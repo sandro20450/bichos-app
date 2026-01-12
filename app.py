@@ -10,12 +10,10 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-# MUDANÇA 1: Nome na aba do navegador
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="centered")
 
 # 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
-    # MUDANÇA 2: Link da LOTEP atualizado
     "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
@@ -122,6 +120,7 @@ def calcular_ranking_atraso_completo(historico):
     return [g for g, s in rank]
 
 def gerar_palpite_estrategico(historico, modo_crise=False):
+    """Gera o palpite correto dependendo do modo"""
     todos_forca = calcular_ranking_forca_completo(historico)
     
     if modo_crise:
@@ -156,19 +155,46 @@ def verificar_status_crise(df_backtest):
     return derrotas >= 2
 
 def gerar_backtest(historico):
+    """
+    CORREÇÃO DO BUG: O Backtest agora verifica se NAQUELA ÉPOCA
+    nós estaríamos em Crise ou não, para usar a lista certa.
+    """
     resultados = []
     if len(historico) < 15: return pd.DataFrame()
     
     for i in range(5):
+        # 1. Definir o momento do passado
         idx = len(historico) - 1 - i
         saiu = historico[idx]
         hist_passado = historico[:idx]
         
-        ranking_na_epoca = calcular_ranking_forca_completo(hist_passado)
-        palpite_padrao = ranking_na_epoca[:14]
+        # 2. Descobrir se naquela época já vínhamos de 2 derrotas (Simulação de Estado)
+        # Para ser rápido, verificamos os 2 jogos anteriores a esse momento usando a estratégia padrão
+        # Se os 2 anteriores foram derrota no padrão, então esse jogo foi jogado em CRISE.
         
+        em_crise_na_epoca = False
+        if len(hist_passado) > 5:
+            # Teste rápido dos 2 anteriores
+            ant1 = hist_passado[-1]
+            hist_ant1 = hist_passado[:-1]
+            palpite_ant1 = calcular_ranking_forca_completo(hist_ant1)[:14]
+            derrota1 = ant1 not in palpite_ant1
+            
+            ant2 = hist_passado[-2]
+            hist_ant2 = hist_passado[:-2]
+            palpite_ant2 = calcular_ranking_forca_completo(hist_ant2)[:14]
+            derrota2 = ant2 not in palpite_ant2
+            
+            if derrota1 and derrota2:
+                em_crise_na_epoca = True
+
+        # 3. Gerar o palpite que o App teria dado naquele dia
+        palpite_princ, palpite_cob = gerar_palpite_estrategico(hist_passado, modo_crise=em_crise_na_epoca)
+        palpite_total = palpite_princ + palpite_cob
+        
+        # 4. Conferir Vitória
         status = "❌"
-        if saiu in palpite_padrao:
+        if saiu in palpite_total:
             status = "💚 VITÓRIA"
             
         resultados.append({"JOGO": f"Recente #{i+1}", "SAIU": f"{saiu:02}", "STATUS": status})
@@ -178,7 +204,6 @@ def gerar_backtest(historico):
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
-# MUDANÇA 3: Título Principal na tela
 st.title("🦅 BICHOS da LOTECA")
 st.caption("Sistema Inteligente de Gestão de Risco")
 
@@ -206,16 +231,18 @@ if aba_ativa:
             ultimo = historico[-1]
             st.info(f"Último Resultado: **Grupo {ultimo:02}**")
             
-            # 1. Gera Backtest e Verifica Crise
+            # 1. Gera Backtest (Agora corrigido)
             df_back = gerar_backtest(historico)
+            
+            # 2. Verifica se AGORA estamos em crise
             EM_CRISE = verificar_status_crise(df_back)
             
-            # 2. Gera Palpite baseado no Status
+            # 3. Gera Palpite baseado no Status Atual
             palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
             
-            # 3. Exibição Condicional
+            # 4. Exibição Condicional
             if EM_CRISE:
-                st.error("🚨 MODO CRISE ATIVADO: 2 Derrotas Detectadas!")
+                st.error("🚨 MODO CRISE ATIVADO: Derrotas Recentes!")
                 st.markdown("⚠️ **Estratégia Alterada:** Jogando com 8 Quentes + 4 Atrasados.")
                 st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
                 st.code(", ".join([f"{n:02}" for n in palpite_princ]))
