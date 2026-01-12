@@ -12,7 +12,6 @@ import pytz
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="centered")
 
-# 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
     "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
@@ -91,7 +90,7 @@ def verificar_atualizacao_site(url):
         return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
 
 # =============================================================================
-# --- 4. MOTOR MATEMÁTICO (CRONOLÓGICO) ---
+# --- 4. MOTOR MATEMÁTICO & DNA DA BANCA (NOVIDADE) ---
 # =============================================================================
 
 def calcular_ranking_forca_completo(historico):
@@ -115,95 +114,97 @@ def calcular_ranking_atraso_completo(historico):
         indices = [i for i, x in enumerate(historico) if x == b]
         val = total - 1 - indices[-1] if indices else total
         atrasos[b] = val
-    
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
+def analisar_dna_banca(historico):
+    """
+    Analisa os últimos 20 jogos para determinar a 'Personalidade' da banca.
+    Retorna:
+    - Score de Obediência (0-100%): Quanto ela respeita os Top 12.
+    - Tipo de Comportamento: 'Normal', 'Viciada (Repete)' ou 'Caótica (Zebra)'.
+    """
+    if len(historico) < 30: return 0, "Dados Insuficientes"
+    
+    acertos_top12 = 0
+    analise_qtd = 20
+    
+    for i in range(analise_qtd):
+        idx = len(historico) - 1 - i
+        saiu = historico[idx]
+        passado = historico[:idx]
+        
+        # Gera o Top 12 daquela época
+        ranking = calcular_ranking_forca_completo(passado)
+        top12 = ranking[:12]
+        
+        if saiu in top12:
+            acertos_top12 += 1
+            
+    score = (acertos_top12 / analise_qtd) * 100
+    
+    # Define personalidade
+    if score >= 65:
+        personalidade = "🎯 Disciplinada (Respeita Lógica)"
+    elif score >= 45:
+        personalidade = "⚖️ Equilibrada"
+    else:
+        personalidade = "🎲 Caótica (Muitas Zebras)"
+        
+    return score, personalidade
+
 def gerar_palpite_estrategico(historico, modo_crise=False):
-    """Gera o palpite correto dependendo do modo"""
     todos_forca = calcular_ranking_forca_completo(historico)
     
     if modo_crise:
-        # ESTRATÉGIA DE CRISE (8 Quentes + 4 Atrasados)
         top8_quentes = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
         top4_atrasados_unicos = []
-        
         for bicho in todos_atrasos:
             if bicho not in top8_quentes:
                 top4_atrasados_unicos.append(bicho)
             if len(top4_atrasados_unicos) == 4:
                 break
-        
-        lista_final = top8_quentes + top4_atrasados_unicos
-        return lista_final, [] 
-        
+        return top8_quentes + top4_atrasados_unicos, [] 
     else:
-        # ESTRATÉGIA NORMAL (12 Força + 2 Cobertura)
-        top12 = todos_forca[:12]
-        cob2 = todos_forca[12:14]
-        return top12, cob2
+        return todos_forca[:12], todos_forca[12:14]
 
 def gerar_backtest_e_status(historico):
-    """
-    SIMULAÇÃO CRONOLÓGICA (V18):
-    Percorre os últimos 20 jogos um por um para determinar
-    se o status de CRISE foi ativado de verdade naquela sequência.
-    """
     if len(historico) < 25: return pd.DataFrame(), False
     
-    # Vamos simular os últimos 20 jogos para "aquecer" o status de crise
-    # Começamos assumindo que estava tudo normal lá atrás
     derrotas_consecutivas = 0
     resultados_simulados = []
-    
-    # Define o ponto de partida (20 jogos atrás)
     inicio_simulacao = len(historico) - 20
     if inicio_simulacao < 0: inicio_simulacao = 0
     
     for i in range(inicio_simulacao, len(historico)):
-        # O resultado real que saiu neste dia
         saiu_real = historico[i]
-        
-        # O histórico disponível ANTES desse resultado sair
         hist_passado = historico[:i]
         
-        # Verifica se estaria em crise NESTE MOMENTO da simulação
         modo_crise_ativo = derrotas_consecutivas >= 2
-        
-        # Gera o palpite que teria sido dado neste dia
         palpite_p, palpite_c = gerar_palpite_estrategico(hist_passado, modo_crise=modo_crise_ativo)
-        palpite_total = palpite_p + palpite_c
         
-        # Confere se ganhou ou perdeu
         status = "❌"
-        if saiu_real in palpite_total:
+        if saiu_real in (palpite_p + palpite_c):
             status = "💚 VITÓRIA"
-            derrotas_consecutivas = 0 # Vitória reseta a crise
+            derrotas_consecutivas = 0
         else:
-            derrotas_consecutivas += 1 # Acumula derrota
+            derrotas_consecutivas += 1
             
-        # Guarda apenas os últimos 5 para mostrar na tabela
         if i >= len(historico) - 5:
             resultados_simulados.append({
-                "JOGO": f"Recente #{len(historico) - i}", # Inverte numeração visual
+                "JOGO": f"Recente #{len(historico) - i}",
                 "SAIU": f"{saiu_real:02}",
                 "STATUS": status
             })
     
-    # O estado final de 'derrotas_consecutivas' é o estado ATUAL do jogo
-    em_crise_agora = derrotas_consecutivas >= 2
-    
-    # Inverte a lista para o mais recente ficar em cima
-    df = pd.DataFrame(resultados_simulados[::-1])
-    
-    return df, em_crise_agora
+    return pd.DataFrame(resultados_simulados[::-1]), derrotas_consecutivas >= 2
 
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
 st.title("🦅 BICHOS da LOTECA")
-st.caption("Sistema V18 - Lógica Cronológica")
+st.caption("Sistema V19 - Diagnóstico de DNA")
 
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
@@ -211,7 +212,7 @@ aba_ativa = conectar_planilha(banca_selecionada)
 if aba_ativa:
     historico = carregar_dados(aba_ativa)
     
-    # Monitor
+    # --- MONITOR DE SITE ---
     st.markdown("---")
     link = URLS_BANCAS.get(banca_selecionada)
     online, tit, det = verificar_atualizacao_site(link)
@@ -222,38 +223,55 @@ if aba_ativa:
     with c_m2:
         if link: st.link_button("🔗 SITE", link)
 
-    tab1, tab2 = st.tabs(["🏠 Palpites", "📈 Gráficos"])
+    tab1, tab2 = st.tabs(["🏠 Diagnóstico & Jogo", "📈 Gráficos"])
 
     with tab1:
         if len(historico) > 0:
             ultimo = historico[-1]
-            st.info(f"Último Resultado: **Grupo {ultimo:02}**")
             
-            # --- CORAÇÃO DO V18 ---
-            # O backtest agora retorna o DF e o status atual de uma vez só
+            # --- 🔍 DIAGNÓSTICO DE DNA (NOVIDADE) ---
+            score_dna, personalidade = analisar_dna_banca(historico)
+            
+            st.markdown("### 🧬 DNA da Banca (Últimos 20 Jogos)")
+            col_dna1, col_dna2, col_dna3 = st.columns([1, 2, 1])
+            
+            # Cor do Score
+            cor_score = "off"
+            if score_dna >= 60: cor_score = "normal" # verde
+            elif score_dna >= 40: cor_score = "off" # cinza/amarelo
+            else: cor_score = "inverse" # vermelho (usando delta_color logic mental)
+
+            col_dna1.metric("Obediência", f"{int(score_dna)}%")
+            col_dna2.info(f"**Status:** {personalidade}")
+            col_dna3.metric("Último", f"{ultimo:02}")
+            
+            if score_dna < 40:
+                st.error("⚠️ CUIDADO: Esta banca está muito instável hoje!")
+            elif score_dna > 75:
+                st.balloons() # Um mimo visual se a banca estiver ótima
+                st.success("💎 MOMENTO DE OURO: A banca está respeitando muito a lógica!")
+            
+            st.markdown("---")
+            # ----------------------------------------
+
+            # Lógica Normal V18
             df_back, EM_CRISE = gerar_backtest_e_status(historico)
-            
-            # Gera Palpite PRO FUTURO (Baseado no status calculado)
             palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
             
-            # Exibição Condicional
             if EM_CRISE:
-                st.error("🚨 MODO CRISE ATIVADO: Derrotas Recentes!")
-                st.markdown("⚠️ **Estratégia Alterada:** Jogando com 8 Quentes + 4 Atrasados.")
+                st.error("🚨 MODO CRISE ATIVADO (Derrotas Recentes)")
                 st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
                 st.code(", ".join([f"{n:02}" for n in palpite_princ]))
-                
             else:
-                st.success("✅ MODO NORMAL: Tendência Estável")
+                st.success("✅ MODO NORMAL (Estratégia Padrão)")
                 c1, c2 = st.columns([2, 1])
                 with c1:
-                    st.markdown("### 🔥 Top 12 (Normal)")
+                    st.markdown("### 🔥 Top 12")
                     st.write(", ".join([f"**{n:02}**" for n in palpite_princ]))
                 with c2:
                     st.markdown("### ❄️ Cob (2)")
                     st.write(", ".join([f"{n:02}" for n in palpite_cob]))
 
-            # Backtest
             with st.expander("📊 Ver Histórico"):
                 if not df_back.empty: st.table(df_back)
 
