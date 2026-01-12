@@ -15,7 +15,7 @@ st.set_page_config(page_title="Titanium V13 - Monitor", page_icon="🦅")
 # 🔗 SEUS LINKS DE MONITORAMENTO
 # Aqui colocamos um link diferente para cada banca
 URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-paraiba-de-hoje",
+    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje" # Substitua pelo link certo se tiver
 }
@@ -221,3 +221,4 @@ if aba_ativa:
                     st.rerun()
     else:
         st.warning("A planilha parece estar vazia.")
+
