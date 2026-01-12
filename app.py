@@ -91,7 +91,7 @@ def verificar_atualizacao_site(url):
         return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
 
 # =============================================================================
-# --- 4. MOTOR MATEMÁTICO (CRÍTICO E NORMAL) ---
+# --- 4. MOTOR MATEMÁTICO (CRONOLÓGICO) ---
 # =============================================================================
 
 def calcular_ranking_forca_completo(historico):
@@ -144,68 +144,66 @@ def gerar_palpite_estrategico(historico, modo_crise=False):
         cob2 = todos_forca[12:14]
         return top12, cob2
 
-def verificar_status_crise(df_backtest):
-    derrotas = 0
-    if not df_backtest.empty:
-        for status in df_backtest['STATUS']:
-            if "❌" in status:
-                derrotas += 1
-            else:
-                break
-    return derrotas >= 2
-
-def gerar_backtest(historico):
+def gerar_backtest_e_status(historico):
     """
-    CORREÇÃO DO BUG: O Backtest agora verifica se NAQUELA ÉPOCA
-    nós estaríamos em Crise ou não, para usar a lista certa.
+    SIMULAÇÃO CRONOLÓGICA (V18):
+    Percorre os últimos 20 jogos um por um para determinar
+    se o status de CRISE foi ativado de verdade naquela sequência.
     """
-    resultados = []
-    if len(historico) < 15: return pd.DataFrame()
+    if len(historico) < 25: return pd.DataFrame(), False
     
-    for i in range(5):
-        # 1. Definir o momento do passado
-        idx = len(historico) - 1 - i
-        saiu = historico[idx]
-        hist_passado = historico[:idx]
+    # Vamos simular os últimos 20 jogos para "aquecer" o status de crise
+    # Começamos assumindo que estava tudo normal lá atrás
+    derrotas_consecutivas = 0
+    resultados_simulados = []
+    
+    # Define o ponto de partida (20 jogos atrás)
+    inicio_simulacao = len(historico) - 20
+    if inicio_simulacao < 0: inicio_simulacao = 0
+    
+    for i in range(inicio_simulacao, len(historico)):
+        # O resultado real que saiu neste dia
+        saiu_real = historico[i]
         
-        # 2. Descobrir se naquela época já vínhamos de 2 derrotas (Simulação de Estado)
-        # Para ser rápido, verificamos os 2 jogos anteriores a esse momento usando a estratégia padrão
-        # Se os 2 anteriores foram derrota no padrão, então esse jogo foi jogado em CRISE.
+        # O histórico disponível ANTES desse resultado sair
+        hist_passado = historico[:i]
         
-        em_crise_na_epoca = False
-        if len(hist_passado) > 5:
-            # Teste rápido dos 2 anteriores
-            ant1 = hist_passado[-1]
-            hist_ant1 = hist_passado[:-1]
-            palpite_ant1 = calcular_ranking_forca_completo(hist_ant1)[:14]
-            derrota1 = ant1 not in palpite_ant1
-            
-            ant2 = hist_passado[-2]
-            hist_ant2 = hist_passado[:-2]
-            palpite_ant2 = calcular_ranking_forca_completo(hist_ant2)[:14]
-            derrota2 = ant2 not in palpite_ant2
-            
-            if derrota1 and derrota2:
-                em_crise_na_epoca = True
-
-        # 3. Gerar o palpite que o App teria dado naquele dia
-        palpite_princ, palpite_cob = gerar_palpite_estrategico(hist_passado, modo_crise=em_crise_na_epoca)
-        palpite_total = palpite_princ + palpite_cob
+        # Verifica se estaria em crise NESTE MOMENTO da simulação
+        modo_crise_ativo = derrotas_consecutivas >= 2
         
-        # 4. Conferir Vitória
+        # Gera o palpite que teria sido dado neste dia
+        palpite_p, palpite_c = gerar_palpite_estrategico(hist_passado, modo_crise=modo_crise_ativo)
+        palpite_total = palpite_p + palpite_c
+        
+        # Confere se ganhou ou perdeu
         status = "❌"
-        if saiu in palpite_total:
+        if saiu_real in palpite_total:
             status = "💚 VITÓRIA"
+            derrotas_consecutivas = 0 # Vitória reseta a crise
+        else:
+            derrotas_consecutivas += 1 # Acumula derrota
             
-        resultados.append({"JOGO": f"Recente #{i+1}", "SAIU": f"{saiu:02}", "STATUS": status})
-        
-    return pd.DataFrame(resultados)
+        # Guarda apenas os últimos 5 para mostrar na tabela
+        if i >= len(historico) - 5:
+            resultados_simulados.append({
+                "JOGO": f"Recente #{len(historico) - i}", # Inverte numeração visual
+                "SAIU": f"{saiu_real:02}",
+                "STATUS": status
+            })
+    
+    # O estado final de 'derrotas_consecutivas' é o estado ATUAL do jogo
+    em_crise_agora = derrotas_consecutivas >= 2
+    
+    # Inverte a lista para o mais recente ficar em cima
+    df = pd.DataFrame(resultados_simulados[::-1])
+    
+    return df, em_crise_agora
 
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
 st.title("🦅 BICHOS da LOTECA")
-st.caption("Sistema Inteligente de Gestão de Risco")
+st.caption("Sistema V18 - Lógica Cronológica")
 
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
@@ -231,16 +229,14 @@ if aba_ativa:
             ultimo = historico[-1]
             st.info(f"Último Resultado: **Grupo {ultimo:02}**")
             
-            # 1. Gera Backtest (Agora corrigido)
-            df_back = gerar_backtest(historico)
+            # --- CORAÇÃO DO V18 ---
+            # O backtest agora retorna o DF e o status atual de uma vez só
+            df_back, EM_CRISE = gerar_backtest_e_status(historico)
             
-            # 2. Verifica se AGORA estamos em crise
-            EM_CRISE = verificar_status_crise(df_back)
-            
-            # 3. Gera Palpite baseado no Status Atual
+            # Gera Palpite PRO FUTURO (Baseado no status calculado)
             palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
             
-            # 4. Exibição Condicional
+            # Exibição Condicional
             if EM_CRISE:
                 st.error("🚨 MODO CRISE ATIVADO: Derrotas Recentes!")
                 st.markdown("⚠️ **Estratégia Alterada:** Jogando com 8 Quentes + 4 Atrasados.")
