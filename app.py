@@ -10,10 +10,10 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-st.set_page_config(page_title="Titanium V17 - Crise", page_icon="🦅", layout="centered")
+st.set_page_config(page_title="LOTECA V17 - Crise", page_icon="💲", layout="centered")
 
 URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-paraiba-de-hoje",
+    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
 }
@@ -283,3 +283,4 @@ if aba_ativa:
             st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
         else:
             st.info("Sem dados.")
+
