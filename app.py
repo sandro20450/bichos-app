@@ -10,41 +10,20 @@ import time
 import base64
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES VISUAIS E SOM (BASE64) ---
+# --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# Inicializa estados para sons
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
     st.session_state['tocar_som_apagar'] = False
 
-# --- SONS EMBUTIDOS (Não dependem de links externos) ---
-# Som de "Plim" (Sucesso)
-SOM_SUCESSO_B64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWgAAAA0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAtMYXZjNTguNTQuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQZAAABAAABAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABLeoAAABAf/7kGQAAAAAAA0gAAAAAABAAAAAAAAAAAAAA//uQZAAAAAAAANIAAAAAAAQAAAAAAAAAAAAA" 
-# (Nota: Por limitação de caracteres aqui, usarei um placeholder curto. 
-# O código abaixo usa st.audio com autoplay que é mais robusto)
-
-# Para garantir que funcione, vamos usar a função nativa do Streamlit com autoplay
-# Mas vamos esconder o player visualmente com CSS
-
 def reproduzir_som(tipo):
-    """
-    Toca o som injetando HTML invisível.
-    tipo: 'sucesso' ou 'apagar'
-    """
-    # Links diretos mais confiáveis (GitHub Raw ou CDNs permissivas)
-    # Se preferir, pode converter seus mp3 para base64, mas usarei links de CDN rápidos aqui
-    
     if tipo == 'sucesso':
-        # Som de "Level Up" / Sucesso
         sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
     else:
-        # Som de "Lixeira" / Deletar (Papel amassando)
         sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
-
-    # HTML com autoplay invisível
     st.markdown(f"""
         <audio autoplay style="display:none;">
             <source src="{sound_url}" type="audio/mpeg">
@@ -52,69 +31,40 @@ def reproduzir_som(tipo):
     """, unsafe_allow_html=True)
 
 def aplicar_estilo_banca(banca):
-    # Padrão
     bg_color = "#0e1117" 
     text_color = "#ffffff"
     card_bg = "#262730"
     
-    if banca == "LOTEP": # Azul
+    if banca == "LOTEP":
         bg_color = "#003366" 
         text_color = "#ffffff"
         card_bg = "rgba(255, 255, 255, 0.1)"
-        
-    elif banca == "CAMINHODASORTE": # VERDE ESCURO E BRANCO
+    elif banca == "CAMINHODASORTE":
         bg_color = "#054a29"  
         text_color = "#ffffff" 
         card_bg = "rgba(255, 255, 255, 0.1)"
-        
-    elif banca == "MONTECAI": # Vermelho
+    elif banca == "MONTECAI":
         bg_color = "#b71c1c"
         text_color = "#ffffff"
         card_bg = "rgba(255, 255, 255, 0.1)"
 
     st.markdown(f"""
     <style>
-        [data-testid="stAppViewContainer"] {{
-            background-color: {bg_color};
-        }}
-        h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{
-            color: {text_color} !important;
-        }}
-        /* CORREÇÃO DO INPUT: Texto Branco */
-        .stNumberInput input {{
-            color: white !important;
-            caret-color: white !important;
-        }}
-        .metric-card {{
-            background-color: {card_bg};
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.2);
-            text-align: center;
-        }}
-        /* Esconde o player de áudio nativo se usarmos st.audio */
-        .stAudio {{
-            display: none;
-        }}
+        [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; }}
+        h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
+        .stNumberInput input {{ color: white !important; caret-color: white !important; }}
+        /* Estilo da Tabela para ficar transparente/limpa */
+        [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
+        thead tr th {{ color: {text_color} !important; }}
+        tbody tr td {{ color: {text_color} !important; }}
+        
+        .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
+        .stAudio {{ display: none; }}
+        
         /* Bolas */
-        .bola-verde {{
-            display: inline-block; width: 38px; height: 38px; line-height: 38px;
-            border-radius: 50%; background-color: #28a745; color: white !important;
-            text-align: center; font-weight: bold; margin: 2px;
-            box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white;
-        }}
-        .bola-azul {{
-            display: inline-block; width: 38px; height: 38px; line-height: 38px;
-            border-radius: 50%; background-color: #17a2b8; color: white !important;
-            text-align: center; font-weight: bold; margin: 2px;
-            box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white;
-        }}
-        .bola-vermelha {{
-            display: inline-block; width: 38px; height: 38px; line-height: 38px;
-            border-radius: 50%; background-color: #dc3545; color: white !important;
-            text-align: center; font-weight: bold; margin: 2px;
-            box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white;
-        }}
+        .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
+        .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
+        .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -228,9 +178,9 @@ def analisar_dna_banca(historico):
         ranking = calcular_ranking_forca_completo(passado)[:12]
         if saiu in ranking: acertos += 1
     score = (acertos / analise) * 100
-    if score >= 65: status = "🎯 DISCIPLINADA"
-    elif score >= 45: status = "⚖️ EQUILIBRADA"
-    else: status = "🎲 CAÓTICA"
+    if score >= 65: status = "DISCIPLINADA"
+    elif score >= 45: status = "EQUILIBRADA"
+    else: status = "CAÓTICA"
     return score, status
 
 def gerar_palpite_estrategico(historico, modo_crise=False):
@@ -271,7 +221,6 @@ def gerar_backtest_e_status(historico):
 # --- 4. INTERFACE PRINCIPAL ---
 # =============================================================================
 
-# Lógica de Som (Verificação de Estado)
 if st.session_state['tocar_som_salvar']:
     reproduzir_som('sucesso')
     st.session_state['tocar_som_salvar'] = False
@@ -286,7 +235,6 @@ with st.sidebar:
     st.markdown("---")
     st.write("📝 **Novo Resultado**")
     novo_bicho = st.number_input("Grupo:", 1, 25, 1)
-    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("💾 SALVAR", type="primary"):
@@ -294,7 +242,7 @@ with st.sidebar:
             if aba and salvar_na_nuvem(aba, novo_bicho):
                 st.session_state['tocar_som_salvar'] = True
                 st.toast("Salvo! 🔔", icon="✅")
-                time.sleep(0.5) # Tempo para o áudio carregar antes do rerun
+                time.sleep(0.5)
                 st.rerun()
     with col_btn2:
         if st.button("🔄 REBOOT"):
@@ -306,7 +254,7 @@ with st.sidebar:
             if aba and deletar_ultimo_registro(aba):
                 st.session_state['tocar_som_apagar'] = True
                 st.toast("Apagado! 🗑️", icon="🗑️")
-                time.sleep(0.5) # Tempo para o áudio carregar
+                time.sleep(0.5)
                 st.rerun()
 
 aplicar_estilo_banca(banca_selecionada)
@@ -317,7 +265,7 @@ if aba_ativa:
     historico = carregar_dados(aba_ativa)
     if len(historico) > 0:
         
-        # --- CABEÇALHO SIMPLES ---
+        # --- CABEÇALHO ---
         link = URLS_BANCAS.get(banca_selecionada)
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         
@@ -331,11 +279,20 @@ if aba_ativa:
         palpite_p, palpite_c = gerar_palpite_estrategico(historico, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico)
         
-        # --- 1. DIAGNÓSTICO & DNA ---
+        # --- 1. DIAGNÓSTICO & DNA (TABELA NOVA) ---
         with st.expander("📊 Diagnóstico & Histórico da Banca", expanded=True):
-            col_d1, col_d2 = st.columns(2)
-            col_d1.metric("Obediência", f"{int(score)}%")
-            col_d2.metric("DNA Status", status_dna)
+            
+            # CRIAÇÃO DA TABELA IGUAL A IMAGEM
+            dados_dna = {
+                "OBEDIÊNCIA": [f"{int(score)}%"],
+                "DNA STATUS": [status_dna]
+            }
+            df_dna = pd.DataFrame(dados_dna)
+            
+            # Exibe a tabela de DNA
+            st.table(df_dna)
+            
+            # Exibe a tabela de Histórico logo abaixo
             st.table(df_back)
 
         st.markdown("---")
@@ -343,7 +300,6 @@ if aba_ativa:
         # --- 2. ABAS (PALPITES E GRÁFICOS) ---
         tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos & Atrasos"])
 
-        # === ABA 1: PALPITES ===
         with tab_palpites:
             if EM_CRISE:
                 st.error("🚨 MODO CRISE: Lista de Recuperação")
@@ -360,7 +316,6 @@ if aba_ativa:
                     st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
                     st.code(", ".join([f"{n:02}" for n in palpite_c]), language="text")
 
-        # === ABA 2: GRÁFICOS ===
         with tab_graficos:
             st.write("### 🐢 Top Atrasados (Quem não sai há tempo?)")
             todos_atrasos = calcular_ranking_atraso_completo(historico)
