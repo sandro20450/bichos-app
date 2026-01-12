@@ -90,7 +90,7 @@ def verificar_atualizacao_site(url):
         return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
 
 # =============================================================================
-# --- 4. MOTOR MATEMÁTICO & DNA DA BANCA (NOVIDADE) ---
+# --- 4. MOTOR MATEMÁTICO (CICLO COMPLETO 25) ---
 # =============================================================================
 
 def calcular_ranking_forca_completo(historico):
@@ -98,6 +98,7 @@ def calcular_ranking_forca_completo(historico):
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
     
+    # Pesos
     c_curto = Counter(hist_reverso[:10])
     for g, f in c_curto.items(): scores[g] += (f * 2.0)
     c_medio = Counter(hist_reverso[:50])
@@ -119,22 +120,20 @@ def calcular_ranking_atraso_completo(historico):
 
 def analisar_dna_banca(historico):
     """
-    Analisa os últimos 20 jogos para determinar a 'Personalidade' da banca.
-    Retorna:
-    - Score de Obediência (0-100%): Quanto ela respeita os Top 12.
-    - Tipo de Comportamento: 'Normal', 'Viciada (Repete)' ou 'Caótica (Zebra)'.
+    ATUALIZADO V20: Analisa os últimos 25 jogos (Ciclo Completo).
+    Isso dá um diagnóstico mais robusto sobre a obediência da banca.
     """
-    if len(historico) < 30: return 0, "Dados Insuficientes"
+    # Precisamos de mais histórico agora (25 + margem)
+    if len(historico) < 35: return 0, "Dados Insuficientes (Precisa de +35 jogos)"
     
     acertos_top12 = 0
-    analise_qtd = 20
+    analise_qtd = 25 # MUDANÇA AQUI: De 20 para 25
     
     for i in range(analise_qtd):
         idx = len(historico) - 1 - i
         saiu = historico[idx]
         passado = historico[:idx]
         
-        # Gera o Top 12 daquela época
         ranking = calcular_ranking_forca_completo(passado)
         top12 = ranking[:12]
         
@@ -143,7 +142,6 @@ def analisar_dna_banca(historico):
             
     score = (acertos_top12 / analise_qtd) * 100
     
-    # Define personalidade
     if score >= 65:
         personalidade = "🎯 Disciplinada (Respeita Lógica)"
     elif score >= 45:
@@ -170,11 +168,12 @@ def gerar_palpite_estrategico(historico, modo_crise=False):
         return todos_forca[:12], todos_forca[12:14]
 
 def gerar_backtest_e_status(historico):
-    if len(historico) < 25: return pd.DataFrame(), False
+    if len(historico) < 30: return pd.DataFrame(), False
     
     derrotas_consecutivas = 0
     resultados_simulados = []
-    inicio_simulacao = len(historico) - 20
+    # Simulação dos últimos 25 jogos
+    inicio_simulacao = len(historico) - 25
     if inicio_simulacao < 0: inicio_simulacao = 0
     
     for i in range(inicio_simulacao, len(historico)):
@@ -204,7 +203,7 @@ def gerar_backtest_e_status(historico):
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
 st.title("🦅 BICHOS da LOTECA")
-st.caption("Sistema V19 - Diagnóstico de DNA")
+st.caption("Sistema V20 - Ciclo 25")
 
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
@@ -229,32 +228,26 @@ if aba_ativa:
         if len(historico) > 0:
             ultimo = historico[-1]
             
-            # --- 🔍 DIAGNÓSTICO DE DNA (NOVIDADE) ---
+            # --- 🔍 DIAGNÓSTICO DE DNA (25 Jogos) ---
             score_dna, personalidade = analisar_dna_banca(historico)
             
-            st.markdown("### 🧬 DNA da Banca (Últimos 20 Jogos)")
+            st.markdown("### 🧬 DNA da Banca (Últimos 25 Jogos)")
             col_dna1, col_dna2, col_dna3 = st.columns([1, 2, 1])
             
-            # Cor do Score
-            cor_score = "off"
-            if score_dna >= 60: cor_score = "normal" # verde
-            elif score_dna >= 40: cor_score = "off" # cinza/amarelo
-            else: cor_score = "inverse" # vermelho (usando delta_color logic mental)
-
             col_dna1.metric("Obediência", f"{int(score_dna)}%")
             col_dna2.info(f"**Status:** {personalidade}")
             col_dna3.metric("Último", f"{ultimo:02}")
             
             if score_dna < 40:
-                st.error("⚠️ CUIDADO: Esta banca está muito instável hoje!")
+                st.error("⚠️ CUIDADO: Banca Instável/Caótica!")
             elif score_dna > 75:
-                st.balloons() # Um mimo visual se a banca estiver ótima
-                st.success("💎 MOMENTO DE OURO: A banca está respeitando muito a lógica!")
+                st.balloons() 
+                st.success("💎 MOMENTO DE OURO!")
             
             st.markdown("---")
             # ----------------------------------------
 
-            # Lógica Normal V18
+            # Lógica Normal V18/V19
             df_back, EM_CRISE = gerar_backtest_e_status(historico)
             palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
             
@@ -263,7 +256,7 @@ if aba_ativa:
                 st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
                 st.code(", ".join([f"{n:02}" for n in palpite_princ]))
             else:
-                st.success("✅ MODO NORMAL (Estratégia Padrão)")
+                st.success("✅ MODO NORMAL")
                 c1, c2 = st.columns([2, 1])
                 with c1:
                     st.markdown("### 🔥 Top 12")
