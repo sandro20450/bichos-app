@@ -10,14 +10,13 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-st.set_page_config(page_title="Titanium V13 - Monitor", page_icon="🦅")
+st.set_page_config(page_title="Titanium V14 - Dashboard", page_icon="🦅", layout="centered")
 
 # 🔗 SEUS LINKS DE MONITORAMENTO
-# Aqui colocamos um link diferente para cada banca
 URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
+    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-paraiba-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
-    "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje" # Substitua pelo link certo se tiver
+    "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
 }
 
 BANCA_OPCOES = ["LOTEP", "CAMINHODASORTE", "MONTECAI"]
@@ -68,46 +67,60 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. O NOVO MONITOR (DETETIVE DE DATA) ---
+# --- 3. FUNÇÕES DE MONITORAMENTO E ESTATÍSTICA ---
 # =============================================================================
 def verificar_atualizacao_site(url):
-    """
-    Acessa o site e verifica se a DATA DE HOJE está escrita lá.
-    Isso indica forte chance de ter saído resultado novo.
-    """
-    if not url:
-        return False, "Link não configurado", ""
-    
+    """Verifica se a data de hoje consta no site"""
+    if not url: return False, "Link não configurado", ""
     try:
-        # Pega a data de hoje no Brasil (ex: 24/05/2024)
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
+        datas_possiveis = [
+            hoje.strftime("%d/%m/%Y"),
+            hoje.strftime("%d-%m-%Y"),
+            hoje.strftime("%d de")
+        ]
         
-        # Formatos comuns de data em sites
-        data_curta = hoje.strftime("%d/%m/%Y")   # 24/05/2024
-        data_traco = hoje.strftime("%d-%m-%Y")   # 24-05-2024
-        data_extenso = hoje.strftime("%d de")    # 24 de (maio...)
-        
-        # O robô acessa o site
         headers = {'User-Agent': 'Mozilla/5.0'}
         resposta = requests.get(url, headers=headers, timeout=5)
         
         if resposta.status_code == 200:
-            texto_site = resposta.text
-            
-            # Verifica se alguma das datas está no texto do site
-            if data_curta in texto_site or data_traco in texto_site or data_extenso in texto_site:
-                return True, "🟢 SITE ATUALIZADO HOJE!", f"O site menciona a data de hoje ({data_curta})."
-            else:
-                return False, "🟡 Data de hoje não encontrada", f"O site está online, mas não achei a data {data_curta}."
+            texto = resposta.text
+            for data in datas_possiveis:
+                if data in texto:
+                    return True, "🟢 SITE ATUALIZADO HOJE!", f"Data encontrada: {data}"
+            return False, "🟡 Data de hoje não encontrada", "O site está online, mas sem a data de hoje."
         else:
-            return False, "🔴 Site Fora do Ar", f"Erro código: {resposta.status_code}"
-            
+            return False, "🔴 Site Fora do Ar", f"Erro: {resposta.status_code}"
     except Exception as e:
         return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
 
+def calcular_atrasos(historico):
+    """Calcula há quantos jogos cada bicho não sai"""
+    atrasos = {}
+    total_jogos = len(historico)
+    
+    for bicho in range(1, 26):
+        try:
+            # Procura o bicho de trás para frente na lista
+            # Se encontrar, calcula a distância até o fim
+            # Se não encontrar, o atraso é o total de jogos
+            indices = [i for i, x in enumerate(historico) if x == bicho]
+            if indices:
+                ultimo_indice = indices[-1]
+                atraso = total_jogos - 1 - ultimo_indice
+                atrasos[bicho] = atraso
+            else:
+                atrasos[bicho] = total_jogos
+        except:
+            atrasos[bicho] = 0
+            
+    # Ordena do mais atrasado para o menos atrasado
+    rank_atraso = sorted(atrasos.items(), key=lambda x: -x[1])
+    return rank_atraso
+
 # =============================================================================
-# --- 4. MOTOR TITANIUM V11.1 (INTELIGÊNCIA) ---
+# --- 4. MOTOR TITANIUM V11.1 ---
 # =============================================================================
 def calcular_ranking_forca(historico):
     if not historico: return []
@@ -138,87 +151,107 @@ def gerar_backtest(historico):
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
-st.title("🦅 Titanium V13 Monitor")
-st.caption("Sistema de Monitoramento & Inteligência")
+st.title("🦅 Titanium V14 Dashboard")
+st.caption("Monitoramento, Estatísticas e Inteligência")
 
 # Seleção de Banca
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
-    # --- ÁREA DE MONITORAMENTO (NOVIDADE) ---
-    st.markdown("---")
-    st.subheader(f"📡 Monitor: {banca_selecionada}")
-    
-    link_atual = URLS_BANCAS.get(banca_selecionada)
-    
-    col_status, col_botao = st.columns([2, 1])
-    
-    with col_status:
-        # Verifica o site em tempo real
-        online, titulo, detalhe = verificar_atualizacao_site(link_atual)
-        if online:
-            st.success(f"**{titulo}**\n\n{detalhe}")
-        else:
-            st.warning(f"**{titulo}**\n\n{detalhe}")
-
-    with col_botao:
-        st.write("Verifique o resultado:")
-        if link_atual:
-            st.link_button("🔗 ABRIR SITE AGORA", link_atual)
-        else:
-            st.error("Link não configurado")
-    
-    st.markdown("---")
-
-    # --- ÁREA DE DADOS E PALPITES ---
     historico = carregar_dados(aba_ativa)
     
-    if len(historico) > 0:
-        ultimo = historico[-1]
-        st.markdown(f"### Último na Planilha: **{ultimo:02}**")
-        
-        # Backtest e Palpites
-        palpite = calcular_ranking_forca(historico)
-        
-        # Colunas para organizar
-        c1, c2 = st.columns(2)
-        with c1:
-            st.info(f"🔥 **Fogo (Top 10):**\n\n{', '.join([f'{n:02}' for n in palpite[:10]])}")
-        with c2:
-            st.warning(f"❄️ **Gelo (Cobertura):**\n\n{', '.join([f'{n:02}' for n in palpite[10:]])}")
+    # --- ÁREA DE MONITORAMENTO ---
+    st.markdown("---")
+    link_atual = URLS_BANCAS.get(banca_selecionada)
+    online, titulo, detalhe = verificar_atualizacao_site(link_atual)
+    
+    col_mon1, col_mon2 = st.columns([3, 1])
+    with col_mon1:
+        if online: st.success(f"**{titulo}**")
+        else: st.warning(f"**{titulo}**")
+    with col_mon2:
+        if link_atual: st.link_button("🔗 VER SITE", link_atual)
 
-        # Tabela Backtest
-        with st.expander("📊 Ver Histórico de Acertos (Backtest)"):
-            df_back = gerar_backtest(historico)
-            if not df_back.empty: st.table(df_back)
+    # --- ABAS DE NAVEGAÇÃO ---
+    tab1, tab2 = st.tabs(["🏠 Principal", "📈 Análise Gráfica"])
 
-        st.markdown("---")
-        
-        # --- ÁREA DE INSERÇÃO MANUAL ---
-        st.write("### 📝 Inserir Novo Resultado")
-        col_input, col_action = st.columns([1, 1])
-        
-        with col_input:
-            novo_bicho = st.number_input("Digite o Grupo que saiu:", min_value=1, max_value=25, value=1)
-        
-        with col_action:
-            st.write("") # Espaço
-            st.write("") 
-            if st.button("💾 Salvar na Planilha", type="primary"):
-                with st.spinner("Salvando..."):
+    # === ABA 1: PRINCIPAL ===
+    with tab1:
+        if len(historico) > 0:
+            ultimo = historico[-1]
+            st.info(f"Último Resultado Salvo: **Grupo {ultimo:02}**")
+            
+            palpite = calcular_ranking_forca(historico)
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("### 🔥 Top 10 (Fogo)")
+                st.write(", ".join([f"**{n:02}**" for n in palpite[:10]]))
+            with c2:
+                st.markdown("### ❄️ Cobertura")
+                st.write(", ".join([f"{n:02}" for n in palpite[10:]]))
+
+            with st.expander("📊 Ver Backtest (Últimos 5 jogos)"):
+                df_back = gerar_backtest(historico)
+                if not df_back.empty: st.table(df_back)
+
+            st.markdown("---")
+            st.write("### 📝 Inserir Novo Resultado")
+            col_input, col_action = st.columns([1, 1])
+            with col_input:
+                novo_bicho = st.number_input("Digite o Grupo:", 1, 25, 1)
+            with col_action:
+                st.write("")
+                st.write("")
+                if st.button("💾 Salvar", type="primary"):
                     if salvar_na_nuvem(aba_ativa, novo_bicho):
-                        st.success("Sucesso!")
+                        st.success("Salvo!")
                         st.rerun()
                     else:
-                        st.error("Erro ao salvar.")
+                        st.error("Erro.")
 
-        # Botão de correção discreto
-        with st.expander("Opções de Correção"):
-            if st.button("🗑️ Apagar Último Registro"):
-                if deletar_ultimo_registro(aba_ativa):
-                    st.success("Apagado.")
+            with st.expander("Opções de Correção"):
+                if st.button("🗑️ Apagar Último"):
+                    deletar_ultimo_registro(aba_ativa)
                     st.rerun()
-    else:
-        st.warning("A planilha parece estar vazia.")
+        else:
+            st.warning("Planilha vazia.")
 
+    # === ABA 2: ESTATÍSTICAS E GRÁFICOS ===
+    with tab2:
+        if len(historico) > 0:
+            st.markdown("### 🐢 Top 4 Atrasados")
+            st.caption("Há quantos jogos eles não saem?")
+            
+            rank_atraso = calcular_atrasos(historico)
+            
+            # Mostra os 4 mais atrasados em colunas grandes
+            colA, colB, colC, colD = st.columns(4)
+            top4 = rank_atraso[:4] # Pega os 4 primeiros
+            
+            colA.metric(f"Grupo {top4[0][0]:02}", f"{top4[0][1]} jogos")
+            colB.metric(f"Grupo {top4[1][0]:02}", f"{top4[1][1]} jogos")
+            colC.metric(f"Grupo {top4[2][0]:02}", f"{top4[2][1]} jogos")
+            colD.metric(f"Grupo {top4[3][0]:02}", f"{top4[3][1]} jogos")
+            
+            st.markdown("---")
+            st.markdown("### 📊 Frequência (Últimos 50 Jogos)")
+            st.caption("Quais grupos estão saindo mais?")
+            
+            # Prepara dados para o gráfico
+            recentes = historico[-50:] # Pega só os últimos 50
+            contagem = Counter(recentes)
+            
+            # Cria DataFrame para o gráfico
+            df_grafico = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes que saiu'])
+            df_grafico.index.name = 'Grupo'
+            
+            # Gráfico de Barras Nativo do Streamlit
+            st.bar_chart(df_grafico)
+            
+        else:
+            st.info("Sem dados suficientes para gráficos.")
+
+else:
+    st.info("Conectando...")
