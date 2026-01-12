@@ -10,7 +10,7 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-st.set_page_config(page_title="Titanium V14 - Dashboard", page_icon="🦅", layout="centered")
+st.set_page_config(page_title="Titanium V15 - Top 12", page_icon="🦅", layout="centered")
 
 # 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
@@ -102,9 +102,6 @@ def calcular_atrasos(historico):
     
     for bicho in range(1, 26):
         try:
-            # Procura o bicho de trás para frente na lista
-            # Se encontrar, calcula a distância até o fim
-            # Se não encontrar, o atraso é o total de jogos
             indices = [i for i, x in enumerate(historico) if x == bicho]
             if indices:
                 ultimo_indice = indices[-1]
@@ -115,7 +112,6 @@ def calcular_atrasos(historico):
         except:
             atrasos[bicho] = 0
             
-    # Ordena do mais atrasado para o menos atrasado
     rank_atraso = sorted(atrasos.items(), key=lambda x: -x[1])
     return rank_atraso
 
@@ -151,8 +147,8 @@ def gerar_backtest(historico):
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
-st.title("🦅 Titanium V14 Dashboard")
-st.caption("Monitoramento, Estatísticas e Inteligência")
+st.title("🦅 Titanium V15 Top 12")
+st.caption("Estratégia: 12 Fortes + 2 Cobertura")
 
 # Seleção de Banca
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
@@ -184,13 +180,16 @@ if aba_ativa:
             
             palpite = calcular_ranking_forca(historico)
             
-            c1, c2 = st.columns(2)
+            # --- MUDANÇA AQUI: DIVISÃO 12 / 2 ---
+            c1, c2 = st.columns([2, 1]) # Coluna 1 maior para caber 12 números
             with c1:
-                st.markdown("### 🔥 Top 10 (Fogo)")
-                st.write(", ".join([f"**{n:02}**" for n in palpite[:10]]))
+                st.markdown("### 🔥 Top 12 (Fogo)")
+                # Pega os primeiros 12
+                st.write(", ".join([f"**{n:02}**" for n in palpite[:12]]))
             with c2:
-                st.markdown("### ❄️ Cobertura")
-                st.write(", ".join([f"{n:02}" for n in palpite[10:]]))
+                st.markdown("### ❄️ Cob (2)")
+                # Pega do 12 em diante
+                st.write(", ".join([f"{n:02}" for n in palpite[12:]]))
 
             with st.expander("📊 Ver Backtest (Últimos 5 jogos)"):
                 df_back = gerar_backtest(historico)
@@ -226,9 +225,8 @@ if aba_ativa:
             
             rank_atraso = calcular_atrasos(historico)
             
-            # Mostra os 4 mais atrasados em colunas grandes
             colA, colB, colC, colD = st.columns(4)
-            top4 = rank_atraso[:4] # Pega os 4 primeiros
+            top4 = rank_atraso[:4]
             
             colA.metric(f"Grupo {top4[0][0]:02}", f"{top4[0][1]} jogos")
             colB.metric(f"Grupo {top4[1][0]:02}", f"{top4[1][1]} jogos")
@@ -239,15 +237,12 @@ if aba_ativa:
             st.markdown("### 📊 Frequência (Últimos 50 Jogos)")
             st.caption("Quais grupos estão saindo mais?")
             
-            # Prepara dados para o gráfico
-            recentes = historico[-50:] # Pega só os últimos 50
+            recentes = historico[-50:]
             contagem = Counter(recentes)
             
-            # Cria DataFrame para o gráfico
             df_grafico = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes que saiu'])
             df_grafico.index.name = 'Grupo'
             
-            # Gráfico de Barras Nativo do Streamlit
             st.bar_chart(df_grafico)
             
         else:
@@ -255,4 +250,3 @@ if aba_ativa:
 
 else:
     st.info("Conectando...")
-
