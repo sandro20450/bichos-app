@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Titanium V11 - Loterias", page_icon="🦅")
 
 # Nomes exatos das abas que estão na planilha
-BANCA_OPCOES = ["TRADICIONAL", "CAMINHODASORTE", "MONTECAI"]
+BANCA_OPCOES = ["LOTEP", "CAMINHODASORTE", "MONTECAI"]
 
 def conectar_planilha(nome_aba):
     """Conecta na planilha e seleciona a aba escolhida"""
@@ -216,3 +216,4 @@ if aba_ativa:
         st.warning("A planilha parece estar vazia.")
 else:
     st.info("Conectando ao banco de dados...")
+
