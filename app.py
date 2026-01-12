@@ -10,9 +10,12 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-st.set_page_config(page_title="LOTECA V17 - Crise", page_icon="💲", layout="centered")
+# MUDANÇA 1: Nome na aba do navegador
+st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="centered")
 
+# 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
+    # MUDANÇA 2: Link da LOTEP atualizado
     "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
@@ -94,22 +97,19 @@ def verificar_atualizacao_site(url):
 # =============================================================================
 
 def calcular_ranking_forca_completo(historico):
-    """Retorna TODOS os 25 bichos ordenados por força (frequência ponderada)"""
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
     
-    # Pesos
     c_curto = Counter(hist_reverso[:10])
     for g, f in c_curto.items(): scores[g] += (f * 2.0)
     c_medio = Counter(hist_reverso[:50])
     for g, f in c_medio.items(): scores[g] += (f * 1.0)
     
     rank = sorted(scores.items(), key=lambda x: -x[1])
-    return [g for g, s in rank] # Retorna lista completa ordenada
+    return [g for g, s in rank]
 
 def calcular_ranking_atraso_completo(historico):
-    """Retorna TODOS os 25 bichos ordenados por atraso (do maior para o menor)"""
     if not historico: return []
     atrasos = {}
     total = len(historico)
@@ -119,20 +119,14 @@ def calcular_ranking_atraso_completo(historico):
         atrasos[b] = val
     
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
-    return [g for g, s in rank] # Retorna lista completa ordenada
+    return [g for g, s in rank]
 
 def gerar_palpite_estrategico(historico, modo_crise=False):
-    """
-    Define a estratégia baseada no estado atual:
-    - NORMAL: Top 12 Força + 2 Cobertura (Força).
-    - CRISE: 8 Top Força + 4 Top Atraso (que não estejam na força).
-    """
     todos_forca = calcular_ranking_forca_completo(historico)
     
     if modo_crise:
         # ESTRATÉGIA DE CRISE (8 Quentes + 4 Atrasados)
         top8_quentes = todos_forca[:8]
-        
         todos_atrasos = calcular_ranking_atraso_completo(historico)
         top4_atrasados_unicos = []
         
@@ -142,9 +136,8 @@ def gerar_palpite_estrategico(historico, modo_crise=False):
             if len(top4_atrasados_unicos) == 4:
                 break
         
-        # Junta tudo numa lista única de 12
         lista_final = top8_quentes + top4_atrasados_unicos
-        return lista_final, [] # Retorna lista vazia na cobertura pois não tem
+        return lista_final, [] 
         
     else:
         # ESTRATÉGIA NORMAL (12 Força + 2 Cobertura)
@@ -153,34 +146,26 @@ def gerar_palpite_estrategico(historico, modo_crise=False):
         return top12, cob2
 
 def verificar_status_crise(df_backtest):
-    """Detecta se há 2 derrotas seguidas nas últimas jogadas"""
     derrotas = 0
     if not df_backtest.empty:
         for status in df_backtest['STATUS']:
             if "❌" in status:
                 derrotas += 1
             else:
-                break # Interrompe se achou vitória
+                break
     return derrotas >= 2
 
 def gerar_backtest(historico):
     resultados = []
     if len(historico) < 15: return pd.DataFrame()
     
-    # Analisa 5 jogos passados
     for i in range(5):
         idx = len(historico) - 1 - i
         saiu = historico[idx]
         hist_passado = historico[:idx]
         
-        # Para o backtest ser honesto, precisamos saber se NAQUELA ÉPOCA
-        # estaríamos em crise ou não.
-        # Isso cria uma recursividade complexa. 
-        # Para simplificar e deixar rápido: O Backtest usa a regra NORMAL (V15)
-        # apenas para dizer se ganhou ou perdeu na tendência padrão.
-        
         ranking_na_epoca = calcular_ranking_forca_completo(hist_passado)
-        palpite_padrao = ranking_na_epoca[:14] # Top 14 padrão
+        palpite_padrao = ranking_na_epoca[:14]
         
         status = "❌"
         if saiu in palpite_padrao:
@@ -193,7 +178,8 @@ def gerar_backtest(historico):
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
-st.title("🦅 Titanium V17 - Auto Crise")
+# MUDANÇA 3: Título Principal na tela
+st.title("🦅 BICHOS da LOTECA")
 st.caption("Sistema Inteligente de Gestão de Risco")
 
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
@@ -232,7 +218,6 @@ if aba_ativa:
                 st.error("🚨 MODO CRISE ATIVADO: 2 Derrotas Detectadas!")
                 st.markdown("⚠️ **Estratégia Alterada:** Jogando com 8 Quentes + 4 Atrasados.")
                 st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
-                # Mostra lista única de 12
                 st.code(", ".join([f"{n:02}" for n in palpite_princ]))
                 
             else:
@@ -272,7 +257,6 @@ if aba_ativa:
     with tab2:
         if len(historico) > 0:
             st.write("### 🐢 Atrasômetro")
-            # Recalcula para exibir gráfico
             todos_atrasos = calcular_ranking_atraso_completo(historico)
             atrasos_dict = {}
             total = len(historico)
@@ -283,4 +267,3 @@ if aba_ativa:
             st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
         else:
             st.info("Sem dados.")
-
