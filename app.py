@@ -13,12 +13,22 @@ import time
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-if 'tocar_som' not in st.session_state:
-    st.session_state['tocar_som'] = False
+# Inicializa estados para sons
+if 'tocar_som_salvar' not in st.session_state:
+    st.session_state['tocar_som_salvar'] = False
+if 'tocar_som_apagar' not in st.session_state:
+    st.session_state['tocar_som_apagar'] = False
 
-SOM_SUCESSO_HTML = """
+# HTML dos Sons
+SOM_SALVAR_HTML = """
     <audio autoplay>
     <source src="https://www.soundjay.com/buttons/sounds/button-3.mp3" type="audio/mpeg">
+    </audio>
+    """
+
+SOM_APAGAR_HTML = """
+    <audio autoplay>
+    <source src="https://www.soundjay.com/misc/sounds/trash-can-lid-1.mp3" type="audio/mpeg">
     </audio>
     """
 
@@ -35,9 +45,9 @@ def aplicar_estilo_banca(banca):
         text_color = "#ffffff"
         card_bg = "rgba(255, 255, 255, 0.1)"
         
-    elif banca == "CAMINHODASORTE": # VERDE ESCURO E BRANCO (Novo Pedido)
-        bg_color = "#054a29"  # Verde bem escuro
-        text_color = "#ffffff" # Texto branco
+    elif banca == "CAMINHODASORTE": # VERDE ESCURO E BRANCO
+        bg_color = "#054a29"  
+        text_color = "#ffffff" 
         card_bg = "rgba(255, 255, 255, 0.1)"
         
     elif banca == "MONTECAI": # Vermelho e Branco
@@ -53,9 +63,13 @@ def aplicar_estilo_banca(banca):
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{
             color: {text_color} !important;
         }}
+        
+        /* CORREÇÃO DO INPUT: Texto Branco para ficar visível no fundo escuro */
         .stNumberInput input {{
-            color: black !important;
+            color: white !important;
+            caret-color: white !important;
         }}
+        
         .metric-card {{
             background-color: {card_bg};
             padding: 10px;
@@ -238,9 +252,14 @@ def gerar_backtest_e_status(historico):
 # --- 4. INTERFACE PRINCIPAL ---
 # =============================================================================
 
-if st.session_state['tocar_som']:
-    st.markdown(SOM_SUCESSO_HTML, unsafe_allow_html=True)
-    st.session_state['tocar_som'] = False
+# Lógica de Som (Salvar e Apagar)
+if st.session_state['tocar_som_salvar']:
+    st.markdown(SOM_SALVAR_HTML, unsafe_allow_html=True)
+    st.session_state['tocar_som_salvar'] = False
+
+if st.session_state['tocar_som_apagar']:
+    st.markdown(SOM_APAGAR_HTML, unsafe_allow_html=True)
+    st.session_state['tocar_som_apagar'] = False
 
 with st.sidebar:
     st.header("🦅 MENU")
@@ -253,18 +272,21 @@ with st.sidebar:
         if st.button("💾 SALVAR", type="primary"):
             aba = conectar_planilha(banca_selecionada)
             if aba and salvar_na_nuvem(aba, novo_bicho):
-                st.session_state['tocar_som'] = True
+                st.session_state['tocar_som_salvar'] = True
                 st.toast("Salvo! 🔔", icon="✅")
                 time.sleep(0.5)
                 st.rerun()
     with col_btn2:
         if st.button("🔄 REBOOT"):
             st.rerun()
+            
     with st.expander("🗑️ Área de Perigo"):
         if st.button("APAGAR ÚLTIMO"):
             aba = conectar_planilha(banca_selecionada)
             if aba and deletar_ultimo_registro(aba):
-                st.toast("Apagado!", icon="🗑️")
+                st.session_state['tocar_som_apagar'] = True
+                st.toast("Apagado! 🗑️", icon="🗑️")
+                time.sleep(0.5)
                 st.rerun()
 
 aplicar_estilo_banca(banca_selecionada)
@@ -321,7 +343,7 @@ if aba_ativa:
                     st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
                     st.code(", ".join([f"{n:02}" for n in palpite_c]), language="text")
 
-        # === ABA 2: GRÁFICOS (RETORNADO) ===
+        # === ABA 2: GRÁFICOS ===
         with tab_graficos:
             st.write("### 🐢 Top Atrasados (Quem não sai há tempo?)")
             todos_atrasos = calcular_ranking_atraso_completo(historico)
