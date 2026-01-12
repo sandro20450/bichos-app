@@ -13,11 +13,9 @@ import time
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# Inicializa estado para som
 if 'tocar_som' not in st.session_state:
     st.session_state['tocar_som'] = False
 
-# HTML do Som de Sucesso (Um "Plim" agradável)
 SOM_SUCESSO_HTML = """
     <audio autoplay>
     <source src="https://www.soundjay.com/buttons/sounds/button-3.mp3" type="audio/mpeg">
@@ -27,7 +25,7 @@ SOM_SUCESSO_HTML = """
 def aplicar_estilo_banca(banca):
     """Define as cores baseadas na banca selecionada"""
     
-    # Cores Padrão (Dark Mode do Streamlit ou Branco)
+    # Padrão
     bg_color = "#0e1117" 
     text_color = "#ffffff"
     card_bg = "#262730"
@@ -37,35 +35,27 @@ def aplicar_estilo_banca(banca):
         text_color = "#ffffff"
         card_bg = "rgba(255, 255, 255, 0.1)"
         
-    elif banca == "CAMINHODASORTE": # Amarelo e Verde
-        bg_color = "#ffeb3b" 
-        text_color = "#1b5e20" # Verde escuro para contraste
-        card_bg = "rgba(0, 0, 0, 0.05)"
+    elif banca == "CAMINHODASORTE": # VERDE ESCURO E BRANCO (Novo Pedido)
+        bg_color = "#054a29"  # Verde bem escuro
+        text_color = "#ffffff" # Texto branco
+        card_bg = "rgba(255, 255, 255, 0.1)"
         
     elif banca == "MONTECAI": # Vermelho e Branco
         bg_color = "#b71c1c"
         text_color = "#ffffff"
         card_bg = "rgba(255, 255, 255, 0.1)"
 
-    # CSS Injetado
     st.markdown(f"""
     <style>
-        /* Fundo Geral */
         [data-testid="stAppViewContainer"] {{
             background-color: {bg_color};
         }}
-        
-        /* Textos Gerais */
-        h1, h2, h3, h4, h5, h6, p, span, div, label {{
+        h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{
             color: {text_color} !important;
         }}
-        
-        /* Ajuste para inputs ficarem legíveis */
         .stNumberInput input {{
             color: black !important;
         }}
-        
-        /* Cards Personalizados */
         .metric-card {{
             background-color: {card_bg};
             padding: 10px;
@@ -73,8 +63,7 @@ def aplicar_estilo_banca(banca):
             border: 1px solid rgba(255,255,255,0.2);
             text-align: center;
         }}
-
-        /* Estilo das Bolas */
+        /* Bolas */
         .bola-verde {{
             display: inline-block; width: 38px; height: 38px; line-height: 38px;
             border-radius: 50%; background-color: #28a745; color: white !important;
@@ -148,7 +137,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA E VISUAL ---
+# --- 3. LÓGICA E CÁLCULOS ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -249,32 +238,28 @@ def gerar_backtest_e_status(historico):
 # --- 4. INTERFACE PRINCIPAL ---
 # =============================================================================
 
-# Toca som se o estado estiver ativado
 if st.session_state['tocar_som']:
     st.markdown(SOM_SUCESSO_HTML, unsafe_allow_html=True)
-    st.session_state['tocar_som'] = False # Desliga para não tocar no refresh
+    st.session_state['tocar_som'] = False
 
 with st.sidebar:
     st.header("🦅 MENU")
     banca_selecionada = st.selectbox("Banca:", BANCA_OPCOES)
-    
     st.markdown("---")
     st.write("📝 **Novo Resultado**")
     novo_bicho = st.number_input("Grupo:", 1, 25, 1)
-    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("💾 SALVAR", type="primary"):
             aba = conectar_planilha(banca_selecionada)
             if aba and salvar_na_nuvem(aba, novo_bicho):
-                st.session_state['tocar_som'] = True # Ativa o som
+                st.session_state['tocar_som'] = True
                 st.toast("Salvo! 🔔", icon="✅")
-                time.sleep(0.5) # Pequena pausa para garantir
+                time.sleep(0.5)
                 st.rerun()
     with col_btn2:
         if st.button("🔄 REBOOT"):
             st.rerun()
-
     with st.expander("🗑️ Área de Perigo"):
         if st.button("APAGAR ÚLTIMO"):
             aba = conectar_planilha(banca_selecionada)
@@ -282,65 +267,82 @@ with st.sidebar:
                 st.toast("Apagado!", icon="🗑️")
                 st.rerun()
 
-# Aplica as cores antes de carregar o resto
 aplicar_estilo_banca(banca_selecionada)
-
 st.title("🦅 BICHOS da LOTECA")
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
     historico = carregar_dados(aba_ativa)
-    
     if len(historico) > 0:
-        # --- TOPO SIMPLIFICADO ---
+        
+        # --- CABEÇALHO SIMPLES ---
         link = URLS_BANCAS.get(banca_selecionada)
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         
         col_mon1, col_mon2 = st.columns([3, 1])
-        with col_mon1:
-            st.caption(f"Monitor: {site_tit}")
-        with col_mon2:
+        with col_mon1: st.caption(f"Monitor: {site_tit}")
+        with col_mon2: 
             if link: st.link_button("🔗 Site", link)
 
-        st.markdown("---")
-        
-        # --- CÁLCULOS ---
+        # CÁLCULOS
         df_back, EM_CRISE = gerar_backtest_e_status(historico)
         palpite_p, palpite_c = gerar_palpite_estrategico(historico, EM_CRISE)
+        score, status_dna = analisar_dna_banca(historico)
         
-        # --- PALPITES ---
-        if EM_CRISE:
-            st.error("🚨 MODO CRISE: Lista de Recuperação")
-            st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
-            st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
+        # --- 1. DIAGNÓSTICO & DNA (TOPO) ---
+        with st.expander("📊 Diagnóstico & Histórico da Banca", expanded=True):
+            # Tabela de DNA (Lado a Lado)
+            col_d1, col_d2 = st.columns(2)
+            col_d1.metric("Obediência", f"{int(score)}%")
+            col_d2.metric("DNA Status", status_dna)
             
-        else:
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.success("🔥 TOP 12 (Principal)")
-                st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
-                st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-            with c2:
-                st.info("❄️ COB (2)")
-                st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
-                st.code(", ".join([f"{n:02}" for n in palpite_c]), language="text")
-
-        # --- ABA DE HISTÓRICO E DNA (Nova Localização) ---
-        with st.expander("📊 Histórico & DNA da Banca", expanded=True):
-            
-            # Diagnóstico movido para CÁ
-            score, status_dna = analisar_dna_banca(historico)
-            
-            cd1, cd2 = st.columns(2)
-            with cd1:
-                st.metric("Obediência (25 jogos)", f"{int(score)}%")
-            with cd2:
-                st.metric("Status DNA", status_dna)
-                
+            # Tabela de Backtest logo abaixo
             st.table(df_back)
 
-    else:
-        st.warning("Adicione dados pela barra lateral.")
+        st.markdown("---")
 
+        # --- 2. ABAS (PALPITES E GRÁFICOS) ---
+        tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos & Atrasos"])
+
+        # === ABA 1: PALPITES ===
+        with tab_palpites:
+            if EM_CRISE:
+                st.error("🚨 MODO CRISE: Lista de Recuperação")
+                st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
+                st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
+            else:
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.success("🔥 TOP 12 (Principal)")
+                    st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
+                    st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
+                with c2:
+                    st.info("❄️ COB (2)")
+                    st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
+                    st.code(", ".join([f"{n:02}" for n in palpite_c]), language="text")
+
+        # === ABA 2: GRÁFICOS (RETORNADO) ===
+        with tab_graficos:
+            st.write("### 🐢 Top Atrasados (Quem não sai há tempo?)")
+            todos_atrasos = calcular_ranking_atraso_completo(historico)
+            atrasos_dict = {}
+            total = len(historico)
+            
+            # Pega os 12 mais atrasados para o gráfico
+            for b in todos_atrasos[:12]:
+                indices = [i for i, x in enumerate(historico) if x == b]
+                val = total - 1 - indices[-1] if indices else total
+                atrasos_dict[f"Gr {b:02}"] = val
+            
+            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos sem sair']))
+            
+            st.write("### 📊 Frequência (Quem sai mais?)")
+            recentes = historico[-50:] # Últimos 50
+            contagem = Counter(recentes)
+            df_freq = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes'])
+            st.bar_chart(df_freq)
+
+    else:
+        st.warning("⚠️ Planilha vazia.")
 else:
     st.info("Conectando...")
