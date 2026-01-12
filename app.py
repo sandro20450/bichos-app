@@ -10,11 +10,10 @@ import pytz
 # =============================================================================
 # --- 1. CONFIGURAÇÕES AVANÇADAS ---
 # =============================================================================
-st.set_page_config(page_title="Titanium V15 - Top 12", page_icon="🦅", layout="centered")
+st.set_page_config(page_title="Titanium V17 - Crise", page_icon="🦅", layout="centered")
 
-# 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
+    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-paraiba-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
 }
@@ -22,7 +21,7 @@ URLS_BANCAS = {
 BANCA_OPCOES = ["LOTEP", "CAMINHODASORTE", "MONTECAI"]
 
 # =============================================================================
-# --- 2. FUNÇÕES DE CONEXÃO E BANCO DE DADOS ---
+# --- 2. CONEXÃO E BANCO DE DADOS ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -67,19 +66,14 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. FUNÇÕES DE MONITORAMENTO E ESTATÍSTICA ---
+# --- 3. MONITORAMENTO ---
 # =============================================================================
 def verificar_atualizacao_site(url):
-    """Verifica se a data de hoje consta no site"""
     if not url: return False, "Link não configurado", ""
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
-        datas_possiveis = [
-            hoje.strftime("%d/%m/%Y"),
-            hoje.strftime("%d-%m-%Y"),
-            hoje.strftime("%d de")
-        ]
+        datas_possiveis = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
         
         headers = {'User-Agent': 'Mozilla/5.0'}
         resposta = requests.get(url, headers=headers, timeout=5)
@@ -95,30 +89,12 @@ def verificar_atualizacao_site(url):
     except Exception as e:
         return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
 
-def calcular_atrasos(historico):
-    """Calcula há quantos jogos cada bicho não sai"""
-    atrasos = {}
-    total_jogos = len(historico)
-    
-    for bicho in range(1, 26):
-        try:
-            indices = [i for i, x in enumerate(historico) if x == bicho]
-            if indices:
-                ultimo_indice = indices[-1]
-                atraso = total_jogos - 1 - ultimo_indice
-                atrasos[bicho] = atraso
-            else:
-                atrasos[bicho] = total_jogos
-        except:
-            atrasos[bicho] = 0
-            
-    rank_atraso = sorted(atrasos.items(), key=lambda x: -x[1])
-    return rank_atraso
+# =============================================================================
+# --- 4. MOTOR MATEMÁTICO (CRÍTICO E NORMAL) ---
+# =============================================================================
 
-# =============================================================================
-# --- 4. MOTOR TITANIUM V11.1 ---
-# =============================================================================
-def calcular_ranking_forca(historico):
+def calcular_ranking_forca_completo(historico):
+    """Retorna TODOS os 25 bichos ordenados por força (frequência ponderada)"""
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
@@ -126,127 +102,184 @@ def calcular_ranking_forca(historico):
     # Pesos
     c_curto = Counter(hist_reverso[:10])
     for g, f in c_curto.items(): scores[g] += (f * 2.0)
-    
     c_medio = Counter(hist_reverso[:50])
     for g, f in c_medio.items(): scores[g] += (f * 1.0)
     
     rank = sorted(scores.items(), key=lambda x: -x[1])
-    return [g for g, s in rank[:14]]
+    return [g for g, s in rank] # Retorna lista completa ordenada
+
+def calcular_ranking_atraso_completo(historico):
+    """Retorna TODOS os 25 bichos ordenados por atraso (do maior para o menor)"""
+    if not historico: return []
+    atrasos = {}
+    total = len(historico)
+    for b in range(1, 26):
+        indices = [i for i, x in enumerate(historico) if x == b]
+        val = total - 1 - indices[-1] if indices else total
+        atrasos[b] = val
+    
+    rank = sorted(atrasos.items(), key=lambda x: -x[1])
+    return [g for g, s in rank] # Retorna lista completa ordenada
+
+def gerar_palpite_estrategico(historico, modo_crise=False):
+    """
+    Define a estratégia baseada no estado atual:
+    - NORMAL: Top 12 Força + 2 Cobertura (Força).
+    - CRISE: 8 Top Força + 4 Top Atraso (que não estejam na força).
+    """
+    todos_forca = calcular_ranking_forca_completo(historico)
+    
+    if modo_crise:
+        # ESTRATÉGIA DE CRISE (8 Quentes + 4 Atrasados)
+        top8_quentes = todos_forca[:8]
+        
+        todos_atrasos = calcular_ranking_atraso_completo(historico)
+        top4_atrasados_unicos = []
+        
+        for bicho in todos_atrasos:
+            if bicho not in top8_quentes:
+                top4_atrasados_unicos.append(bicho)
+            if len(top4_atrasados_unicos) == 4:
+                break
+        
+        # Junta tudo numa lista única de 12
+        lista_final = top8_quentes + top4_atrasados_unicos
+        return lista_final, [] # Retorna lista vazia na cobertura pois não tem
+        
+    else:
+        # ESTRATÉGIA NORMAL (12 Força + 2 Cobertura)
+        top12 = todos_forca[:12]
+        cob2 = todos_forca[12:14]
+        return top12, cob2
+
+def verificar_status_crise(df_backtest):
+    """Detecta se há 2 derrotas seguidas nas últimas jogadas"""
+    derrotas = 0
+    if not df_backtest.empty:
+        for status in df_backtest['STATUS']:
+            if "❌" in status:
+                derrotas += 1
+            else:
+                break # Interrompe se achou vitória
+    return derrotas >= 2
 
 def gerar_backtest(historico):
     resultados = []
     if len(historico) < 15: return pd.DataFrame()
+    
+    # Analisa 5 jogos passados
     for i in range(5):
         idx = len(historico) - 1 - i
         saiu = historico[idx]
-        prev = calcular_ranking_forca(historico[:idx])
-        status = "💚 VITÓRIA" if saiu in prev else "❌"
+        hist_passado = historico[:idx]
+        
+        # Para o backtest ser honesto, precisamos saber se NAQUELA ÉPOCA
+        # estaríamos em crise ou não.
+        # Isso cria uma recursividade complexa. 
+        # Para simplificar e deixar rápido: O Backtest usa a regra NORMAL (V15)
+        # apenas para dizer se ganhou ou perdeu na tendência padrão.
+        
+        ranking_na_epoca = calcular_ranking_forca_completo(hist_passado)
+        palpite_padrao = ranking_na_epoca[:14] # Top 14 padrão
+        
+        status = "❌"
+        if saiu in palpite_padrao:
+            status = "💚 VITÓRIA"
+            
         resultados.append({"JOGO": f"Recente #{i+1}", "SAIU": f"{saiu:02}", "STATUS": status})
+        
     return pd.DataFrame(resultados)
 
 # =============================================================================
 # --- 5. INTERFACE DO APLICATIVO ---
 # =============================================================================
-st.title("🦅 Titanium V15 Top 12")
-st.caption("Estratégia: 12 Fortes + 2 Cobertura")
+st.title("🦅 Titanium V17 - Auto Crise")
+st.caption("Sistema Inteligente de Gestão de Risco")
 
-# Seleção de Banca
 banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
     historico = carregar_dados(aba_ativa)
     
-    # --- ÁREA DE MONITORAMENTO ---
+    # Monitor
     st.markdown("---")
-    link_atual = URLS_BANCAS.get(banca_selecionada)
-    online, titulo, detalhe = verificar_atualizacao_site(link_atual)
-    
-    col_mon1, col_mon2 = st.columns([3, 1])
-    with col_mon1:
-        if online: st.success(f"**{titulo}**")
-        else: st.warning(f"**{titulo}**")
-    with col_mon2:
-        if link_atual: st.link_button("🔗 VER SITE", link_atual)
+    link = URLS_BANCAS.get(banca_selecionada)
+    online, tit, det = verificar_atualizacao_site(link)
+    c_m1, c_m2 = st.columns([3,1])
+    with c_m1:
+        if online: st.success(tit)
+        else: st.warning(tit)
+    with c_m2:
+        if link: st.link_button("🔗 SITE", link)
 
-    # --- ABAS DE NAVEGAÇÃO ---
-    tab1, tab2 = st.tabs(["🏠 Principal", "📈 Análise Gráfica"])
+    tab1, tab2 = st.tabs(["🏠 Palpites", "📈 Gráficos"])
 
-    # === ABA 1: PRINCIPAL ===
     with tab1:
         if len(historico) > 0:
             ultimo = historico[-1]
-            st.info(f"Último Resultado Salvo: **Grupo {ultimo:02}**")
+            st.info(f"Último Resultado: **Grupo {ultimo:02}**")
             
-            palpite = calcular_ranking_forca(historico)
+            # 1. Gera Backtest e Verifica Crise
+            df_back = gerar_backtest(historico)
+            EM_CRISE = verificar_status_crise(df_back)
             
-            # --- MUDANÇA AQUI: DIVISÃO 12 / 2 ---
-            c1, c2 = st.columns([2, 1]) # Coluna 1 maior para caber 12 números
-            with c1:
-                st.markdown("### 🔥 Top 12 (Fogo)")
-                # Pega os primeiros 12
-                st.write(", ".join([f"**{n:02}**" for n in palpite[:12]]))
-            with c2:
-                st.markdown("### ❄️ Cob (2)")
-                # Pega do 12 em diante
-                st.write(", ".join([f"{n:02}" for n in palpite[12:]]))
+            # 2. Gera Palpite baseado no Status
+            palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
+            
+            # 3. Exibição Condicional
+            if EM_CRISE:
+                st.error("🚨 MODO CRISE ATIVADO: 2 Derrotas Detectadas!")
+                st.markdown("⚠️ **Estratégia Alterada:** Jogando com 8 Quentes + 4 Atrasados.")
+                st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
+                # Mostra lista única de 12
+                st.code(", ".join([f"{n:02}" for n in palpite_princ]))
+                
+            else:
+                st.success("✅ MODO NORMAL: Tendência Estável")
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.markdown("### 🔥 Top 12 (Normal)")
+                    st.write(", ".join([f"**{n:02}**" for n in palpite_princ]))
+                with c2:
+                    st.markdown("### ❄️ Cob (2)")
+                    st.write(", ".join([f"{n:02}" for n in palpite_cob]))
 
-            with st.expander("📊 Ver Backtest (Últimos 5 jogos)"):
-                df_back = gerar_backtest(historico)
+            # Backtest
+            with st.expander("📊 Ver Histórico"):
                 if not df_back.empty: st.table(df_back)
 
             st.markdown("---")
             st.write("### 📝 Inserir Novo Resultado")
-            col_input, col_action = st.columns([1, 1])
-            with col_input:
-                novo_bicho = st.number_input("Digite o Grupo:", 1, 25, 1)
-            with col_action:
+            ci, ca = st.columns([1,1])
+            with ci: novo = st.number_input("Grupo:", 1, 25, 1)
+            with ca:
                 st.write("")
                 st.write("")
                 if st.button("💾 Salvar", type="primary"):
-                    if salvar_na_nuvem(aba_ativa, novo_bicho):
+                    if salvar_na_nuvem(aba_ativa, novo):
                         st.success("Salvo!")
                         st.rerun()
-                    else:
-                        st.error("Erro.")
-
-            with st.expander("Opções de Correção"):
+                    else: st.error("Erro")
+            
+            with st.expander("Correção"):
                 if st.button("🗑️ Apagar Último"):
                     deletar_ultimo_registro(aba_ativa)
                     st.rerun()
         else:
-            st.warning("Planilha vazia.")
+            st.warning("Sem dados.")
 
-    # === ABA 2: ESTATÍSTICAS E GRÁFICOS ===
     with tab2:
         if len(historico) > 0:
-            st.markdown("### 🐢 Top 4 Atrasados")
-            st.caption("Há quantos jogos eles não saem?")
-            
-            rank_atraso = calcular_atrasos(historico)
-            
-            colA, colB, colC, colD = st.columns(4)
-            top4 = rank_atraso[:4]
-            
-            colA.metric(f"Grupo {top4[0][0]:02}", f"{top4[0][1]} jogos")
-            colB.metric(f"Grupo {top4[1][0]:02}", f"{top4[1][1]} jogos")
-            colC.metric(f"Grupo {top4[2][0]:02}", f"{top4[2][1]} jogos")
-            colD.metric(f"Grupo {top4[3][0]:02}", f"{top4[3][1]} jogos")
-            
-            st.markdown("---")
-            st.markdown("### 📊 Frequência (Últimos 50 Jogos)")
-            st.caption("Quais grupos estão saindo mais?")
-            
-            recentes = historico[-50:]
-            contagem = Counter(recentes)
-            
-            df_grafico = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes que saiu'])
-            df_grafico.index.name = 'Grupo'
-            
-            st.bar_chart(df_grafico)
-            
+            st.write("### 🐢 Atrasômetro")
+            # Recalcula para exibir gráfico
+            todos_atrasos = calcular_ranking_atraso_completo(historico)
+            atrasos_dict = {}
+            total = len(historico)
+            for b in todos_atrasos[:10]:
+                indices = [i for i, x in enumerate(historico) if x == b]
+                val = total - 1 - indices[-1] if indices else total
+                atrasos_dict[f"Gr {b:02}"] = val
+            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
         else:
-            st.info("Sem dados suficientes para gráficos.")
-
-else:
-    st.info("Conectando...")
+            st.info("Sem dados.")
