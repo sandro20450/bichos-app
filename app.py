@@ -14,7 +14,7 @@ st.set_page_config(page_title="Titanium V14 - Dashboard", page_icon="🦅", layo
 
 # 🔗 SEUS LINKS DE MONITORAMENTO
 URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-paraiba-de-hoje",
+    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
     "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
     "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
 }
@@ -255,3 +255,4 @@ if aba_ativa:
 
 else:
     st.info("Conectando...")
+
