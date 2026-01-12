@@ -8,9 +8,63 @@ from datetime import datetime
 import pytz
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES AVANÇADAS ---
+# --- 1. CONFIGURAÇÕES VISUAIS (CSS PRO) ---
 # =============================================================================
-st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="centered")
+st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
+
+# CSS para deixar o visual com cara de aplicativo nativo
+st.markdown("""
+<style>
+    /* Estilo das Bolas de Loteria */
+    .bola-verde {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        border-radius: 50%;
+        background-color: #28a745;
+        color: white;
+        text-align: center;
+        font-weight: bold;
+        margin: 3px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    }
+    .bola-azul {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        border-radius: 50%;
+        background-color: #17a2b8;
+        color: white;
+        text-align: center;
+        font-weight: bold;
+        margin: 3px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    }
+    .bola-vermelha {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        border-radius: 50%;
+        background-color: #dc3545;
+        color: white;
+        text-align: center;
+        font-weight: bold;
+        margin: 3px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    }
+    /* Cards do Topo */
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #d0d0d0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 URLS_BANCAS = {
     "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
@@ -21,7 +75,7 @@ URLS_BANCAS = {
 BANCA_OPCOES = ["LOTEP", "CAMINHODASORTE", "MONTECAI"]
 
 # =============================================================================
-# --- 2. CONEXÃO E BANCO DE DADOS ---
+# --- 2. FUNÇÕES DE BANCO DE DADOS ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -34,7 +88,7 @@ def conectar_planilha(nome_aba):
             worksheet = sh.worksheet(nome_aba)
             return worksheet
         except Exception as e:
-            st.error(f"Erro na planilha: {e}")
+            st.sidebar.error(f"Erro planilha: {e}")
             return None
     return None
 
@@ -49,8 +103,7 @@ def salvar_na_nuvem(worksheet, numero):
         try:
             worksheet.append_row([int(numero)])
             return True
-        except:
-            return False
+        except: return False
     return False
 
 def deletar_ultimo_registro(worksheet):
@@ -61,49 +114,45 @@ def deletar_ultimo_registro(worksheet):
             if total_linhas > 0:
                 worksheet.delete_rows(total_linhas)
                 return True
-        except:
-            return False
+        except: return False
     return False
 
 # =============================================================================
-# --- 3. MONITORAMENTO ---
+# --- 3. FUNÇÕES MATEMÁTICAS & VISUAIS ---
 # =============================================================================
+def html_bolas(lista, cor="verde"):
+    """Gera o HTML das bolas coloridas"""
+    html = "<div>"
+    classe = f"bola-{cor}"
+    for n in lista:
+        html += f"<div class='{classe}'>{n:02}</div>"
+    html += "</div>"
+    return html
+
 def verificar_atualizacao_site(url):
-    if not url: return False, "Link não configurado", ""
+    if not url: return False, "Sem Link", ""
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
-        datas_possiveis = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
-        
+        datas = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
         headers = {'User-Agent': 'Mozilla/5.0'}
-        resposta = requests.get(url, headers=headers, timeout=5)
-        
-        if resposta.status_code == 200:
-            texto = resposta.text
-            for data in datas_possiveis:
-                if data in texto:
-                    return True, "🟢 SITE ATUALIZADO HOJE!", f"Data encontrada: {data}"
-            return False, "🟡 Data de hoje não encontrada", "O site está online, mas sem a data de hoje."
-        else:
-            return False, "🔴 Site Fora do Ar", f"Erro: {resposta.status_code}"
-    except Exception as e:
-        return False, "🔴 Erro de Conexão", f"Detalhe: {e}"
+        r = requests.get(url, headers=headers, timeout=4)
+        if r.status_code == 200:
+            for d in datas:
+                if d in r.text: return True, "🟢 ATUALIZADO", f"Data: {d}"
+            return False, "🟡 SEM DATA", "Site online, sem data de hoje."
+        return False, "🔴 OFF", "Erro site."
+    except: return False, "🔴 ERRO", "Falha conexão."
 
-# =============================================================================
-# --- 4. MOTOR MATEMÁTICO (CICLO COMPLETO 25) ---
-# =============================================================================
-
+# --- LÓGICA V20 (CICLO 25) ---
 def calcular_ranking_forca_completo(historico):
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
-    
-    # Pesos
     c_curto = Counter(hist_reverso[:10])
     for g, f in c_curto.items(): scores[g] += (f * 2.0)
     c_medio = Counter(hist_reverso[:50])
     for g, f in c_medio.items(): scores[g] += (f * 1.0)
-    
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
@@ -119,185 +168,158 @@ def calcular_ranking_atraso_completo(historico):
     return [g for g, s in rank]
 
 def analisar_dna_banca(historico):
-    """
-    ATUALIZADO V20: Analisa os últimos 25 jogos (Ciclo Completo).
-    Isso dá um diagnóstico mais robusto sobre a obediência da banca.
-    """
-    # Precisamos de mais histórico agora (25 + margem)
-    if len(historico) < 35: return 0, "Dados Insuficientes (Precisa de +35 jogos)"
-    
-    acertos_top12 = 0
-    analise_qtd = 25 # MUDANÇA AQUI: De 20 para 25
-    
-    for i in range(analise_qtd):
+    if len(historico) < 35: return 0, "Calibrando..."
+    acertos = 0
+    analise = 25
+    for i in range(analise):
         idx = len(historico) - 1 - i
         saiu = historico[idx]
         passado = historico[:idx]
-        
-        ranking = calcular_ranking_forca_completo(passado)
-        top12 = ranking[:12]
-        
-        if saiu in top12:
-            acertos_top12 += 1
-            
-    score = (acertos_top12 / analise_qtd) * 100
-    
-    if score >= 65:
-        personalidade = "🎯 Disciplinada (Respeita Lógica)"
-    elif score >= 45:
-        personalidade = "⚖️ Equilibrada"
-    else:
-        personalidade = "🎲 Caótica (Muitas Zebras)"
-        
-    return score, personalidade
+        ranking = calcular_ranking_forca_completo(passado)[:12]
+        if saiu in ranking: acertos += 1
+    score = (acertos / analise) * 100
+    if score >= 65: status = "🎯 DISCIPLINADA"
+    elif score >= 45: status = "⚖️ EQUILIBRADA"
+    else: status = "🎲 CAÓTICA"
+    return score, status
 
 def gerar_palpite_estrategico(historico, modo_crise=False):
     todos_forca = calcular_ranking_forca_completo(historico)
-    
     if modo_crise:
-        top8_quentes = todos_forca[:8]
+        top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
-        top4_atrasados_unicos = []
-        for bicho in todos_atrasos:
-            if bicho not in top8_quentes:
-                top4_atrasados_unicos.append(bicho)
-            if len(top4_atrasados_unicos) == 4:
-                break
-        return top8_quentes + top4_atrasados_unicos, [] 
+        top4_atraso = []
+        for b in todos_atrasos:
+            if b not in top8:
+                top4_atraso.append(b)
+            if len(top4_atraso) == 4: break
+        return top8 + top4_atraso, []
     else:
         return todos_forca[:12], todos_forca[12:14]
 
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), False
+    derrotas = 0
+    resultados = []
+    inicio = max(0, len(historico) - 25)
     
-    derrotas_consecutivas = 0
-    resultados_simulados = []
-    # Simulação dos últimos 25 jogos
-    inicio_simulacao = len(historico) - 25
-    if inicio_simulacao < 0: inicio_simulacao = 0
-    
-    for i in range(inicio_simulacao, len(historico)):
-        saiu_real = historico[i]
-        hist_passado = historico[:i]
-        
-        modo_crise_ativo = derrotas_consecutivas >= 2
-        palpite_p, palpite_c = gerar_palpite_estrategico(hist_passado, modo_crise=modo_crise_ativo)
+    for i in range(inicio, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        crise = derrotas >= 2
+        p_princ, p_cob = gerar_palpite_estrategico(passado, crise)
         
         status = "❌"
-        if saiu_real in (palpite_p + palpite_c):
-            status = "💚 VITÓRIA"
-            derrotas_consecutivas = 0
+        if saiu in (p_princ + p_cob):
+            status = "💚"
+            derrotas = 0
         else:
-            derrotas_consecutivas += 1
+            derrotas += 1
             
         if i >= len(historico) - 5:
-            resultados_simulados.append({
-                "JOGO": f"Recente #{len(historico) - i}",
-                "SAIU": f"{saiu_real:02}",
-                "STATUS": status
-            })
+            resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
+            
+    return pd.DataFrame(resultados[::-1]), derrotas >= 2
+
+# =============================================================================
+# --- 4. INTERFACE PRINCIPAL (DASHBOARD) ---
+# =============================================================================
+# BARRA LATERAL (CONTROLES)
+with st.sidebar:
+    st.header("🦅 MENU DE COMANDO")
+    banca_selecionada = st.selectbox("Escolha a Banca:", BANCA_OPCOES)
     
-    return pd.DataFrame(resultados_simulados[::-1]), derrotas_consecutivas >= 2
+    st.markdown("---")
+    st.write("📝 **Novo Resultado**")
+    novo_bicho = st.number_input("Grupo:", 1, 25, 1)
+    
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("💾 SALVAR", type="primary"):
+            aba = conectar_planilha(banca_selecionada)
+            if aba and salvar_na_nuvem(aba, novo_bicho):
+                st.toast("Salvo com sucesso!", icon="✅")
+                st.rerun()
+    with col_btn2:
+        if st.button("🔄 REBOOT"):
+            st.rerun()
 
-# =============================================================================
-# --- 5. INTERFACE DO APLICATIVO ---
-# =============================================================================
+    with st.expander("🗑️ Área de Perigo"):
+        st.write("Apagar o último registro:")
+        if st.button("CONFIRMAR EXCLUSÃO"):
+            aba = conectar_planilha(banca_selecionada)
+            if aba and deletar_ultimo_registro(aba):
+                st.toast("Apagado!", icon="🗑️")
+                st.rerun()
+
+# TELA PRINCIPAL
 st.title("🦅 BICHOS da LOTECA")
-st.caption("Sistema V20 - Ciclo 25")
-
-banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
     historico = carregar_dados(aba_ativa)
     
-    # --- MONITOR DE SITE ---
-    st.markdown("---")
-    link = URLS_BANCAS.get(banca_selecionada)
-    online, tit, det = verificar_atualizacao_site(link)
-    c_m1, c_m2 = st.columns([3,1])
-    with c_m1:
-        if online: st.success(tit)
-        else: st.warning(tit)
-    with c_m2:
-        if link: st.link_button("🔗 SITE", link)
+    if len(historico) > 0:
+        # --- CABEÇALHO (PLACAR) ---
+        score, status_dna = analisar_dna_banca(historico)
+        ultimo = historico[-1]
+        link = URLS_BANCAS.get(banca_selecionada)
+        site_on, site_tit, _ = verificar_atualizacao_site(link)
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Obediência", f"{int(score)}%")
+        c2.metric("Status DNA", "Caótico" if score < 40 else "Disciplinado")
+        c3.metric("Último Saiu", f"{ultimo:02}")
+        with c4:
+            st.write(f"Monitor: {site_tit}")
+            if link: st.link_button("🔗 Abrir Site", link)
 
-    tab1, tab2 = st.tabs(["🏠 Diagnóstico & Jogo", "📈 Gráficos"])
-
-    with tab1:
-        if len(historico) > 0:
-            ultimo = historico[-1]
+        st.markdown("---")
+        
+        # --- LÓGICA ---
+        df_back, EM_CRISE = gerar_backtest_e_status(historico)
+        palpite_p, palpite_c = gerar_palpite_estrategico(historico, EM_CRISE)
+        
+        # --- VISUALIZAÇÃO DOS PALPITES ---
+        if EM_CRISE:
+            st.error("🚨 MODO CRISE ATIVADO: Jogando RECUPERAÇÃO (Quentes + Atrasados)")
             
-            # --- 🔍 DIAGNÓSTICO DE DNA (25 Jogos) ---
-            score_dna, personalidade = analisar_dna_banca(historico)
+            st.markdown("### 🛡️ LISTA DE RECUPERAÇÃO (12)")
+            # Bolas Vermelhas
+            st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
             
-            st.markdown("### 🧬 DNA da Banca (Últimos 25 Jogos)")
-            col_dna1, col_dna2, col_dna3 = st.columns([1, 2, 1])
+            # Botão de Copiar
+            lista_str = ", ".join([f"{n:02}" for n in palpite_p])
+            st.caption("📋 Copiar Lista:")
+            st.code(lista_str, language="text")
             
-            col_dna1.metric("Obediência", f"{int(score_dna)}%")
-            col_dna2.info(f"**Status:** {personalidade}")
-            col_dna3.metric("Último", f"{ultimo:02}")
-            
-            if score_dna < 40:
-                st.error("⚠️ CUIDADO: Banca Instável/Caótica!")
-            elif score_dna > 75:
-                st.balloons() 
-                st.success("💎 MOMENTO DE OURO!")
-            
-            st.markdown("---")
-            # ----------------------------------------
-
-            # Lógica Normal V18/V19
-            df_back, EM_CRISE = gerar_backtest_e_status(historico)
-            palpite_princ, palpite_cob = gerar_palpite_estrategico(historico, modo_crise=EM_CRISE)
-            
-            if EM_CRISE:
-                st.error("🚨 MODO CRISE ATIVADO (Derrotas Recentes)")
-                st.markdown("### 🛡️ Lista de Recuperação (12 Grupos)")
-                st.code(", ".join([f"{n:02}" for n in palpite_princ]))
-            else:
-                st.success("✅ MODO NORMAL")
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    st.markdown("### 🔥 Top 12")
-                    st.write(", ".join([f"**{n:02}**" for n in palpite_princ]))
-                with c2:
-                    st.markdown("### ❄️ Cob (2)")
-                    st.write(", ".join([f"{n:02}" for n in palpite_cob]))
-
-            with st.expander("📊 Ver Histórico"):
-                if not df_back.empty: st.table(df_back)
-
-            st.markdown("---")
-            st.write("### 📝 Inserir Novo Resultado")
-            ci, ca = st.columns([1,1])
-            with ci: novo = st.number_input("Grupo:", 1, 25, 1)
-            with ca:
-                st.write("")
-                st.write("")
-                if st.button("💾 Salvar", type="primary"):
-                    if salvar_na_nuvem(aba_ativa, novo):
-                        st.success("Salvo!")
-                        st.rerun()
-                    else: st.error("Erro")
-            
-            with st.expander("Correção"):
-                if st.button("🗑️ Apagar Último"):
-                    deletar_ultimo_registro(aba_ativa)
-                    st.rerun()
         else:
-            st.warning("Sem dados.")
+            col_princ, col_cob = st.columns([2, 1])
+            
+            with col_princ:
+                st.success("🔥 PALPITE PRINCIPAL (TOP 12)")
+                # Bolas Verdes
+                st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
+                
+                # Copiar
+                lista_str = ", ".join([f"{n:02}" for n in palpite_p])
+                st.code(lista_str, language="text")
+                
+            with col_cob:
+                st.info("❄️ COBERTURA (2)")
+                # Bolas Azuis
+                st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
+                
+                # Copiar
+                lista_cob_str = ", ".join([f"{n:02}" for n in palpite_c])
+                st.code(lista_cob_str, language="text")
 
-    with tab2:
-        if len(historico) > 0:
-            st.write("### 🐢 Atrasômetro")
-            todos_atrasos = calcular_ranking_atraso_completo(historico)
-            atrasos_dict = {}
-            total = len(historico)
-            for b in todos_atrasos[:10]:
-                indices = [i for i, x in enumerate(historico) if x == b]
-                val = total - 1 - indices[-1] if indices else total
-                atrasos_dict[f"Gr {b:02}"] = val
-            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
-        else:
-            st.info("Sem dados.")
+        # --- BACKTEST ---
+        with st.expander("📊 Ver Histórico de Acertos"):
+            if not df_back.empty: st.table(df_back)
+
+    else:
+        st.warning("⚠️ Planilha vazia. Adicione dados pela barra lateral.")
+
+else:
+    st.info("Conectando ao banco de dados...")
