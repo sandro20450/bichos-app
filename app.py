@@ -14,40 +14,49 @@ import base64
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# --- CENTRAL DE CONFIGURAÇÃO DAS BANCAS (V28) ---
-# Aqui você define o Nome, a Cor, o Link do Site e a IMAGEM (Logo)
-# Se você não tiver o link da imagem ainda, ele vai mostrar o ícone padrão.
-
+# --- CENTRAL DE CONFIGURAÇÃO DAS BANCAS (V29) ---
+# Adicionado: 'horarios' com a grade de sorteios
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/731/731985.png", # TROQUE ESTE LINK PELA SUA LOGO DA LOTEP
-        "cor_fundo": "#003366", # Azul
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/731/731985.png", 
+        "cor_fundo": "#003366", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
-        "url_site": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje"
+        "url_site": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
+        "horarios": {
+            "segsab": "10:45 🔹 12:45 🔹 15:45 🔹 18:00",
+            "dom": "10:00 🔹 12:45"
+        }
     },
     "CAMINHODASORTE": {
         "display_name": "CAMINHO DA SORTE",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732220.png", # TROQUE ESTE LINK PELA SUA LOGO DA CAMINHO
-        "cor_fundo": "#054a29", # Verde Escuro
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732220.png", 
+        "cor_fundo": "#054a29", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
-        "url_site": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje"
+        "url_site": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
+        "horarios": {
+            "segsab": "09:40 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 20:00 🔹 21:00",
+            "dom": "09:40 🔹 11:00 🔹 12:40"
+        }
     },
     "MONTECAI": {
         "display_name": "MONTE CARLOS",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732217.png", # TROQUE ESTE LINK PELA SUA LOGO DA MONTE CARLOS
-        "cor_fundo": "#b71c1c", # Vermelho
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732217.png", 
+        "cor_fundo": "#b71c1c", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
-        "url_site": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
+        "url_site": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje",
+        "horarios": {
+            "segsab": "10:00 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 21:00",
+            "dom": "10:00 🔹 11:00 🔹 12:40"
+        }
     }
 }
 
 BANCA_OPCOES = list(CONFIG_BANCAS.keys())
 
-# Inicializa estados para sons
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
@@ -84,10 +93,10 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
         
-        /* Tabela Transparente */
+        /* Tabela Transparente e Centralizada */
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
-        thead tr th {{ color: {text_color} !important; text-align: center !important; }}
-        tbody tr td {{ color: {text_color} !important; text-align: center !important; }}
+        thead tr th {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
+        tbody tr td {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
         
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
@@ -311,8 +320,7 @@ if aba_ativa:
         aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
         config_atual = CONFIG_BANCAS[banca_selecionada]
 
-        # --- CABEÇALHO PERSONALIZADO (LOGO + NOME) ---
-        # Centralização usando colunas
+        # --- CABEÇALHO PERSONALIZADO ---
         col_head1, col_head2, col_head3 = st.columns([1, 2, 1])
         with col_head2:
             st.markdown(f"""
@@ -322,9 +330,8 @@ if aba_ativa:
                 </div>
             """, unsafe_allow_html=True)
         
-        st.write("") # Espaço
+        st.write("") 
 
-        # Monitor de Site
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -332,7 +339,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # --- 1. DIAGNÓSTICO (Tabela Transparente) ---
+        # --- 1. DIAGNÓSTICO E TABELAS ---
         with st.expander("📊 Diagnóstico & Histórico", expanded=True):
             dados_dna = {
                 "OBEDIÊNCIA": [f"{int(score)}%"],
@@ -340,6 +347,14 @@ if aba_ativa:
             }
             st.table(pd.DataFrame(dados_dna))
             st.table(df_back)
+
+        # --- NOVO: TABELA DE HORÁRIOS ---
+        with st.expander("🕒 Horários dos Sorteios"):
+            df_horarios = pd.DataFrame({
+                "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
+                "HORÁRIOS DE SORTEIO": [config_atual['horarios']['segsab'], config_atual['horarios']['dom']]
+            })
+            st.table(df_horarios)
 
         st.markdown("---")
 
