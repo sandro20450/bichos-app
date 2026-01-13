@@ -14,6 +14,40 @@ import base64
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
+# --- CENTRAL DE CONFIGURAÇÃO DAS BANCAS (V28) ---
+# Aqui você define o Nome, a Cor, o Link do Site e a IMAGEM (Logo)
+# Se você não tiver o link da imagem ainda, ele vai mostrar o ícone padrão.
+
+CONFIG_BANCAS = {
+    "LOTEP": {
+        "display_name": "LOTEP PARAÍBA",
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/731/731985.png", # TROQUE ESTE LINK PELA SUA LOGO DA LOTEP
+        "cor_fundo": "#003366", # Azul
+        "cor_texto": "#ffffff",
+        "card_bg": "rgba(255, 255, 255, 0.1)",
+        "url_site": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje"
+    },
+    "CAMINHODASORTE": {
+        "display_name": "CAMINHO DA SORTE",
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732220.png", # TROQUE ESTE LINK PELA SUA LOGO DA CAMINHO
+        "cor_fundo": "#054a29", # Verde Escuro
+        "cor_texto": "#ffffff",
+        "card_bg": "rgba(255, 255, 255, 0.1)",
+        "url_site": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje"
+    },
+    "MONTECAI": {
+        "display_name": "MONTE CARLOS",
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732217.png", # TROQUE ESTE LINK PELA SUA LOGO DA MONTE CARLOS
+        "cor_fundo": "#b71c1c", # Vermelho
+        "cor_texto": "#ffffff",
+        "card_bg": "rgba(255, 255, 255, 0.1)",
+        "url_site": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
+    }
+}
+
+BANCA_OPCOES = list(CONFIG_BANCAS.keys())
+
+# Inicializa estados para sons
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
@@ -22,7 +56,7 @@ if 'tocar_som_apagar' not in st.session_state:
 def reproduzir_som(tipo):
     if tipo == 'sucesso':
         sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
-    elif tipo == 'alerta': # Som de erro/alerta
+    elif tipo == 'alerta':
         sound_url = "https://cdn.pixabay.com/download/audio/2021/08/09/audio_0083556434.mp3?filename=error-2-126514.mp3"
     else:
         sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
@@ -32,38 +66,29 @@ def reproduzir_som(tipo):
         </audio>
     """, unsafe_allow_html=True)
 
-def aplicar_estilo_banca(banca, bloqueado=False):
-    bg_color = "#0e1117" 
-    text_color = "#ffffff"
-    card_bg = "#262730"
+def aplicar_estilo_banca(banca_key, bloqueado=False):
+    config = CONFIG_BANCAS.get(banca_key)
     
     if bloqueado:
-        # ESTILO DE BLOQUEIO (CINZA ESCURO / PRETO)
         bg_color = "#1a1a1a"
         text_color = "#a0a0a0"
         card_bg = "#000000"
     else:
-        if banca == "LOTEP":
-            bg_color = "#003366" 
-            text_color = "#ffffff"
-            card_bg = "rgba(255, 255, 255, 0.1)"
-        elif banca == "CAMINHODASORTE":
-            bg_color = "#054a29"  
-            text_color = "#ffffff" 
-            card_bg = "rgba(255, 255, 255, 0.1)"
-        elif banca == "MONTECAI":
-            bg_color = "#b71c1c"
-            text_color = "#ffffff"
-            card_bg = "rgba(255, 255, 255, 0.1)"
+        bg_color = config["cor_fundo"]
+        text_color = config["cor_texto"]
+        card_bg = config["card_bg"]
 
     st.markdown(f"""
     <style>
         [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; transition: background-color 0.5s; }}
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
+        
+        /* Tabela Transparente */
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
-        thead tr th {{ color: {text_color} !important; }}
-        tbody tr td {{ color: {text_color} !important; }}
+        thead tr th {{ color: {text_color} !important; text-align: center !important; }}
+        tbody tr td {{ color: {text_color} !important; text-align: center !important; }}
+        
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
         
@@ -74,14 +99,6 @@ def aplicar_estilo_banca(banca, bloqueado=False):
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
     </style>
     """, unsafe_allow_html=True)
-
-URLS_BANCAS = {
-    "LOTEP": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
-    "CAMINHODASORTE": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
-    "MONTECAI": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje"
-}
-
-BANCA_OPCOES = ["LOTEP", "CAMINHODASORTE", "MONTECAI"]
 
 # =============================================================================
 # --- 2. FUNÇÕES DE BANCO DE DADOS ---
@@ -127,7 +144,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA V27 - ESPECÍFICA POR BANCA ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -153,27 +170,16 @@ def verificar_atualizacao_site(url):
     except: return False, "🔴 ERRO", "Falha conexão."
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
-    """
-    V27: Lógica Diferenciada.
-    - PADRAO: Olha longo prazo (50 jogos).
-    - CAMINHODASORTE: Olha CURTÍSSIMO prazo (8 jogos) para pegar tendências rápidas.
-    """
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
     
     if banca == "CAMINHODASORTE":
-        # LÓGICA TURBO (Para banca difícil)
-        # Foca drasticamente nos últimos 8 resultados
         c_ultra_curto = Counter(hist_reverso[:8])
-        for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0) # Peso enorme no recente
-        
-        # Ignora quase todo o resto para não poluir
+        for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
         c_curto = Counter(hist_reverso[:15])
         for g, f in c_curto.items(): scores[g] += (f * 1.0)
-        
     else:
-        # LÓGICA CLÁSSICA (Para bancas estáveis - Lotep/Montecai)
         c_curto = Counter(hist_reverso[:10])
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
@@ -210,9 +216,7 @@ def analisar_dna_banca(historico, banca):
     return score, status
 
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
-    # Passamos a banca para o calculo de força saber qual lógica usar
     todos_forca = calcular_ranking_forca_completo(historico, banca)
-    
     if modo_crise:
         top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
@@ -245,7 +249,6 @@ def gerar_backtest_e_status(historico, banca):
         if i >= len(historico) - 5:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
             
-    # Retorna também o numero exato de derrotas atuais
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
 # =============================================================================
@@ -261,11 +264,12 @@ if st.session_state['tocar_som_apagar']:
     st.session_state['tocar_som_apagar'] = False
 
 with st.sidebar:
-    st.header("🦅 MENU")
-    banca_selecionada = st.selectbox("Banca:", BANCA_OPCOES)
+    st.header("🦅 MENU DE JOGO")
+    banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
     st.markdown("---")
     st.write("📝 **Novo Resultado**")
     novo_bicho = st.number_input("Grupo:", 1, 25, 1)
+    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("💾 SALVAR", type="primary"):
@@ -294,33 +298,42 @@ if aba_ativa:
     historico = carregar_dados(aba_ativa)
     if len(historico) > 0:
         
-        # --- CÁLCULOS CENTRAIS ---
+        # --- CÁLCULOS ---
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         
-        # --- LÓGICA DE TRAVA DE SEGURANÇA (NOVIDADE V27) ---
-        # Se for Caminho da Sorte e tiver 3 ou mais derrotas, BLOQUEIA.
+        # --- LÓGICA DE BLOQUEIO CS ---
         MODO_BLOQUEIO = False
         if banca_selecionada == "CAMINHODASORTE" and qtd_derrotas >= 3:
             MODO_BLOQUEIO = True
         
-        # Aplica o estilo (Se bloqueado, fica tudo cinza/preto)
         aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
-        
-        st.title("🦅 BICHOS da LOTECA")
+        config_atual = CONFIG_BANCAS[banca_selecionada]
 
-        # --- CABEÇALHO ---
-        link = URLS_BANCAS.get(banca_selecionada)
-        site_on, site_tit, _ = verificar_atualizacao_site(link)
+        # --- CABEÇALHO PERSONALIZADO (LOGO + NOME) ---
+        # Centralização usando colunas
+        col_head1, col_head2, col_head3 = st.columns([1, 2, 1])
+        with col_head2:
+            st.markdown(f"""
+                <div style='text-align: center;'>
+                    <img src='{config_atual['logo_url']}' width='100' style='margin-bottom: 10px;'>
+                    <h1 style='margin:0; padding:0; font-size: 2.5rem;'>{config_atual['display_name']}</h1>
+                </div>
+            """, unsafe_allow_html=True)
         
+        st.write("") # Espaço
+
+        # Monitor de Site
+        link = config_atual['url_site']
+        site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
         with col_mon1: st.caption(f"Monitor: {site_tit}")
         with col_mon2: 
-            if link: st.link_button("🔗 Site", link)
+            if link: st.link_button("🔗 Abrir Site", link)
 
-        # --- 1. DIAGNÓSTICO ---
-        with st.expander("📊 Diagnóstico & Histórico da Banca", expanded=True):
+        # --- 1. DIAGNÓSTICO (Tabela Transparente) ---
+        with st.expander("📊 Diagnóstico & Histórico", expanded=True):
             dados_dna = {
                 "OBEDIÊNCIA": [f"{int(score)}%"],
                 "DNA STATUS": [status_dna]
@@ -330,27 +343,19 @@ if aba_ativa:
 
         st.markdown("---")
 
-        # --- TELA DE BLOQUEIO OU PALPITES ---
         if MODO_BLOQUEIO:
-            st.error(f"⛔ TRAVA DE SEGURANÇA ATIVADA: {qtd_derrotas} Derrotas Seguidas")
+            st.error(f"⛔ TRAVA DE SEGURANÇA: {qtd_derrotas} Derrotas Seguidas")
             st.markdown("""
             <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
                 <h2>NÃO APOSTE AGORA!</h2>
-                <p>A banca <b>Caminho da Sorte</b> está extremamente instável.</p>
-                <p>O sistema entrou em modo de <b>Simulação de Recuperação</b>.</p>
-                <hr>
-                <p>Abaixo estão os números que o robô está testando para tentar vencer a banca.</p>
-                <p><b>Aguarde sair uma VITÓRIA VIRTUAL (💚) no Histórico antes de voltar a jogar dinheiro.</b></p>
+                <p>A banca está muito instável. Aguarde uma vitória virtual.</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Mostra palpites "apagados/cinzas"
-            st.write("🤖 Palpites de Teste (Simulação):")
+            st.write("🤖 Palpites de Simulação:")
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             
         else:
-            # FLUXO NORMAL DE JOGO
-            tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos & Atrasos"])
+            tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos"])
 
             with tab_palpites:
                 if EM_CRISE:
@@ -377,7 +382,7 @@ if aba_ativa:
                     indices = [i for i, x in enumerate(historico) if x == b]
                     val = total - 1 - indices[-1] if indices else total
                     atrasos_dict[f"Gr {b:02}"] = val
-                st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos sem sair']))
+                st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
                 
                 st.write("### 📊 Frequência")
                 recentes = historico[-50:] 
