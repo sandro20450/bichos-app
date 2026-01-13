@@ -22,6 +22,8 @@ if 'tocar_som_apagar' not in st.session_state:
 def reproduzir_som(tipo):
     if tipo == 'sucesso':
         sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
+    elif tipo == 'alerta': # Som de erro/alerta
+        sound_url = "https://cdn.pixabay.com/download/audio/2021/08/09/audio_0083556434.mp3?filename=error-2-126514.mp3"
     else:
         sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
     st.markdown(f"""
@@ -30,34 +32,38 @@ def reproduzir_som(tipo):
         </audio>
     """, unsafe_allow_html=True)
 
-def aplicar_estilo_banca(banca):
+def aplicar_estilo_banca(banca, bloqueado=False):
     bg_color = "#0e1117" 
     text_color = "#ffffff"
     card_bg = "#262730"
     
-    if banca == "LOTEP":
-        bg_color = "#003366" 
-        text_color = "#ffffff"
-        card_bg = "rgba(255, 255, 255, 0.1)"
-    elif banca == "CAMINHODASORTE":
-        bg_color = "#054a29"  
-        text_color = "#ffffff" 
-        card_bg = "rgba(255, 255, 255, 0.1)"
-    elif banca == "MONTECAI":
-        bg_color = "#b71c1c"
-        text_color = "#ffffff"
-        card_bg = "rgba(255, 255, 255, 0.1)"
+    if bloqueado:
+        # ESTILO DE BLOQUEIO (CINZA ESCURO / PRETO)
+        bg_color = "#1a1a1a"
+        text_color = "#a0a0a0"
+        card_bg = "#000000"
+    else:
+        if banca == "LOTEP":
+            bg_color = "#003366" 
+            text_color = "#ffffff"
+            card_bg = "rgba(255, 255, 255, 0.1)"
+        elif banca == "CAMINHODASORTE":
+            bg_color = "#054a29"  
+            text_color = "#ffffff" 
+            card_bg = "rgba(255, 255, 255, 0.1)"
+        elif banca == "MONTECAI":
+            bg_color = "#b71c1c"
+            text_color = "#ffffff"
+            card_bg = "rgba(255, 255, 255, 0.1)"
 
     st.markdown(f"""
     <style>
-        [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; }}
+        [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; transition: background-color 0.5s; }}
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
-        /* Estilo da Tabela para ficar transparente/limpa */
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
         thead tr th {{ color: {text_color} !important; }}
         tbody tr td {{ color: {text_color} !important; }}
-        
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
         
@@ -65,6 +71,7 @@ def aplicar_estilo_banca(banca):
         .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
+        .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -120,7 +127,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA E CÁLCULOS ---
+# --- 3. LÓGICA V27 - ESPECÍFICA POR BANCA ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -145,14 +152,33 @@ def verificar_atualizacao_site(url):
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
 
-def calcular_ranking_forca_completo(historico):
+def calcular_ranking_forca_completo(historico, banca="PADRAO"):
+    """
+    V27: Lógica Diferenciada.
+    - PADRAO: Olha longo prazo (50 jogos).
+    - CAMINHODASORTE: Olha CURTÍSSIMO prazo (8 jogos) para pegar tendências rápidas.
+    """
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
-    c_curto = Counter(hist_reverso[:10])
-    for g, f in c_curto.items(): scores[g] += (f * 2.0)
-    c_medio = Counter(hist_reverso[:50])
-    for g, f in c_medio.items(): scores[g] += (f * 1.0)
+    
+    if banca == "CAMINHODASORTE":
+        # LÓGICA TURBO (Para banca difícil)
+        # Foca drasticamente nos últimos 8 resultados
+        c_ultra_curto = Counter(hist_reverso[:8])
+        for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0) # Peso enorme no recente
+        
+        # Ignora quase todo o resto para não poluir
+        c_curto = Counter(hist_reverso[:15])
+        for g, f in c_curto.items(): scores[g] += (f * 1.0)
+        
+    else:
+        # LÓGICA CLÁSSICA (Para bancas estáveis - Lotep/Montecai)
+        c_curto = Counter(hist_reverso[:10])
+        for g, f in c_curto.items(): scores[g] += (f * 2.0)
+        c_medio = Counter(hist_reverso[:50])
+        for g, f in c_medio.items(): scores[g] += (f * 1.0)
+        
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
@@ -167,7 +193,7 @@ def calcular_ranking_atraso_completo(historico):
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
-def analisar_dna_banca(historico):
+def analisar_dna_banca(historico, banca):
     if len(historico) < 35: return 0, "Calibrando..."
     acertos = 0
     analise = 25
@@ -175,7 +201,7 @@ def analisar_dna_banca(historico):
         idx = len(historico) - 1 - i
         saiu = historico[idx]
         passado = historico[:idx]
-        ranking = calcular_ranking_forca_completo(passado)[:12]
+        ranking = calcular_ranking_forca_completo(passado, banca)[:12]
         if saiu in ranking: acertos += 1
     score = (acertos / analise) * 100
     if score >= 65: status = "DISCIPLINADA"
@@ -183,8 +209,10 @@ def analisar_dna_banca(historico):
     else: status = "CAÓTICA"
     return score, status
 
-def gerar_palpite_estrategico(historico, modo_crise=False):
-    todos_forca = calcular_ranking_forca_completo(historico)
+def gerar_palpite_estrategico(historico, banca, modo_crise=False):
+    # Passamos a banca para o calculo de força saber qual lógica usar
+    todos_forca = calcular_ranking_forca_completo(historico, banca)
+    
     if modo_crise:
         top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
@@ -197,16 +225,17 @@ def gerar_palpite_estrategico(historico, modo_crise=False):
     else:
         return todos_forca[:12], todos_forca[12:14]
 
-def gerar_backtest_e_status(historico):
-    if len(historico) < 30: return pd.DataFrame(), False
+def gerar_backtest_e_status(historico, banca):
+    if len(historico) < 30: return pd.DataFrame(), False, 0
     derrotas = 0
     resultados = []
     inicio = max(0, len(historico) - 25)
+    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
         crise = derrotas >= 2
-        p_princ, p_cob = gerar_palpite_estrategico(passado, crise)
+        p_princ, p_cob = gerar_palpite_estrategico(passado, banca, crise)
         status = "❌"
         if saiu in (p_princ + p_cob):
             status = "💚"
@@ -215,7 +244,9 @@ def gerar_backtest_e_status(historico):
             derrotas += 1
         if i >= len(historico) - 5:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
-    return pd.DataFrame(resultados[::-1]), derrotas >= 2
+            
+    # Retorna também o numero exato de derrotas atuais
+    return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -257,14 +288,28 @@ with st.sidebar:
                 time.sleep(0.5)
                 st.rerun()
 
-aplicar_estilo_banca(banca_selecionada)
-st.title("🦅 BICHOS da LOTECA")
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
     historico = carregar_dados(aba_ativa)
     if len(historico) > 0:
         
+        # --- CÁLCULOS CENTRAIS ---
+        df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
+        palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
+        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
+        
+        # --- LÓGICA DE TRAVA DE SEGURANÇA (NOVIDADE V27) ---
+        # Se for Caminho da Sorte e tiver 3 ou mais derrotas, BLOQUEIA.
+        MODO_BLOQUEIO = False
+        if banca_selecionada == "CAMINHODASORTE" and qtd_derrotas >= 3:
+            MODO_BLOQUEIO = True
+        
+        # Aplica o estilo (Se bloqueado, fica tudo cinza/preto)
+        aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
+        
+        st.title("🦅 BICHOS da LOTECA")
+
         # --- CABEÇALHO ---
         link = URLS_BANCAS.get(banca_selecionada)
         site_on, site_tit, _ = verificar_atualizacao_site(link)
@@ -274,66 +319,71 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Site", link)
 
-        # CÁLCULOS
-        df_back, EM_CRISE = gerar_backtest_e_status(historico)
-        palpite_p, palpite_c = gerar_palpite_estrategico(historico, EM_CRISE)
-        score, status_dna = analisar_dna_banca(historico)
-        
-        # --- 1. DIAGNÓSTICO & DNA (TABELA NOVA) ---
+        # --- 1. DIAGNÓSTICO ---
         with st.expander("📊 Diagnóstico & Histórico da Banca", expanded=True):
-            
-            # CRIAÇÃO DA TABELA IGUAL A IMAGEM
             dados_dna = {
                 "OBEDIÊNCIA": [f"{int(score)}%"],
                 "DNA STATUS": [status_dna]
             }
-            df_dna = pd.DataFrame(dados_dna)
-            
-            # Exibe a tabela de DNA
-            st.table(df_dna)
-            
-            # Exibe a tabela de Histórico logo abaixo
+            st.table(pd.DataFrame(dados_dna))
             st.table(df_back)
 
         st.markdown("---")
 
-        # --- 2. ABAS (PALPITES E GRÁFICOS) ---
-        tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos & Atrasos"])
+        # --- TELA DE BLOQUEIO OU PALPITES ---
+        if MODO_BLOQUEIO:
+            st.error(f"⛔ TRAVA DE SEGURANÇA ATIVADA: {qtd_derrotas} Derrotas Seguidas")
+            st.markdown("""
+            <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
+                <h2>NÃO APOSTE AGORA!</h2>
+                <p>A banca <b>Caminho da Sorte</b> está extremamente instável.</p>
+                <p>O sistema entrou em modo de <b>Simulação de Recuperação</b>.</p>
+                <hr>
+                <p>Abaixo estão os números que o robô está testando para tentar vencer a banca.</p>
+                <p><b>Aguarde sair uma VITÓRIA VIRTUAL (💚) no Histórico antes de voltar a jogar dinheiro.</b></p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Mostra palpites "apagados/cinzas"
+            st.write("🤖 Palpites de Teste (Simulação):")
+            st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
+            
+        else:
+            # FLUXO NORMAL DE JOGO
+            tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos & Atrasos"])
 
-        with tab_palpites:
-            if EM_CRISE:
-                st.error("🚨 MODO CRISE: Lista de Recuperação")
-                st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
-                st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-            else:
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    st.success("🔥 TOP 12 (Principal)")
-                    st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
+            with tab_palpites:
+                if EM_CRISE:
+                    st.error("🚨 MODO CRISE: Lista de Recuperação")
+                    st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-                with c2:
-                    st.info("❄️ COB (2)")
-                    st.markdown(html_bolas(palpite_c, "azul"), unsafe_allow_html=True)
-                    st.code(", ".join([f"{n:02}" for n in palpite_c]), language="text")
+                else:
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.success("🔥 TOP 12 (Principal)")
+                        st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
+                        st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
+                    with c2:
+                        st.info("❄️ COB (2)")
+                        st.markdown(html_bolas(palpite_cob, "azul"), unsafe_allow_html=True)
+                        st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
 
-        with tab_graficos:
-            st.write("### 🐢 Top Atrasados (Quem não sai há tempo?)")
-            todos_atrasos = calcular_ranking_atraso_completo(historico)
-            atrasos_dict = {}
-            total = len(historico)
-            
-            for b in todos_atrasos[:12]:
-                indices = [i for i, x in enumerate(historico) if x == b]
-                val = total - 1 - indices[-1] if indices else total
-                atrasos_dict[f"Gr {b:02}"] = val
-            
-            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos sem sair']))
-            
-            st.write("### 📊 Frequência (Quem sai mais?)")
-            recentes = historico[-50:] 
-            contagem = Counter(recentes)
-            df_freq = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes'])
-            st.bar_chart(df_freq)
+            with tab_graficos:
+                st.write("### 🐢 Top Atrasados")
+                todos_atrasos = calcular_ranking_atraso_completo(historico)
+                atrasos_dict = {}
+                total = len(historico)
+                for b in todos_atrasos[:12]:
+                    indices = [i for i, x in enumerate(historico) if x == b]
+                    val = total - 1 - indices[-1] if indices else total
+                    atrasos_dict[f"Gr {b:02}"] = val
+                st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos sem sair']))
+                
+                st.write("### 📊 Frequência")
+                recentes = historico[-50:] 
+                contagem = Counter(recentes)
+                df_freq = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes'])
+                st.bar_chart(df_freq)
 
     else:
         st.warning("⚠️ Planilha vazia.")
