@@ -189,7 +189,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
     config = CONFIG_BANCAS[banca]
-    if dia_semana == 6: # Domingo
+    if dia_semana == 6: 
         lista_str = config['horarios']['dom']
     else:
         lista_str = config['horarios']['segsab']
@@ -210,13 +210,11 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     scores = {g: 0 for g in range(1, 26)}
     
     if banca == "CAMINHODASORTE" or banca == "MONTECAI":
-        # Lógica Turbo (8 Jogos)
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
         c_curto = Counter(hist_reverso[:15])
         for g, f in c_curto.items(): scores[g] += (f * 1.0)
     else:
-        # Lógica Clássica
         c_curto = Counter(hist_reverso[:10])
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
@@ -284,34 +282,23 @@ def gerar_backtest_e_status(historico, banca):
         else:
             derrotas += 1
         if i >= len(historico) - 5:
-            # Salva apenas status para uso interno, o display é diferente
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
             
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
 def obter_comparativo_geral():
-    """
-    Função Especial V33:
-    Conecta em todas as bancas e pega os últimos 5 resultados.
-    """
     dados_comp = {"JOGO": ["#1", "#2", "#3", "#4", "#5"]}
-    
     for b_key in BANCA_OPCOES:
-        nome_curto = CONFIG_BANCAS[b_key]['display_name'].split(" ")[0] # Ex: LOTEP, CAMINHO, MONTE
+        nome_curto = CONFIG_BANCAS[b_key]['display_name'].split(" ")[0] 
         try:
             aba = conectar_planilha(b_key)
             if aba:
                 hist, _ = carregar_dados(aba)
                 if len(hist) > 0:
                     df, _, _ = gerar_backtest_e_status(hist, b_key)
-                    # Pega a coluna RES (💚/❌)
-                    # O DF vem invertido (Recente em cima), mas queremos alinhar
-                    # Vamos pegar os 5 primeiros
                     status_list = df['RES'].tolist()
-                    # Garante que tem 5
                     while len(status_list) < 5:
                         status_list.append("-")
-                    
                     dados_comp[nome_curto] = status_list
                 else:
                     dados_comp[nome_curto] = ["-"] * 5
@@ -319,8 +306,31 @@ def obter_comparativo_geral():
                 dados_comp[nome_curto] = ["Erro"] * 5
         except:
             dados_comp[nome_curto] = ["Erro"] * 5
-            
     return pd.DataFrame(dados_comp)
+
+# --- NOVA FUNÇÃO V34: ANÁLISE PAR/ÍMPAR ---
+def analisar_par_impar(historico):
+    if not historico: return None, 0, 0, 0
+    
+    # 1. Sequencia Atual (Streak)
+    ultimo = historico[-1]
+    eh_par = (ultimo % 2 == 0)
+    tipo_atual = "PAR" if eh_par else "ÍMPAR"
+    seq = 0
+    
+    for x in reversed(historico):
+        x_par = (x % 2 == 0)
+        if x_par == eh_par:
+            seq += 1
+        else:
+            break
+            
+    # 2. Balanço nos últimos 50 jogos
+    recorte = historico[-50:]
+    qtd_par = len([x for x in recorte if x % 2 == 0])
+    qtd_impar = len([x for x in recorte if x % 2 != 0])
+    
+    return tipo_atual, seq, qtd_par, qtd_impar
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -382,11 +392,14 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS PRINCIPAIS
+        # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
+        
+        # CÁLCULO PAR/IMPAR (V34)
+        tipo_atual, seq_atual, total_par, total_impar = analisar_par_impar(historico)
         
         # BLOQUEIO
         MODO_BLOQUEIO = False
@@ -418,10 +431,8 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # --- DIAGNÓSTICO E COMPARATIVO (NOVIDADE V33) ---
+        # DIAGNÓSTICO E COMPARATIVO
         with st.expander("📊 Diagnóstico & Histórico", expanded=True):
-            
-            # Abas internas
             tab_diag, tab_comp = st.tabs(["🔍 Diagnóstico Atual", "⚔️ Comparativo Geral"])
             
             with tab_diag:
@@ -430,16 +441,16 @@ if aba_ativa:
                     "DNA STATUS": [status_dna]
                 }
                 st.table(pd.DataFrame(dados_dna))
-                st.table(df_back) # Histórico individual
+                st.table(df_back) 
                 
             with tab_comp:
-                st.caption("Comparação em Tempo Real das últimas 5 rodadas de todas as bancas")
+                st.caption("Comparação em Tempo Real")
                 if st.button("🔄 Carregar Comparativo Geral"):
                     with st.spinner("Analisando todas as bancas..."):
                         df_comp = obter_comparativo_geral()
                         st.table(df_comp)
                 else:
-                    st.info("Clique no botão acima para carregar o comparativo (Evita lentidão).")
+                    st.info("Clique no botão acima para carregar.")
 
         # GRADE DE HORÁRIOS
         with st.expander("🕒 Grade de Horários da Banca"):
@@ -463,7 +474,8 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             
         else:
-            tab_palpites, tab_graficos = st.tabs(["🏠 Palpites do Robô", "📈 Gráficos"])
+            # ADICIONADO ABA PAR/IMPAR
+            tab_palpites, tab_parimpar, tab_graficos = st.tabs(["🏠 Palpites do Robô", "⚖️ Par ou Ímpar", "📈 Gráficos"])
 
             with tab_palpites:
                 if EM_CRISE:
@@ -480,6 +492,47 @@ if aba_ativa:
                         st.info("❄️ COB (2)")
                         st.markdown(html_bolas(palpite_cob, "azul"), unsafe_allow_html=True)
                         st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
+            
+            # --- NOVA ABA PAR/ÍMPAR ---
+            with tab_parimpar:
+                st.write("### ⚖️ Balança Par vs Ímpar (Últimos 50)")
+                
+                # Exibe Balanço
+                col_pi1, col_pi2 = st.columns(2)
+                col_pi1.metric("Pares (Total)", f"{total_par}", delta=f"{(total_par/50)*100:.0f}%")
+                col_pi2.metric("Ímpares (Total)", f"{total_impar}", delta=f"{(total_impar/50)*100:.0f}%")
+                
+                st.markdown("---")
+                st.write("### 🌊 Tendência de Momento (Streak)")
+                
+                # Lógica do Alerta
+                if seq_atual >= 4:
+                    cor_alerta = "red"
+                    texto_alerta = f"⚠️ ALERTA: {seq_atual} {tipo_atual}ES SEGUIDOS!"
+                    sugestao = f"👉 Dica: Aposte no **{'ÍMPAR' if tipo_atual == 'PAR' else 'PAR'}**"
+                elif seq_atual == 3:
+                    cor_alerta = "orange"
+                    texto_alerta = f"Fique de Olho: {seq_atual} {tipo_atual}es Seguidos"
+                    sugestao = "Aguarde mais um resultado para confirmar."
+                else:
+                    cor_alerta = "green"
+                    texto_alerta = f"Normal: {seq_atual} {tipo_atual} seguido(s)"
+                    sugestao = "O jogo está equilibrado."
+
+                st.markdown(f"<h3 style='color:{cor_alerta}'>{texto_alerta}</h3>", unsafe_allow_html=True)
+                st.info(sugestao)
+                
+                # Visualização dos últimos 10 (bolinhas P ou I)
+                st.write("Últimos 10 resultados:")
+                html_seq = "<div>"
+                for x in historico[::-1][:10]:
+                    txt = "P" if x%2==0 else "I"
+                    cor_b = "#007bff" if txt=="P" else "#ffc107" # Azul Par, Amarelo Impar
+                    # Cor do texto preta para contraste no amarelo
+                    cor_txt = "#000" if txt=="I" else "#fff"
+                    html_seq += f"<span style='display:inline-block;width:30px;height:30px;line-height:30px;border-radius:50%;background-color:{cor_b};color:{cor_txt};text-align:center;margin:2px;font-weight:bold;'>{txt}</span>"
+                html_seq += "</div>"
+                st.markdown(html_seq, unsafe_allow_html=True)
 
             with tab_graficos:
                 st.write("### 🐢 Top Atrasados")
