@@ -19,7 +19,7 @@ st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/731/731985.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/256/7544/7544988.png", 
         "cor_fundo": "#003366", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -409,3 +409,4 @@ if aba_ativa:
         st.warning("⚠️ Planilha vazia.")
 else:
     st.info("Conectando...")
+
