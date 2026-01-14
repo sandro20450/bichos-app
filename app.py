@@ -79,7 +79,6 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
     config = CONFIG_BANCAS.get(banca_key)
     
     if bloqueado:
-        # ESTILO BLOQUEIO (CINZA/PRETO)
         bg_color = "#1a1a1a"
         text_color = "#a0a0a0"
         card_bg = "#000000"
@@ -96,8 +95,8 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .stSelectbox div[data-baseweb="select"] > div {{ color: black !important; }}
         
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
-        thead tr th {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
-        tbody tr td {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
+        thead tr th {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
+        tbody tr td {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
         
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
@@ -160,7 +159,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ E HORÁRIOS ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -210,15 +209,14 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
     
-    # --- MUDANÇA V32: APLICANDO LÓGICA TURBO TAMBÉM NA MONTECAI ---
     if banca == "CAMINHODASORTE" or banca == "MONTECAI":
-        # Lógica Turbo (8 Jogos) - Alta Reatividade
+        # Lógica Turbo (8 Jogos)
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
         c_curto = Counter(hist_reverso[:15])
         for g, f in c_curto.items(): scores[g] += (f * 1.0)
     else:
-        # Lógica Clássica (LOTEP e outras)
+        # Lógica Clássica
         c_curto = Counter(hist_reverso[:10])
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
@@ -286,9 +284,43 @@ def gerar_backtest_e_status(historico, banca):
         else:
             derrotas += 1
         if i >= len(historico) - 5:
+            # Salva apenas status para uso interno, o display é diferente
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
             
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
+
+def obter_comparativo_geral():
+    """
+    Função Especial V33:
+    Conecta em todas as bancas e pega os últimos 5 resultados.
+    """
+    dados_comp = {"JOGO": ["#1", "#2", "#3", "#4", "#5"]}
+    
+    for b_key in BANCA_OPCOES:
+        nome_curto = CONFIG_BANCAS[b_key]['display_name'].split(" ")[0] # Ex: LOTEP, CAMINHO, MONTE
+        try:
+            aba = conectar_planilha(b_key)
+            if aba:
+                hist, _ = carregar_dados(aba)
+                if len(hist) > 0:
+                    df, _, _ = gerar_backtest_e_status(hist, b_key)
+                    # Pega a coluna RES (💚/❌)
+                    # O DF vem invertido (Recente em cima), mas queremos alinhar
+                    # Vamos pegar os 5 primeiros
+                    status_list = df['RES'].tolist()
+                    # Garante que tem 5
+                    while len(status_list) < 5:
+                        status_list.append("-")
+                    
+                    dados_comp[nome_curto] = status_list
+                else:
+                    dados_comp[nome_curto] = ["-"] * 5
+            else:
+                dados_comp[nome_curto] = ["Erro"] * 5
+        except:
+            dados_comp[nome_curto] = ["Erro"] * 5
+            
+    return pd.DataFrame(dados_comp)
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -306,11 +338,10 @@ with st.sidebar:
     st.header("🦅 MENU DE JOGO")
     banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
     
-    # SELETOR DE HORÁRIOS INTELIGENTE
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
     config_banca = CONFIG_BANCAS[banca_selecionada]
-    if dia_semana == 6: # Domingo
+    if dia_semana == 6: 
         lista_horarios_str = config_banca['horarios']['dom']
     else:
         lista_horarios_str = config_banca['horarios']['segsab']
@@ -351,16 +382,14 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS
+        # CÁLCULOS PRINCIPAIS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         
-        # --- LÓGICA DE BLOQUEIO (V32: Agora inclui MONTECAI) ---
+        # BLOQUEIO
         MODO_BLOQUEIO = False
-        
-        # Se for Caminho OU Montecai E tiver 3+ derrotas -> Bloqueia
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
             MODO_BLOQUEIO = True
         
@@ -378,29 +407,41 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
-        # MONITOR E INFO
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
-        
         with col_mon1: 
             info_ultimo = f"Último: Grupo {historico[-1]:02}"
             if ultimo_horario_salvo:
                 info_ultimo += f" ({ultimo_horario_salvo})"
             st.info(f"📡 {site_tit}  |  🏁 {info_ultimo}")
-            
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO
+        # --- DIAGNÓSTICO E COMPARATIVO (NOVIDADE V33) ---
         with st.expander("📊 Diagnóstico & Histórico", expanded=True):
-            dados_dna = {
-                "OBEDIÊNCIA": [f"{int(score)}%"],
-                "DNA STATUS": [status_dna]
-            }
-            st.table(pd.DataFrame(dados_dna))
-            st.table(df_back)
+            
+            # Abas internas
+            tab_diag, tab_comp = st.tabs(["🔍 Diagnóstico Atual", "⚔️ Comparativo Geral"])
+            
+            with tab_diag:
+                dados_dna = {
+                    "OBEDIÊNCIA": [f"{int(score)}%"],
+                    "DNA STATUS": [status_dna]
+                }
+                st.table(pd.DataFrame(dados_dna))
+                st.table(df_back) # Histórico individual
+                
+            with tab_comp:
+                st.caption("Comparação em Tempo Real das últimas 5 rodadas de todas as bancas")
+                if st.button("🔄 Carregar Comparativo Geral"):
+                    with st.spinner("Analisando todas as bancas..."):
+                        df_comp = obter_comparativo_geral()
+                        st.table(df_comp)
+                else:
+                    st.info("Clique no botão acima para carregar o comparativo (Evita lentidão).")
 
+        # GRADE DE HORÁRIOS
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
                 "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
