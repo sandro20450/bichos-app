@@ -14,12 +14,11 @@ import base64
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# --- CENTRAL DE CONFIGURAÇÃO DAS BANCAS (V29) ---
-# Adicionado: 'horarios' com a grade de sorteios
+# --- CONFIGURAÇÃO DAS BANCAS E HORÁRIOS ---
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
-        "logo_url": "https://cdn-icons-png.flaticon.com/256/7544/7544988.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/731/731985.png", 
         "cor_fundo": "#003366", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -31,7 +30,7 @@ CONFIG_BANCAS = {
     },
     "CAMINHODASORTE": {
         "display_name": "CAMINHO DA SORTE",
-        "logo_url": "https://cdn-icons-png.flaticon.com/256/7510/7510279.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732220.png", 
         "cor_fundo": "#054a29", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -43,7 +42,7 @@ CONFIG_BANCAS = {
     },
     "MONTECAI": {
         "display_name": "MONTE CARLOS",
-        "logo_url": "https://cdn-icons-png.flaticon.com/256/7152/7152381.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732217.png", 
         "cor_fundo": "#b71c1c", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -57,6 +56,7 @@ CONFIG_BANCAS = {
 
 BANCA_OPCOES = list(CONFIG_BANCAS.keys())
 
+# Estados de Som
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
@@ -92,8 +92,9 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; transition: background-color 0.5s; }}
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
+        /* Selectbox Styles */
+        .stSelectbox div[data-baseweb="select"] > div {{ color: black !important; }}
         
-        /* Tabela Transparente e Centralizada */
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
         thead tr th {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
         tbody tr td {{ color: {text_color} !important; text-align: left !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
@@ -110,7 +111,7 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. FUNÇÕES DE BANCO DE DADOS ---
+# --- 2. FUNÇÕES DE BANCO DE DADOS (ATUALIZADAS) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -129,14 +130,26 @@ def conectar_planilha(nome_aba):
 
 def carregar_dados(worksheet):
     if worksheet:
+        # Pega a Coluna A (Grupos)
         valores = worksheet.col_values(1)
-        return [int(v) for v in valores if v.isdigit()]
-    return []
+        grupos = [int(v) for v in valores if v.isdigit()]
+        
+        # Pega a Coluna B (Horários) para mostrar o último
+        # Tenta pegar apenas o último valor da coluna B para ser rápido
+        try:
+            horarios = worksheet.col_values(2)
+            ultimo_horario = horarios[-1] if horarios else ""
+        except:
+            ultimo_horario = ""
+            
+        return grupos, ultimo_horario
+    return [], ""
 
-def salvar_na_nuvem(worksheet, numero):
+def salvar_na_nuvem(worksheet, numero, horario):
     if worksheet:
         try:
-            worksheet.append_row([int(numero)])
+            # AGORA SALVA O NÚMERO NA COLUNA A E O HORÁRIO NA COLUNA B
+            worksheet.append_row([int(numero), str(horario)])
             return True
         except: return False
     return False
@@ -275,15 +288,35 @@ if st.session_state['tocar_som_apagar']:
 with st.sidebar:
     st.header("🦅 MENU DE JOGO")
     banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
+    
+    # --- NOVIDADE V30: LÓGICA DE HORÁRIOS AUTOMÁTICA ---
+    # Verifica o dia da semana (0=Seg, 6=Dom)
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    dia_semana = datetime.now(fuso_br).weekday()
+    
+    # Pega os horários da banca selecionada
+    config_banca = CONFIG_BANCAS[banca_selecionada]
+    if dia_semana == 6: # Domingo
+        lista_horarios_str = config_banca['horarios']['dom']
+    else: # Seg a Sab
+        lista_horarios_str = config_banca['horarios']['segsab']
+    
+    # Converte a string "10:00 🔹 12:00" em uma lista real para o selectbox
+    lista_horarios = [h.strip() for h in lista_horarios_str.split('🔹')]
+    
     st.markdown("---")
-    st.write("📝 **Novo Resultado**")
-    novo_bicho = st.number_input("Grupo:", 1, 25, 1)
+    st.write("📝 **Registrar Sorteio**")
+    
+    # Inputs
+    novo_horario = st.selectbox("Horário do Resultado:", lista_horarios)
+    novo_bicho = st.number_input("Grupo (Resultado):", 1, 25, 1)
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("💾 SALVAR", type="primary"):
             aba = conectar_planilha(banca_selecionada)
-            if aba and salvar_na_nuvem(aba, novo_bicho):
+            # SALVA O NÚMERO E O HORÁRIO
+            if aba and salvar_na_nuvem(aba, novo_bicho, novo_horario):
                 st.session_state['tocar_som_salvar'] = True
                 st.toast("Salvo! 🔔", icon="✅")
                 time.sleep(0.5)
@@ -304,15 +337,17 @@ with st.sidebar:
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
-    historico = carregar_dados(aba_ativa)
+    # Carrega dados e o último horário salvo
+    historico, ultimo_horario_salvo = carregar_dados(aba_ativa)
+    
     if len(historico) > 0:
         
-        # --- CÁLCULOS ---
+        # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         
-        # --- LÓGICA DE BLOQUEIO CS ---
+        # BLOQUEIO CS
         MODO_BLOQUEIO = False
         if banca_selecionada == "CAMINHODASORTE" and qtd_derrotas >= 3:
             MODO_BLOQUEIO = True
@@ -320,7 +355,7 @@ if aba_ativa:
         aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
         config_atual = CONFIG_BANCAS[banca_selecionada]
 
-        # --- CABEÇALHO PERSONALIZADO ---
+        # CABEÇALHO
         col_head1, col_head2, col_head3 = st.columns([1, 2, 1])
         with col_head2:
             st.markdown(f"""
@@ -332,14 +367,23 @@ if aba_ativa:
         
         st.write("") 
 
+        # MONITOR DE SITE E INFO DE ÚLTIMO RESULTADO
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
-        with col_mon1: st.caption(f"Monitor: {site_tit}")
+        
+        with col_mon1: 
+            # MOSTRA O ÚLTIMO RESULTADO COM O HORÁRIO AO LADO
+            info_ultimo = f"Último: Grupo {historico[-1]:02}"
+            if ultimo_horario_salvo:
+                info_ultimo += f" ({ultimo_horario_salvo})"
+            
+            st.info(f"📡 {site_tit}  |  🏁 {info_ultimo}")
+            
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # --- 1. DIAGNÓSTICO E TABELAS ---
+        # DIAGNÓSTICO
         with st.expander("📊 Diagnóstico & Histórico", expanded=True):
             dados_dna = {
                 "OBEDIÊNCIA": [f"{int(score)}%"],
@@ -348,11 +392,11 @@ if aba_ativa:
             st.table(pd.DataFrame(dados_dna))
             st.table(df_back)
 
-        # --- NOVO: TABELA DE HORÁRIOS ---
-        with st.expander("🕒 Horários dos Sorteios"):
+        # HORÁRIOS
+        with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
                 "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
-                "HORÁRIOS DE SORTEIO": [config_atual['horarios']['segsab'], config_atual['horarios']['dom']]
+                "HORÁRIOS": [config_atual['horarios']['segsab'], config_atual['horarios']['dom']]
             })
             st.table(df_horarios)
 
@@ -406,9 +450,6 @@ if aba_ativa:
                 st.bar_chart(df_freq)
 
     else:
-        st.warning("⚠️ Planilha vazia.")
+        st.warning("⚠️ Planilha vazia. Adicione o primeiro resultado.")
 else:
     st.info("Conectando...")
-
-
-
