@@ -14,7 +14,7 @@ import base64
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# --- CONFIGURAÇÃO DAS BANCAS E HORÁRIOS ---
+# --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
@@ -92,7 +92,6 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; transition: background-color 0.5s; }}
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
-        /* Selectbox Styles */
         .stSelectbox div[data-baseweb="select"] > div {{ color: black !important; }}
         
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
@@ -111,7 +110,7 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. FUNÇÕES DE BANCO DE DADOS (ATUALIZADAS) ---
+# --- 2. FUNÇÕES DE BANCO DE DADOS ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -130,25 +129,19 @@ def conectar_planilha(nome_aba):
 
 def carregar_dados(worksheet):
     if worksheet:
-        # Pega a Coluna A (Grupos)
         valores = worksheet.col_values(1)
         grupos = [int(v) for v in valores if v.isdigit()]
-        
-        # Pega a Coluna B (Horários) para mostrar o último
-        # Tenta pegar apenas o último valor da coluna B para ser rápido
         try:
             horarios = worksheet.col_values(2)
             ultimo_horario = horarios[-1] if horarios else ""
         except:
             ultimo_horario = ""
-            
         return grupos, ultimo_horario
     return [], ""
 
 def salvar_na_nuvem(worksheet, numero, horario):
     if worksheet:
         try:
-            # AGORA SALVA O NÚMERO NA COLUNA A E O HORÁRIO NA COLUNA B
             worksheet.append_row([int(numero), str(horario)])
             return True
         except: return False
@@ -166,7 +159,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ ---
+# --- 3. LÓGICA DO ROBÔ E HORÁRIOS ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -190,6 +183,39 @@ def verificar_atualizacao_site(url):
             return False, "🟡 DATA AUSENTE", "Site online, sem data de hoje."
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
+
+def calcular_proximo_horario(banca, ultimo_horario):
+    """
+    Função V31: Descobre qual o próximo horário da grade
+    baseado no último inserido.
+    """
+    if not ultimo_horario: return "Próximo Sorteio"
+    
+    # Descobre se é domingo ou dia útil para pegar a lista certa
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    dia_semana = datetime.now(fuso_br).weekday()
+    
+    config = CONFIG_BANCAS[banca]
+    if dia_semana == 6: # Domingo
+        lista_str = config['horarios']['dom']
+    else:
+        lista_str = config['horarios']['segsab']
+        
+    lista_horarios = [h.strip() for h in lista_str.split('🔹')]
+    
+    try:
+        # Tenta achar onde está o último horário na lista
+        indice_atual = lista_horarios.index(ultimo_horario)
+        
+        # Pega o próximo
+        if indice_atual + 1 < len(lista_horarios):
+            proximo = lista_horarios[indice_atual + 1]
+            return f"Palpite para: {proximo}"
+        else:
+            return "Palpite para: Amanhã/Próximo Dia"
+    except:
+        # Se o horário salvo não bater com a lista de hoje (mudou o dia)
+        return "Palpite para: Próximo Sorteio"
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
@@ -289,25 +315,19 @@ with st.sidebar:
     st.header("🦅 MENU DE JOGO")
     banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
     
-    # --- NOVIDADE V30: LÓGICA DE HORÁRIOS AUTOMÁTICA ---
-    # Verifica o dia da semana (0=Seg, 6=Dom)
+    # SELETOR DE HORÁRIOS INTELIGENTE
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
-    
-    # Pega os horários da banca selecionada
     config_banca = CONFIG_BANCAS[banca_selecionada]
     if dia_semana == 6: # Domingo
         lista_horarios_str = config_banca['horarios']['dom']
-    else: # Seg a Sab
+    else:
         lista_horarios_str = config_banca['horarios']['segsab']
-    
-    # Converte a string "10:00 🔹 12:00" em uma lista real para o selectbox
     lista_horarios = [h.strip() for h in lista_horarios_str.split('🔹')]
     
     st.markdown("---")
     st.write("📝 **Registrar Sorteio**")
     
-    # Inputs
     novo_horario = st.selectbox("Horário do Resultado:", lista_horarios)
     novo_bicho = st.number_input("Grupo (Resultado):", 1, 25, 1)
     
@@ -315,7 +335,6 @@ with st.sidebar:
     with col_btn1:
         if st.button("💾 SALVAR", type="primary"):
             aba = conectar_planilha(banca_selecionada)
-            # SALVA O NÚMERO E O HORÁRIO
             if aba and salvar_na_nuvem(aba, novo_bicho, novo_horario):
                 st.session_state['tocar_som_salvar'] = True
                 st.toast("Salvo! 🔔", icon="✅")
@@ -337,7 +356,6 @@ with st.sidebar:
 aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
-    # Carrega dados e o último horário salvo
     historico, ultimo_horario_salvo = carregar_dados(aba_ativa)
     
     if len(historico) > 0:
@@ -346,6 +364,9 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
+        
+        # CÁLCULO DO TEXTO DE PREVISÃO (NOVO V31)
+        texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         
         # BLOQUEIO CS
         MODO_BLOQUEIO = False
@@ -364,20 +385,17 @@ if aba_ativa:
                     <h1 style='margin:0; padding:0; font-size: 2.5rem;'>{config_atual['display_name']}</h1>
                 </div>
             """, unsafe_allow_html=True)
-        
         st.write("") 
 
-        # MONITOR DE SITE E INFO DE ÚLTIMO RESULTADO
+        # MONITOR E INFO
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
         
         with col_mon1: 
-            # MOSTRA O ÚLTIMO RESULTADO COM O HORÁRIO AO LADO
             info_ultimo = f"Último: Grupo {historico[-1]:02}"
             if ultimo_horario_salvo:
                 info_ultimo += f" ({ultimo_horario_salvo})"
-            
             st.info(f"📡 {site_tit}  |  🏁 {info_ultimo}")
             
         with col_mon2: 
@@ -392,7 +410,6 @@ if aba_ativa:
             st.table(pd.DataFrame(dados_dna))
             st.table(df_back)
 
-        # HORÁRIOS
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
                 "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
@@ -407,7 +424,7 @@ if aba_ativa:
             st.markdown("""
             <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
                 <h2>NÃO APOSTE AGORA!</h2>
-                <p>A banca está muito instável. Aguarde uma vitória virtual.</p>
+                <p>A banca está muito instável.</p>
             </div>
             """, unsafe_allow_html=True)
             st.write("🤖 Palpites de Simulação:")
@@ -418,13 +435,14 @@ if aba_ativa:
 
             with tab_palpites:
                 if EM_CRISE:
-                    st.error("🚨 MODO CRISE: Lista de Recuperação")
+                    st.error(f"🚨 MODO CRISE - {texto_horario_futuro}")
                     st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                 else:
                     c1, c2 = st.columns([2, 1])
                     with c1:
-                        st.success("🔥 TOP 12 (Principal)")
+                        # AQUI ESTÁ A MENSAGEM DO HORÁRIO NO CABEÇALHO VERDE
+                        st.success(f"🔥 TOP 12 - {texto_horario_futuro}")
                         st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
                         st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                     with c2:
