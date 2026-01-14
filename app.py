@@ -79,6 +79,7 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
     config = CONFIG_BANCAS.get(banca_key)
     
     if bloqueado:
+        # ESTILO BLOQUEIO (CINZA/PRETO)
         bg_color = "#1a1a1a"
         text_color = "#a0a0a0"
         card_bg = "#000000"
@@ -185,36 +186,23 @@ def verificar_atualizacao_site(url):
     except: return False, "🔴 ERRO", "Falha conexão."
 
 def calcular_proximo_horario(banca, ultimo_horario):
-    """
-    Função V31: Descobre qual o próximo horário da grade
-    baseado no último inserido.
-    """
     if not ultimo_horario: return "Próximo Sorteio"
-    
-    # Descobre se é domingo ou dia útil para pegar a lista certa
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
-    
     config = CONFIG_BANCAS[banca]
     if dia_semana == 6: # Domingo
         lista_str = config['horarios']['dom']
     else:
         lista_str = config['horarios']['segsab']
-        
     lista_horarios = [h.strip() for h in lista_str.split('🔹')]
-    
     try:
-        # Tenta achar onde está o último horário na lista
         indice_atual = lista_horarios.index(ultimo_horario)
-        
-        # Pega o próximo
         if indice_atual + 1 < len(lista_horarios):
             proximo = lista_horarios[indice_atual + 1]
             return f"Palpite para: {proximo}"
         else:
             return "Palpite para: Amanhã/Próximo Dia"
     except:
-        # Se o horário salvo não bater com a lista de hoje (mudou o dia)
         return "Palpite para: Próximo Sorteio"
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
@@ -222,12 +210,15 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
     
-    if banca == "CAMINHODASORTE":
+    # --- MUDANÇA V32: APLICANDO LÓGICA TURBO TAMBÉM NA MONTECAI ---
+    if banca == "CAMINHODASORTE" or banca == "MONTECAI":
+        # Lógica Turbo (8 Jogos) - Alta Reatividade
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
         c_curto = Counter(hist_reverso[:15])
         for g, f in c_curto.items(): scores[g] += (f * 1.0)
     else:
+        # Lógica Clássica (LOTEP e outras)
         c_curto = Counter(hist_reverso[:10])
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
@@ -364,13 +355,13 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
-        
-        # CÁLCULO DO TEXTO DE PREVISÃO (NOVO V31)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         
-        # BLOQUEIO CS
+        # --- LÓGICA DE BLOQUEIO (V32: Agora inclui MONTECAI) ---
         MODO_BLOQUEIO = False
-        if banca_selecionada == "CAMINHODASORTE" and qtd_derrotas >= 3:
+        
+        # Se for Caminho OU Montecai E tiver 3+ derrotas -> Bloqueia
+        if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
             MODO_BLOQUEIO = True
         
         aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
@@ -424,7 +415,7 @@ if aba_ativa:
             st.markdown("""
             <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
                 <h2>NÃO APOSTE AGORA!</h2>
-                <p>A banca está muito instável.</p>
+                <p>A banca está muito instável. Aguarde uma vitória virtual.</p>
             </div>
             """, unsafe_allow_html=True)
             st.write("🤖 Palpites de Simulação:")
@@ -441,7 +432,6 @@ if aba_ativa:
                 else:
                     c1, c2 = st.columns([2, 1])
                     with c1:
-                        # AQUI ESTÁ A MENSAGEM DO HORÁRIO NO CABEÇALHO VERDE
                         st.success(f"🔥 TOP 12 - {texto_horario_futuro}")
                         st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
                         st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
