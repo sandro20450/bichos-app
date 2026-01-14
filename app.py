@@ -31,7 +31,7 @@ CONFIG_BANCAS = {
     },
     "CAMINHODASORTE": {
         "display_name": "CAMINHO DA SORTE",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732220.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/256/7510/7510279.png", 
         "cor_fundo": "#054a29", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -409,4 +409,5 @@ if aba_ativa:
         st.warning("⚠️ Planilha vazia.")
 else:
     st.info("Conectando...")
+
 
