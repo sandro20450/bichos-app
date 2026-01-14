@@ -43,7 +43,7 @@ CONFIG_BANCAS = {
     },
     "MONTECAI": {
         "display_name": "MONTE CARLOS",
-        "logo_url": "https://cdn-icons-png.flaticon.com/512/732/732217.png", 
+        "logo_url": "https://cdn-icons-png.flaticon.com/256/7152/7152381.png", 
         "cor_fundo": "#b71c1c", 
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
@@ -409,5 +409,6 @@ if aba_ativa:
         st.warning("⚠️ Planilha vazia.")
 else:
     st.info("Conectando...")
+
 
 
