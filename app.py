@@ -104,6 +104,9 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
+        
+        /* Bola Fantasma (Zebras) */
+        .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -170,10 +173,10 @@ def verificar_atualizacao_site(url):
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
+        datas = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=4)
         if r.status_code == 200:
-            datas = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
             for d in datas:
                 if d in r.text: return True, "🟢 SITE ATUALIZADO", f"Data: {d}"
             return False, "🟡 DATA AUSENTE", "Site online, sem data de hoje."
@@ -271,8 +274,9 @@ def analisar_dna_banca(historico, banca):
     return score, status
 
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
-    # Retorna o TOP 12 (com vicio se tiver) e COB
+    # GERA O TOP 12 MESTRE (Base de tudo)
     todos_forca = calcular_ranking_forca_completo(historico, banca)
+    
     if modo_crise:
         top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
@@ -283,8 +287,11 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         return top8 + top4_atraso, []
     
     top12 = todos_forca[:12]
+    
+    # RADAR DE VICIO (CORREÇÃO V44: Aplicado antes de tudo)
     vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
+    
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
@@ -293,7 +300,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     return top12, cob2
 
 def gerar_backtest_e_status(historico, banca):
-    # BACKTEST BASEADO NO TOP 12 (Padrão)
+    # BACKTEST BASEADO NO TOP 12
     if len(historico) < 30: return pd.DataFrame(), False, 0
     derrotas = 0
     resultados = []
@@ -302,9 +309,9 @@ def gerar_backtest_e_status(historico, banca):
         saiu = historico[i]
         passado = historico[:i]
         crise = derrotas >= 2
-        p_princ, p_cob = gerar_palpite_estrategico(passado, banca, crise)
+        p_princ, _ = gerar_palpite_estrategico(passado, banca, crise)
         status = "❌"
-        if saiu in (p_princ + p_cob):
+        if saiu in p_princ:
             status = "💚"
             derrotas = 0
         else:
@@ -313,41 +320,67 @@ def gerar_backtest_e_status(historico, banca):
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
-# --- NOVA LÓGICA V43: BACKTEST TOP 17 ---
+# --- CORREÇÃO V44: TOP 17 SINCRONIZADO E MODO INVERSO ---
 def gerar_backtest_top17(historico, banca):
     """
-    Backtest fixo nos 17 melhores grupos.
+    V44: Garante que o Top 17 contenha OBRIGATORIAMENTE o Top 12.
+    Isso corrige o bug de 'Ganhou no 12 mas Perdeu no 17'.
+    Também detecta se a banca Inverteu (Muitas derrotas no Top 17).
     """
-    if len(historico) < 30: return pd.DataFrame(), [], False
+    if len(historico) < 30: return pd.DataFrame(), [], False, False
     
     resultados = []
     falha_recente = False
+    contagem_derrotas_17 = 0
     
     # Analisa apenas os últimos 5 jogos
     inicio = max(0, len(historico) - 5)
     
-    # Pega a lista ATUAL de Top 17 para mostrar
-    ranking_atual = calcular_ranking_forca_completo(historico, banca)
-    top17_atual = ranking_atual[:17]
+    # Gera a lista ATUAL para exibição
+    ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
+    top12_atual, _ = gerar_palpite_estrategico(historico, banca) # Pega o Top 12 com Vício/Crise
+    
+    # Monta o Top 17 Atual (12 Inteligentes + 5 Melhores do Resto)
+    sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
+    top17_atual = top12_atual + sobras_atual[:5]
+    zebras_atual = sobras_atual[5:] # O Bottom 8 (Fantasmas)
     
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
         
-        # Recalcula o ranking daquele momento no passado
-        todos_forca = calcular_ranking_forca_completo(passado, banca)
-        top17_da_epoca = todos_forca[:17]
+        # RECONSTROI A LOGICA NO PASSADO
+        # 1. Pega o Top 12 daquela época (com todas as regras)
+        # Como não sabemos se estava em crise no passado exato sem rodar tudo, 
+        # vamos assumir a lógica padrao/vicio para simplificar o teste rápido, 
+        # mas mantendo a consistencia de inclusão.
+        
+        # Para ser perfeito, precisariamos simular a crise passo a passo.
+        # Simplificação Robustez: Pega Top 12 base + Sobras.
+        
+        ranking_bruto = calcular_ranking_forca_completo(passado, banca)
+        
+        # Simula lógica base (sem crise profunda para não pesar)
+        top12_passado, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
+        sobras = [x for x in ranking_bruto if x not in top12_passado]
+        top17_da_epoca = top12_passado + sobras[:5]
         
         status = "❌"
         if saiu in top17_da_epoca:
             status = "💚"
+            contagem_derrotas_17 = 0
         else:
-            if i == len(historico) - 1: # Se o ultimo foi derrota
+            contagem_derrotas_17 += 1
+            if i == len(historico) - 1:
                 falha_recente = True
         
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
         
-    return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente
+    # DETECTOR DE INVERSÃO (V44)
+    # Se tiver 3 ou mais derrotas seguidas no Top 17
+    modo_inverso = contagem_derrotas_17 >= 3
+        
+    return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
 def analisar_par_impar_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
@@ -401,7 +434,6 @@ def gerar_bussola_dia(historico):
     tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
     return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
 
-# --- MOTOR DE HEDGE ---
 def calcular_todas_oportunidades():
     oportunidades = []
     for b_key in BANCA_OPCOES:
@@ -529,8 +561,8 @@ if aba_ativa:
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
-        # CALCULO TOP 17 (NOVO)
-        df_top17, lista_top17, ALERTA_FALHA_17 = gerar_backtest_top17(historico, banca_selecionada)
+        # CALCULO TOP 17 (CORRIGIDO V44)
+        df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -561,7 +593,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO (V43: 3 ABAS)
+        # DIAGNÓSTICO E HEDGE (V44)
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
             tab_diag_12, tab_diag_17, tab_hedge = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "⚔️ Estratégia Global"])
             
@@ -570,14 +602,28 @@ if aba_ativa:
                 st.table(df_back) 
                 
             with tab_diag_17:
-                if ALERTA_FALHA_17:
-                    st.error("🚨 **OPORTUNIDADE RARA DETECTADA!** O Top 17 falhou no último jogo. A chance de acerto agora é muito alta.")
+                if MODO_INVERSO_ATIVO:
+                    st.markdown("""
+                    <div style="background-color: #6f42c1; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid white;">
+                        <h2>👻 MODO CAÇA-FANTASMAS ATIVO!</h2>
+                        <p>A banca <b>INVERTEU A LÓGICA</b> (3+ derrotas no Top 17).</p>
+                        <p>Não jogue no Top 17 agora. <b>Aposte nas ZEBRAS (Bottom 8).</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.write("👻 **ZEBRAS SUGERIDAS (Bottom 8):**")
+                    st.markdown(html_bolas(zebras, "fantasma"), unsafe_allow_html=True)
+                    st.code(", ".join([f"{n:02}" for n in zebras]), language="text")
+                    
+                elif ALERTA_FALHA_17:
+                    st.error("🚨 **OPORTUNIDADE RARA: O Top 17 Falhou!** A chance de acerto agora é muito alta.")
+                    st.write("📋 **Lista dos 17 Grupos para jogar:**")
+                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 else:
                     st.success("✅ Top 17 operando normalmente.")
+                    st.write("📋 **Lista dos 17 Grupos para jogar:**")
+                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 
                 st.table(df_top17)
-                st.write("📋 **Lista dos 17 Grupos para jogar:**")
-                st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 
             with tab_hedge:
                 if st.button("🔎 Gerar Estratégia de Ataque e Defesa"):
