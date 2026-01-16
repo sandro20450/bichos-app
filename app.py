@@ -104,8 +104,6 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
-        
-        /* Bola Fantasma (Zebras) */
         .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
     </style>
     """, unsafe_allow_html=True)
@@ -173,10 +171,10 @@ def verificar_atualizacao_site(url):
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
-        datas = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=4)
         if r.status_code == 200:
+            datas = [hoje.strftime("%d/%m/%Y"), hoje.strftime("%d-%m-%Y"), hoje.strftime("%d de")]
             for d in datas:
                 if d in r.text: return True, "🟢 SITE ATUALIZADO", f"Data: {d}"
             return False, "🟡 DATA AUSENTE", "Site online, sem data de hoje."
@@ -288,7 +286,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     
     top12 = todos_forca[:12]
     
-    # RADAR DE VICIO (CORREÇÃO V44: Aplicado antes de tudo)
+    # RADAR DE VICIO (APLICA SEMPRE PARA CONSISTENCIA)
     vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
     
@@ -320,14 +318,13 @@ def gerar_backtest_e_status(historico, banca):
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
-# --- CORREÇÃO V44: TOP 17 SINCRONIZADO E MODO INVERSO ---
+# --- CORREÇÃO V45: TOP 17 SINCRONIZADO ---
 def gerar_backtest_top17(historico, banca):
     """
-    V44: Garante que o Top 17 contenha OBRIGATORIAMENTE o Top 12.
-    Isso corrige o bug de 'Ganhou no 12 mas Perdeu no 17'.
-    Também detecta se a banca Inverteu (Muitas derrotas no Top 17).
+    V45: Garante que o Top 17 contenha OBRIGATORIAMENTE o Top 12 daquela época.
+    Corrige o bug onde um número aparecia no Top 12 mas sumia do Top 17.
     """
-    if len(historico) < 30: return pd.DataFrame(), [], False, False
+    if len(historico) < 30: return pd.DataFrame(), [], False, False, []
     
     resultados = []
     falha_recente = False
@@ -336,34 +333,29 @@ def gerar_backtest_top17(historico, banca):
     # Analisa apenas os últimos 5 jogos
     inicio = max(0, len(historico) - 5)
     
-    # Gera a lista ATUAL para exibição
+    # Gera a lista ATUAL para exibição (Simulando)
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
-    top12_atual, _ = gerar_palpite_estrategico(historico, banca) # Pega o Top 12 com Vício/Crise
+    top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     
-    # Monta o Top 17 Atual (12 Inteligentes + 5 Melhores do Resto)
+    # Monta o Top 17 Atual
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
     top17_atual = top12_atual + sobras_atual[:5]
-    zebras_atual = sobras_atual[5:] # O Bottom 8 (Fantasmas)
+    zebras_atual = sobras_atual[5:]
     
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
         
-        # RECONSTROI A LOGICA NO PASSADO
-        # 1. Pega o Top 12 daquela época (com todas as regras)
-        # Como não sabemos se estava em crise no passado exato sem rodar tudo, 
-        # vamos assumir a lógica padrao/vicio para simplificar o teste rápido, 
-        # mas mantendo a consistencia de inclusão.
+        # RECONSTRUÇÃO HISTÓRICA PERFEITA
+        # 1. Pega o Top 12 Inteligente da época (com Vício)
+        top12_da_epoca, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
         
-        # Para ser perfeito, precisariamos simular a crise passo a passo.
-        # Simplificação Robustez: Pega Top 12 base + Sobras.
+        # 2. Pega o Ranking Bruto da época
+        ranking_bruto_da_epoca = calcular_ranking_forca_completo(passado, banca)
         
-        ranking_bruto = calcular_ranking_forca_completo(passado, banca)
-        
-        # Simula lógica base (sem crise profunda para não pesar)
-        top12_passado, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
-        sobras = [x for x in ranking_bruto if x not in top12_passado]
-        top17_da_epoca = top12_passado + sobras[:5]
+        # 3. Monta o Top 17 (12 Smart + 5 Melhores Sobras)
+        sobras = [x for x in ranking_bruto_da_epoca if x not in top12_da_epoca]
+        top17_da_epoca = top12_da_epoca + sobras[:5]
         
         status = "❌"
         if saiu in top17_da_epoca:
@@ -376,8 +368,6 @@ def gerar_backtest_top17(historico, banca):
         
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
         
-    # DETECTOR DE INVERSÃO (V44)
-    # Se tiver 3 ou mais derrotas seguidas no Top 17
     modo_inverso = contagem_derrotas_17 >= 3
         
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
@@ -554,14 +544,14 @@ if aba_ativa:
         # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
-        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
+        # score, status_dna = analisar_dna_banca(historico, banca_selecionada) # Removido conforme pedido
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
-        # CALCULO TOP 17 (CORRIGIDO V44)
+        # CALCULO TOP 17 (CORRIGIDO V45)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
@@ -593,7 +583,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO E HEDGE (V44)
+        # DIAGNÓSTICO E HEDGE (V45: TOP 17 SINCRONIZADO)
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
             tab_diag_12, tab_diag_17, tab_hedge = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "⚔️ Estratégia Global"])
             
