@@ -186,9 +186,7 @@ def verificar_atualizacao_site(url):
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
 
-# --- FUNÇÕES DE TEMPO E HORÁRIO (V38) ---
 def extrair_hora_minuto(texto_hora):
-    """Converte '10:45' em (10, 45) inteiros"""
     try:
         partes = texto_hora.split(':')
         return int(partes[0]), int(partes[1])
@@ -196,27 +194,20 @@ def extrair_hora_minuto(texto_hora):
         return 0, 0
 
 def calcular_proximo_horario_real(banca):
-    """Retorna o próximo horário como string (ex: '11:00') e como datetime para calculo"""
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso_br)
     dia_semana = agora.weekday()
-    
     config = CONFIG_BANCAS[banca]
     lista_str = config['horarios']['dom'] if dia_semana == 6 else config['horarios']['segsab']
     lista_horarios = [h.strip() for h in lista_str.split('🔹')]
-    
     for h in lista_horarios:
         hh, mm = extrair_hora_minuto(h)
         horario_dt = agora.replace(hour=hh, minute=mm, second=0, microsecond=0)
-        # Se for 10:45 e agora são 10:00, este é o próximo.
-        # Se agora são 10:50, o 10:45 já passou.
         if horario_dt > agora:
             return h, horario_dt
-            
     return "Amanhã", agora + timedelta(days=1)
 
 def calcular_proximo_horario(banca, ultimo_horario):
-    """Função visual para o cabeçalho"""
     if not ultimo_horario: return "Próximo Sorteio"
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
@@ -231,7 +222,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
     except:
         return "Palpite para: Próximo Sorteio"
 
-# --- LÓGICAS MATEMÁTICAS ---
+# --- MATEMÁTICA E ANALYTICS ---
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
     hist_reverso = historico[::-1]
@@ -309,25 +300,6 @@ def gerar_backtest_e_status(historico, banca):
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
-def obter_comparativo_geral():
-    dados_comp = {"JOGO": ["#1", "#2", "#3", "#4", "#5"]}
-    for b_key in BANCA_OPCOES:
-        nome_curto = CONFIG_BANCAS[b_key]['display_name'].split(" ")[0] 
-        try:
-            aba = conectar_planilha(b_key)
-            if aba:
-                hist, _ = carregar_dados(aba)
-                if len(hist) > 0:
-                    df, _, _ = gerar_backtest_e_status(hist, b_key)
-                    status_list = df['RES'].tolist()
-                    while len(status_list) < 5: status_list.append("-")
-                    dados_comp[nome_curto] = status_list
-                else: dados_comp[nome_curto] = ["-"] * 5
-            else: dados_comp[nome_curto] = ["Erro"] * 5
-        except: dados_comp[nome_curto] = ["Erro"] * 5
-    return pd.DataFrame(dados_comp)
-
-# --- ANÁLISE PAR/ÍMPAR NEUTRO ---
 def analisar_par_impar_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
     hist_validos = [x for x in historico if x != 25]
@@ -348,7 +320,6 @@ def analisar_par_impar_neutro(historico):
         atraso_25 += 1
     return tipo_atual, seq, qtd_par, qtd_impar, atraso_25
 
-# --- ANÁLISE ALTO/BAIXO NEUTRO ---
 def analisar_alto_baixo_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
     hist_validos = [x for x in historico if x != 25]
@@ -370,7 +341,7 @@ def analisar_alto_baixo_neutro(historico):
         atraso_25 += 1
     return tipo_atual, seq, qtd_baixo, qtd_alto, atraso_25
 
-# --- V38: MOTOR DE HEDGE (COBERTURA CRUZADA) ---
+# --- MOTOR DE HEDGE E OPORTUNIDADE ---
 def calcular_todas_oportunidades():
     oportunidades = []
     
@@ -381,7 +352,6 @@ def calcular_todas_oportunidades():
             hist, _ = carregar_dados(aba)
             if len(hist) < 30: continue
             
-            # Checa Trava de Segurança (Se bloqueado, não sugere)
             _, _, derrotas = gerar_backtest_e_status(hist, b_key)
             if (b_key in ["CAMINHODASORTE", "MONTECAI"]) and derrotas >= 3:
                 continue
@@ -389,7 +359,6 @@ def calcular_todas_oportunidades():
             prox_hora_str, prox_hora_dt = calcular_proximo_horario_real(b_key)
             nome_display = CONFIG_BANCAS[b_key]['display_name']
 
-            # 1. Avalia Par/Impar
             tipo_pi, seq_pi, t_par, t_impar, _ = analisar_par_impar_neutro(hist)
             tot_pi = t_par + t_impar if (t_par+t_impar) > 0 else 1
             pct_par = (t_par/tot_pi)*100
@@ -398,10 +367,10 @@ def calcular_todas_oportunidades():
             if seq_pi >= 4:
                 score_pi += 40
                 aposta_pi = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
-            if pct_par < 40: # Pouco par -> Joga Par
+            if pct_par < 40:
                 score_pi += 30
                 aposta_pi = "PAR"
-            elif pct_par > 60: # Pouco impar -> Joga Impar
+            elif pct_par > 60:
                 score_pi += 30
                 aposta_pi = "ÍMPAR"
             
@@ -411,7 +380,6 @@ def calcular_todas_oportunidades():
                     "aposta": aposta_pi, "score": score_pi, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt
                 })
 
-            # 2. Avalia Alto/Baixo
             tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(hist)
             tot_ab = t_baixo + t_alto if (t_baixo+t_alto) > 0 else 1
             pct_baixo = (t_baixo/tot_ab)*100
@@ -433,8 +401,7 @@ def calcular_todas_oportunidades():
                     "aposta": aposta_ab, "score": score_ab, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt
                 })
 
-            # 3. Avalia TOP 12 (Recuperação)
-            if derrotas == 2: # Crise boa
+            if derrotas == 2:
                 palpite, _ = gerar_palpite_estrategico(hist, b_key, modo_crise=True)
                 lista_txt = ", ".join([f"{n:02}" for n in palpite])
                 oportunidades.append({
@@ -449,23 +416,14 @@ def calcular_todas_oportunidades():
 def gerar_estrategia_cobertura():
     ops = calcular_todas_oportunidades()
     if not ops: return None, None
-    
-    # Ordena pelo Score (Melhores primeiro)
     ops.sort(key=lambda x: x['score'], reverse=True)
-    
     melhor_ataque = ops[0]
     melhor_defesa = None
-    
-    # Procura uma defesa compatível (horário próximo e banca diferente se possível)
     for op in ops[1:]:
-        # Diferença de tempo em minutos
         diff_min = abs((melhor_ataque['hora_dt'] - op['hora_dt']).total_seconds() / 60)
-        
-        # Aceita se for em até 90 min de diferença
         if diff_min <= 90:
             melhor_defesa = op
             break
-            
     return melhor_ataque, melhor_defesa
 
 # =============================================================================
@@ -528,7 +486,7 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS BASE
+        # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
@@ -568,10 +526,15 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO + HEDGE (V38)
+        # DIAGNÓSTICO (V39 - REORGANIZADO)
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
-            tab_hedge, tab_diag, tab_comp = st.tabs(["🛡️ Estratégia de Cobertura (Cross-Banca)", "🔍 Diagnóstico Local", "⚔️ Comparativo"])
+            tab_diag, tab_hedge = st.tabs(["🔍 Diagnóstico Local", "🛡️ Estratégia de Cobertura (Cross-Banca)"])
             
+            with tab_diag:
+                dados_dna = {"OBEDIÊNCIA": [f"{int(score)}%"], "DNA STATUS": [status_dna]}
+                st.table(pd.DataFrame(dados_dna))
+                st.table(df_back) 
+                
             with tab_hedge:
                 if st.button("🔎 Gerar Estratégia de Ataque e Defesa"):
                     with st.spinner("O Robô está cruzando dados de todas as bancas..."):
@@ -597,15 +560,6 @@ if aba_ativa:
                             st.warning("Nenhuma oportunidade clara encontrada agora.")
                 else:
                     st.info("Clique para buscar a melhor combinação de apostas entre as bancas.")
-
-            with tab_diag:
-                dados_dna = {"OBEDIÊNCIA": [f"{int(score)}%"], "DNA STATUS": [status_dna]}
-                st.table(pd.DataFrame(dados_dna))
-                st.table(df_back) 
-            with tab_comp:
-                if st.button("🔄 Atualizar Comparativo"):
-                    with st.spinner("Analisando..."):
-                        st.table(obter_comparativo_geral())
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
