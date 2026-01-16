@@ -10,14 +10,14 @@ import time
 import base64
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES GERAIS ---
+# --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# CONFIGURAÇÃO DE PAGAMENTO (COTAÇÃO)
-COTACAO_GRUPO = 23.0  # Paga 23 para 1
+# CONFIGURAÇÃO DE PAGAMENTO (COTAÇÃO PADRÃO)
+COTACAO_GRUPO = 23.0 
 
-# --- CENTRAL DE CONFIGURAÇÃO DE BANCAS ---
+# --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
@@ -80,8 +80,11 @@ def reproduzir_som(tipo):
 
 def aplicar_estilo_banca(banca_key, bloqueado=False):
     config = CONFIG_BANCAS.get(banca_key)
+    
     if bloqueado:
-        bg_color, text_color, card_bg = "#1a1a1a", "#a0a0a0", "#000000"
+        bg_color = "#1a1a1a"
+        text_color = "#a0a0a0"
+        card_bg = "#000000"
     else:
         bg_color = config["cor_fundo"]
         text_color = config["cor_texto"]
@@ -93,16 +96,20 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {text_color} !important; }}
         .stNumberInput input {{ color: white !important; caret-color: white !important; }}
         .stSelectbox div[data-baseweb="select"] > div {{ color: black !important; }}
+        
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
         thead tr th {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
         tbody tr td {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
+        
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
+        
         /* Bolas */
         .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
+        
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
     </style>
     """, unsafe_allow_html=True)
@@ -131,14 +138,14 @@ def carregar_dados(worksheet):
         try:
             horarios = worksheet.col_values(2)
             ultimo_horario = horarios[-1] if horarios else ""
-        except: ultimo_horario = ""
+        except:
+            ultimo_horario = ""
         return grupos, ultimo_horario
     return [], ""
 
 def salvar_na_nuvem(worksheet, numero, horario):
     if worksheet:
         try:
-            # V40: Agora salvamos a data também na coluna C para futuro uso
             data_hoje = datetime.now().strftime("%Y-%m-%d")
             worksheet.append_row([int(numero), str(horario), data_hoje])
             return True
@@ -157,7 +164,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ, RADAR E BÚSSOLA ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -186,7 +193,8 @@ def extrair_hora_minuto(texto_hora):
     try:
         partes = texto_hora.split(':')
         return int(partes[0]), int(partes[1])
-    except: return 0, 0
+    except:
+        return 0, 0
 
 def calcular_proximo_horario_real(banca):
     fuso_br = pytz.timezone('America/Sao_Paulo')
@@ -214,25 +222,24 @@ def calcular_proximo_horario(banca, ultimo_horario):
         if indice_atual + 1 < len(lista_horarios):
             return f"Palpite para: {lista_horarios[indice_atual + 1]}"
         return "Palpite para: Amanhã/Próximo Dia"
-    except: return "Palpite para: Próximo Sorteio"
+    except:
+        return "Palpite para: Próximo Sorteio"
 
-# --- RADAR DE VÍCIO (NOVO V40) ---
-def detectar_vicio_repeticao(historico):
-    """Verifica se a banca está repetindo muito o resultado anterior"""
+# --- RADAR DE VÍCIO ---
+def detecting_vicio_repeticao(historico):
     if len(historico) < 10: return False
     repeticoes = 0
-    # Analisa últimos 15 jogos
     recorte = historico[-15:]
     for i in range(len(recorte)-1):
         if recorte[i] == recorte[i+1]:
             repeticoes += 1
-    # Se houver mais de 1 repetição recente, considera viciada
     return repeticoes >= 2
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
+    
     if banca == "CAMINHODASORTE" or banca == "MONTECAI":
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
@@ -243,6 +250,7 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
         for g, f in c_medio.items(): scores[g] += (f * 1.0)
+        
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
@@ -274,10 +282,7 @@ def analisar_dna_banca(historico, banca):
     return score, status
 
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
-    # Obtem ranking normal
     todos_forca = calcular_ranking_forca_completo(historico, banca)
-    
-    # Lógica de Crise
     if modo_crise:
         top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
@@ -287,18 +292,12 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
             if len(top4_atraso) == 4: break
         return top8 + top4_atraso, []
     
-    # Lógica Normal com RADAR DE VÍCIO (V40)
     top12 = todos_forca[:12]
-    
-    # Verifica vício
-    vicio = detectar_vicio_repeticao(historico)
+    vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
-    
-    # Se tiver vício E o último não estiver no Top 12, coloca ele na marra
     if vicio and (ultimo not in top12):
-        # Remove o último da lista (o 12º, mais fraco) e insere o recente
         top12.pop() 
-        top12.insert(0, ultimo) # Coloca em primeiro para destaque
+        top12.insert(0, ultimo) 
     
     cob2 = todos_forca[12:14]
     return top12, cob2
@@ -341,7 +340,6 @@ def obter_comparativo_geral():
         except: dados_comp[nome_curto] = ["Erro"] * 5
     return pd.DataFrame(dados_comp)
 
-# --- ANALYTICS AVANÇADOS ---
 def analisar_par_impar_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
     hist_validos = [x for x in historico if x != 25]
@@ -383,25 +381,18 @@ def analisar_alto_baixo_neutro(historico):
         atraso_25 += 1
     return tipo_atual, seq, qtd_baixo, qtd_alto, atraso_25
 
-# --- BÚSSOLA DO DIA (V40) ---
 def gerar_bussola_dia(historico):
-    """Analisa os últimos 10 jogos para dar a tendência imediata do dia"""
     if len(historico) < 10: return "Aguardando dados..."
-    
     recorte = historico[-10:]
-    # Par/Impar
     pares = len([x for x in recorte if x%2==0 and x!=25])
     impares = len([x for x in recorte if x%2!=0 and x!=25])
     tend_pi = "PARES" if pares > impares else "ÍMPARES"
-    
-    # Alto/Baixo
     baixos = len([x for x in recorte if 1<=x<=12])
     altos = len([x for x in recorte if 13<=x<=24])
     tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
-    
     return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
 
-# --- HEDGE E CALCULADORA (V40) ---
+# --- MOTOR DE HEDGE ---
 def calcular_todas_oportunidades():
     oportunidades = []
     for b_key in BANCA_OPCOES:
@@ -427,7 +418,7 @@ def calcular_todas_oportunidades():
             elif pct_par > 60: score_pi, aposta_pi = 30, "ÍMPAR"
             
             if score_pi > 0 and aposta_pi:
-                oportunidades.append({"banca": nome_display, "chave": b_key, "tipo": "PAR/IMPAR", "aposta": aposta_pi, "score": score_pi, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt, "odds": 2.0}) # Odds aprox P/I (simplificado)
+                oportunidades.append({"banca": nome_display, "chave": b_key, "tipo": "PAR/IMPAR", "aposta": aposta_pi, "score": score_pi, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt, "odds": 2.0})
 
             tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(hist)
             tot_ab = t_baixo + t_alto if (t_baixo+t_alto) > 0 else 1
@@ -525,10 +516,7 @@ if aba_ativa:
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
-        
-        # RADAR DE VÍCIO
-        vicio_ativo = detectar_vicio_repeticao(historico)
-        
+        vicio_ativo = detecting_vicio_repeticao(historico)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
@@ -539,7 +527,6 @@ if aba_ativa:
         aplicar_estilo_banca(banca_selecionada, bloqueado=MODO_BLOQUEIO)
         config_atual = CONFIG_BANCAS[banca_selecionada]
 
-        # CABEÇALHO
         col_head1, col_head2, col_head3 = st.columns([1, 2, 1])
         with col_head2:
             st.markdown(f"""
@@ -550,7 +537,6 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
-        # BÚSSOLA DO DIA (NOVO)
         st.info(f"🧭 {bussola_texto}")
 
         link = config_atual['url_site']
@@ -563,7 +549,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO E HEDGE (COM CALCULADORA)
+        # DIAGNÓSTICO E HEDGE (V41: CALCULADORA LIVRE)
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
             tab_diag, tab_hedge = st.tabs(["🔍 Diagnóstico Local", "🛡️ Estratégia de Cobertura (Cross-Banca)"])
             
@@ -574,64 +560,70 @@ if aba_ativa:
                 
             with tab_hedge:
                 if st.button("🔎 Gerar Estratégia de Ataque e Defesa"):
-                    with st.spinner("Calculando com Gestão de Risco..."):
+                    with st.spinner("O Robô está cruzando dados de todas as bancas..."):
                         ataque, defesa = gerar_estrategia_cobertura()
                         
+                        # Armazena na sessão para a calculadora usar
                         if ataque:
+                            st.session_state['last_atk_odds'] = ataque['odds']
+                            st.session_state['last_atk_name'] = ataque['banca']
                             col_atk, col_def = st.columns(2)
                             with col_atk:
                                 st.success(f"⚔️ ATAQUE (Score {ataque['score']})")
                                 st.markdown(f"**{ataque['banca']}** - 🕒 {ataque['hora_str']}")
                                 st.write(f"🎯 **{ataque['tipo']}**: {ataque['aposta']}")
-                                
                             with col_def:
                                 if defesa:
+                                    st.session_state['last_def_odds'] = defesa['odds']
+                                    st.session_state['last_def_name'] = defesa['banca']
                                     st.info(f"🛡️ DEFESA (Score {defesa['score']})")
                                     st.markdown(f"**{defesa['banca']}** - 🕒 {defesa['hora_str']}")
                                     st.write(f"🎯 **{defesa['tipo']}**: {defesa['aposta']}")
                                 else:
-                                    st.warning("Sem cobertura.")
-                            
-                            st.markdown("---")
-                            st.write("💰 **Calculadora Financeira**")
-                            
-                            val_ataque = st.number_input("Quanto você vai apostar no ATAQUE? (R$)", 1.0, 1000.0, 10.0)
-                            
-                            # Lógica Simplificada de Hedge para Grupos
-                            # Custo Ataque = val_ataque
-                            # Retorno Ataque = (val_ataque / 12) * 23 [Se for Top 12] ou val_ataque * 2 [Se for Par/Impar]
-                            # A calculadora foca em cobrir o custo total usando a defesa.
-                            
-                            # Fator multiplicador da defesa (aprox)
-                            fator_def = 23.0 if "TOP" in str(defesa['tipo']) else 2.0
-                            qtd_itens_def = 12 if "TOP" in str(defesa['tipo']) else 1
-                            
-                            # Formula de Hedge (Para Zero a Zero):
-                            # LucroDefesa = CustoTotal
-                            # (ApostaDef / QtdItens) * 23 = ApostaAtk + ApostaDef
-                            
-                            if defesa and "TOP" in str(defesa['tipo']):
-                                # Hedge complexo (Grupo)
-                                # (X / 12) * 23 = ValAtk + X
-                                # 1.916 X = ValAtk + X -> 0.916 X = ValAtk -> X = ValAtk / 0.916
-                                val_defesa = val_ataque / 0.91
-                            elif defesa:
-                                # Hedge simples (Par/Impar - Paga 2x - Não cobre bem se for 1 pra 1, precisa de odd maior)
-                                # Se a defesa paga só 2x, é impossível fazer hedge perfeito de valor igual.
-                                # Vamos assumir hedge parcial.
-                                val_defesa = val_ataque # 1 pra 1
-                            else:
-                                val_defesa = 0
-                                
-                            if defesa and fator_def > 2:
-                                st.metric("Aposte na Defesa (Hedge Zero Risco):", f"R$ {val_defesa:.2f}")
-                                st.caption("Se a defesa ganhar, você recupera todo o investimento.")
-                            elif defesa:
-                                st.warning("A defesa paga pouco (2x). Hedge total matemático não é possível com lucro.")
-                                st.metric("Sugestão de Defesa:", f"R$ {val_ataque * 0.5:.2f}")
-                            
+                                    st.session_state['last_def_odds'] = 2.0 # Default
+                                    st.warning("Sem cobertura compatível no horário.")
                         else:
-                            st.warning("Nenhuma oportunidade clara encontrada agora.")
+                            st.warning("Nenhuma oportunidade automática clara encontrada agora.")
+
+                st.markdown("---")
+                st.write("🧮 **Calculadora de Gestão de Banca (Livre)**")
+                
+                c_calc1, c_calc2 = st.columns(2)
+                
+                # Recupera valores do robô se existirem, senão usa padrão
+                default_atk_odd = st.session_state.get('last_atk_odds', COTACAO_GRUPO)
+                default_def_odd = st.session_state.get('last_def_odds', 2.0)
+                
+                with c_calc1:
+                    val_ataque = st.number_input("Valor no ATAQUE (R$):", 1.0, 1000.0, 10.0)
+                    odd_ataque = st.number_input("Cotação Ataque (x):", 1.0, 100.0, float(default_atk_odd))
+                
+                with c_calc2:
+                    st.write("Configuração Defesa")
+                    odd_defesa = st.number_input("Cotação Defesa (x):", 1.0, 100.0, float(default_def_odd))
+                
+                # CÁLCULO DE HEDGE
+                # Lucro Ataque = (ValAtk * OddAtk) - CustoTotal
+                # Lucro Defesa = (ValDef * OddDef) - CustoTotal >= 0 (Para recuperar)
+                
+                # (ValDef * OddDef) = ValAtk + ValDef
+                # ValDef * OddDef - ValDef = ValAtk
+                # ValDef * (OddDef - 1) = ValAtk
+                # ValDef = ValAtk / (OddDef - 1)
+                
+                if odd_defesa > 1:
+                    val_defesa_ideal = val_ataque / (odd_defesa - 1)
+                    custo_total = val_ataque + val_defesa_ideal
+                    lucro_ataque = (val_ataque * odd_ataque) - custo_total
+                    
+                    st.info(f"🛡️ Para recuperar 100% se der zebra, aposte **R$ {val_defesa_ideal:.2f}** na Defesa.")
+                    st.caption(f"Investimento Total: R$ {custo_total:.2f}")
+                    if lucro_ataque > 0:
+                        st.success(f"💰 Se o Ataque bater, seu LUCRO LÍQUIDO será: **R$ {lucro_ataque:.2f}**")
+                    else:
+                        st.error("A Cotação do Ataque é baixa demais para cobrir esse custo.")
+                else:
+                    st.error("Cotação da defesa inválida.")
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
@@ -654,11 +646,11 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        tab_palpites, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🏠 Palpites", "⚖️ Par/Ímpar", "📏 Alto/Baixo", "📈 Gráficos"])
+        tab_palpites, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🏠 Palpites", "⚖️ Par/Ímpar (50%)", "📏 Alto/Baixo (50%)", "📈 Gráficos"])
 
         with tab_palpites:
             if MODO_BLOQUEIO:
-                st.info("👀 Modo Simulação Ativo.")
+                st.info("👀 Modo Simulação Ativo. Veja os palpites cinzas acima.")
             else:
                 if EM_CRISE:
                     st.error(f"🚨 MODO CRISE - {texto_horario_futuro}")
@@ -667,10 +659,8 @@ if aba_ativa:
                 else:
                     c1, c2 = st.columns([2, 1])
                     with c1:
-                        # ALERTA DE VÍCIO NO PALPITE
                         if vicio_ativo:
-                            st.warning("⚠️ Atenção: RADAR DE VÍCIO ATIVADO! (Repetições detectadas)")
-                        
+                            st.warning("⚠️ RADAR DE VÍCIO ATIVADO! (Repetições detectadas)")
                         st.success(f"🔥 TOP 12 - {texto_horario_futuro}")
                         st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
                         st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
@@ -693,7 +683,6 @@ if aba_ativa:
             col_pi1, col_pi2 = st.columns(2)
             total_validos = t_par + t_impar if (t_par + t_impar) > 0 else 1
             pct_par = (t_par/total_validos)*100
-            
             col_pi1.metric("Pares", f"{t_par}", delta=f"{pct_par:.0f}%")
             col_pi2.metric("Ímpares", f"{t_impar}", delta=f"{(100-pct_par):.0f}%")
             
@@ -739,12 +728,25 @@ if aba_ativa:
             col_ab1.metric("Baixos", f"{t_baixo}", delta=f"{pct_baixo:.0f}%")
             col_ab2.metric("Altos", f"{t_alto}", delta=f"{(100-pct_baixo):.0f}%")
             
+            cor_alerta_ab = "green"
+            texto_alerta_ab = "Equilibrado"
+            sugestao_ab = "Aguarde..."
+            if pct_baixo < 40:
+                sugestao_ab = "📈 Desequilíbrio: Jogue BAIXO"
+                cor_alerta_ab = "orange"
+                texto_alerta_ab = "Chance %"
+            elif pct_baixo > 60:
+                sugestao_ab = "📈 Desequilíbrio: Jogue ALTO"
+                cor_alerta_ab = "orange"
+                texto_alerta_ab = "Chance %"
             if seq_ab >= 4:
+                cor_alerta_ab = "red"
+                texto_alerta_ab = f"⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!"
                 oposto = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
-                st.markdown(f"<h3 style='color:red'>⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!</h3>", unsafe_allow_html=True)
-                st.info(f"👉 Dica: Aposte no **{oposto}**")
-            else:
-                st.write("Equilibrado.")
+                sugestao_ab = f"👉 Dica: Aposte no **{oposto}**"
+            
+            st.markdown(f"<h3 style='color:{cor_alerta_ab}'>{texto_alerta_ab}</h3>", unsafe_allow_html=True)
+            st.info(sugestao_ab)
             
             st.write("Histórico:")
             html_seq_ab = "<div>"
