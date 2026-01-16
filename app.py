@@ -310,16 +310,12 @@ def obter_comparativo_geral():
             dados_comp[nome_curto] = ["Erro"] * 5
     return pd.DataFrame(dados_comp)
 
-# --- ANÁLISE PAR/ÍMPAR V36 (COM FATOR 25 NEUTRO) ---
+# --- ANÁLISE PAR/ÍMPAR V36 (NEUTRO 25) ---
 def analisar_par_impar_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
-    
-    # Filtra: Remove 25 das contas de sequencia e balanço
     hist_validos = [x for x in historico if x != 25]
-    
     if not hist_validos: return "NEUTRO", 0, 0, 0, 0
     
-    # 1. Sequencia Atual (Ignorando os 25 que sairam)
     ultimo_valido = hist_validos[-1]
     eh_par = (ultimo_valido % 2 == 0)
     tipo_atual = "PAR" if eh_par else "ÍMPAR"
@@ -328,12 +324,9 @@ def analisar_par_impar_neutro(historico):
         if (x % 2 == 0) == eh_par: seq += 1
         else: break
         
-    # 2. Balanço nos últimos 50 (Válidos)
     recorte = hist_validos[-50:]
     qtd_par = len([x for x in recorte if x % 2 == 0])
     qtd_impar = len([x for x in recorte if x % 2 != 0])
-    
-    # 3. Atraso do 25 (Vaca)
     atraso_25 = 0
     for x in reversed(historico):
         if x == 25: break
@@ -341,15 +334,12 @@ def analisar_par_impar_neutro(historico):
         
     return tipo_atual, seq, qtd_par, qtd_impar, atraso_25
 
-# --- ANÁLISE ALTO/BAIXO V36 (COM FATOR 25 NEUTRO) ---
+# --- ANÁLISE ALTO/BAIXO V36 (NEUTRO 25) ---
 def analisar_alto_baixo_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
-    
-    # Filtra 25
     hist_validos = [x for x in historico if x != 25]
     if not hist_validos: return "NEUTRO", 0, 0, 0, 0
     
-    # Baixo: 1 a 12 | Alto: 13 a 24 | (25 excluido)
     ultimo_valido = hist_validos[-1]
     eh_baixo = (1 <= ultimo_valido <= 12)
     tipo_atual = "BAIXO" if eh_baixo else "ALTO"
@@ -362,14 +352,94 @@ def analisar_alto_baixo_neutro(historico):
     recorte = hist_validos[-50:]
     qtd_baixo = len([x for x in recorte if 1 <= x <= 12])
     qtd_alto = len([x for x in recorte if 13 <= x <= 24])
-    
-    # Atraso 25 (mesma logica)
     atraso_25 = 0
     for x in reversed(historico):
         if x == 25: break
         atraso_25 += 1
         
     return tipo_atual, seq, qtd_baixo, qtd_alto, atraso_25
+
+# --- NOVA FUNÇÃO V37: CÁLCULO DE OPORTUNIDADE GLOBAL ---
+def calcular_pontuacao_oportunidade(historico, banca_nome):
+    """
+    Analisa uma banca e retorna uma pontuação de oportunidade (0 a 100)
+    e uma lista de motivos/dicas.
+    """
+    pontos = 0
+    dicas = []
+    
+    # 1. Analise de Crise/Recuperação (Peso 30)
+    _, em_crise, derrotas = gerar_backtest_e_status(historico, banca_nome)
+    # Se estiver bloqueado (3+ derrotas), a oportunidade é arriscada, zera pontos de crise
+    # Se estiver em crise simples (2 derrotas), é chance de ouro
+    if derrotas == 2:
+        pontos += 30
+        dicas.append("🔥 Modo Recuperação Ativo (Vitória Iminente)")
+    
+    # 2. Analise de Obediência (Peso 20)
+    score_dna, _ = analisar_dna_banca(historico, banca_nome)
+    pontos += int(score_dna / 5) # Max 20 pts
+    
+    # 3. Analise Par/Impar (Peso 25)
+    tipo_pi, seq_pi, t_par, t_impar, _ = analisar_par_impar_neutro(historico)
+    total_validos = t_par + t_impar if (t_par + t_impar) > 0 else 1
+    pct_par = (t_par / total_validos) * 100
+    
+    # Check Sequencia
+    if seq_pi >= 4:
+        pontos += 15
+        oposto = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
+        dicas.append(f"⚖️ Seq. Longa ({seq_pi} {tipo_pi}s) -> Jogue {oposto}")
+    
+    # Check Desequilíbrio Porcentagem (<40%)
+    if pct_par < 40:
+        pontos += 15
+        dicas.append(f"📊 Desequilíbrio (Pares baixos {int(pct_par)}%) -> Jogue PAR")
+    elif pct_par > 60:
+        pontos += 15
+        dicas.append(f"📊 Desequilíbrio (Ímpares baixos {int(100-pct_par)}%) -> Jogue ÍMPAR")
+
+    # 4. Analise Alto/Baixo (Peso 25)
+    tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
+    total_validos_ab = t_baixo + t_alto if (t_baixo + t_alto) > 0 else 1
+    pct_baixo = (t_baixo / total_validos_ab) * 100
+    
+    if seq_ab >= 4:
+        pontos += 15
+        oposto = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
+        dicas.append(f"📏 Seq. Longa ({seq_ab} {tipo_ab}s) -> Jogue {oposto}")
+        
+    if pct_baixo < 40:
+        pontos += 15
+        dicas.append(f"📊 Desequilíbrio (Baixos raros {int(pct_baixo)}%) -> Jogue BAIXO")
+    elif pct_baixo > 60:
+        pontos += 15
+        dicas.append(f"📊 Desequilíbrio (Altos raros {int(100-pct_baixo)}%) -> Jogue ALTO")
+
+    return pontos, dicas
+
+def gerar_relatorio_oportunidades():
+    ranking = []
+    for b_key in BANCA_OPCOES:
+        nome_display = CONFIG_BANCAS[b_key]['display_name']
+        try:
+            aba = conectar_planilha(b_key)
+            if aba:
+                hist, _ = carregar_dados(aba)
+                if len(hist) > 30:
+                    pts, motivos = calcular_pontuacao_oportunidade(hist, b_key)
+                    # Verifica trava de segurança para não recomendar banca bloqueada
+                    _, _, derrotas = gerar_backtest_e_status(hist, b_key)
+                    if (b_key in ["CAMINHODASORTE", "MONTECAI"]) and derrotas >= 3:
+                        ranking.append({"banca": nome_display, "pontos": -1, "motivos": ["⛔ BANCA BLOQUEADA (Risco Alto)"]})
+                    else:
+                        ranking.append({"banca": nome_display, "pontos": pts, "motivos": motivos})
+        except:
+            pass
+            
+    # Ordena por pontos (maior para menor)
+    ranking = sorted(ranking, key=lambda x: x['pontos'], reverse=True)
+    return ranking
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -473,19 +543,42 @@ if aba_ativa:
 
         # DIAGNÓSTICO
         with st.expander("📊 Diagnóstico & Histórico", expanded=True):
-            tab_diag, tab_comp = st.tabs(["🔍 Diagnóstico Atual", "⚔️ Comparativo Geral"])
+            # TABS DE DIAGNÓSTICO (V37 - NOVA ABA RADAR)
+            tab_radar, tab_diag, tab_comp = st.tabs(["💎 Radar de Oportunidades", "🔍 Diagnóstico Atual", "⚔️ Comparativo Geral"])
+            
+            with tab_radar:
+                st.write("### 🤖 IA Scan: Melhor Aposta Agora")
+                if st.button("🔎 Escanear Mercado (Todas as Bancas)"):
+                    with st.spinner("Calculando probabilidades..."):
+                        rank_oportunidades = gerar_relatorio_oportunidades()
+                        
+                        if rank_oportunidades:
+                            top1 = rank_oportunidades[0]
+                            st.success(f"🏆 MELHOR OPORTUNIDADE: **{top1['banca']}**")
+                            if top1['pontos'] == -1:
+                                st.error("Mercado em Perigo! Nenhuma aposta segura.")
+                            else:
+                                st.metric("Pontuação de Chance", f"{top1['pontos']}/100")
+                                for m in top1['motivos']:
+                                    st.write(m)
+                                    
+                            st.markdown("---")
+                            st.write("Outras Bancas:")
+                            for item in rank_oportunidades[1:]:
+                                st.caption(f"**{item['banca']}**: {item['pontos']} pts")
+                        else:
+                            st.warning("Dados insuficientes.")
+                else:
+                    st.info("Clique para ver onde está a maior chance de lucro.")
+
             with tab_diag:
                 dados_dna = {"OBEDIÊNCIA": [f"{int(score)}%"], "DNA STATUS": [status_dna]}
                 st.table(pd.DataFrame(dados_dna))
                 st.table(df_back) 
             with tab_comp:
-                st.caption("Comparação em Tempo Real")
-                if st.button("🔄 Carregar Comparativo Geral"):
-                    with st.spinner("Analisando todas as bancas..."):
-                        df_comp = obter_comparativo_geral()
-                        st.table(df_comp)
-                else:
-                    st.info("Clique no botão acima para carregar.")
+                if st.button("🔄 Atualizar Comparativo"):
+                    with st.spinner("Analisando..."):
+                        st.table(obter_comparativo_geral())
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
@@ -530,51 +623,54 @@ if aba_ativa:
                         st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
         
         with tab_parimpar:
-            # MOSTRADOR DO 25 (VACA)
             st.write("### 🐮 Fator 25 (Neutro)")
             col_v1, col_v2 = st.columns([1, 3])
             with col_v1:
                 st.markdown(f"<div class='bola-25'>25</div>", unsafe_allow_html=True)
             with col_v2:
-                if atr_25 == 0:
-                    st.warning("⚠️ O 25 ACABOU DE SAIR! As estatísticas podem resetar.")
-                elif atr_25 >= 15:
-                    st.success(f"🚨 **ATRASADO HÁ {atr_25} JOGOS!** Ideal para Cobertura.")
-                else:
-                    st.info(f"Atraso normal: {atr_25} jogos sem sair.")
+                if atr_25 == 0: st.warning("⚠️ O 25 ACABOU DE SAIR!")
+                elif atr_25 >= 15: st.success(f"🚨 **ATRASADO HÁ {atr_25} JOGOS!**")
+                else: st.info(f"Atraso normal: {atr_25}")
             
             st.markdown("---")
             st.write("### ⚖️ Balança P/I (Sem o 25)")
             col_pi1, col_pi2 = st.columns(2)
-            total_validos = t_par + t_impar
-            if total_validos == 0: total_validos = 1 # Evitar div zero
+            total_validos = t_par + t_impar if (t_par + t_impar) > 0 else 1
+            pct_par = (t_par/total_validos)*100
             
-            col_pi1.metric("Pares (2-24)", f"{t_par}", delta=f"{(t_par/total_validos)*100:.0f}%")
-            col_pi2.metric("Ímpares (1-23)", f"{t_impar}", delta=f"{(t_impar/total_validos)*100:.0f}%")
+            col_pi1.metric("Pares", f"{t_par}", delta=f"{pct_par:.0f}%")
+            col_pi2.metric("Ímpares", f"{t_impar}", delta=f"{(100-pct_par):.0f}%")
             
-            # Alerta P/I
+            # ALERTA DUPLO (SEQUENCIA + PORCENTAGEM)
+            cor_alerta = "green"
+            texto_alerta = "Mercado Equilibrado"
+            sugestao = "Aguarde..."
+            
+            # Analise de Desequilibrio %
+            if pct_par < 40:
+                sugestao = "📈 Desequilíbrio: Jogue PAR (Estão saindo pouco)"
+                cor_alerta = "orange"
+                texto_alerta = "Oportunidade por %"
+            elif pct_par > 60:
+                sugestao = "📈 Desequilíbrio: Jogue ÍMPAR (Estão saindo pouco)"
+                cor_alerta = "orange"
+                texto_alerta = "Oportunidade por %"
+            
+            # Analise de Sequencia (Soberana)
             if seq_pi >= 4:
                 cor_alerta = "red"
-                texto_alerta = f"⚠️ ALERTA: {seq_pi} {tipo_pi}ES SEGUIDOS!"
-                sugestao = f"👉 Dica: Aposte no **{'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'}**"
-            elif seq_pi == 3:
-                cor_alerta = "orange"
-                texto_alerta = f"Fique de Olho: {seq_pi} {tipo_pi}es Seguidos"
-                sugestao = "Aguarde..."
-            else:
-                cor_alerta = "green"
-                texto_alerta = f"Normal: {seq_pi} {tipo_pi} seguido(s)"
-                sugestao = "Equilibrado."
-            
+                texto_alerta = f"⚠️ ALERTA MÁXIMO: {seq_pi} {tipo_pi}ES SEGUIDOS!"
+                oposto = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
+                sugestao = f"👉 Dica: Aposte no **{oposto}**"
+
             st.markdown(f"<h3 style='color:{cor_alerta}'>{texto_alerta}</h3>", unsafe_allow_html=True)
             st.info(sugestao)
             
-            st.write("Histórico Visual (P=Azul, I=Amarelo, 25=Branco):")
+            st.write("Histórico Visual:")
             html_seq = "<div>"
             for x in historico[::-1][:12]:
                 if x == 25:
-                    txt, cor_b, cor_txt = "25", "white", "black"
-                    borda = "3px solid #d4af37"
+                    txt, cor_b, cor_txt, borda = "25", "white", "black", "3px solid #d4af37"
                 else:
                     txt = "P" if x%2==0 else "I"
                     cor_b = "#007bff" if txt=="P" else "#ffc107"
@@ -585,42 +681,42 @@ if aba_ativa:
             st.markdown(html_seq, unsafe_allow_html=True)
 
         with tab_altobaixo:
-            st.write("### 🐮 Fator 25 (Neutro)")
-            if atr_25 >= 15: st.success(f"🚨 **USE O 25 COMO COBERTURA!** (Atraso: {atr_25})")
-            else: st.info(f"Status do 25: Atraso {atr_25}")
-            
-            st.markdown("---")
             st.write("### 📏 Balança A/B (Sem o 25)")
             col_ab1, col_ab2 = st.columns(2)
-            tot_v_ab = t_baixo + t_alto
-            if tot_v_ab == 0: tot_v_ab = 1
+            tot_v_ab = t_baixo + t_alto if (t_baixo + t_alto) > 0 else 1
+            pct_baixo = (t_baixo/tot_v_ab)*100
             
-            col_ab1.metric("Baixos (1-12)", f"{t_baixo}", delta=f"{(t_baixo/tot_v_ab)*100:.0f}%")
-            col_ab2.metric("Altos (13-24)", f"{t_alto}", delta=f"{(t_alto/tot_v_ab)*100:.0f}%")
+            col_ab1.metric("Baixos (1-12)", f"{t_baixo}", delta=f"{pct_baixo:.0f}%")
+            col_ab2.metric("Altos (13-24)", f"{t_alto}", delta=f"{(100-pct_baixo):.0f}%")
             
+            # Alerta AB (Duplo)
+            cor_alerta_ab = "green"
+            texto_alerta_ab = "Equilibrado"
+            sugestao_ab = "Aguarde..."
+            
+            if pct_baixo < 40:
+                sugestao_ab = "📈 Desequilíbrio: Jogue BAIXO (Estão raros)"
+                cor_alerta_ab = "orange"
+                texto_alerta_ab = "Oportunidade por %"
+            elif pct_baixo > 60:
+                sugestao_ab = "📈 Desequilíbrio: Jogue ALTO (Estão raros)"
+                cor_alerta_ab = "orange"
+                texto_alerta_ab = "Oportunidade por %"
+                
             if seq_ab >= 4:
-                cor_alerta = "red"
-                texto_alerta = f"⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!"
+                cor_alerta_ab = "red"
+                texto_alerta_ab = f"⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!"
                 oposto = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
-                sugestao = f"👉 Dica: Aposte no **{oposto}**"
-            elif seq_ab == 3:
-                cor_alerta = "orange"
-                texto_alerta = f"Fique de Olho: {seq_ab} {tipo_ab}os Seguidos"
-                sugestao = "Aguarde..."
-            else:
-                cor_alerta = "green"
-                texto_alerta = f"Normal: {seq_ab} {tipo_ab}o(s) seguido(s)"
-                sugestao = "Equilibrado."
+                sugestao_ab = f"👉 Dica: Aposte no **{oposto}**"
             
-            st.markdown(f"<h3 style='color:{cor_alerta}'>{texto_alerta}</h3>", unsafe_allow_html=True)
-            st.info(sugestao)
+            st.markdown(f"<h3 style='color:{cor_alerta_ab}'>{texto_alerta_ab}</h3>", unsafe_allow_html=True)
+            st.info(sugestao_ab)
             
-            st.write("Histórico Visual (B=Ciano, A=Laranja, 25=Branco):")
+            st.write("Histórico Visual:")
             html_seq_ab = "<div>"
             for x in historico[::-1][:12]:
                 if x == 25:
-                    txt, cor_b, cor_txt = "25", "white", "black"
-                    borda = "3px solid #d4af37"
+                    txt, cor_b, cor_txt, borda = "25", "white", "black", "3px solid #d4af37"
                 else:
                     is_low = (1 <= x <= 12)
                     txt = "B" if is_low else "A"
