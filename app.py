@@ -4,7 +4,7 @@ from collections import Counter
 import gspread
 from google.oauth2.service_account import Credentials
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import time
 import base64
@@ -186,31 +186,56 @@ def verificar_atualizacao_site(url):
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
 
+# --- FUNÇÕES DE TEMPO E HORÁRIO (V38) ---
+def extrair_hora_minuto(texto_hora):
+    """Converte '10:45' em (10, 45) inteiros"""
+    try:
+        partes = texto_hora.split(':')
+        return int(partes[0]), int(partes[1])
+    except:
+        return 0, 0
+
+def calcular_proximo_horario_real(banca):
+    """Retorna o próximo horário como string (ex: '11:00') e como datetime para calculo"""
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso_br)
+    dia_semana = agora.weekday()
+    
+    config = CONFIG_BANCAS[banca]
+    lista_str = config['horarios']['dom'] if dia_semana == 6 else config['horarios']['segsab']
+    lista_horarios = [h.strip() for h in lista_str.split('🔹')]
+    
+    for h in lista_horarios:
+        hh, mm = extrair_hora_minuto(h)
+        horario_dt = agora.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        # Se for 10:45 e agora são 10:00, este é o próximo.
+        # Se agora são 10:50, o 10:45 já passou.
+        if horario_dt > agora:
+            return h, horario_dt
+            
+    return "Amanhã", agora + timedelta(days=1)
+
 def calcular_proximo_horario(banca, ultimo_horario):
+    """Função visual para o cabeçalho"""
     if not ultimo_horario: return "Próximo Sorteio"
     fuso_br = pytz.timezone('America/Sao_Paulo')
     dia_semana = datetime.now(fuso_br).weekday()
     config = CONFIG_BANCAS[banca]
-    if dia_semana == 6: 
-        lista_str = config['horarios']['dom']
-    else:
-        lista_str = config['horarios']['segsab']
+    lista_str = config['horarios']['dom'] if dia_semana == 6 else config['horarios']['segsab']
     lista_horarios = [h.strip() for h in lista_str.split('🔹')]
     try:
         indice_atual = lista_horarios.index(ultimo_horario)
         if indice_atual + 1 < len(lista_horarios):
-            proximo = lista_horarios[indice_atual + 1]
-            return f"Palpite para: {proximo}"
-        else:
-            return "Palpite para: Amanhã/Próximo Dia"
+            return f"Palpite para: {lista_horarios[indice_atual + 1]}"
+        return "Palpite para: Amanhã/Próximo Dia"
     except:
         return "Palpite para: Próximo Sorteio"
 
+# --- LÓGICAS MATEMÁTICAS ---
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
-    
     if banca == "CAMINHODASORTE" or banca == "MONTECAI":
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
@@ -221,7 +246,6 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
         for g, f in c_medio.items(): scores[g] += (f * 1.0)
-        
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
@@ -259,8 +283,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         todos_atrasos = calcular_ranking_atraso_completo(historico)
         top4_atraso = []
         for b in todos_atrasos:
-            if b not in top8:
-                top4_atraso.append(b)
+            if b not in top8: top4_atraso.append(b)
             if len(top4_atraso) == 4: break
         return top8 + top4_atraso, []
     else:
@@ -271,7 +294,6 @@ def gerar_backtest_e_status(historico, banca):
     derrotas = 0
     resultados = []
     inicio = max(0, len(historico) - 25)
-    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -285,7 +307,6 @@ def gerar_backtest_e_status(historico, banca):
             derrotas += 1
         if i >= len(historico) - 5:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES": status})
-            
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
 def obter_comparativo_geral():
@@ -299,23 +320,18 @@ def obter_comparativo_geral():
                 if len(hist) > 0:
                     df, _, _ = gerar_backtest_e_status(hist, b_key)
                     status_list = df['RES'].tolist()
-                    while len(status_list) < 5:
-                        status_list.append("-")
+                    while len(status_list) < 5: status_list.append("-")
                     dados_comp[nome_curto] = status_list
-                else:
-                    dados_comp[nome_curto] = ["-"] * 5
-            else:
-                dados_comp[nome_curto] = ["Erro"] * 5
-        except:
-            dados_comp[nome_curto] = ["Erro"] * 5
+                else: dados_comp[nome_curto] = ["-"] * 5
+            else: dados_comp[nome_curto] = ["Erro"] * 5
+        except: dados_comp[nome_curto] = ["Erro"] * 5
     return pd.DataFrame(dados_comp)
 
-# --- ANÁLISE PAR/ÍMPAR V36 (NEUTRO 25) ---
+# --- ANÁLISE PAR/ÍMPAR NEUTRO ---
 def analisar_par_impar_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
     hist_validos = [x for x in historico if x != 25]
     if not hist_validos: return "NEUTRO", 0, 0, 0, 0
-    
     ultimo_valido = hist_validos[-1]
     eh_par = (ultimo_valido % 2 == 0)
     tipo_atual = "PAR" if eh_par else "ÍMPAR"
@@ -323,7 +339,6 @@ def analisar_par_impar_neutro(historico):
     for x in reversed(hist_validos):
         if (x % 2 == 0) == eh_par: seq += 1
         else: break
-        
     recorte = hist_validos[-50:]
     qtd_par = len([x for x in recorte if x % 2 == 0])
     qtd_impar = len([x for x in recorte if x % 2 != 0])
@@ -331,15 +346,13 @@ def analisar_par_impar_neutro(historico):
     for x in reversed(historico):
         if x == 25: break
         atraso_25 += 1
-        
     return tipo_atual, seq, qtd_par, qtd_impar, atraso_25
 
-# --- ANÁLISE ALTO/BAIXO V36 (NEUTRO 25) ---
+# --- ANÁLISE ALTO/BAIXO NEUTRO ---
 def analisar_alto_baixo_neutro(historico):
     if not historico: return None, 0, 0, 0, 0
     hist_validos = [x for x in historico if x != 25]
     if not hist_validos: return "NEUTRO", 0, 0, 0, 0
-    
     ultimo_valido = hist_validos[-1]
     eh_baixo = (1 <= ultimo_valido <= 12)
     tipo_atual = "BAIXO" if eh_baixo else "ALTO"
@@ -348,7 +361,6 @@ def analisar_alto_baixo_neutro(historico):
         x_baixo = (1 <= x <= 12)
         if x_baixo == eh_baixo: seq += 1
         else: break
-        
     recorte = hist_validos[-50:]
     qtd_baixo = len([x for x in recorte if 1 <= x <= 12])
     qtd_alto = len([x for x in recorte if 13 <= x <= 24])
@@ -356,90 +368,105 @@ def analisar_alto_baixo_neutro(historico):
     for x in reversed(historico):
         if x == 25: break
         atraso_25 += 1
-        
     return tipo_atual, seq, qtd_baixo, qtd_alto, atraso_25
 
-# --- NOVA FUNÇÃO V37: CÁLCULO DE OPORTUNIDADE GLOBAL ---
-def calcular_pontuacao_oportunidade(historico, banca_nome):
-    """
-    Analisa uma banca e retorna uma pontuação de oportunidade (0 a 100)
-    e uma lista de motivos/dicas.
-    """
-    pontos = 0
-    dicas = []
+# --- V38: MOTOR DE HEDGE (COBERTURA CRUZADA) ---
+def calcular_todas_oportunidades():
+    oportunidades = []
     
-    # 1. Analise de Crise/Recuperação (Peso 30)
-    _, em_crise, derrotas = gerar_backtest_e_status(historico, banca_nome)
-    # Se estiver bloqueado (3+ derrotas), a oportunidade é arriscada, zera pontos de crise
-    # Se estiver em crise simples (2 derrotas), é chance de ouro
-    if derrotas == 2:
-        pontos += 30
-        dicas.append("🔥 Modo Recuperação Ativo (Vitória Iminente)")
-    
-    # 2. Analise de Obediência (Peso 20)
-    score_dna, _ = analisar_dna_banca(historico, banca_nome)
-    pontos += int(score_dna / 5) # Max 20 pts
-    
-    # 3. Analise Par/Impar (Peso 25)
-    tipo_pi, seq_pi, t_par, t_impar, _ = analisar_par_impar_neutro(historico)
-    total_validos = t_par + t_impar if (t_par + t_impar) > 0 else 1
-    pct_par = (t_par / total_validos) * 100
-    
-    # Check Sequencia
-    if seq_pi >= 4:
-        pontos += 15
-        oposto = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
-        dicas.append(f"⚖️ Seq. Longa ({seq_pi} {tipo_pi}s) -> Jogue {oposto}")
-    
-    # Check Desequilíbrio Porcentagem (<40%)
-    if pct_par < 40:
-        pontos += 15
-        dicas.append(f"📊 Desequilíbrio (Pares baixos {int(pct_par)}%) -> Jogue PAR")
-    elif pct_par > 60:
-        pontos += 15
-        dicas.append(f"📊 Desequilíbrio (Ímpares baixos {int(100-pct_par)}%) -> Jogue ÍMPAR")
-
-    # 4. Analise Alto/Baixo (Peso 25)
-    tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
-    total_validos_ab = t_baixo + t_alto if (t_baixo + t_alto) > 0 else 1
-    pct_baixo = (t_baixo / total_validos_ab) * 100
-    
-    if seq_ab >= 4:
-        pontos += 15
-        oposto = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
-        dicas.append(f"📏 Seq. Longa ({seq_ab} {tipo_ab}s) -> Jogue {oposto}")
-        
-    if pct_baixo < 40:
-        pontos += 15
-        dicas.append(f"📊 Desequilíbrio (Baixos raros {int(pct_baixo)}%) -> Jogue BAIXO")
-    elif pct_baixo > 60:
-        pontos += 15
-        dicas.append(f"📊 Desequilíbrio (Altos raros {int(100-pct_baixo)}%) -> Jogue ALTO")
-
-    return pontos, dicas
-
-def gerar_relatorio_oportunidades():
-    ranking = []
     for b_key in BANCA_OPCOES:
-        nome_display = CONFIG_BANCAS[b_key]['display_name']
         try:
             aba = conectar_planilha(b_key)
-            if aba:
-                hist, _ = carregar_dados(aba)
-                if len(hist) > 30:
-                    pts, motivos = calcular_pontuacao_oportunidade(hist, b_key)
-                    # Verifica trava de segurança para não recomendar banca bloqueada
-                    _, _, derrotas = gerar_backtest_e_status(hist, b_key)
-                    if (b_key in ["CAMINHODASORTE", "MONTECAI"]) and derrotas >= 3:
-                        ranking.append({"banca": nome_display, "pontos": -1, "motivos": ["⛔ BANCA BLOQUEADA (Risco Alto)"]})
-                    else:
-                        ranking.append({"banca": nome_display, "pontos": pts, "motivos": motivos})
-        except:
-            pass
+            if not aba: continue
+            hist, _ = carregar_dados(aba)
+            if len(hist) < 30: continue
             
-    # Ordena por pontos (maior para menor)
-    ranking = sorted(ranking, key=lambda x: x['pontos'], reverse=True)
-    return ranking
+            # Checa Trava de Segurança (Se bloqueado, não sugere)
+            _, _, derrotas = gerar_backtest_e_status(hist, b_key)
+            if (b_key in ["CAMINHODASORTE", "MONTECAI"]) and derrotas >= 3:
+                continue
+
+            prox_hora_str, prox_hora_dt = calcular_proximo_horario_real(b_key)
+            nome_display = CONFIG_BANCAS[b_key]['display_name']
+
+            # 1. Avalia Par/Impar
+            tipo_pi, seq_pi, t_par, t_impar, _ = analisar_par_impar_neutro(hist)
+            tot_pi = t_par + t_impar if (t_par+t_impar) > 0 else 1
+            pct_par = (t_par/tot_pi)*100
+            score_pi = 0
+            aposta_pi = ""
+            if seq_pi >= 4:
+                score_pi += 40
+                aposta_pi = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
+            if pct_par < 40: # Pouco par -> Joga Par
+                score_pi += 30
+                aposta_pi = "PAR"
+            elif pct_par > 60: # Pouco impar -> Joga Impar
+                score_pi += 30
+                aposta_pi = "ÍMPAR"
+            
+            if score_pi > 0 and aposta_pi:
+                oportunidades.append({
+                    "banca": nome_display, "chave": b_key, "tipo": "PAR/IMPAR", 
+                    "aposta": aposta_pi, "score": score_pi, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt
+                })
+
+            # 2. Avalia Alto/Baixo
+            tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(hist)
+            tot_ab = t_baixo + t_alto if (t_baixo+t_alto) > 0 else 1
+            pct_baixo = (t_baixo/tot_ab)*100
+            score_ab = 0
+            aposta_ab = ""
+            if seq_ab >= 4:
+                score_ab += 40
+                aposta_ab = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
+            if pct_baixo < 40: 
+                score_ab += 30
+                aposta_ab = "BAIXO"
+            elif pct_baixo > 60: 
+                score_ab += 30
+                aposta_ab = "ALTO"
+                
+            if score_ab > 0 and aposta_ab:
+                oportunidades.append({
+                    "banca": nome_display, "chave": b_key, "tipo": "ALTO/BAIXO", 
+                    "aposta": aposta_ab, "score": score_ab, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt
+                })
+
+            # 3. Avalia TOP 12 (Recuperação)
+            if derrotas == 2: # Crise boa
+                palpite, _ = gerar_palpite_estrategico(hist, b_key, modo_crise=True)
+                lista_txt = ", ".join([f"{n:02}" for n in palpite])
+                oportunidades.append({
+                    "banca": nome_display, "chave": b_key, "tipo": "TOP 12 (Recuperação)", 
+                    "aposta": f"Grupos: {lista_txt}", "score": 90, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt
+                })
+
+        except: continue
+
+    return oportunidades
+
+def gerar_estrategia_cobertura():
+    ops = calcular_todas_oportunidades()
+    if not ops: return None, None
+    
+    # Ordena pelo Score (Melhores primeiro)
+    ops.sort(key=lambda x: x['score'], reverse=True)
+    
+    melhor_ataque = ops[0]
+    melhor_defesa = None
+    
+    # Procura uma defesa compatível (horário próximo e banca diferente se possível)
+    for op in ops[1:]:
+        # Diferença de tempo em minutos
+        diff_min = abs((melhor_ataque['hora_dt'] - op['hora_dt']).total_seconds() / 60)
+        
+        # Aceita se for em até 90 min de diferença
+        if diff_min <= 90:
+            melhor_defesa = op
+            break
+            
+    return melhor_ataque, melhor_defesa
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -501,13 +528,13 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS
+        # CÁLCULOS BASE
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         
-        # ANÁLISES EXTRAS (V36 - NEUTRO)
+        # ANÁLISES EXTRAS (V36)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
@@ -541,35 +568,35 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO
-        with st.expander("📊 Diagnóstico & Histórico", expanded=True):
-            # TABS DE DIAGNÓSTICO (V37 - NOVA ABA RADAR)
-            tab_radar, tab_diag, tab_comp = st.tabs(["💎 Radar de Oportunidades", "🔍 Diagnóstico Atual", "⚔️ Comparativo Geral"])
+        # DIAGNÓSTICO + HEDGE (V38)
+        with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
+            tab_hedge, tab_diag, tab_comp = st.tabs(["🛡️ Estratégia de Cobertura (Cross-Banca)", "🔍 Diagnóstico Local", "⚔️ Comparativo"])
             
-            with tab_radar:
-                st.write("### 🤖 IA Scan: Melhor Aposta Agora")
-                if st.button("🔎 Escanear Mercado (Todas as Bancas)"):
-                    with st.spinner("Calculando probabilidades..."):
-                        rank_oportunidades = gerar_relatorio_oportunidades()
+            with tab_hedge:
+                if st.button("🔎 Gerar Estratégia de Ataque e Defesa"):
+                    with st.spinner("O Robô está cruzando dados de todas as bancas..."):
+                        ataque, defesa = gerar_estrategia_cobertura()
                         
-                        if rank_oportunidades:
-                            top1 = rank_oportunidades[0]
-                            st.success(f"🏆 MELHOR OPORTUNIDADE: **{top1['banca']}**")
-                            if top1['pontos'] == -1:
-                                st.error("Mercado em Perigo! Nenhuma aposta segura.")
-                            else:
-                                st.metric("Pontuação de Chance", f"{top1['pontos']}/100")
-                                for m in top1['motivos']:
-                                    st.write(m)
-                                    
-                            st.markdown("---")
-                            st.write("Outras Bancas:")
-                            for item in rank_oportunidades[1:]:
-                                st.caption(f"**{item['banca']}**: {item['pontos']} pts")
+                        if ataque:
+                            col_atk, col_def = st.columns(2)
+                            with col_atk:
+                                st.success(f"⚔️ ATAQUE (Principal) - Score {ataque['score']}")
+                                st.markdown(f"**{ataque['banca']}**")
+                                st.write(f"🕒 {ataque['hora_str']}")
+                                st.write(f"🎯 **{ataque['tipo']}**: {ataque['aposta']}")
+                                
+                            with col_def:
+                                if defesa:
+                                    st.info(f"🛡️ DEFESA (Cobertura) - Score {defesa['score']}")
+                                    st.markdown(f"**{defesa['banca']}**")
+                                    st.write(f"🕒 {defesa['hora_str']}")
+                                    st.write(f"🎯 **{defesa['tipo']}**: {defesa['aposta']}")
+                                else:
+                                    st.warning("Sem cobertura compatível no horário.")
                         else:
-                            st.warning("Dados insuficientes.")
+                            st.warning("Nenhuma oportunidade clara encontrada agora.")
                 else:
-                    st.info("Clique para ver onde está a maior chance de lucro.")
+                    st.info("Clique para buscar a melhor combinação de apostas entre as bancas.")
 
             with tab_diag:
                 dados_dna = {"OBEDIÊNCIA": [f"{int(score)}%"], "DNA STATUS": [status_dna]}
@@ -625,8 +652,7 @@ if aba_ativa:
         with tab_parimpar:
             st.write("### 🐮 Fator 25 (Neutro)")
             col_v1, col_v2 = st.columns([1, 3])
-            with col_v1:
-                st.markdown(f"<div class='bola-25'>25</div>", unsafe_allow_html=True)
+            with col_v1: st.markdown(f"<div class='bola-25'>25</div>", unsafe_allow_html=True)
             with col_v2:
                 if atr_25 == 0: st.warning("⚠️ O 25 ACABOU DE SAIR!")
                 elif atr_25 >= 15: st.success(f"🚨 **ATRASADO HÁ {atr_25} JOGOS!**")
@@ -641,22 +667,17 @@ if aba_ativa:
             col_pi1.metric("Pares", f"{t_par}", delta=f"{pct_par:.0f}%")
             col_pi2.metric("Ímpares", f"{t_impar}", delta=f"{(100-pct_par):.0f}%")
             
-            # ALERTA DUPLO (SEQUENCIA + PORCENTAGEM)
             cor_alerta = "green"
             texto_alerta = "Mercado Equilibrado"
             sugestao = "Aguarde..."
-            
-            # Analise de Desequilibrio %
             if pct_par < 40:
-                sugestao = "📈 Desequilíbrio: Jogue PAR (Estão saindo pouco)"
+                sugestao = "📈 Desequilíbrio: Jogue PAR"
                 cor_alerta = "orange"
                 texto_alerta = "Oportunidade por %"
             elif pct_par > 60:
-                sugestao = "📈 Desequilíbrio: Jogue ÍMPAR (Estão saindo pouco)"
+                sugestao = "📈 Desequilíbrio: Jogue ÍMPAR"
                 cor_alerta = "orange"
                 texto_alerta = "Oportunidade por %"
-            
-            # Analise de Sequencia (Soberana)
             if seq_pi >= 4:
                 cor_alerta = "red"
                 texto_alerta = f"⚠️ ALERTA MÁXIMO: {seq_pi} {tipo_pi}ES SEGUIDOS!"
@@ -689,20 +710,17 @@ if aba_ativa:
             col_ab1.metric("Baixos (1-12)", f"{t_baixo}", delta=f"{pct_baixo:.0f}%")
             col_ab2.metric("Altos (13-24)", f"{t_alto}", delta=f"{(100-pct_baixo):.0f}%")
             
-            # Alerta AB (Duplo)
             cor_alerta_ab = "green"
             texto_alerta_ab = "Equilibrado"
             sugestao_ab = "Aguarde..."
-            
             if pct_baixo < 40:
-                sugestao_ab = "📈 Desequilíbrio: Jogue BAIXO (Estão raros)"
+                sugestao_ab = "📈 Desequilíbrio: Jogue BAIXO"
                 cor_alerta_ab = "orange"
                 texto_alerta_ab = "Oportunidade por %"
             elif pct_baixo > 60:
-                sugestao_ab = "📈 Desequilíbrio: Jogue ALTO (Estão raros)"
+                sugestao_ab = "📈 Desequilíbrio: Jogue ALTO"
                 cor_alerta_ab = "orange"
                 texto_alerta_ab = "Oportunidade por %"
-                
             if seq_ab >= 4:
                 cor_alerta_ab = "red"
                 texto_alerta_ab = f"⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!"
