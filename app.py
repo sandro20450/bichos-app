@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import pytz
 import time
 import base64
-from bs4 import BeautifulSoup # Nova biblioteca para ler a tabela do site
+from bs4 import BeautifulSoup 
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
@@ -60,7 +60,7 @@ CONFIG_BANCAS = {
 
 BANCA_OPCOES = list(CONFIG_BANCAS.keys())
 
-# Estados de Som e Inputs Automáticos
+# Estados de Som
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
@@ -110,6 +110,7 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
         .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
+        .bola-puxada {{ display: inline-block; width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -161,66 +162,8 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DE WEB SCRAPING (NOVA V46) ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
-def raspar_ultimo_resultado_real(url, banca_key):
-    """
-    Vai até o site, lê o HTML, procura a tabela do sorteio mais recente
-    e extrai: Data, Horário e Grupo do 1º Prêmio.
-    """
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code != 200: return None, None, "Erro Site"
-        
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # O site geralmente divide os sorteios em blocos. Vamos pegar o primeiro bloco visivel.
-        # Procurando o cabeçalho que contem a data
-        # Estrutura típica: <h5>Nome Banca - Horario - Resultado do dia DD/MM/AAAA</h5>
-        
-        fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje = datetime.now(fuso_br).strftime("%d/%m/%Y")
-        
-        # Procura todos os headers de sorteio
-        blocos = soup.find_all(['h5', 'h4', 'h3']) # Resultadofacil usa h5 geralmente
-        
-        for bloco in blocos:
-            texto = bloco.get_text().strip()
-            # Verifica se é o sorteio DE HOJE
-            if hoje in texto:
-                # Achamos o sorteio de hoje! Agora precisamos do horário e do grupo.
-                # O horário geralmente está no texto: "18:30"
-                
-                # Tenta extrair horário do texto (ex: "18:30")
-                horario_encontrado = None
-                # Busca simples por padrão HH:MM
-                import re
-                match = re.search(r'\d{2}:\d{2}', texto)
-                if match:
-                    horario_encontrado = match.group(0)
-                
-                # Agora procura a tabela logo após este cabeçalho
-                tabela = bloco.find_next('table')
-                if tabela:
-                    # A tabela tem cabeçalho: Premio | Milhar | Grupo | Bicho
-                    # Queremos a primeira linha de dados (1º Premio) e a coluna Grupo (indice 2)
-                    linhas = tabela.find_all('tr')
-                    for linha in linhas:
-                        colunas = linha.find_all('td')
-                        if len(colunas) >= 3:
-                            premio = colunas[0].get_text().strip()
-                            if '1º' in premio or '1' in premio:
-                                grupo = colunas[2].get_text().strip()
-                                if grupo.isdigit():
-                                    return int(grupo), horario_encontrado, "Sucesso"
-                                    
-        return None, None, "Data Ausente" # Não achou sorteio com a data de hoje
-        
-    except Exception as e:
-        return None, None, f"Erro: {e}"
-
-# --- OUTRAS LÓGICAS ---
 def html_bolas(lista, cor="verde"):
     html = "<div>"
     classe = f"bola-{cor}"
@@ -230,7 +173,6 @@ def html_bolas(lista, cor="verde"):
     return html
 
 def verificar_atualizacao_site(url):
-    # Função simples apenas para o status do monitor
     if not url: return False, "Sem Link", ""
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
@@ -279,6 +221,38 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
+# --- SCRAPING ---
+def raspar_ultimo_resultado_real(url, banca_key):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=5)
+        if r.status_code != 200: return None, None, "Erro Site"
+        soup = BeautifulSoup(r.text, 'html.parser')
+        fuso_br = pytz.timezone('America/Sao_Paulo')
+        hoje = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        blocos = soup.find_all(['h5', 'h4', 'h3']) 
+        for bloco in blocos:
+            texto = bloco.get_text().strip()
+            if hoje in texto:
+                horario_encontrado = None
+                import re
+                match = re.search(r'\d{2}:\d{2}', texto)
+                if match: horario_encontrado = match.group(0)
+                tabela = bloco.find_next('table')
+                if tabela:
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
+                            if '1º' in premio or '1' in premio:
+                                grupo = colunas[2].get_text().strip()
+                                if grupo.isdigit():
+                                    return int(grupo), horario_encontrado, "Sucesso"
+        return None, None, "Data Ausente"
+    except Exception as e:
+        return None, None, f"Erro: {e}"
+
 # --- RADAR DE VÍCIO ---
 def detecting_vicio_repeticao(historico):
     if len(historico) < 10: return False
@@ -288,6 +262,33 @@ def detecting_vicio_repeticao(historico):
         if recorte[i] == recorte[i+1]:
             repeticoes += 1
     return repeticoes >= 2
+
+# --- CÁLCULO DE PUXADAS (NOVO V47) ---
+def calcular_puxada_do_ultimo(historico):
+    if len(historico) < 2: return None, []
+    
+    ultimo = historico[-1] # O gatilho
+    seguintes = []
+    
+    # Varre todo o histórico procurando esse gatilho
+    for i in range(len(historico)-1):
+        if historico[i] == ultimo:
+            seguintes.append(historico[i+1]) # Pega o que veio depois
+            
+    if not seguintes: return ultimo, []
+    
+    # Conta a frequência
+    contagem = Counter(seguintes)
+    total_ocorrencias = len(seguintes)
+    
+    # Pega os 3 mais comuns e calcula %
+    rank = contagem.most_common(3)
+    puxadas_com_pct = []
+    for grupo, freq in rank:
+        pct = (freq / total_ocorrencias) * 100
+        puxadas_com_pct.append((grupo, pct))
+        
+    return ultimo, puxadas_com_pct
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
@@ -336,9 +337,7 @@ def analisar_dna_banca(historico, banca):
     return score, status
 
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
-    # GERA O TOP 12 MESTRE (Base de tudo)
     todos_forca = calcular_ranking_forca_completo(historico, banca)
-    
     if modo_crise:
         top8 = todos_forca[:8]
         todos_atrasos = calcular_ranking_atraso_completo(historico)
@@ -349,11 +348,8 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         return top8 + top4_atraso, []
     
     top12 = todos_forca[:12]
-    
-    # RADAR DE VICIO
     vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
-    
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
@@ -383,14 +379,11 @@ def gerar_backtest_e_status(historico, banca):
 
 def gerar_backtest_top17(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), [], False, False, []
-    
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    
     inicio = max(0, len(historico) - 5)
     
-    # ATUAL
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -400,8 +393,6 @@ def gerar_backtest_top17(historico, banca):
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
-        
-        # RECONSTROI HISTORICO
         top12_da_epoca, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
         ranking_bruto_da_epoca = calcular_ranking_forca_completo(passado, banca)
         sobras = [x for x in ranking_bruto_da_epoca if x not in top12_da_epoca]
@@ -557,7 +548,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # --- BOTÃO DE IMPORTAÇÃO AUTOMÁTICA (V46) ---
     col_import, _ = st.columns([1, 0.1])
     with col_import:
         if st.button("📡 Importar Resultado do Site"):
@@ -566,7 +556,6 @@ with st.sidebar:
                 if grp:
                     st.success(f"Encontrado! G{grp:02} às {hor}")
                     st.session_state['auto_grupo'] = grp
-                    # Tenta achar o indice do horario na lista
                     try:
                         idx_h = lista_horarios.index(hor)
                         st.session_state['auto_horario_idx'] = idx_h
@@ -577,7 +566,6 @@ with st.sidebar:
     
     st.write("📝 **Registrar Sorteio**")
     
-    # Inputs conectados ao Session State para auto-preenchimento
     novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
     novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
     
@@ -613,15 +601,17 @@ if aba_ativa:
         # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
-        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
-        # CALCULO TOP 17 (CORRIGIDO)
+        # CALCULO TOP 17 (V45)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
+        
+        # CALCULO PUXADAS (V47)
+        ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -652,7 +642,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO
+        # DIAGNÓSTICO E HEDGE (V45)
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
             tab_diag_12, tab_diag_17, tab_hedge = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "⚔️ Estratégia Global"])
             
@@ -761,7 +751,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        tab_palpites, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🏠 Palpites", "⚖️ Par/Ímpar (50%)", "📏 Alto/Baixo (50%)", "📈 Gráficos"])
+        tab_palpites, tab_puxadas, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🏠 Palpites", "🧲 Puxadas (Markov)", "⚖️ Par/Ímpar", "📏 Alto/Baixo", "📈 Gráficos"])
 
         with tab_palpites:
             if MODO_BLOQUEIO:
@@ -784,6 +774,24 @@ if aba_ativa:
                         st.markdown(html_bolas(palpite_cob, "azul"), unsafe_allow_html=True)
                         st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
         
+        with tab_puxadas:
+            st.write(f"### 🧲 Quem puxa quem?")
+            st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
+            
+            if lista_puxadas:
+                st.markdown("---")
+                col_p1, col_p2, col_p3 = st.columns(3)
+                cols = [col_p1, col_p2, col_p3]
+                
+                for i, (grupo, pct) in enumerate(lista_puxadas):
+                    with cols[i]:
+                        st.markdown(f"<div style='text-align:center;'><h4>{i+1}º Mais Forte</h4></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='display:flex;justify-content:center;'><div class='bola-puxada'>{grupo:02}</div></div>", unsafe_allow_html=True)
+                        st.progress(int(pct))
+                        st.caption(f"Frequência: {int(pct)}%")
+            else:
+                st.warning("Dados insuficientes para calcular puxada.")
+
         with tab_parimpar:
             st.write("### 🐮 Fator 25 (Neutro)")
             col_v1, col_v2 = st.columns([1, 3])
