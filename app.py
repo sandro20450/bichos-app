@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pytz
 import time
 import base64
+from bs4 import BeautifulSoup # Nova biblioteca para ler a tabela do site
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
@@ -59,11 +60,15 @@ CONFIG_BANCAS = {
 
 BANCA_OPCOES = list(CONFIG_BANCAS.keys())
 
-# Estados de Som
+# Estados de Som e Inputs Automáticos
 if 'tocar_som_salvar' not in st.session_state:
     st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state:
     st.session_state['tocar_som_apagar'] = False
+if 'auto_grupo' not in st.session_state:
+    st.session_state['auto_grupo'] = 1
+if 'auto_horario_idx' not in st.session_state:
+    st.session_state['auto_horario_idx'] = 0
 
 def reproduzir_som(tipo):
     if tipo == 'sucesso':
@@ -156,8 +161,66 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ ---
+# --- 3. LÓGICA DE WEB SCRAPING (NOVA V46) ---
 # =============================================================================
+def raspar_ultimo_resultado_real(url, banca_key):
+    """
+    Vai até o site, lê o HTML, procura a tabela do sorteio mais recente
+    e extrai: Data, Horário e Grupo do 1º Prêmio.
+    """
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=5)
+        if r.status_code != 200: return None, None, "Erro Site"
+        
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        # O site geralmente divide os sorteios em blocos. Vamos pegar o primeiro bloco visivel.
+        # Procurando o cabeçalho que contem a data
+        # Estrutura típica: <h5>Nome Banca - Horario - Resultado do dia DD/MM/AAAA</h5>
+        
+        fuso_br = pytz.timezone('America/Sao_Paulo')
+        hoje = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        
+        # Procura todos os headers de sorteio
+        blocos = soup.find_all(['h5', 'h4', 'h3']) # Resultadofacil usa h5 geralmente
+        
+        for bloco in blocos:
+            texto = bloco.get_text().strip()
+            # Verifica se é o sorteio DE HOJE
+            if hoje in texto:
+                # Achamos o sorteio de hoje! Agora precisamos do horário e do grupo.
+                # O horário geralmente está no texto: "18:30"
+                
+                # Tenta extrair horário do texto (ex: "18:30")
+                horario_encontrado = None
+                # Busca simples por padrão HH:MM
+                import re
+                match = re.search(r'\d{2}:\d{2}', texto)
+                if match:
+                    horario_encontrado = match.group(0)
+                
+                # Agora procura a tabela logo após este cabeçalho
+                tabela = bloco.find_next('table')
+                if tabela:
+                    # A tabela tem cabeçalho: Premio | Milhar | Grupo | Bicho
+                    # Queremos a primeira linha de dados (1º Premio) e a coluna Grupo (indice 2)
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
+                            if '1º' in premio or '1' in premio:
+                                grupo = colunas[2].get_text().strip()
+                                if grupo.isdigit():
+                                    return int(grupo), horario_encontrado, "Sucesso"
+                                    
+        return None, None, "Data Ausente" # Não achou sorteio com a data de hoje
+        
+    except Exception as e:
+        return None, None, f"Erro: {e}"
+
+# --- OUTRAS LÓGICAS ---
 def html_bolas(lista, cor="verde"):
     html = "<div>"
     classe = f"bola-{cor}"
@@ -167,6 +230,7 @@ def html_bolas(lista, cor="verde"):
     return html
 
 def verificar_atualizacao_site(url):
+    # Função simples apenas para o status do monitor
     if not url: return False, "Sem Link", ""
     try:
         fuso_br = pytz.timezone('America/Sao_Paulo')
@@ -286,7 +350,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     
     top12 = todos_forca[:12]
     
-    # RADAR DE VICIO (APLICA SEMPRE PARA CONSISTENCIA)
+    # RADAR DE VICIO
     vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
     
@@ -298,7 +362,6 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     return top12, cob2
 
 def gerar_backtest_e_status(historico, banca):
-    # BACKTEST BASEADO NO TOP 12
     if len(historico) < 30: return pd.DataFrame(), False, 0
     derrotas = 0
     resultados = []
@@ -318,26 +381,18 @@ def gerar_backtest_e_status(historico, banca):
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, derrotas
 
-# --- CORREÇÃO V45: TOP 17 SINCRONIZADO ---
 def gerar_backtest_top17(historico, banca):
-    """
-    V45: Garante que o Top 17 contenha OBRIGATORIAMENTE o Top 12 daquela época.
-    Corrige o bug onde um número aparecia no Top 12 mas sumia do Top 17.
-    """
     if len(historico) < 30: return pd.DataFrame(), [], False, False, []
     
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
     
-    # Analisa apenas os últimos 5 jogos
     inicio = max(0, len(historico) - 5)
     
-    # Gera a lista ATUAL para exibição (Simulando)
+    # ATUAL
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
-    
-    # Monta o Top 17 Atual
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
     top17_atual = top12_atual + sobras_atual[:5]
     zebras_atual = sobras_atual[5:]
@@ -346,14 +401,9 @@ def gerar_backtest_top17(historico, banca):
         saiu = historico[i]
         passado = historico[:i]
         
-        # RECONSTRUÇÃO HISTÓRICA PERFEITA
-        # 1. Pega o Top 12 Inteligente da época (com Vício)
+        # RECONSTROI HISTORICO
         top12_da_epoca, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
-        
-        # 2. Pega o Ranking Bruto da época
         ranking_bruto_da_epoca = calcular_ranking_forca_completo(passado, banca)
-        
-        # 3. Monta o Top 17 (12 Smart + 5 Melhores Sobras)
         sobras = [x for x in ranking_bruto_da_epoca if x not in top12_da_epoca]
         top17_da_epoca = top12_da_epoca + sobras[:5]
         
@@ -369,7 +419,6 @@ def gerar_backtest_top17(historico, banca):
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
         
     modo_inverso = contagem_derrotas_17 >= 3
-        
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
 def analisar_par_impar_neutro(historico):
@@ -507,10 +556,30 @@ with st.sidebar:
     lista_horarios = [h.strip() for h in lista_horarios_str.split('🔹')]
     
     st.markdown("---")
+    
+    # --- BOTÃO DE IMPORTAÇÃO AUTOMÁTICA (V46) ---
+    col_import, _ = st.columns([1, 0.1])
+    with col_import:
+        if st.button("📡 Importar Resultado do Site"):
+            with st.spinner("Buscando dados na central..."):
+                grp, hor, msg = raspar_ultimo_resultado_real(config_banca['url_site'], banca_selecionada)
+                if grp:
+                    st.success(f"Encontrado! G{grp:02} às {hor}")
+                    st.session_state['auto_grupo'] = grp
+                    # Tenta achar o indice do horario na lista
+                    try:
+                        idx_h = lista_horarios.index(hor)
+                        st.session_state['auto_horario_idx'] = idx_h
+                    except: 
+                        st.session_state['auto_horario_idx'] = 0
+                else:
+                    st.error(f"Não encontrado ou Data antiga ({msg})")
+    
     st.write("📝 **Registrar Sorteio**")
     
-    novo_horario = st.selectbox("Horário do Resultado:", lista_horarios)
-    novo_bicho = st.number_input("Grupo (Resultado):", 1, 25, 1)
+    # Inputs conectados ao Session State para auto-preenchimento
+    novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
+    novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
@@ -544,14 +613,14 @@ if aba_ativa:
         # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
-        # score, status_dna = analisar_dna_banca(historico, banca_selecionada) # Removido conforme pedido
+        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         
-        # CALCULO TOP 17 (CORRIGIDO V45)
+        # CALCULO TOP 17 (CORRIGIDO)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
@@ -583,7 +652,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO E HEDGE (V45: TOP 17 SINCRONIZADO)
+        # DIAGNÓSTICO
         with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
             tab_diag_12, tab_diag_17, tab_hedge = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "⚔️ Estratégia Global"])
             
