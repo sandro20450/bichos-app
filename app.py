@@ -222,7 +222,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V49 (UNIVERSAL / BUSCA POR CONTEÚDO) ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -234,29 +234,58 @@ def raspar_ultimo_resultado_real(url, banca_key):
         hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
         
         candidatos = [] 
-        blocos = soup.find_all(['h5', 'h4', 'h3']) 
         
-        for bloco in blocos:
-            texto = bloco.get_text().strip()
-            if hoje_str in texto:
-                match = re.search(r'\d{2}:\d{2}', texto)
-                if match:
-                    horario_str = match.group(0)
-                    tabela = bloco.find_next('table')
-                    if tabela:
-                        linhas = tabela.find_all('tr')
-                        for linha in linhas:
-                            colunas = linha.find_all('td')
-                            if len(colunas) >= 3:
-                                premio = colunas[0].get_text().strip()
-                                if '1º' in premio or '1' in premio:
-                                    grupo = colunas[2].get_text().strip()
-                                    if grupo.isdigit():
-                                        candidatos.append((horario_str, int(grupo)))
+        # BUSCA UNIVERSAL: Procura qualquer texto que contenha a data de hoje
+        elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
+        for elem in elementos_data:
+            # Sobe na hierarquia para achar o bloco do sorteio
+            # Geralmente é um Hx ou DIV pai
+            container = elem.parent
+            
+            # Tenta subir mais niveis se for necessario, mas vamos começar com o pai direto e o avô
+            for _ in range(3): # Tenta subir ate 3 niveis para achar o contexto
+                if container:
+                    texto_container = container.get_text()
+                    
+                    # Procura Hora no container (formato 14:00 ou 14h00)
+                    match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
+                    
+                    if match_hora:
+                        horario_str = match_hora.group(1).replace('h', ':')
+                        
+                        # Procura a Tabela PROXIMA a este container
+                        tabela = container.find_next('table')
+                        if tabela:
+                            linhas = tabela.find_all('tr')
+                            for linha in linhas:
+                                colunas = linha.find_all('td')
+                                if len(colunas) >= 3:
+                                    premio = colunas[0].get_text().strip()
+                                    if '1º' in premio or '1' in premio:
+                                        grupo = colunas[2].get_text().strip()
+                                        if grupo.isdigit():
+                                            candidatos.append((horario_str, int(grupo)))
+                                            break # Achou o grupo desse horario, para de ler a tabela
+                        break # Achou horario e tentou tabela, sai do loop de niveis
+                    container = container.parent
+                else:
+                    break
+
         if not candidatos: return None, None, "Data Ausente"
+        
+        # Ordena por horario (decrescente) para pegar o mais recente
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        return candidatos[0][1], candidatos[0][0], "Sucesso"
+        
+        # Remove duplicatas mantendo ordem
+        candidatos_unicos = []
+        vistos = set()
+        for h, g in candidatos:
+            if h not in vistos:
+                candidatos_unicos.append((h, g))
+                vistos.add(h)
+                
+        return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
 
@@ -353,39 +382,26 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
 
 # --- NOVO: ANALISAR TENDENCIA DE VITORIA/DERROTA (V49) ---
 def analisar_tendencia_vitoria(historico, banca):
-    """
-    Analisa se Vitoria puxa Vitoria ou se Derrota puxa Vitoria.
-    """
     if len(historico) < 30: return 0, 0, "Dados insuficientes"
-    
-    # 1. Gera o status de cada jogo (Green/Red)
     status_lista = []
-    # Usamos Top 12 (Padrão) para essa análise
     for i in range(len(historico)-30, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
         palpite, _ = gerar_palpite_estrategico(passado, banca)
-        status_lista.append(1 if saiu in palpite else 0) # 1=Green, 0=Red
-        
-    # 2. Analisa Transições
+        status_lista.append(1 if saiu in palpite else 0)
     vitoria_pos_vitoria = 0
     total_vitorias = 0
     vitoria_pos_derrota = 0
     total_derrotas = 0
-    
     for i in range(len(status_lista)-1):
-        if status_lista[i] == 1: # Se foi Green
+        if status_lista[i] == 1: 
             total_vitorias += 1
-            if status_lista[i+1] == 1: # E o proximo foi Green
-                vitoria_pos_vitoria += 1
-        else: # Se foi Red
+            if status_lista[i+1] == 1: vitoria_pos_vitoria += 1
+        else:
             total_derrotas += 1
-            if status_lista[i+1] == 1: # E o proximo foi Green
-                vitoria_pos_derrota += 1
-                
+            if status_lista[i+1] == 1: vitoria_pos_derrota += 1
     pct_win_pos_win = (vitoria_pos_vitoria / total_vitorias * 100) if total_vitorias > 0 else 0
     pct_win_pos_loss = (vitoria_pos_derrota / total_derrotas * 100) if total_derrotas > 0 else 0
-    
     return pct_win_pos_win, pct_win_pos_loss
 
 def gerar_backtest_e_status(historico, banca):
@@ -574,8 +590,6 @@ if aba_ativa:
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
-        
-        # NOVO: ANALISE TENDENCIA V49
         pct_win_win, pct_loss_win = analisar_tendencia_vitoria(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
@@ -607,12 +621,11 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE LOCAL (V49 - COM IA DE TENDENCIA)
+        # PAINEL DE CONTROLE LOCAL (V49)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
-                # EXIBIÇÃO DA IA DE TENDÊNCIA
                 c_ia1, c_ia2 = st.columns(2)
                 with c_ia1:
                     st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
