@@ -8,15 +8,13 @@ from datetime import datetime, timedelta
 import pytz
 import time
 import base64
+import re
 from bs4 import BeautifulSoup 
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
-
-# CONFIGURAÇÃO DE PAGAMENTO
-COTACAO_GRUPO = 23.0 
 
 # --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
@@ -221,35 +219,62 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING ---
+# --- SCRAPING AVANÇADO V48 (CORREÇÃO DE BUG DE HORA) ---
 def raspar_ultimo_resultado_real(url, banca_key):
+    """
+    V48: Coleta TODOS os resultados com a data de hoje e escolhe
+    o que tiver o HORÁRIO MAIS RECENTE.
+    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code != 200: return None, None, "Erro Site"
+        
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        
+        candidatos = [] # Lista para guardar (hora, grupo)
+        
         blocos = soup.find_all(['h5', 'h4', 'h3']) 
+        
         for bloco in blocos:
             texto = bloco.get_text().strip()
-            if hoje in texto:
-                horario_encontrado = None
-                import re
+            # Se encontrar a data de hoje no bloco
+            if hoje_str in texto:
+                # Tenta extrair hora
                 match = re.search(r'\d{2}:\d{2}', texto)
-                if match: horario_encontrado = match.group(0)
-                tabela = bloco.find_next('table')
-                if tabela:
-                    linhas = tabela.find_all('tr')
-                    for linha in linhas:
-                        colunas = linha.find_all('td')
-                        if len(colunas) >= 3:
-                            premio = colunas[0].get_text().strip()
-                            if '1º' in premio or '1' in premio:
-                                grupo = colunas[2].get_text().strip()
-                                if grupo.isdigit():
-                                    return int(grupo), horario_encontrado, "Sucesso"
-        return None, None, "Data Ausente"
+                if match:
+                    horario_str = match.group(0)
+                    
+                    # Tenta extrair grupo
+                    tabela = bloco.find_next('table')
+                    if tabela:
+                        linhas = tabela.find_all('tr')
+                        for linha in linhas:
+                            colunas = linha.find_all('td')
+                            if len(colunas) >= 3:
+                                premio = colunas[0].get_text().strip()
+                                if '1º' in premio or '1' in premio:
+                                    grupo = colunas[2].get_text().strip()
+                                    if grupo.isdigit():
+                                        # ACHOU UM CANDIDATO VALIDO!
+                                        # Guarda ele na lista para comparar depois
+                                        candidatos.append((horario_str, int(grupo)))
+        
+        # LOGICA DE DESEMPATE
+        if not candidatos:
+            return None, None, "Data Ausente"
+            
+        # Ordena os candidatos pelo horário (decrescente, do maior para o menor)
+        # Como o formato é HH:MM, a ordenação de string funciona (12:45 > 10:45)
+        candidatos.sort(key=lambda x: x[0], reverse=True)
+        
+        # Pega o primeiro (o mais recente)
+        melhor_horario, melhor_grupo = candidatos[0]
+        
+        return melhor_grupo, melhor_horario, "Sucesso"
+        
     except Exception as e:
         return None, None, f"Erro: {e}"
 
@@ -263,31 +288,22 @@ def detecting_vicio_repeticao(historico):
             repeticoes += 1
     return repeticoes >= 2
 
-# --- CÁLCULO DE PUXADAS (NOVO V47) ---
+# --- CÁLCULO DE PUXADAS ---
 def calcular_puxada_do_ultimo(historico):
     if len(historico) < 2: return None, []
-    
-    ultimo = historico[-1] # O gatilho
+    ultimo = historico[-1]
     seguintes = []
-    
-    # Varre todo o histórico procurando esse gatilho
     for i in range(len(historico)-1):
         if historico[i] == ultimo:
-            seguintes.append(historico[i+1]) # Pega o que veio depois
-            
+            seguintes.append(historico[i+1])
     if not seguintes: return ultimo, []
-    
-    # Conta a frequência
     contagem = Counter(seguintes)
     total_ocorrencias = len(seguintes)
-    
-    # Pega os 3 mais comuns e calcula %
     rank = contagem.most_common(3)
     puxadas_com_pct = []
     for grupo, freq in rank:
         pct = (freq / total_ocorrencias) * 100
         puxadas_com_pct.append((grupo, pct))
-        
     return ultimo, puxadas_com_pct
 
 def calcular_ranking_forca_completo(historico, banca="PADRAO"):
@@ -464,66 +480,6 @@ def gerar_bussola_dia(historico):
     tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
     return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
 
-def calcular_todas_oportunidades():
-    oportunidades = []
-    for b_key in BANCA_OPCOES:
-        try:
-            aba = conectar_planilha(b_key)
-            if not aba: continue
-            hist, _ = carregar_dados(aba)
-            if len(hist) < 30: continue
-            
-            _, _, derrotas = gerar_backtest_e_status(hist, b_key)
-            if (b_key in ["CAMINHODASORTE", "MONTECAI"]) and derrotas >= 3: continue
-
-            prox_hora_str, prox_hora_dt = calcular_proximo_horario_real(b_key)
-            nome_display = CONFIG_BANCAS[b_key]['display_name']
-
-            tipo_pi, seq_pi, t_par, t_impar, _ = analisar_par_impar_neutro(hist)
-            tot_pi = t_par + t_impar if (t_par+t_impar) > 0 else 1
-            pct_par = (t_par/tot_pi)*100
-            score_pi, aposta_pi = 0, ""
-            
-            if seq_pi >= 4: score_pi, aposta_pi = 40, ('ÍMPAR' if tipo_pi == 'PAR' else 'PAR')
-            if pct_par < 40: score_pi, aposta_pi = 30, "PAR"
-            elif pct_par > 60: score_pi, aposta_pi = 30, "ÍMPAR"
-            
-            if score_pi > 0 and aposta_pi:
-                oportunidades.append({"banca": nome_display, "chave": b_key, "tipo": "PAR/IMPAR", "aposta": aposta_pi, "score": score_pi, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt, "odds": 2.0})
-
-            tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(hist)
-            tot_ab = t_baixo + t_alto if (t_baixo+t_alto) > 0 else 1
-            pct_baixo = (t_baixo/tot_ab)*100
-            score_ab, aposta_ab = 0, ""
-            
-            if seq_ab >= 4: score_ab, aposta_ab = 40, ('ALTO' if tipo_ab == 'BAIXO' else 'BAIXO')
-            if pct_baixo < 40: score_ab, aposta_ab = 30, "BAIXO"
-            elif pct_baixo > 60: score_ab, aposta_ab = 30, "ALTO"
-                
-            if score_ab > 0 and aposta_ab:
-                oportunidades.append({"banca": nome_display, "chave": b_key, "tipo": "ALTO/BAIXO", "aposta": aposta_ab, "score": score_ab, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt, "odds": 2.0})
-
-            if derrotas == 2:
-                palpite, _ = gerar_palpite_estrategico(hist, b_key, modo_crise=True)
-                lista_txt = ", ".join([f"{n:02}" for n in palpite])
-                oportunidades.append({"banca": nome_display, "chave": b_key, "tipo": "TOP 12", "aposta": f"Grupos: {lista_txt}", "score": 90, "hora_str": prox_hora_str, "hora_dt": prox_hora_dt, "odds": COTACAO_GRUPO})
-
-        except: continue
-    return oportunidades
-
-def gerar_estrategia_cobertura():
-    ops = calcular_todas_oportunidades()
-    if not ops: return None, None
-    ops.sort(key=lambda x: x['score'], reverse=True)
-    melhor_ataque = ops[0]
-    melhor_defesa = None
-    for op in ops[1:]:
-        diff_min = abs((melhor_ataque['hora_dt'] - op['hora_dt']).total_seconds() / 60)
-        if diff_min <= 90:
-            melhor_defesa = op
-            break
-    return melhor_ataque, melhor_defesa
-
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
 # =============================================================================
@@ -551,10 +507,10 @@ with st.sidebar:
     col_import, _ = st.columns([1, 0.1])
     with col_import:
         if st.button("📡 Importar Resultado do Site"):
-            with st.spinner("Buscando dados na central..."):
+            with st.spinner("Buscando o resultado MAIS RECENTE de hoje..."):
                 grp, hor, msg = raspar_ultimo_resultado_real(config_banca['url_site'], banca_selecionada)
                 if grp:
-                    st.success(f"Encontrado! G{grp:02} às {hor}")
+                    st.success(f"Atualizado! G{grp:02} às {hor}")
                     st.session_state['auto_grupo'] = grp
                     try:
                         idx_h = lista_horarios.index(hor)
@@ -562,7 +518,7 @@ with st.sidebar:
                     except: 
                         st.session_state['auto_horario_idx'] = 0
                 else:
-                    st.error(f"Não encontrado ou Data antiga ({msg})")
+                    st.error(f"Nenhum resultado NOVO hoje ({msg})")
     
     st.write("📝 **Registrar Sorteio**")
     
@@ -601,6 +557,7 @@ if aba_ativa:
         # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
+        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
@@ -642,9 +599,9 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # DIAGNÓSTICO E HEDGE (V45)
-        with st.expander("📊 Painel de Controle & Estratégia", expanded=True):
-            tab_diag_12, tab_diag_17, tab_hedge = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "⚔️ Estratégia Global"])
+        # PAINEL DE CONTROLE (SEM ESTRATÉGIA GLOBAL)
+        with st.expander("📊 Painel de Controle (Local)", expanded=True):
+            tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
                 st.write("Diagnóstico Clássico (Top 12):")
@@ -673,62 +630,6 @@ if aba_ativa:
                     st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 
                 st.table(df_top17)
-                
-            with tab_hedge:
-                if st.button("🔎 Gerar Estratégia de Ataque e Defesa"):
-                    with st.spinner("O Robô está cruzando dados de todas as bancas..."):
-                        ataque, defesa = gerar_estrategia_cobertura()
-                        
-                        if ataque:
-                            st.session_state['last_atk_odds'] = ataque['odds']
-                            st.session_state['last_atk_name'] = ataque['banca']
-                            col_atk, col_def = st.columns(2)
-                            with col_atk:
-                                st.success(f"⚔️ ATAQUE (Score {ataque['score']})")
-                                st.markdown(f"**{ataque['banca']}** - 🕒 {ataque['hora_str']}")
-                                st.write(f"🎯 **{ataque['tipo']}**: {ataque['aposta']}")
-                            with col_def:
-                                if defesa:
-                                    st.session_state['last_def_odds'] = defesa['odds']
-                                    st.session_state['last_def_name'] = defesa['banca']
-                                    st.info(f"🛡️ DEFESA (Score {defesa['score']})")
-                                    st.markdown(f"**{defesa['banca']}** - 🕒 {defesa['hora_str']}")
-                                    st.write(f"🎯 **{defesa['tipo']}**: {defesa['aposta']}")
-                                else:
-                                    st.session_state['last_def_odds'] = 2.0 
-                                    st.warning("Sem cobertura compatível no horário.")
-                        else:
-                            st.warning("Nenhuma oportunidade automática clara encontrada agora.")
-
-                st.markdown("---")
-                st.write("🧮 **Calculadora de Gestão de Banca (Livre)**")
-                
-                c_calc1, c_calc2 = st.columns(2)
-                
-                default_atk_odd = st.session_state.get('last_atk_odds', COTACAO_GRUPO)
-                default_def_odd = st.session_state.get('last_def_odds', 2.0)
-                
-                with c_calc1:
-                    val_ataque = st.number_input("Valor no ATAQUE (R$):", 1.0, 1000.0, 10.0)
-                    odd_ataque = st.number_input("Cotação Ataque (x):", 1.0, 100.0, float(default_atk_odd))
-                
-                with c_calc2:
-                    st.write("Configuração Defesa")
-                    odd_defesa = st.number_input("Cotação Defesa (x):", 1.0, 100.0, float(default_def_odd))
-                
-                if odd_defesa > 1:
-                    val_defesa_ideal = val_ataque / (odd_defesa - 1)
-                    custo_total = val_ataque + val_defesa_ideal
-                    lucro_ataque = (val_ataque * odd_ataque) - custo_total
-                    
-                    st.info(f"🛡️ Para recuperar 100% se der zebra, aposte **R$ {val_defesa_ideal:.2f}** na Defesa.")
-                    st.caption(f"Investimento Total: R$ {custo_total:.2f}")
-                    if lucro_ataque > 0:
-                        st.success(f"💰 Se o Ataque bater, seu LUCRO LÍQUIDO será: **R$ {lucro_ataque:.2f}**")
-                    else:
-                        st.error("A Cotação do Ataque é baixa demais para cobrir esse custo.")
-                else:
-                    st.error("Cotação da defesa inválida.")
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
