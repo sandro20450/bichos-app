@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
+# CONFIGURAÇÃO DE PAGAMENTO
+COTACAO_GRUPO = 23.0 
+
 # --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -219,12 +222,8 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V48 (CORREÇÃO DE BUG DE HORA) ---
+# --- SCRAPING AVANÇADO ---
 def raspar_ultimo_resultado_real(url, banca_key):
-    """
-    V48: Coleta TODOS os resultados com a data de hoje e escolhe
-    o que tiver o HORÁRIO MAIS RECENTE.
-    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
@@ -234,20 +233,15 @@ def raspar_ultimo_resultado_real(url, banca_key):
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
         
-        candidatos = [] # Lista para guardar (hora, grupo)
-        
+        candidatos = [] 
         blocos = soup.find_all(['h5', 'h4', 'h3']) 
         
         for bloco in blocos:
             texto = bloco.get_text().strip()
-            # Se encontrar a data de hoje no bloco
             if hoje_str in texto:
-                # Tenta extrair hora
                 match = re.search(r'\d{2}:\d{2}', texto)
                 if match:
                     horario_str = match.group(0)
-                    
-                    # Tenta extrair grupo
                     tabela = bloco.find_next('table')
                     if tabela:
                         linhas = tabela.find_all('tr')
@@ -258,25 +252,13 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                 if '1º' in premio or '1' in premio:
                                     grupo = colunas[2].get_text().strip()
                                     if grupo.isdigit():
-                                        # ACHOU UM CANDIDATO VALIDO!
-                                        # Guarda ele na lista para comparar depois
                                         candidatos.append((horario_str, int(grupo)))
         
-        # LOGICA DE DESEMPATE
-        if not candidatos:
-            return None, None, "Data Ausente"
-            
-        # Ordena os candidatos pelo horário (decrescente, do maior para o menor)
-        # Como o formato é HH:MM, a ordenação de string funciona (12:45 > 10:45)
+        if not candidatos: return None, None, "Data Ausente"
         candidatos.sort(key=lambda x: x[0], reverse=True)
+        return candidatos[0][1], candidatos[0][0], "Sucesso"
         
-        # Pega o primeiro (o mais recente)
-        melhor_horario, melhor_grupo = candidatos[0]
-        
-        return melhor_grupo, melhor_horario, "Sucesso"
-        
-    except Exception as e:
-        return None, None, f"Erro: {e}"
+    except Exception as e: return None, None, f"Erro: {e}"
 
 # --- RADAR DE VÍCIO ---
 def detecting_vicio_repeticao(historico):
@@ -310,7 +292,6 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
     if not historico: return []
     hist_reverso = historico[::-1]
     scores = {g: 0 for g in range(1, 26)}
-    
     if banca == "CAMINHODASORTE" or banca == "MONTECAI":
         c_ultra_curto = Counter(hist_reverso[:8])
         for g, f in c_ultra_curto.items(): scores[g] += (f * 4.0)
@@ -321,7 +302,6 @@ def calcular_ranking_forca_completo(historico, banca="PADRAO"):
         for g, f in c_curto.items(): scores[g] += (f * 2.0)
         c_medio = Counter(hist_reverso[:50])
         for g, f in c_medio.items(): scores[g] += (f * 1.0)
-        
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
@@ -362,16 +342,51 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
             if b not in top8: top4_atraso.append(b)
             if len(top4_atraso) == 4: break
         return top8 + top4_atraso, []
-    
     top12 = todos_forca[:12]
     vicio = detecting_vicio_repeticao(historico)
     ultimo = historico[-1]
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
-    
     cob2 = todos_forca[12:14]
     return top12, cob2
+
+# --- NOVO: ANALISAR TENDENCIA DE VITORIA/DERROTA (V49) ---
+def analisar_tendencia_vitoria(historico, banca):
+    """
+    Analisa se Vitoria puxa Vitoria ou se Derrota puxa Vitoria.
+    """
+    if len(historico) < 30: return 0, 0, "Dados insuficientes"
+    
+    # 1. Gera o status de cada jogo (Green/Red)
+    status_lista = []
+    # Usamos Top 12 (Padrão) para essa análise
+    for i in range(len(historico)-30, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        palpite, _ = gerar_palpite_estrategico(passado, banca)
+        status_lista.append(1 if saiu in palpite else 0) # 1=Green, 0=Red
+        
+    # 2. Analisa Transições
+    vitoria_pos_vitoria = 0
+    total_vitorias = 0
+    vitoria_pos_derrota = 0
+    total_derrotas = 0
+    
+    for i in range(len(status_lista)-1):
+        if status_lista[i] == 1: # Se foi Green
+            total_vitorias += 1
+            if status_lista[i+1] == 1: # E o proximo foi Green
+                vitoria_pos_vitoria += 1
+        else: # Se foi Red
+            total_derrotas += 1
+            if status_lista[i+1] == 1: # E o proximo foi Green
+                vitoria_pos_derrota += 1
+                
+    pct_win_pos_win = (vitoria_pos_vitoria / total_vitorias * 100) if total_vitorias > 0 else 0
+    pct_win_pos_loss = (vitoria_pos_derrota / total_derrotas * 100) if total_derrotas > 0 else 0
+    
+    return pct_win_pos_win, pct_win_pos_loss
 
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0
@@ -399,7 +414,6 @@ def gerar_backtest_top17(historico, banca):
     falha_recente = False
     contagem_derrotas_17 = 0
     inicio = max(0, len(historico) - 5)
-    
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -413,18 +427,14 @@ def gerar_backtest_top17(historico, banca):
         ranking_bruto_da_epoca = calcular_ranking_forca_completo(passado, banca)
         sobras = [x for x in ranking_bruto_da_epoca if x not in top12_da_epoca]
         top17_da_epoca = top12_da_epoca + sobras[:5]
-        
         status = "❌"
         if saiu in top17_da_epoca:
             status = "💚"
             contagem_derrotas_17 = 0
         else:
             contagem_derrotas_17 += 1
-            if i == len(historico) - 1:
-                falha_recente = True
-        
+            if i == len(historico) - 1: falha_recente = True
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
-        
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
@@ -507,10 +517,10 @@ with st.sidebar:
     col_import, _ = st.columns([1, 0.1])
     with col_import:
         if st.button("📡 Importar Resultado do Site"):
-            with st.spinner("Buscando o resultado MAIS RECENTE de hoje..."):
+            with st.spinner("Buscando dados na central..."):
                 grp, hor, msg = raspar_ultimo_resultado_real(config_banca['url_site'], banca_selecionada)
                 if grp:
-                    st.success(f"Atualizado! G{grp:02} às {hor}")
+                    st.success(f"Encontrado! G{grp:02} às {hor}")
                     st.session_state['auto_grupo'] = grp
                     try:
                         idx_h = lista_horarios.index(hor)
@@ -518,7 +528,7 @@ with st.sidebar:
                     except: 
                         st.session_state['auto_horario_idx'] = 0
                 else:
-                    st.error(f"Nenhum resultado NOVO hoje ({msg})")
+                    st.error(f"Não encontrado ou Data antiga ({msg})")
     
     st.write("📝 **Registrar Sorteio**")
     
@@ -557,18 +567,16 @@ if aba_ativa:
         # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
-        score, status_dna = analisar_dna_banca(historico, banca_selecionada)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
         tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
-        
-        # CALCULO TOP 17 (V45)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
-        
-        # CALCULO PUXADAS (V47)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
+        
+        # NOVO: ANALISE TENDENCIA V49
+        pct_win_win, pct_loss_win = analisar_tendencia_vitoria(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -599,12 +607,25 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (SEM ESTRATÉGIA GLOBAL)
+        # PAINEL DE CONTROLE LOCAL (V49 - COM IA DE TENDENCIA)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
-                st.write("Diagnóstico Clássico (Top 12):")
+                # EXIBIÇÃO DA IA DE TENDÊNCIA
+                c_ia1, c_ia2 = st.columns(2)
+                with c_ia1:
+                    st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
+                    if pct_win_win > 50: st.caption("👉 **DICA:** Se o último foi Green, jogue novamente!")
+                    else: st.caption("Cuidado: A banca costuma alternar.")
+                
+                with c_ia2:
+                    st.metric("♻️ Chance de Recuperação (Loss puxa Win)", f"{int(pct_loss_win)}%")
+                    if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
+                    else: st.caption("Padrão normal de recuperação.")
+                
+                st.markdown("---")
+                st.write("Diagnóstico Clássico:")
                 st.table(df_back) 
                 
             with tab_diag_17:
