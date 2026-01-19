@@ -234,8 +234,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
         hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
         
         candidatos = [] 
-        
-        # BUSCA UNIVERSAL
         elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
         for elem in elementos_data:
@@ -244,7 +242,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
                 if container:
                     texto_container = container.get_text()
                     match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
-                    
                     if match_hora:
                         horario_str = match_hora.group(1).replace('h', ':')
                         tabela = container.find_next('table')
@@ -266,14 +263,12 @@ def raspar_ultimo_resultado_real(url, banca_key):
 
         if not candidatos: return None, None, "Data Ausente"
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        # Remove duplicatas
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
-                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
@@ -334,22 +329,6 @@ def calcular_ranking_atraso_completo(historico):
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
-def analisar_dna_banca(historico, banca):
-    if len(historico) < 35: return 0, "Calibrando..."
-    acertos = 0
-    analise = 25
-    for i in range(analise):
-        idx = len(historico) - 1 - i
-        saiu = historico[idx]
-        passado = historico[:idx]
-        ranking = calcular_ranking_forca_completo(passado, banca)[:12]
-        if saiu in ranking: acertos += 1
-    score = (acertos / analise) * 100
-    if score >= 65: status = "DISCIPLINADA"
-    elif score >= 45: status = "EQUILIBRADA"
-    else: status = "CAÓTICA"
-    return score, status
-
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     todos_forca = calcular_ranking_forca_completo(historico, banca)
     if modo_crise:
@@ -368,30 +347,6 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         top12.insert(0, ultimo) 
     cob2 = todos_forca[12:14]
     return top12, cob2
-
-# --- ANALISAR TENDENCIA DE VITORIA/DERROTA ---
-def analisar_tendencia_vitoria(historico, banca):
-    if len(historico) < 30: return 0, 0, "Dados insuficientes"
-    status_lista = []
-    for i in range(len(historico)-30, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        palpite, _ = gerar_palpite_estrategico(passado, banca)
-        status_lista.append(1 if saiu in palpite else 0)
-    vitoria_pos_vitoria = 0
-    total_vitorias = 0
-    vitoria_pos_derrota = 0
-    total_derrotas = 0
-    for i in range(len(status_lista)-1):
-        if status_lista[i] == 1: 
-            total_vitorias += 1
-            if status_lista[i+1] == 1: vitoria_pos_vitoria += 1
-        else:
-            total_derrotas += 1
-            if status_lista[i+1] == 1: vitoria_pos_derrota += 1
-    pct_win_pos_win = (vitoria_pos_vitoria / total_vitorias * 100) if total_vitorias > 0 else 0
-    pct_win_pos_loss = (vitoria_pos_derrota / total_derrotas * 100) if total_derrotas > 0 else 0
-    return pct_win_pos_win, pct_win_pos_loss
 
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0
@@ -443,46 +398,28 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-def analisar_par_impar_neutro(historico):
-    if not historico: return None, 0, 0, 0, 0
-    hist_validos = [x for x in historico if x != 25]
-    if not hist_validos: return "NEUTRO", 0, 0, 0, 0
-    ultimo_valido = hist_validos[-1]
-    eh_par = (ultimo_valido % 2 == 0)
-    tipo_atual = "PAR" if eh_par else "ÍMPAR"
-    seq = 0
-    for x in reversed(hist_validos):
-        if (x % 2 == 0) == eh_par: seq += 1
-        else: break
-    recorte = hist_validos[-50:]
-    qtd_par = len([x for x in recorte if x % 2 == 0])
-    qtd_impar = len([x for x in recorte if x % 2 != 0])
-    atraso_25 = 0
-    for x in reversed(historico):
-        if x == 25: break
-        atraso_25 += 1
-    return tipo_atual, seq, qtd_par, qtd_impar, atraso_25
-
-def analisar_alto_baixo_neutro(historico):
-    if not historico: return None, 0, 0, 0, 0
-    hist_validos = [x for x in historico if x != 25]
-    if not hist_validos: return "NEUTRO", 0, 0, 0, 0
-    ultimo_valido = hist_validos[-1]
-    eh_baixo = (1 <= ultimo_valido <= 12)
-    tipo_atual = "BAIXO" if eh_baixo else "ALTO"
-    seq = 0
-    for x in reversed(hist_validos):
-        x_baixo = (1 <= x <= 12)
-        if x_baixo == eh_baixo: seq += 1
-        else: break
-    recorte = hist_validos[-50:]
-    qtd_baixo = len([x for x in recorte if 1 <= x <= 12])
-    qtd_alto = len([x for x in recorte if 13 <= x <= 24])
-    atraso_25 = 0
-    for x in reversed(historico):
-        if x == 25: break
-        atraso_25 += 1
-    return tipo_atual, seq, qtd_baixo, qtd_alto, atraso_25
+# --- NOVA ANÁLISE DE SETORES (BMA + 25) V51 ---
+def analisar_setores_bma(historico):
+    if not historico: return {}
+    
+    setor_b = list(range(1, 9))
+    setor_m = list(range(9, 17))
+    setor_a = list(range(17, 25))
+    
+    def get_atraso(lista, hist):
+        cnt = 0
+        for x in reversed(hist):
+            if x in lista: break
+            cnt += 1
+        return cnt
+        
+    res = {
+        "BAIXO (01-08)": get_atraso(setor_b, historico),
+        "MÉDIO (09-16)": get_atraso(setor_m, historico),
+        "ALTO (17-24)": get_atraso(setor_a, historico),
+        "CORINGA (25)": get_atraso([25], historico)
+    }
+    return res
 
 def gerar_bussola_dia(historico):
     if len(historico) < 10: return "Aguardando dados..."
@@ -575,11 +512,11 @@ if aba_ativa:
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
-        tipo_pi, seq_pi, t_par, t_impar, atr_25 = analisar_par_impar_neutro(historico)
-        tipo_ab, seq_ab, t_baixo, t_alto, _ = analisar_alto_baixo_neutro(historico)
+        
+        # NOVOS CALCULOS V51
+        dados_setores = analisar_setores_bma(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
-        pct_win_win, pct_loss_win = analisar_tendencia_vitoria(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -610,60 +547,32 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE LOCAL (V50 - SEM ESTRATÉGIA GLOBAL)
+        # PAINEL DE CONTROLE LOCAL
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
-                # INTEGRANDO PALPITES AQUI
                 c_palp1, c_palp2 = st.columns(2)
                 with c_palp1:
                     st.write("🔥 **TOP 12 (Principal):**")
-                    if vicio_ativo: st.warning("⚠️ Vício detectado (último repetido)")
+                    if vicio_ativo: st.warning("⚠️ Vício detectado")
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                 with c_palp2:
                     st.write("❄️ **COBERTURA (2):**")
                     st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
-                
-                st.markdown("---")
-                
-                # IA DE TENDENCIA
-                c_ia1, c_ia2 = st.columns(2)
-                with c_ia1:
-                    st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
-                    if pct_win_win > 50: st.caption("👉 **DICA:** Se o último foi Green, jogue novamente!")
-                    else: st.caption("Cuidado: A banca costuma alternar.")
-                
-                with c_ia2:
-                    st.metric("♻️ Chance de Recuperação (Loss puxa Win)", f"{int(pct_loss_win)}%")
-                    if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
-                    else: st.caption("Padrão normal de recuperação.")
                 
                 st.write("Diagnóstico Clássico:")
                 st.table(df_back) 
                 
             with tab_diag_17:
                 if MODO_INVERSO_ATIVO:
-                    st.markdown("""
-                    <div style="background-color: #6f42c1; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid white;">
-                        <h2>👻 MODO CAÇA-FANTASMAS ATIVO!</h2>
-                        <p>A banca <b>INVERTEU A LÓGICA</b> (3+ derrotas no Top 17).</p>
-                        <p>Não jogue no Top 17 agora. <b>Aposte nas ZEBRAS (Bottom 8).</b></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.write("👻 **ZEBRAS SUGERIDAS (Bottom 8):**")
-                    st.markdown(html_bolas(zebras, "fantasma"), unsafe_allow_html=True)
+                    st.error("👻 MODO INVERSO ATIVO! A Banca inverteu. Aposte nas ZEBRAS.")
                     st.code(", ".join([f"{n:02}" for n in zebras]), language="text")
-                    
                 elif ALERTA_FALHA_17:
-                    st.error("🚨 **OPORTUNIDADE RARA: O Top 17 Falhou!** A chance de acerto agora é muito alta.")
-                    st.write("📋 **Lista dos 17 Grupos para jogar:**")
-                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
-                else:
-                    st.success("✅ Top 17 operando normalmente.")
-                    st.write("📋 **Lista dos 17 Grupos para jogar:**")
-                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
+                    st.error("🚨 O Top 17 Falhou! Chance de acerto alta.")
                 
+                st.write("📋 **Lista dos 17 Grupos:**")
+                st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 st.table(df_top17)
 
         with st.expander("🕒 Grade de Horários da Banca"):
@@ -687,17 +596,16 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        tab_puxadas, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "⚖️ Par/Ímpar", "📏 Alto/Baixo", "📈 Gráficos"])
+        # ABAS PRINCIPAIS (V51 - SEM PAR/IMPAR, COM SETORES)
+        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
             st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
-            
             if lista_puxadas:
                 st.markdown("---")
                 col_p1, col_p2, col_p3 = st.columns(3)
                 cols = [col_p1, col_p2, col_p3]
-                
                 for i, (grupo, pct) in enumerate(lista_puxadas):
                     with cols[i]:
                         st.markdown(f"<div style='text-align:center;'><h4>{i+1}º Mais Forte</h4></div>", unsafe_allow_html=True)
@@ -707,100 +615,38 @@ if aba_ativa:
             else:
                 st.warning("Dados insuficientes para calcular puxada.")
 
-        with tab_parimpar:
-            st.write("### 🐮 Fator 25 (Neutro)")
-            col_v1, col_v2 = st.columns([1, 3])
-            with col_v1: st.markdown(f"<div class='bola-25'>25</div>", unsafe_allow_html=True)
-            with col_v2:
-                if atr_25 == 0: st.warning("⚠️ O 25 ACABOU DE SAIR!")
-                elif atr_25 >= 15: st.success(f"🚨 **ATRASADO HÁ {atr_25} JOGOS!**")
-                else: st.info(f"Atraso normal: {atr_25}")
+        with tab_setores:
+            st.write("### 🎯 Análise Tática de Setores")
+            st.info("Veja qual terço da tabela está mais atrasado.")
             
+            c_b, c_m, c_a, c_25 = st.columns(4)
+            
+            # Ordenar setores por atraso para recomendar
+            recomendacoes = []
+            for k, v in dados_setores.items():
+                if k != "CORINGA (25)" and v >= 3: # Se atraso >= 3 em setor normal
+                    recomendacoes.append(k)
+            
+            with c_b:
+                st.metric("📉 BAIXO (01-08)", f"{dados_setores['BAIXO (01-08)']}", delta="Atraso")
+            with c_m:
+                st.metric("➖ MÉDIO (09-16)", f"{dados_setores['MÉDIO (09-16)']}", delta="Atraso")
+            with c_a:
+                st.metric("📈 ALTO (17-24)", f"{dados_setores['ALTO (17-24)']}", delta="Atraso")
+            with c_25:
+                at_25 = dados_setores['CORINGA (25)']
+                st.metric("🐮 VACA (25)", f"{at_25}", delta="Atraso")
+                
             st.markdown("---")
-            st.write("### ⚖️ Balança P/I (Sem o 25)")
-            col_pi1, col_pi2 = st.columns(2)
-            total_validos = t_par + t_impar if (t_par + t_impar) > 0 else 1
-            pct_par = (t_par/total_validos)*100
-            
-            col_pi1.metric("Pares", f"{t_par}", delta=f"{pct_par:.0f}%")
-            col_pi2.metric("Ímpares", f"{t_impar}", delta=f"{(100-pct_par):.0f}%")
-            
-            cor_alerta = "green"
-            texto_alerta = "Equilibrado"
-            sugestao = "Aguarde..."
-            if pct_par < 40:
-                sugestao = "📈 Desequilíbrio: Jogue PAR"
-                cor_alerta = "orange"
-                texto_alerta = "Chance %"
-            elif pct_par > 60:
-                sugestao = "📈 Desequilíbrio: Jogue ÍMPAR"
-                cor_alerta = "orange"
-                texto_alerta = "Chance %"
-            if seq_pi >= 4:
-                cor_alerta = "red"
-                texto_alerta = f"⚠️ ALERTA: {seq_pi} {tipo_pi}ES SEGUIDOS!"
-                oposto = 'ÍMPAR' if tipo_pi == 'PAR' else 'PAR'
-                sugestao = f"👉 Dica: Aposte no **{oposto}**"
-
-            st.markdown(f"<h3 style='color:{cor_alerta}'>{texto_alerta}</h3>", unsafe_allow_html=True)
-            st.info(sugestao)
-            
-            st.write("Histórico:")
-            html_seq = "<div>"
-            for x in historico[::-1][:12]:
-                if x == 25:
-                    txt, cor_b, cor_txt, borda = "25", "white", "black", "3px solid #d4af37"
-                else:
-                    txt = "P" if x%2==0 else "I"
-                    cor_b = "#007bff" if txt=="P" else "#ffc107"
-                    cor_txt = "#000" if txt=="I" else "#fff"
-                    borda = "none"
-                html_seq += f"<span style='display:inline-block;width:30px;height:30px;line-height:30px;border-radius:50%;background-color:{cor_b};color:{cor_txt};text-align:center;margin:2px;font-weight:bold;border:{borda}'>{txt}</span>"
-            html_seq += "</div>"
-            st.markdown(html_seq, unsafe_allow_html=True)
-
-        with tab_altobaixo:
-            st.write("### 📏 Balança A/B (Sem o 25)")
-            col_ab1, col_ab2 = st.columns(2)
-            tot_v_ab = t_baixo + t_alto if (t_baixo + t_alto) > 0 else 1
-            pct_baixo = (t_baixo/tot_v_ab)*100
-            col_ab1.metric("Baixos", f"{t_baixo}", delta=f"{pct_baixo:.0f}%")
-            col_ab2.metric("Altos", f"{t_alto}", delta=f"{(100-pct_baixo):.0f}%")
-            
-            cor_alerta_ab = "green"
-            texto_alerta_ab = "Equilibrado"
-            sugestao_ab = "Aguarde..."
-            if pct_baixo < 40:
-                sugestao_ab = "📈 Desequilíbrio: Jogue BAIXO"
-                cor_alerta_ab = "orange"
-                texto_alerta_ab = "Chance %"
-            elif pct_baixo > 60:
-                sugestao_ab = "📈 Desequilíbrio: Jogue ALTO"
-                cor_alerta_ab = "orange"
-                texto_alerta_ab = "Chance %"
-            if seq_ab >= 4:
-                cor_alerta_ab = "red"
-                texto_alerta_ab = f"⚠️ ALERTA: {seq_ab} {tipo_ab}OS SEGUIDOS!"
-                oposto = 'ALTO' if tipo_ab == 'BAIXO' else 'BAIXO'
-                sugestao_ab = f"👉 Dica: Aposte no **{oposto}**"
-            
-            st.markdown(f"<h3 style='color:{cor_alerta_ab}'>{texto_alerta_ab}</h3>", unsafe_allow_html=True)
-            st.info(sugestao_ab)
-            
-            st.write("Histórico:")
-            html_seq_ab = "<div>"
-            for x in historico[::-1][:12]:
-                if x == 25:
-                    txt, cor_b, cor_txt, borda = "25", "white", "black", "3px solid #d4af37"
-                else:
-                    is_low = (1 <= x <= 12)
-                    txt = "B" if is_low else "A"
-                    cor_b = "#17a2b8" if is_low else "#fd7e14"
-                    cor_txt = "white"
-                    borda = "none"
-                html_seq_ab += f"<span style='display:inline-block;width:30px;height:30px;line-height:30px;border-radius:50%;background-color:{cor_b};color:{cor_txt};text-align:center;margin:2px;font-weight:bold;border:{borda}'>{txt}</span>"
-            html_seq_ab += "</div>"
-            st.markdown(html_seq_ab, unsafe_allow_html=True)
+            if recomendacoes:
+                st.success(f"👉 **RECOMENDAÇÃO:** Jogue no setor **{' + '.join(recomendacoes)}**")
+            else:
+                st.info("Os setores estão equilibrados.")
+                
+            if at_25 >= 15:
+                st.error("🚨 **ALERTA VACA:** O 25 está muito atrasado! Cubra ele.")
+            elif at_25 == 0:
+                st.warning("A Vaca acabou de sair (Reset).")
 
         with tab_graficos:
             st.write("### 🐢 Top Atrasados")
