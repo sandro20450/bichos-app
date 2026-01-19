@@ -105,13 +105,19 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
         .stAudio {{ display: none; }}
         
+        /* Bolas Padrão */
         .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-vermelha {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
-        .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
         .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
         .bola-puxada {{ display: inline-block; width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
+
+        /* Bolas de Setores BMA */
+        .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }} /* Azul/Ciano */
+        .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }} /* Laranja */
+        .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }} /* Vermelho */
+        .bola-25 {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #ffd700; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -398,9 +404,9 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- NOVA ANÁLISE DE SETORES (BMA + 25) V51 ---
+# --- NOVA ANÁLISE DE SETORES (BMA + 25) E SEQUENCIA ---
 def analisar_setores_bma(historico):
-    if not historico: return {}
+    if not historico: return {}, []
     
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
@@ -413,13 +419,23 @@ def analisar_setores_bma(historico):
             cnt += 1
         return cnt
         
-    res = {
+    res_atraso = {
         "BAIXO (01-08)": get_atraso(setor_b, historico),
         "MÉDIO (09-16)": get_atraso(setor_m, historico),
         "ALTO (17-24)": get_atraso(setor_a, historico),
         "CORINGA (25)": get_atraso([25], historico)
     }
-    return res
+    
+    # Gera sequencia visual
+    sequencia_visual = []
+    for x in historico[::-1][:10]: # Últimos 10, do recente pro antigo
+        if x == 25: sigla, classe = "25", "bola-25"
+        elif x <= 8: sigla, classe = "B", "bola-b"
+        elif x <= 16: sigla, classe = "M", "bola-m"
+        else: sigla, classe = "A", "bola-a"
+        sequencia_visual.append((sigla, classe))
+        
+    return res_atraso, sequencia_visual
 
 def gerar_bussola_dia(historico):
     if len(historico) < 10: return "Aguardando dados..."
@@ -513,8 +529,8 @@ if aba_ativa:
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # NOVOS CALCULOS V51
-        dados_setores = analisar_setores_bma(historico)
+        # NOVOS CALCULOS V52
+        dados_setores, seq_visual_setores = analisar_setores_bma(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
@@ -596,7 +612,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V51 - SEM PAR/IMPAR, COM SETORES)
+        # ABAS PRINCIPAIS (V52 - COM VISUAL BMA)
         tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
         
         with tab_puxadas:
@@ -617,14 +633,21 @@ if aba_ativa:
 
         with tab_setores:
             st.write("### 🎯 Análise Tática de Setores")
-            st.info("Veja qual terço da tabela está mais atrasado.")
+            
+            # VISUALIZADOR DE SEQUENCIA (NOVO V52)
+            st.write("Histórico Recente (⬅️ Mais Novo):")
+            html_seq = "<div>"
+            for sigla, classe in seq_visual_setores:
+                html_seq += f"<div class='{classe}'>{sigla}</div>"
+            html_seq += "</div>"
+            st.markdown(html_seq, unsafe_allow_html=True)
+            st.markdown("---")
             
             c_b, c_m, c_a, c_25 = st.columns(4)
             
-            # Ordenar setores por atraso para recomendar
             recomendacoes = []
             for k, v in dados_setores.items():
-                if k != "CORINGA (25)" and v >= 3: # Se atraso >= 3 em setor normal
+                if k != "CORINGA (25)" and v >= 3:
                     recomendacoes.append(k)
             
             with c_b:
