@@ -334,22 +334,6 @@ def calcular_ranking_atraso_completo(historico):
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
-def analisar_dna_banca(historico, banca):
-    if len(historico) < 35: return 0, "Calibrando..."
-    acertos = 0
-    analise = 25
-    for i in range(analise):
-        idx = len(historico) - 1 - i
-        saiu = historico[idx]
-        passado = historico[:idx]
-        ranking = calcular_ranking_forca_completo(passado, banca)[:12]
-        if saiu in ranking: acertos += 1
-    score = (acertos / analise) * 100
-    if score >= 65: status = "DISCIPLINADA"
-    elif score >= 45: status = "EQUILIBRADA"
-    else: status = "CAÓTICA"
-    return score, status
-
 def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     todos_forca = calcular_ranking_forca_completo(historico, banca)
     if modo_crise:
@@ -395,7 +379,6 @@ def gerar_backtest_top17(historico, banca):
     falha_recente = False
     contagem_derrotas_17 = 0
     inicio = max(0, len(historico) - 5)
-    
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -420,25 +403,53 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- ANALISE DE SETORES BMA + 25 ---
-def analisar_setores_bma(historico):
-    if not historico: return {}, []
+# --- NOVA ANÁLISE DE SETORES (BMA + 25) E SEQUENCIA V53 ---
+def analisar_setores_bma_com_maximo(historico):
+    if not historico: return {}, {}, []
+    
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
+    setor_25 = [25]
     
-    def get_atraso(lista, hist):
-        cnt = 0
-        for x in reversed(hist):
-            if x in lista: break
-            cnt += 1
-        return cnt
+    def calcular_atrasos(lista_alvo, hist):
+        atraso_atual = 0
+        max_atraso = 0
+        contador_temp = 0
         
-    res_atraso = {
-        "BAIXO (01-08)": get_atraso(setor_b, historico),
-        "MÉDIO (09-16)": get_atraso(setor_m, historico),
-        "ALTO (17-24)": get_atraso(setor_a, historico),
-        "CORINGA (25)": get_atraso([25], historico)
+        # Atual
+        for x in reversed(hist):
+            if x in lista_alvo: break
+            atraso_atual += 1
+            
+        # Maximo Historico
+        for x in hist:
+            if x not in lista_alvo:
+                contador_temp += 1
+            else:
+                if contador_temp > max_atraso: max_atraso = contador_temp
+                contador_temp = 0
+        if contador_temp > max_atraso: max_atraso = contador_temp
+        
+        return atraso_atual, max_atraso
+        
+    curr_b, max_b = calcular_atrasos(setor_b, historico)
+    curr_m, max_m = calcular_atrasos(setor_m, historico)
+    curr_a, max_a = calcular_atrasos(setor_a, historico)
+    curr_25, max_25 = calcular_atrasos(setor_25, historico)
+    
+    dados_atual = {
+        "BAIXO (01-08)": curr_b,
+        "MÉDIO (09-16)": curr_m,
+        "ALTO (17-24)": curr_a,
+        "CORINGA (25)": curr_25
+    }
+    
+    dados_maximo = {
+        "BAIXO (01-08)": max_b,
+        "MÉDIO (09-16)": max_m,
+        "ALTO (17-24)": max_a,
+        "CORINGA (25)": max_25
     }
     
     sequencia_visual = []
@@ -448,43 +459,8 @@ def analisar_setores_bma(historico):
         elif x <= 16: sigla, classe = "M", "bola-m"
         else: sigla, classe = "A", "bola-a"
         sequencia_visual.append((sigla, classe))
-    return res_atraso, sequencia_visual
-
-def gerar_bussola_dia(historico):
-    if len(historico) < 10: return "Aguardando dados..."
-    recorte = historico[-10:]
-    pares = len([x for x in recorte if x%2==0 and x!=25])
-    impares = len([x for x in recorte if x%2!=0 and x!=25])
-    tend_pi = "PARES" if pares > impares else "ÍMPARES"
-    baixos = len([x for x in recorte if 1<=x<=12])
-    altos = len([x for x in recorte if 13<=x<=24])
-    tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
-    return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
-
-# --- NOVA FUNÇÃO V53: DNA FIXO (BUNKER) ---
-def analisar_dna_fixo_historico(historico):
-    """Calcula os 17 grupos mais frequentes de TODO o histórico e simula desempenho"""
-    if len(historico) < 50: return [], pd.DataFrame(), 0.0
-    
-    # 1. Acha o "Bunker" (17 mais frequentes de sempre)
-    contagem_total = Counter(historico)
-    top_17_fixo = [g for g, freq in contagem_total.most_common(17)]
-    
-    # 2. Testa nos últimos 20 jogos
-    resultados_simulacao = []
-    acertos = 0
-    recorte_teste = historico[-20:]
-    
-    for i, saiu in enumerate(recorte_teste):
-        status = "❌"
-        if saiu in top_17_fixo:
-            status = "💚"
-            acertos += 1
-        # Cria dataframe reverso para mostrar o mais recente em cima
-        resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER": status})
         
-    taxa_acerto = (acertos / 20) * 100
-    return top_17_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto
+    return dados_atual, dados_maximo, sequencia_visual
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -560,20 +536,16 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS GERAIS
+        # CÁLCULOS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
-        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # V51/V52 - Setores
-        dados_setores, seq_visual_setores = analisar_setores_bma(historico)
+        # V53 - NOVOS DADOS
+        dados_atual, dados_maximo, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
-        
-        # V53 - DNA FIXO
-        lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -592,8 +564,6 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
-        st.info(f"🧭 {bussola_texto}")
-
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -604,9 +574,9 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V53 - COM ABA BUNKER)
+        # PAINEL DE CONTROLE LOCAL
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
-            tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (O Bunker)"])
+            tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
                 c_palp1, c_palp2 = st.columns(2)
@@ -617,6 +587,7 @@ if aba_ativa:
                 with c_palp2:
                     st.write("❄️ **COBERTURA (2):**")
                     st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
+                
                 st.write("Diagnóstico Clássico:")
                 st.table(df_back) 
                 
@@ -630,19 +601,6 @@ if aba_ativa:
                 st.write("📋 **Lista dos 17 Grupos:**")
                 st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 st.table(df_top17)
-                
-            with tab_bunker:
-                st.write(f"### 🧬 DNA Histórico da Banca")
-                st.write(f"Estes são os **17 Grupos que mais saem na história** desta banca.")
-                
-                col_b1, col_b2 = st.columns([3, 1])
-                with col_b1:
-                    st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
-                with col_b2:
-                    st.metric("Acertos (Ult. 20)", f"{int(taxa_bunker)}%")
-                
-                st.caption("Comparativo Bunker (Fixo) vs Realidade Recente:")
-                st.table(df_bunker)
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
@@ -665,8 +623,8 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V52/V53)
-        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
+        # ABAS PRINCIPAIS (V53 - SEM PAR/IMPAR, COM SETORES ANALISE MAXIMA)
+        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
@@ -685,7 +643,7 @@ if aba_ativa:
                 st.warning("Dados insuficientes para calcular puxada.")
 
         with tab_setores:
-            st.write("### 🎯 Análise Tática de Setores")
+            st.write("### 🎯 Análise de Setores (B.M.A.)")
             st.write("Histórico Recente (⬅️ Mais Novo):")
             html_seq = "<div>"
             for sigla, classe in seq_visual_setores:
@@ -695,25 +653,38 @@ if aba_ativa:
             st.markdown("---")
             
             c_b, c_m, c_a, c_25 = st.columns(4)
-            recomendacoes = []
-            for k, v in dados_setores.items():
-                if k != "CORINGA (25)" and v >= 3:
-                    recomendacoes.append(k)
             
-            with c_b: st.metric("📉 BAIXO (01-08)", f"{dados_setores['BAIXO (01-08)']}", delta="Atraso")
-            with c_m: st.metric("➖ MÉDIO (09-16)", f"{dados_setores['MÉDIO (09-16)']}", delta="Atraso")
-            with c_a: st.metric("📈 ALTO (17-24)", f"{dados_setores['ALTO (17-24)']}", delta="Atraso")
-            with c_25:
-                at_25 = dados_setores['CORINGA (25)']
-                st.metric("🐮 VACA (25)", f"{at_25}", delta="Atraso")
+            # Logica de Recomendação por Maximo Atraso
+            recomendacoes = []
+            
+            with c_b:
+                val = dados_atual['BAIXO (01-08)']
+                lim = dados_maximo['BAIXO (01-08)']
+                st.metric("BAIXO (01-08)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("BAIXO")
                 
+            with c_m:
+                val = dados_atual['MÉDIO (09-16)']
+                lim = dados_maximo['MÉDIO (09-16)']
+                st.metric("MÉDIO (09-16)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("MÉDIO")
+                
+            with c_a:
+                val = dados_atual['ALTO (17-24)']
+                lim = dados_maximo['ALTO (17-24)']
+                st.metric("ALTO (17-24)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("ALTO")
+                
+            with c_25:
+                val = dados_atual['CORINGA (25)']
+                lim = dados_maximo['CORINGA (25)']
+                st.metric("VACA (25)", f"{val}", delta=f"Recorde: {lim}")
+            
             st.markdown("---")
             if recomendacoes:
-                st.success(f"👉 **RECOMENDAÇÃO:** Jogue no setor **{' + '.join(recomendacoes)}**")
+                st.error(f"🚨 **ALERTA MÁXIMO:** O setor **{' + '.join(recomendacoes)}** está perto do RECORDE HISTÓRICO de atraso!")
             else:
-                st.info("Os setores estão equilibrados.")
-            if at_25 >= 15: st.error("🚨 **ALERTA VACA:** O 25 está muito atrasado! Cubra ele.")
-            elif at_25 == 0: st.warning("A Vaca acabou de sair (Reset).")
+                st.info("Nenhum setor em nível crítico de stress.")
 
         with tab_graficos:
             st.write("### 🐢 Top Atrasados")
