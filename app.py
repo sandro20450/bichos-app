@@ -403,26 +403,20 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- NOVA ANÁLISE DE SETORES (BMA + 25) E SEQUENCIA V53 ---
+# --- ANALISE DE SETORES BMA + 25 ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, []
-    
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
-    
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
         contador_temp = 0
-        
-        # Atual
         for x in reversed(hist):
             if x in lista_alvo: break
             atraso_atual += 1
-            
-        # Maximo Historico
         for x in hist:
             if x not in lista_alvo:
                 contador_temp += 1
@@ -430,28 +424,13 @@ def analisar_setores_bma_com_maximo(historico):
                 if contador_temp > max_atraso: max_atraso = contador_temp
                 contador_temp = 0
         if contador_temp > max_atraso: max_atraso = contador_temp
-        
         return atraso_atual, max_atraso
-        
     curr_b, max_b = calcular_atrasos(setor_b, historico)
     curr_m, max_m = calcular_atrasos(setor_m, historico)
     curr_a, max_a = calcular_atrasos(setor_a, historico)
     curr_25, max_25 = calcular_atrasos(setor_25, historico)
-    
-    dados_atual = {
-        "BAIXO (01-08)": curr_b,
-        "MÉDIO (09-16)": curr_m,
-        "ALTO (17-24)": curr_a,
-        "CORINGA (25)": curr_25
-    }
-    
-    dados_maximo = {
-        "BAIXO (01-08)": max_b,
-        "MÉDIO (09-16)": max_m,
-        "ALTO (17-24)": max_a,
-        "CORINGA (25)": max_25
-    }
-    
+    dados_atual = {"BAIXO (01-08)": curr_b, "MÉDIO (09-16)": curr_m, "ALTO (17-24)": curr_a, "CORINGA (25)": curr_25}
+    dados_maximo = {"BAIXO (01-08)": max_b, "MÉDIO (09-16)": max_m, "ALTO (17-24)": max_a, "CORINGA (25)": max_25}
     sequencia_visual = []
     for x in historico[::-1][:10]:
         if x == 25: sigla, classe = "25", "bola-25"
@@ -459,8 +438,35 @@ def analisar_setores_bma_com_maximo(historico):
         elif x <= 16: sigla, classe = "M", "bola-m"
         else: sigla, classe = "A", "bola-a"
         sequencia_visual.append((sigla, classe))
-        
     return dados_atual, dados_maximo, sequencia_visual
+
+def gerar_bussola_dia(historico):
+    if len(historico) < 10: return "Aguardando dados..."
+    recorte = historico[-10:]
+    pares = len([x for x in recorte if x%2==0 and x!=25])
+    impares = len([x for x in recorte if x%2!=0 and x!=25])
+    tend_pi = "PARES" if pares > impares else "ÍMPARES"
+    baixos = len([x for x in recorte if 1<=x<=12])
+    altos = len([x for x in recorte if 13<=x<=24])
+    tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
+    return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
+
+# --- DNA FIXO (BUNKER) ---
+def analisar_dna_fixo_historico(historico):
+    if len(historico) < 50: return [], pd.DataFrame(), 0.0
+    contagem_total = Counter(historico)
+    top_17_fixo = [g for g, freq in contagem_total.most_common(17)]
+    resultados_simulacao = []
+    acertos = 0
+    recorte_teste = historico[-20:]
+    for i, saiu in enumerate(recorte_teste):
+        status = "❌"
+        if saiu in top_17_fixo:
+            status = "💚"
+            acertos += 1
+        resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER": status})
+    taxa_acerto = (acertos / 20) * 100
+    return top_17_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -540,12 +546,14 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
+        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # V53 - NOVOS DADOS
+        # V53/54 - NOVOS DADOS
         dados_atual, dados_maximo, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
+        lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -564,6 +572,8 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
+        st.info(f"🧭 {bussola_texto}")
+
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -574,9 +584,9 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE LOCAL
+        # PAINEL DE CONTROLE (V54 - COM BUNKER)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
-            tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
+            tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
             with tab_diag_12:
                 c_palp1, c_palp2 = st.columns(2)
@@ -601,6 +611,19 @@ if aba_ativa:
                 st.write("📋 **Lista dos 17 Grupos:**")
                 st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 st.table(df_top17)
+                
+            with tab_bunker:
+                st.write(f"### 🧬 DNA Histórico (Bunker)")
+                st.write(f"Estes são os **17 Grupos mais frequentes da história** desta banca.")
+                
+                col_b1, col_b2 = st.columns([3, 1])
+                with col_b1:
+                    st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
+                with col_b2:
+                    st.metric("Acertos (Ult. 20)", f"{int(taxa_bunker)}%")
+                
+                st.caption("Comparativo Bunker (Fixo) vs Realidade Recente:")
+                st.table(df_bunker)
 
         with st.expander("🕒 Grade de Horários da Banca"):
             df_horarios = pd.DataFrame({
@@ -623,7 +646,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V53 - SEM PAR/IMPAR, COM SETORES ANALISE MAXIMA)
+        # ABAS PRINCIPAIS (V53)
         tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
         
         with tab_puxadas:
@@ -653,8 +676,6 @@ if aba_ativa:
             st.markdown("---")
             
             c_b, c_m, c_a, c_25 = st.columns(4)
-            
-            # Logica de Recomendação por Maximo Atraso
             recomendacoes = []
             
             with c_b:
@@ -662,19 +683,16 @@ if aba_ativa:
                 lim = dados_maximo['BAIXO (01-08)']
                 st.metric("BAIXO (01-08)", f"{val}", delta=f"Recorde: {lim}")
                 if val >= (lim - 1): recomendacoes.append("BAIXO")
-                
             with c_m:
                 val = dados_atual['MÉDIO (09-16)']
                 lim = dados_maximo['MÉDIO (09-16)']
                 st.metric("MÉDIO (09-16)", f"{val}", delta=f"Recorde: {lim}")
                 if val >= (lim - 1): recomendacoes.append("MÉDIO")
-                
             with c_a:
                 val = dados_atual['ALTO (17-24)']
                 lim = dados_maximo['ALTO (17-24)']
                 st.metric("ALTO (17-24)", f"{val}", delta=f"Recorde: {lim}")
                 if val >= (lim - 1): recomendacoes.append("ALTO")
-                
             with c_25:
                 val = dados_atual['CORINGA (25)']
                 lim = dados_maximo['CORINGA (25)']
