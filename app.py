@@ -222,7 +222,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V49 (UNIVERSAL / BUSCA POR CONTEÚDO) ---
+# --- SCRAPING AVANÇADO ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -235,26 +235,18 @@ def raspar_ultimo_resultado_real(url, banca_key):
         
         candidatos = [] 
         
-        # BUSCA UNIVERSAL: Procura qualquer texto que contenha a data de hoje
+        # BUSCA UNIVERSAL
         elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
         for elem in elementos_data:
-            # Sobe na hierarquia para achar o bloco do sorteio
-            # Geralmente é um Hx ou DIV pai
             container = elem.parent
-            
-            # Tenta subir mais niveis se for necessario, mas vamos começar com o pai direto e o avô
-            for _ in range(3): # Tenta subir ate 3 niveis para achar o contexto
+            for _ in range(3): 
                 if container:
                     texto_container = container.get_text()
-                    
-                    # Procura Hora no container (formato 14:00 ou 14h00)
                     match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
                     
                     if match_hora:
                         horario_str = match_hora.group(1).replace('h', ':')
-                        
-                        # Procura a Tabela PROXIMA a este container
                         tabela = container.find_next('table')
                         if tabela:
                             linhas = tabela.find_all('tr')
@@ -266,18 +258,15 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                         grupo = colunas[2].get_text().strip()
                                         if grupo.isdigit():
                                             candidatos.append((horario_str, int(grupo)))
-                                            break # Achou o grupo desse horario, para de ler a tabela
-                        break # Achou horario e tentou tabela, sai do loop de niveis
+                                            break 
+                        break 
                     container = container.parent
                 else:
                     break
 
         if not candidatos: return None, None, "Data Ausente"
-        
-        # Ordena por horario (decrescente) para pegar o mais recente
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        
-        # Remove duplicatas mantendo ordem
+        # Remove duplicatas
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
@@ -380,7 +369,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     cob2 = todos_forca[12:14]
     return top12, cob2
 
-# --- NOVO: ANALISAR TENDENCIA DE VITORIA/DERROTA (V49) ---
+# --- ANALISAR TENDENCIA DE VITORIA/DERROTA ---
 def analisar_tendencia_vitoria(historico, banca):
     if len(historico) < 30: return 0, 0, "Dados insuficientes"
     status_lista = []
@@ -621,11 +610,24 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE LOCAL (V49)
+        # PAINEL DE CONTROLE LOCAL (V50 - SEM ESTRATÉGIA GLOBAL)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17 = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)"])
             
             with tab_diag_12:
+                # INTEGRANDO PALPITES AQUI
+                c_palp1, c_palp2 = st.columns(2)
+                with c_palp1:
+                    st.write("🔥 **TOP 12 (Principal):**")
+                    if vicio_ativo: st.warning("⚠️ Vício detectado (último repetido)")
+                    st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
+                with c_palp2:
+                    st.write("❄️ **COBERTURA (2):**")
+                    st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
+                
+                st.markdown("---")
+                
+                # IA DE TENDENCIA
                 c_ia1, c_ia2 = st.columns(2)
                 with c_ia1:
                     st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
@@ -637,7 +639,6 @@ if aba_ativa:
                     if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
                     else: st.caption("Padrão normal de recuperação.")
                 
-                st.markdown("---")
                 st.write("Diagnóstico Clássico:")
                 st.table(df_back) 
                 
@@ -686,28 +687,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        tab_palpites, tab_puxadas, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🏠 Palpites", "🧲 Puxadas (Markov)", "⚖️ Par/Ímpar", "📏 Alto/Baixo", "📈 Gráficos"])
-
-        with tab_palpites:
-            if MODO_BLOQUEIO:
-                st.info("👀 Modo Simulação Ativo. Veja os palpites cinzas acima.")
-            else:
-                if EM_CRISE:
-                    st.error(f"🚨 MODO CRISE - {texto_horario_futuro}")
-                    st.markdown(html_bolas(palpite_p, "vermelha"), unsafe_allow_html=True)
-                    st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-                else:
-                    c1, c2 = st.columns([2, 1])
-                    with c1:
-                        if vicio_ativo:
-                            st.warning("⚠️ RADAR DE VÍCIO ATIVADO! (Repetições detectadas)")
-                        st.success(f"🔥 TOP 12 - {texto_horario_futuro}")
-                        st.markdown(html_bolas(palpite_p, "verde"), unsafe_allow_html=True)
-                        st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-                    with c2:
-                        st.info("❄️ COB (2)")
-                        st.markdown(html_bolas(palpite_cob, "azul"), unsafe_allow_html=True)
-                        st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
+        tab_puxadas, tab_parimpar, tab_altobaixo, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "⚖️ Par/Ímpar", "📏 Alto/Baixo", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
