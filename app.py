@@ -112,6 +112,7 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
         .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
         
+        /* Bolas Setores */
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
@@ -378,10 +379,7 @@ def gerar_backtest_top17(historico, banca):
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    
-    # AUMENTADO PARA 20 JOGOS
     inicio = max(0, len(historico) - 20)
-    
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -406,29 +404,19 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM ---
+# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM E RECORDE ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, [], {}
-    
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
-    
     recorte_50 = historico[-50:]
     total_50 = len(recorte_50)
-    
     def calc_pct(lista_alvo):
         qtd = len([x for x in recorte_50 if x in lista_alvo])
         return (qtd / total_50) * 100 if total_50 > 0 else 0
-    
-    porcentagens = {
-        "BAIXO (01-08)": calc_pct(setor_b),
-        "MÉDIO (09-16)": calc_pct(setor_m),
-        "ALTO (17-24)": calc_pct(setor_a),
-        "CORINGA (25)": calc_pct(setor_25)
-    }
-    
+    porcentagens = {"BAIXO (01-08)": calc_pct(setor_b), "MÉDIO (09-16)": calc_pct(setor_m), "ALTO (17-24)": calc_pct(setor_a), "CORINGA (25)": calc_pct(setor_25)}
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -437,22 +425,18 @@ def analisar_setores_bma_com_maximo(historico):
             if x in lista_alvo: break
             atraso_atual += 1
         for x in hist:
-            if x not in lista_alvo:
-                contador_temp += 1
+            if x not in lista_alvo: contador_temp += 1
             else:
                 if contador_temp > max_atraso: max_atraso = contador_temp
                 contador_temp = 0
         if contador_temp > max_atraso: max_atraso = contador_temp
         return atraso_atual, max_atraso
-        
     curr_b, max_b = calcular_atrasos(setor_b, historico)
     curr_m, max_m = calcular_atrasos(setor_m, historico)
     curr_a, max_a = calcular_atrasos(setor_a, historico)
     curr_25, max_25 = calcular_atrasos(setor_25, historico)
-    
     dados_atual = {"BAIXO (01-08)": curr_b, "MÉDIO (09-16)": curr_m, "ALTO (17-24)": curr_a, "CORINGA (25)": curr_25}
     dados_maximo = {"BAIXO (01-08)": max_b, "MÉDIO (09-16)": max_m, "ALTO (17-24)": max_a, "CORINGA (25)": max_25}
-    
     sequencia_visual = []
     for x in historico[::-1][:10]:
         if x == 25: sigla, classe = "25", "bola-25"
@@ -460,7 +444,6 @@ def analisar_setores_bma_com_maximo(historico):
         elif x <= 16: sigla, classe = "M", "bola-m"
         else: sigla, classe = "A", "bola-a"
         sequencia_visual.append((sigla, classe))
-        
     return dados_atual, dados_maximo, sequencia_visual, porcentagens
 
 # --- DNA FIXO (BUNKER) ---
@@ -522,7 +505,12 @@ with st.sidebar:
     
     st.write("📝 **Registrar Sorteio**")
     
-    novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
+    # CORREÇÃO DO ERRO DE INDICE (V58)
+    idx_safe = st.session_state.get('auto_horario_idx', 0)
+    if idx_safe >= len(lista_horarios):
+        idx_safe = 0
+    
+    novo_horario = st.selectbox("Horário:", lista_horarios, index=idx_safe)
     novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
     
     col_btn1, col_btn2 = st.columns(2)
@@ -593,7 +581,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V54 - COM BUNKER)
+        # PAINEL DE CONTROLE LOCAL
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
@@ -653,7 +641,7 @@ if aba_ativa:
             st.markdown("---")
 
         # ABAS PRINCIPAIS
-        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
+        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
@@ -683,9 +671,6 @@ if aba_ativa:
             
             c_b, c_m, c_a, c_25 = st.columns(4)
             recomendacoes = []
-            
-            # Helper de cor para %
-            def cor_pct(val): return "red" if val > 40 else "blue" if val < 20 else "green"
             
             with c_b:
                 val = dados_atual['BAIXO (01-08)']
