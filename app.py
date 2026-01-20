@@ -378,7 +378,10 @@ def gerar_backtest_top17(historico, banca):
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    inicio = max(0, len(historico) - 5)
+    
+    # AUMENTADO PARA 20 JOGOS
+    inicio = max(0, len(historico) - 20)
+    
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -403,7 +406,7 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM (V55) ---
+# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, [], {}
     
@@ -412,11 +415,9 @@ def analisar_setores_bma_com_maximo(historico):
     setor_a = list(range(17, 25))
     setor_25 = [25]
     
-    # Recorte para % (Ultimos 50)
     recorte_50 = historico[-50:]
     total_50 = len(recorte_50)
     
-    # Contagem para Porcentagem
     def calc_pct(lista_alvo):
         qtd = len([x for x in recorte_50 if x in lista_alvo])
         return (qtd / total_50) * 100 if total_50 > 0 else 0
@@ -461,17 +462,6 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
         
     return dados_atual, dados_maximo, sequencia_visual, porcentagens
-
-def gerar_bussola_dia(historico):
-    if len(historico) < 10: return "Aguardando dados..."
-    recorte = historico[-10:]
-    pares = len([x for x in recorte if x%2==0 and x!=25])
-    impares = len([x for x in recorte if x%2!=0 and x!=25])
-    tend_pi = "PARES" if pares > impares else "ÍMPARES"
-    baixos = len([x for x in recorte if 1<=x<=12])
-    altos = len([x for x in recorte if 13<=x<=24])
-    tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
-    return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
 
 # --- DNA FIXO (BUNKER) ---
 def analisar_dna_fixo_historico(historico):
@@ -568,12 +558,10 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
-        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # V55 - SETORES COM PORCENTAGEM
+        # V55/V56 - NOVOS DADOS
         dados_atual, dados_maximo, seq_visual_setores, porcentagens = analisar_setores_bma_com_maximo(historico)
-        
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
@@ -595,8 +583,6 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
-        st.info(f"🧭 {bussola_texto}")
-
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -607,7 +593,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V54)
+        # PAINEL DE CONTROLE (V54 - COM BUNKER)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
@@ -666,7 +652,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V55 - SETORES + %)
+        # ABAS PRINCIPAIS
         tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
         
         with tab_puxadas:
