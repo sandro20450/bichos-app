@@ -403,13 +403,31 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- ANALISE DE SETORES BMA + 25 ---
+# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM (V55) ---
 def analisar_setores_bma_com_maximo(historico):
-    if not historico: return {}, {}, []
+    if not historico: return {}, {}, [], {}
+    
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
+    
+    # Recorte para % (Ultimos 50)
+    recorte_50 = historico[-50:]
+    total_50 = len(recorte_50)
+    
+    # Contagem para Porcentagem
+    def calc_pct(lista_alvo):
+        qtd = len([x for x in recorte_50 if x in lista_alvo])
+        return (qtd / total_50) * 100 if total_50 > 0 else 0
+    
+    porcentagens = {
+        "BAIXO (01-08)": calc_pct(setor_b),
+        "MÉDIO (09-16)": calc_pct(setor_m),
+        "ALTO (17-24)": calc_pct(setor_a),
+        "CORINGA (25)": calc_pct(setor_25)
+    }
+    
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -425,12 +443,15 @@ def analisar_setores_bma_com_maximo(historico):
                 contador_temp = 0
         if contador_temp > max_atraso: max_atraso = contador_temp
         return atraso_atual, max_atraso
+        
     curr_b, max_b = calcular_atrasos(setor_b, historico)
     curr_m, max_m = calcular_atrasos(setor_m, historico)
     curr_a, max_a = calcular_atrasos(setor_a, historico)
     curr_25, max_25 = calcular_atrasos(setor_25, historico)
+    
     dados_atual = {"BAIXO (01-08)": curr_b, "MÉDIO (09-16)": curr_m, "ALTO (17-24)": curr_a, "CORINGA (25)": curr_25}
     dados_maximo = {"BAIXO (01-08)": max_b, "MÉDIO (09-16)": max_m, "ALTO (17-24)": max_a, "CORINGA (25)": max_25}
+    
     sequencia_visual = []
     for x in historico[::-1][:10]:
         if x == 25: sigla, classe = "25", "bola-25"
@@ -438,7 +459,8 @@ def analisar_setores_bma_com_maximo(historico):
         elif x <= 16: sigla, classe = "M", "bola-m"
         else: sigla, classe = "A", "bola-a"
         sequencia_visual.append((sigla, classe))
-    return dados_atual, dados_maximo, sequencia_visual
+        
+    return dados_atual, dados_maximo, sequencia_visual, porcentagens
 
 def gerar_bussola_dia(historico):
     if len(historico) < 10: return "Aguardando dados..."
@@ -549,8 +571,9 @@ if aba_ativa:
         bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # V53/54 - NOVOS DADOS
-        dados_atual, dados_maximo, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
+        # V55 - SETORES COM PORCENTAGEM
+        dados_atual, dados_maximo, seq_visual_setores, porcentagens = analisar_setores_bma_com_maximo(historico)
+        
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
@@ -584,7 +607,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V54 - COM BUNKER)
+        # PAINEL DE CONTROLE (V54)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
@@ -614,14 +637,11 @@ if aba_ativa:
                 
             with tab_bunker:
                 st.write(f"### 🧬 DNA Histórico (Bunker)")
-                st.write(f"Estes são os **17 Grupos mais frequentes da história** desta banca.")
-                
                 col_b1, col_b2 = st.columns([3, 1])
                 with col_b1:
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
                 with col_b2:
                     st.metric("Acertos (Ult. 20)", f"{int(taxa_bunker)}%")
-                
                 st.caption("Comparativo Bunker (Fixo) vs Realidade Recente:")
                 st.table(df_bunker)
 
@@ -646,8 +666,8 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V53)
-        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
+        # ABAS PRINCIPAIS (V55 - SETORES + %)
+        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
@@ -678,25 +698,39 @@ if aba_ativa:
             c_b, c_m, c_a, c_25 = st.columns(4)
             recomendacoes = []
             
+            # Helper de cor para %
+            def cor_pct(val): return "red" if val > 40 else "blue" if val < 20 else "green"
+            
             with c_b:
                 val = dados_atual['BAIXO (01-08)']
                 lim = dados_maximo['BAIXO (01-08)']
+                pct = porcentagens['BAIXO (01-08)']
                 st.metric("BAIXO (01-08)", f"{val}", delta=f"Recorde: {lim}")
+                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
                 if val >= (lim - 1): recomendacoes.append("BAIXO")
+                
             with c_m:
                 val = dados_atual['MÉDIO (09-16)']
                 lim = dados_maximo['MÉDIO (09-16)']
+                pct = porcentagens['MÉDIO (09-16)']
                 st.metric("MÉDIO (09-16)", f"{val}", delta=f"Recorde: {lim}")
+                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
                 if val >= (lim - 1): recomendacoes.append("MÉDIO")
+                
             with c_a:
                 val = dados_atual['ALTO (17-24)']
                 lim = dados_maximo['ALTO (17-24)']
+                pct = porcentagens['ALTO (17-24)']
                 st.metric("ALTO (17-24)", f"{val}", delta=f"Recorde: {lim}")
+                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
                 if val >= (lim - 1): recomendacoes.append("ALTO")
+                
             with c_25:
                 val = dados_atual['CORINGA (25)']
                 lim = dados_maximo['CORINGA (25)']
+                pct = porcentagens['CORINGA (25)']
                 st.metric("VACA (25)", f"{val}", delta=f"Recorde: {lim}")
+                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
             
             st.markdown("---")
             if recomendacoes:
