@@ -505,10 +505,9 @@ with st.sidebar:
     
     st.write("📝 **Registrar Sorteio**")
     
-    # CORREÇÃO DO ERRO DE INDICE (V58)
+    # PROTEÇÃO DE INDICE (CORREÇÃO DE ERRO)
     idx_safe = st.session_state.get('auto_horario_idx', 0)
-    if idx_safe >= len(lista_horarios):
-        idx_safe = 0
+    if idx_safe >= len(lista_horarios): idx_safe = 0
     
     novo_horario = st.selectbox("Horário:", lista_horarios, index=idx_safe)
     novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
@@ -640,7 +639,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS
+        # ABAS PRINCIPAIS (V59 - TABELA EM SETORES)
         tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
         
         with tab_puxadas:
@@ -661,6 +660,8 @@ if aba_ativa:
 
         with tab_setores:
             st.write("### 🎯 Análise de Setores (B.M.A.)")
+            
+            # VISUALIZADOR DE SEQUENCIA
             st.write("Histórico Recente (⬅️ Mais Novo):")
             html_seq = "<div>"
             for sigla, classe in seq_visual_setores:
@@ -669,45 +670,64 @@ if aba_ativa:
             st.markdown(html_seq, unsafe_allow_html=True)
             st.markdown("---")
             
-            c_b, c_m, c_a, c_25 = st.columns(4)
-            recomendacoes = []
+            # TABELA DE DADOS (V59)
+            table_data = []
             
-            with c_b:
-                val = dados_atual['BAIXO (01-08)']
-                lim = dados_maximo['BAIXO (01-08)']
-                pct = porcentagens['BAIXO (01-08)']
-                st.metric("BAIXO (01-08)", f"{val}", delta=f"Recorde: {lim}")
-                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
-                if val >= (lim - 1): recomendacoes.append("BAIXO")
-                
-            with c_m:
-                val = dados_atual['MÉDIO (09-16)']
-                lim = dados_maximo['MÉDIO (09-16)']
-                pct = porcentagens['MÉDIO (09-16)']
-                st.metric("MÉDIO (09-16)", f"{val}", delta=f"Recorde: {lim}")
-                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
-                if val >= (lim - 1): recomendacoes.append("MÉDIO")
-                
-            with c_a:
-                val = dados_atual['ALTO (17-24)']
-                lim = dados_maximo['ALTO (17-24)']
-                pct = porcentagens['ALTO (17-24)']
-                st.metric("ALTO (17-24)", f"{val}", delta=f"Recorde: {lim}")
-                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
-                if val >= (lim - 1): recomendacoes.append("ALTO")
-                
-            with c_25:
-                val = dados_atual['CORINGA (25)']
-                lim = dados_maximo['CORINGA (25)']
-                pct = porcentagens['CORINGA (25)']
-                st.metric("VACA (25)", f"{val}", delta=f"Recorde: {lim}")
-                st.markdown(f"**{pct:.0f}%** (50 jogos)", unsafe_allow_html=True)
+            # Helper para status
+            def get_status(atual, recorde):
+                return "⚠️ Crítico" if atual >= (recorde - 1) else "✅ Normal"
             
-            st.markdown("---")
-            if recomendacoes:
-                st.error(f"🚨 **ALERTA MÁXIMO:** O setor **{' + '.join(recomendacoes)}** está perto do RECORDE HISTÓRICO de atraso!")
-            else:
-                st.info("Nenhum setor em nível crítico de stress.")
+            # BAIXO
+            b_atu = dados_atual['BAIXO (01-08)']
+            b_rec = dados_maximo['BAIXO (01-08)']
+            table_data.append({
+                "SETOR": "BAIXO (01-08)",
+                "ATRASO": b_atu,
+                "RECORDE": b_rec,
+                "FREQ (50)": f"{int(porcentagens['BAIXO (01-08)'])}%",
+                "STATUS": get_status(b_atu, b_rec)
+            })
+            
+            # MEDIO
+            m_atu = dados_atual['MÉDIO (09-16)']
+            m_rec = dados_maximo['MÉDIO (09-16)']
+            table_data.append({
+                "SETOR": "MÉDIO (09-16)",
+                "ATRASO": m_atu,
+                "RECORDE": m_rec,
+                "FREQ (50)": f"{int(porcentagens['MÉDIO (09-16)'])}%",
+                "STATUS": get_status(m_atu, m_rec)
+            })
+            
+            # ALTO
+            a_atu = dados_atual['ALTO (17-24)']
+            a_rec = dados_maximo['ALTO (17-24)']
+            table_data.append({
+                "SETOR": "ALTO (17-24)",
+                "ATRASO": a_atu,
+                "RECORDE": a_rec,
+                "FREQ (50)": f"{int(porcentagens['ALTO (17-24)'])}%",
+                "STATUS": get_status(a_atu, a_rec)
+            })
+            
+            # VACA
+            v_atu = dados_atual['CORINGA (25)']
+            v_rec = dados_maximo['CORINGA (25)']
+            table_data.append({
+                "SETOR": "VACA (25)",
+                "ATRASO": v_atu,
+                "RECORDE": v_rec,
+                "FREQ (50)": f"{int(porcentagens['CORINGA (25)'])}%",
+                "STATUS": get_status(v_atu, v_rec)
+            })
+            
+            df_setores = pd.DataFrame(table_data)
+            st.table(df_setores)
+            
+            # ALERTAS TEXTUAIS
+            criticos = [d['SETOR'] for d in table_data if "⚠️" in d['STATUS']]
+            if criticos:
+                st.error(f"🚨 **ATENÇÃO:** O setor **{', '.join(criticos)}** está próximo do RECORDE HISTÓRICO de atraso!")
 
         with tab_graficos:
             st.write("### 🐢 Top Atrasados")
