@@ -112,7 +112,6 @@ def aplicar_estilo_banca(banca_key, bloqueado=False):
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
         .bola-fantasma {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #6f42c1; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }}
         
-        /* Bolas Setores */
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
@@ -446,6 +445,77 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
     return dados_atual, dados_maximo, sequencia_visual, porcentagens
 
+# --- NOVA FUNÇÃO V60: BACKTEST ESTRATEGIA 2 SETORES ---
+def gerar_backtest_setores_estrategico(historico):
+    """
+    Simula a estrategia de escolher 2 setores:
+    1. O mais atrasado (desde que não seja a Vaca, a menos que seja cobertura).
+    2. O mais frequente (para pegar tendencia).
+    """
+    if len(historico) < 20: return pd.DataFrame()
+    
+    resultados_simulacao = []
+    
+    setor_b = list(range(1, 9))
+    setor_m = list(range(9, 17))
+    setor_a = list(range(17, 25))
+    setor_25 = [25]
+    
+    # Analisa os últimos 10 jogos
+    for i in range(len(historico)-10, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i] # O que o robô saberia antes do jogo
+        
+        # Recalcula estatisticas naquele momento
+        dados_atual_temp, _, _, pct_temp = analisar_setores_bma_com_maximo(passado)
+        
+        # Logica de Seleção:
+        # 1. Pega o setor com MAIOR atraso (Excluindo Vaca da prioridade principal se atraso for baixo)
+        lista_atrasos = [
+            ("B", dados_atual_temp["BAIXO (01-08)"], setor_b),
+            ("M", dados_atual_temp["MÉDIO (09-16)"], setor_m),
+            ("A", dados_atual_temp["ALTO (17-24)"], setor_a)
+        ]
+        lista_atrasos.sort(key=lambda x: x[1], reverse=True)
+        setor_atrasado_nome = lista_atrasos[0][0]
+        setor_atrasado_grupos = lista_atrasos[0][2]
+        
+        # 2. Pega o setor com MAIOR frequencia (Tendencia) - Que nao seja o mesmo do atrasado
+        lista_freq = [
+            ("B", pct_temp["BAIXO (01-08)"], setor_b),
+            ("M", pct_temp["MÉDIO (09-16)"], setor_m),
+            ("A", pct_temp["ALTO (17-24)"], setor_a)
+        ]
+        lista_freq.sort(key=lambda x: x[1], reverse=True)
+        
+        setor_frequente_nome = None
+        setor_frequente_grupos = []
+        
+        for nome, _, grps in lista_freq:
+            if nome != setor_atrasado_nome:
+                setor_frequente_nome = nome
+                setor_frequente_grupos = grps
+                break
+        
+        # Palpite Final (16 Grupos)
+        palpite_setores = setor_atrasado_grupos + setor_frequente_grupos
+        
+        # Check Win
+        status = "❌"
+        if saiu in palpite_setores:
+            status = "💚"
+        elif saiu == 25:
+            status = "🐮" # Vaca (Neutro/Cover)
+            
+        resultados_simulacao.insert(0, {
+            "JOGO": f"#{len(historico)-i}", 
+            "SAIU": f"{saiu:02}", 
+            "PALPITE": f"{setor_atrasado_nome} (Crise) + {setor_frequente_nome} (Forte)",
+            "RES": status
+        })
+        
+    return pd.DataFrame(resultados_simulacao)
+
 # --- DNA FIXO (BUNKER) ---
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0.0
@@ -505,7 +575,6 @@ with st.sidebar:
     
     st.write("📝 **Registrar Sorteio**")
     
-    # PROTEÇÃO DE INDICE (CORREÇÃO DE ERRO)
     idx_safe = st.session_state.get('auto_horario_idx', 0)
     if idx_safe >= len(lista_horarios): idx_safe = 0
     
@@ -552,6 +621,9 @@ if aba_ativa:
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
+        
+        # V60 - BACKTEST ESTRATÉGICO 2 SETORES
+        df_backtest_2set = gerar_backtest_setores_estrategico(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -639,8 +711,8 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V59 - TABELA EM SETORES)
-        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (Stress Test)", "📈 Gráficos"])
+        # ABAS PRINCIPAIS
+        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
         
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
@@ -660,8 +732,6 @@ if aba_ativa:
 
         with tab_setores:
             st.write("### 🎯 Análise de Setores (B.M.A.)")
-            
-            # VISUALIZADOR DE SEQUENCIA
             st.write("Histórico Recente (⬅️ Mais Novo):")
             html_seq = "<div>"
             for sigla, classe in seq_visual_setores:
@@ -670,7 +740,7 @@ if aba_ativa:
             st.markdown(html_seq, unsafe_allow_html=True)
             st.markdown("---")
             
-            # TABELA DE DADOS (V59)
+            # TABELA DE DADOS
             table_data = []
             
             # Helper para status
@@ -724,10 +794,14 @@ if aba_ativa:
             df_setores = pd.DataFrame(table_data)
             st.table(df_setores)
             
-            # ALERTAS TEXTUAIS
             criticos = [d['SETOR'] for d in table_data if "⚠️" in d['STATUS']]
-            if criticos:
-                st.error(f"🚨 **ATENÇÃO:** O setor **{', '.join(criticos)}** está próximo do RECORDE HISTÓRICO de atraso!")
+            if criticos: st.error(f"🚨 **ATENÇÃO:** O setor **{', '.join(criticos)}** está próximo do RECORDE HISTÓRICO de atraso!")
+            
+            # --- NOVO BACKTEST DE SETORES (V60) ---
+            st.markdown("---")
+            st.write("#### 🧪 Backtest: Estratégia Dupla (Crise + Tendência)")
+            st.info("Simulação: Apostar sempre no setor Mais Atrasado + Setor Mais Frequente.")
+            st.table(df_backtest_2set)
 
         with tab_graficos:
             st.write("### 🐢 Top Atrasados")
