@@ -350,13 +350,13 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
-    cob2 = todos_forca[12:14]
-    return top12, cob2
+    
+    # V68: COBERTURA REMOVIDA (RETORNA VAZIO)
+    return top12, []
 
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0, 0
     resultados = []
-    # ALTERADO PARA EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
     
     # Max Loss Risk e Streak Atual
@@ -387,11 +387,9 @@ def gerar_backtest_e_status(historico, banca):
         else:
             derrotas += 1
         
-        # MOSTRAR ULTIMOS 20 JOGOS
         if i >= len(historico) - 20:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     
-    # Recalcula streak real a partir da lista
     curr_streak = 0
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
@@ -448,7 +446,6 @@ def gerar_backtest_top17(historico, banca):
             if i == len(historico) - 1: falha_recente = True
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
     
-    # Recalcula streak real a partir da lista
     curr_streak = 0
     for res in reversed(resultados):
         if res["TOP 17"] == "❌": curr_streak += 1
@@ -509,7 +506,6 @@ def analisar_dna_fixo_historico(historico):
     contagem_total = Counter(historico)
     top_17_fixo = [g for g, freq in contagem_total.most_common(17)]
     
-    # Max Loss Risk
     max_loss = 0
     temp_loss = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -530,9 +526,8 @@ def analisar_dna_fixo_historico(historico):
             acertos += 1
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER": status})
     
-    # Streak Atual
     curr_streak = 0
-    for res in resultados_simulacao: # já está reverso
+    for res in resultados_simulacao: 
         if res["BUNKER"] == "❌": curr_streak += 1
         else: break
         
@@ -788,7 +783,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V67) - LAYOUT DE 3 MESAS
+        # PAINEL DE CONTROLE (V68)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
@@ -796,9 +791,8 @@ if aba_ativa:
                 for alerta in alertas_oportunidade:
                     st.success(alerta)
             
-            # --- ABAS ---
-            tab_setores_main, tab_comparativo, tab_puxadas_main, tab_graficos_main = st.tabs([
-                "🎯 Setores & Estratégias", "🆚 Comparativo (3 Mesas)", "🧲 Puxadas", "📈 Gráficos"
+            tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
+                "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
             ])
             
             # --- ABA 1: SETORES & ESTRATEGIAS ---
@@ -852,51 +846,56 @@ if aba_ativa:
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
 
-            # --- ABA 2: COMPARATIVO GERAL (3 MESAS) ---
-            with tab_comparativo:
-                # LAYOUT DE 3 COLUNAS (RESPONSIVO: LADO A LADO NO PC, EMPILHADO NO CELULAR)
-                col1, col2, col3 = st.columns(3)
+            # --- ABA 2: TOP 12 (SEM COBERTURA) ---
+            with tab_top12:
+                st.write("🔥 **TOP 12 (Principal):**")
+                if vicio_ativo: st.warning("⚠️ Vício detectado")
+                st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                 
-                # --- MESA 1: TOP 12 ---
-                with col1:
-                    st.subheader("🔥 Top 12 (Padrão)")
-                    st.caption("Agressivo (Menos grupos, maior risco)")
-                    st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
-                    st.write(f"Cob: {', '.join([f'{n:02}' for n in palpite_cob])}")
-                    st.table(df_back)
-                    st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top12}**")
-                    if curr_streak_12 >= max_loss_top12 and curr_streak_12 > 0:
-                        st.error(f"🚨 ALERTA: Recorde atingido!")
+                st.caption("Diagnóstico Simples:")
+                st.table(df_back)
+                st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{max_loss_top12}**")
+                
+                if curr_streak_12 >= max_loss_top12 and curr_streak_12 > 0:
+                    st.error(f"🚨 **ALERTA MÁXIMO:** Atingiu o Recorde de Derrotas ({curr_streak_12})!")
 
-                # --- MESA 2: TOP 17 DINÂMICO ---
-                with col2:
+            # --- ABA 3: TOP 17 + BUNKER ---
+            with tab_top17_bunker:
+                col_t1, col_t2 = st.columns(2)
+                
+                with col_t1:
                     st.subheader("🛡️ Top 17 (Dinâmico)")
-                    st.caption("Adaptável (Segue a tendência)")
-                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
+                    if MODO_INVERSO_ATIVO: st.error("👻 MODO INVERSO ATIVO! Aposte nas ZEBRAS.")
+                    
                     st.table(df_top17)
-                    st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top17}**")
+                    st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{max_loss_top17}**")
+                    
                     if curr_streak_17 >= max_loss_top17 and curr_streak_17 > 0:
-                        st.error(f"🚨 ALERTA: Recorde atingido!")
-
-                # --- MESA 3: BUNKER (FIXO) ---
-                with col3:
-                    st.subheader("🧬 Bunker (Fixo)")
-                    st.caption("Histórico (Os 17 mais fortes de sempre)")
-                    st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
+                        st.error(f"🚨 **ALERTA MÁXIMO:** Atingiu o Recorde de Derrotas ({curr_streak_17})!")
+                    
+                    st.write("📋 **Lista Dinâmica:**")
+                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
+                
+                with col_t2:
+                    st.subheader("🧬 DNA Fixo (Bunker)")
                     st.table(df_bunker)
-                    st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_bunker}**")
+                    st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{max_loss_bunker}**")
+                    
                     if curr_streak_bunker >= max_loss_bunker and curr_streak_bunker > 0:
-                        st.error(f"🚨 ALERTA: Recorde atingido!")
+                        st.error(f"🚨 **ALERTA MÁXIMO:** Atingiu o Recorde de Derrotas ({curr_streak_bunker})!")
+                    
+                    st.write("📋 **Lista Fixa:**")
+                    st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
 
             # --- ABA 4: PUXADAS ---
             with tab_puxadas_main:
                 st.write(f"### 🧲 Quem puxa quem?")
                 st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
                 if lista_puxadas:
-                    c_p1, c_p2, c_p3 = st.columns(3)
-                    cols_p = [c_p1, c_p2, c_p3]
+                    col_p1, col_p2, col_p3 = st.columns(3)
+                    cols = [col_p1, col_p2, col_p3]
                     for i, (grupo, pct) in enumerate(lista_puxadas):
-                        with cols_p[i]:
+                        with cols[i]:
                             st.markdown(f"<div style='text-align:center;'><h4>{i+1}º Mais Forte</h4></div>", unsafe_allow_html=True)
                             st.markdown(f"<div style='display:flex;justify-content:center;'><div class='bola-puxada'>{grupo:02}</div></div>", unsafe_allow_html=True)
                             st.progress(int(pct))
