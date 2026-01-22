@@ -470,51 +470,54 @@ def analisar_dna_fixo_historico(historico):
 
 # --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) V55 ---
 def gerar_palpite_setorizado(historico, banca):
-    """
-    Seleciona os 4 melhores Baixos, 4 melhores Médios e 4 melhores Altos.
-    Total: 12 Grupos equilibrados.
-    """
     ranking = calcular_ranking_forca_completo(historico, banca)
-    
     setor_b = [g for g in ranking if 1 <= g <= 8]
     setor_m = [g for g in ranking if 9 <= g <= 16]
-    # No setor Alto, vamos considerar até o 25 (incluindo vaca) para não deixar ela de fora
-    # Mas como o pedido foi "setores", vamos priorizar a área ALTA padrão (17-24) e o 25 entra se for forte lá
     setor_a = [g for g in ranking if 17 <= g <= 25] 
-    
     top4_b = setor_b[:4]
     top4_m = setor_m[:4]
     top4_a = setor_a[:4]
-    
     palpite_equilibrado = top4_b + top4_m + top4_a
-    # Ordena para ficar bonito
     palpite_equilibrado.sort()
-    
     return palpite_equilibrado
 
 def gerar_backtest_setorizado(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), []
-    
     resultados = []
-    # Analisa últimos 10 jogos
     inicio = max(0, len(historico) - 10)
-    
-    # Gera a lista ATUAL para exibição
     lista_atual = gerar_palpite_setorizado(historico, banca)
-    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
-        
         palpite_da_epoca = gerar_palpite_setorizado(passado, banca)
-        
         status = "❌"
-        if saiu in palpite_da_epoca:
-            status = "💚"
-            
+        if saiu in palpite_da_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
-        
     return pd.DataFrame(resultados[::-1]), lista_atual
+
+# --- ANALISAR TENDENCIA DE VITORIA/DERROTA ---
+def analisar_tendencia_vitoria(historico, banca):
+    if len(historico) < 30: return 0, 0, "Dados insuficientes"
+    status_lista = []
+    for i in range(len(historico)-30, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        palpite, _ = gerar_palpite_estrategico(passado, banca)
+        status_lista.append(1 if saiu in palpite else 0)
+    vitoria_pos_vitoria = 0
+    total_vitorias = 0
+    vitoria_pos_derrota = 0
+    total_derrotas = 0
+    for i in range(len(status_lista)-1):
+        if status_lista[i] == 1: 
+            total_vitorias += 1
+            if status_lista[i+1] == 1: vitoria_pos_vitoria += 1
+        else:
+            total_derrotas += 1
+            if status_lista[i+1] == 1: vitoria_pos_derrota += 1
+    pct_win_pos_win = (vitoria_pos_vitoria / total_vitorias * 100) if total_vitorias > 0 else 0
+    pct_win_pos_loss = (vitoria_pos_derrota / total_derrotas * 100) if total_derrotas > 0 else 0
+    return pct_win_pos_win, pct_win_pos_loss
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -608,6 +611,9 @@ if aba_ativa:
         # V55 - ESTRATEGIA SETORIZADA
         df_setorizado, lista_setorizada = gerar_backtest_setorizado(historico, banca_selecionada)
         
+        # V49 - IA TENDENCIA
+        pct_win_win, pct_loss_win = analisar_tendencia_vitoria(historico, banca_selecionada)
+        
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
             MODO_BLOQUEIO = True
@@ -637,7 +643,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V54 - COM BUNKER)
+        # PAINEL DE CONTROLE (V56 - COMPLETO)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
@@ -651,8 +657,29 @@ if aba_ativa:
                     st.write("❄️ **COBERTURA (2):**")
                     st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
                 
-                st.write("Diagnóstico Clássico:")
+                st.markdown("---")
+                
+                # IA TENDENCIA
+                c_ia1, c_ia2 = st.columns(2)
+                with c_ia1:
+                    st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
+                    if pct_win_win > 50: st.caption("👉 **DICA:** Se o último foi Green, jogue novamente!")
+                    else: st.caption("Cuidado: A banca costuma alternar.")
+                
+                with c_ia2:
+                    st.metric("♻️ Chance de Recuperação (Loss puxa Win)", f"{int(pct_loss_win)}%")
+                    if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
+                    else: st.caption("Padrão normal de recuperação.")
+                
+                st.markdown("---")
+                st.write("📊 **Backtest: Estratégia Dupla (Crise + Tendência):**")
                 st.table(df_back) 
+                
+                st.markdown("---")
+                st.write("⚖️ **Backtest: Estratégia Equilibrada (Cerco 4x4x4):**")
+                st.table(df_setorizado)
+                st.write("📋 **Lista Pronta (4x4x4):**")
+                st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
                 
             with tab_diag_17:
                 if MODO_INVERSO_ATIVO:
@@ -699,7 +726,7 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS (V55 - REORDENADAS + ESTRATÉGIA SETORIZADA)
+        # ABAS PRINCIPAIS (V55/56)
         tab_setores, tab_puxadas, tab_graficos = st.tabs(["🎯 Setores (BMA)", "🧲 Puxadas (Markov)", "📈 Gráficos"])
         
         with tab_setores:
@@ -713,7 +740,6 @@ if aba_ativa:
             st.markdown("---")
             
             c_b, c_m, c_a, c_25 = st.columns(4)
-            
             recomendacoes = []
             
             with c_b:
@@ -743,17 +769,6 @@ if aba_ativa:
             if recomendacoes:
                 st.error(f"🚨 **ALERTA MÁXIMO:** O setor **{' + '.join(recomendacoes)}** está perto do RECORDE HISTÓRICO de atraso!")
             
-            # --- NOVA ESTRATÉGIA 4x4x4 ---
-            st.markdown("---")
-            st.write("### ⚖️ Estratégia Equilibrada (Cerco 4x4x4)")
-            st.info("Seleciona os 4 melhores de cada setor (B, M, A) para cercar o jogo.")
-            
-            st.write("📊 **Backtest Recente (Últimos 10 Jogos):**")
-            st.table(df_setorizado)
-            
-            st.write("📋 **Lista Pronta (12 Grupos Equilibrados):**")
-            st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
-
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
             st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
