@@ -356,6 +356,7 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0, 0
     resultados = []
+    # ALTERADO PARA EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
     
     # Max Loss Risk e Streak Atual
@@ -385,7 +386,9 @@ def gerar_backtest_e_status(historico, banca):
             derrotas = 0
         else:
             derrotas += 1
-        if i >= len(historico) - 5:
+        
+        # MOSTRAR ULTIMOS 20 JOGOS
+        if i >= len(historico) - 20:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     
     # Recalcula streak real a partir da lista
@@ -647,22 +650,6 @@ def gerar_backtest_bma_crise_tendencia(historico):
         
     return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq, curr_streak
 
-def analisar_dna_banca(historico, banca):
-    if len(historico) < 35: return 0, "Calibrando..."
-    acertos = 0
-    analise = 25
-    for i in range(analise):
-        idx = len(historico) - 1 - i
-        saiu = historico[idx]
-        passado = historico[:idx]
-        ranking = calcular_ranking_forca_completo(passado, banca)[:12]
-        if saiu in ranking: acertos += 1
-    score = (acertos / analise) * 100
-    if score >= 65: status = "DISCIPLINADA"
-    elif score >= 45: status = "EQUILIBRADA"
-    else: status = "CAÓTICA"
-    return score, status
-
 def monitorar_oportunidades(historico, banca):
     alertas = []
     # Monitorar Top 12 (Regra: 2 ou mais derrotas)
@@ -801,7 +788,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V65)
+        # PAINEL DE CONTROLE (V66)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
@@ -864,7 +851,7 @@ if aba_ativa:
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
 
-            # --- ABA 2: TOP 12 (LIMPA) ---
+            # --- ABA 2: TOP 12 ---
             with tab_top12:
                 c_palp1, c_palp2 = st.columns(2)
                 with c_palp1:
