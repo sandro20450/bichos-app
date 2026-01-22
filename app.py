@@ -450,17 +450,6 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
     return dados_atual, dados_maximo, df_setores, sequencia_visual
 
-def gerar_bussola_dia(historico):
-    if len(historico) < 10: return "Aguardando dados..."
-    recorte = historico[-10:]
-    pares = len([x for x in recorte if x%2==0 and x!=25])
-    impares = len([x for x in recorte if x%2!=0 and x!=25])
-    tend_pi = "PARES" if pares > impares else "ÍMPARES"
-    baixos = len([x for x in recorte if 1<=x<=12])
-    altos = len([x for x in recorte if 13<=x<=24])
-    tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
-    return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
-
 # --- DNA FIXO (BUNKER) ---
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0.0
@@ -504,6 +493,50 @@ def gerar_backtest_setorizado(historico, banca):
         if saiu in palpite_da_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
     return pd.DataFrame(resultados[::-1]), lista_atual
+
+# --- ESTRATEGIA 1: CRISE + TENDENCIA (BMA) ---
+def identificar_bma_crise_tendencia(historico):
+    if not historico: return [], "", ""
+    mapa_setores = {
+        "BAIXO": list(range(1, 9)),
+        "MÉDIO": list(range(9, 17)),
+        "ALTO": list(range(17, 25))
+    }
+    # 1. Achar Crise
+    atrasos = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
+    for nome, nums in mapa_setores.items():
+        cnt = 0
+        for x in reversed(historico):
+            if x in nums: break
+            cnt += 1
+        atrasos[nome] = cnt
+    setor_crise = max(atrasos, key=atrasos.get)
+    
+    # 2. Achar Tendencia (Ultimos 10)
+    recorte = historico[-10:]
+    freqs = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
+    for x in recorte:
+        if 1 <= x <= 8: freqs["BAIXO"] += 1
+        elif 9 <= x <= 16: freqs["MÉDIO"] += 1
+        elif 17 <= x <= 24: freqs["ALTO"] += 1
+    setor_tendencia = max(freqs, key=freqs.get)
+    
+    palpite = list(set(mapa_setores[setor_crise] + mapa_setores[setor_tendencia]))
+    palpite.sort()
+    return palpite, setor_crise, setor_tendencia
+
+def gerar_backtest_bma_crise_tendencia(historico):
+    resultados = []
+    inicio = max(0, len(historico) - 10)
+    palpite_atual, crise_atual, trend_atual = identificar_bma_crise_tendencia(historico)
+    for i in range(inicio, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        palpite_epoca, _, _ = identificar_bma_crise_tendencia(passado)
+        status = "❌"
+        if saiu in palpite_epoca: status = "💚"
+        resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (Crise+Trend)": status})
+    return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -583,7 +616,6 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
-        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
         # V51/V52/V53 - Setores
@@ -596,6 +628,9 @@ if aba_ativa:
         
         # V55 - ESTRATEGIA SETORIZADA
         df_setorizado, lista_setorizada = gerar_backtest_setorizado(historico, banca_selecionada)
+        
+        # V58 - ESTRATEGIA BMA CRISE+TREND
+        df_bma_ct, palpite_bma_ct, crise_ct, trend_ct = gerar_backtest_bma_crise_tendencia(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -614,8 +649,6 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
-        st.info(f"🧭 {bussola_texto}")
-
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -626,13 +659,13 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V57)
+        # PAINEL DE CONTROLE (V58)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
                 "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
             ])
             
-            # --- ABA 1: SETORES & ESTRATEGIAS (A Principal) ---
+            # --- ABA 1: SETORES & ESTRATEGIAS ---
             with tab_setores_main:
                 st.write("Histórico Recente (⬅️ Mais Novo):")
                 html_seq = "<div>"
@@ -642,16 +675,13 @@ if aba_ativa:
                 st.markdown(html_seq, unsafe_allow_html=True)
                 st.markdown("---")
                 
-                # TABELA DE ATRASOS (RECORDE)
                 st.write("📊 **Tabela de Stress (Atraso vs Recorde):**")
                 st.table(df_setores_table)
                 
-                # RECOMENDAÇÕES BASEADAS NO RECORD
                 recomendacoes = []
                 for k, v in dados_atual.items():
                     limite = dados_maximo[k]
-                    if v >= (limite - 2): # Alerta se estiver perto do recorde
-                        recomendacoes.append(k)
+                    if v >= (limite - 2): recomendacoes.append(k)
                 if recomendacoes:
                     st.error(f"🚨 **ALERTA CRÍTICO:** O setor **{' + '.join(recomendacoes)}** está próximo do limite histórico!")
                 else:
@@ -663,13 +693,15 @@ if aba_ativa:
                 c_strat1, c_strat2 = st.columns(2)
                 
                 with c_strat1:
-                    st.write("🔥 **Estratégia 1: Dupla (Crise/Tendência)**")
-                    st.caption("Baseada no Top 12 + Vício.")
-                    st.table(df_back) # Backtest Top 12
+                    st.write("🔥 **Estratégia 1: BMA (Crise + Tendência)**")
+                    st.info(f"Foco: **{crise_ct}** (Crise) + **{trend_ct}** (Tendência)")
+                    st.table(df_bma_ct) # Backtest BMA Crise+Trend
+                    st.write("**Jogar:**")
+                    st.code(", ".join([f"{n:02}" for n in palpite_bma_ct]), language="text")
                     
                 with c_strat2:
                     st.write("⚖️ **Estratégia 2: Setorizada (4x4x4)**")
-                    st.caption("Cerca 4 bichos de cada setor.")
+                    st.info("Cerca 4 bichos de cada setor (Equilíbrio).")
                     st.table(df_setorizado) # Backtest 4x4x4
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
@@ -741,27 +773,6 @@ if aba_ativa:
                 contagem = Counter(recentes)
                 df_freq = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes'])
                 st.bar_chart(df_freq)
-
-        with st.expander("🕒 Grade de Horários da Banca"):
-            df_horarios = pd.DataFrame({
-                "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
-                "HORÁRIOS": [config_atual['horarios']['segsab'], config_atual['horarios']['dom']]
-            })
-            st.table(df_horarios)
-
-        st.markdown("---")
-
-        if MODO_BLOQUEIO:
-            st.error(f"⛔ TRAVA DE SEGURANÇA: {qtd_derrotas} Derrotas Seguidas")
-            st.markdown("""
-            <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
-                <h2>NÃO APOSTE AGORA!</h2>
-                <p>A banca está muito instável. Aguarde uma vitória virtual.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.write("🤖 Palpites de Simulação:")
-            st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
-            st.markdown("---")
 
     else:
         st.warning("⚠️ Planilha vazia. Adicione o primeiro resultado.")
