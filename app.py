@@ -803,8 +803,13 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V63)
+        # PAINEL DE CONTROLE (V64)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
+            
+            # --- MONITOR DE OPORTUNIDADE (NOVO) ---
+            if curr_streak_12 >= 2:
+                 st.success("⚡ OPORTUNIDADE: Top 12 falhou 2x ou mais. Jogue no Bunker agora!")
+
             tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
                 "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
             ])
@@ -870,17 +875,6 @@ if aba_ativa:
                 with c_palp2:
                     st.write("❄️ **COBERTURA (2):**")
                     st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
-                
-                st.markdown("---")
-                c_ia1, c_ia2 = st.columns(2)
-                with c_ia1:
-                    st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
-                    if pct_win_win > 50: st.caption("👉 **DICA:** Se o último foi Green, jogue novamente!")
-                    else: st.caption("Cuidado: A banca costuma alternar.")
-                with c_ia2:
-                    st.metric("♻️ Chance de Recuperação (Loss puxa Win)", f"{int(pct_loss_win)}%")
-                    if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
-                    else: st.caption("Padrão normal de recuperação.")
                 
                 st.caption("Diagnóstico Simples:")
                 st.table(df_back)
