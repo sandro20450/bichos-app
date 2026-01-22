@@ -378,7 +378,6 @@ def gerar_backtest_top17(historico, banca):
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    # AUMENTADO PARA 20 JOGOS
     inicio = max(0, len(historico) - 20)
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
@@ -431,7 +430,6 @@ def analisar_setores_bma_com_maximo(historico):
     curr_a, max_a = calcular_atrasos(setor_a, historico)
     curr_25, max_25 = calcular_atrasos(setor_25, historico)
     
-    # Criando DataFrame para tabela
     df_setores = pd.DataFrame([
         {"SETOR": "BAIXO (01-08)", "ATUAL": curr_b, "RECORDE": max_b},
         {"SETOR": "MÉDIO (09-16)", "ATUAL": curr_m, "RECORDE": max_m},
@@ -482,10 +480,27 @@ def gerar_palpite_setorizado(historico, banca):
     return palpite_equilibrado
 
 def gerar_backtest_setorizado(historico, banca):
-    if len(historico) < 30: return pd.DataFrame(), []
+    if len(historico) < 30: return pd.DataFrame(), [], 0
     resultados = []
     inicio = max(0, len(historico) - 10)
     lista_atual = gerar_palpite_setorizado(historico, banca)
+    
+    # Calcular Max Loss (Piso de Vidro) em 50 jogos
+    max_derrotas_seq = 0
+    temp_derrotas = 0
+    inicio_risk = max(0, len(historico) - 50)
+    
+    for i in range(inicio_risk, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        pulp = gerar_palpite_setorizado(passado, banca)
+        if saiu not in pulp:
+            temp_derrotas += 1
+        else:
+            if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
+            temp_derrotas = 0
+    if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
+    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -493,7 +508,7 @@ def gerar_backtest_setorizado(historico, banca):
         status = "❌"
         if saiu in palpite_da_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
-    return pd.DataFrame(resultados[::-1]), lista_atual
+    return pd.DataFrame(resultados[::-1]), lista_atual, max_derrotas_seq
 
 # --- ESTRATEGIA 1: CRISE + TENDENCIA (BMA) ---
 def identificar_bma_crise_tendencia(historico):
@@ -503,7 +518,6 @@ def identificar_bma_crise_tendencia(historico):
         "MÉDIO": list(range(9, 17)),
         "ALTO": list(range(17, 25))
     }
-    # 1. Achar Crise
     atrasos = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for nome, nums in mapa_setores.items():
         cnt = 0
@@ -512,8 +526,6 @@ def identificar_bma_crise_tendencia(historico):
             cnt += 1
         atrasos[nome] = cnt
     setor_crise = max(atrasos, key=atrasos.get)
-    
-    # 2. Achar Tendencia (Ultimos 10)
     recorte = historico[-10:]
     freqs = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for x in recorte:
@@ -521,7 +533,6 @@ def identificar_bma_crise_tendencia(historico):
         elif 9 <= x <= 16: freqs["MÉDIO"] += 1
         elif 17 <= x <= 24: freqs["ALTO"] += 1
     setor_tendencia = max(freqs, key=freqs.get)
-    
     palpite = list(set(mapa_setores[setor_crise] + mapa_setores[setor_tendencia]))
     palpite.sort()
     return palpite, setor_crise, setor_tendencia
@@ -530,6 +541,23 @@ def gerar_backtest_bma_crise_tendencia(historico):
     resultados = []
     inicio = max(0, len(historico) - 10)
     palpite_atual, crise_atual, trend_atual = identificar_bma_crise_tendencia(historico)
+    
+    # Max Loss Risk
+    max_derrotas_seq = 0
+    temp_derrotas = 0
+    inicio_risk = max(0, len(historico) - 50)
+    
+    for i in range(inicio_risk, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        pulp, _, _ = identificar_bma_crise_tendencia(passado)
+        if saiu not in pulp:
+            temp_derrotas += 1
+        else:
+            if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
+            temp_derrotas = 0
+    if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
+    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -537,7 +565,7 @@ def gerar_backtest_bma_crise_tendencia(historico):
         status = "❌"
         if saiu in palpite_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (Crise+Trend)": status})
-    return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual
+    return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -617,6 +645,7 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
+        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
         # V51/V52/V53 - Setores
@@ -627,11 +656,11 @@ if aba_ativa:
         # V53/54 - DNA FIXO
         lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
         
-        # V55 - ESTRATEGIA SETORIZADA
-        df_setorizado, lista_setorizada = gerar_backtest_setorizado(historico, banca_selecionada)
+        # V55/V60 - ESTRATEGIA SETORIZADA + RISK
+        df_setorizado, lista_setorizada, risk_setor = gerar_backtest_setorizado(historico, banca_selecionada)
         
-        # V58 - ESTRATEGIA BMA CRISE+TREND
-        df_bma_ct, palpite_bma_ct, crise_ct, trend_ct = gerar_backtest_bma_crise_tendencia(historico)
+        # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
+        df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma = gerar_backtest_bma_crise_tendencia(historico)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -660,7 +689,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V59)
+        # PAINEL DE CONTROLE (V60)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
                 "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
@@ -697,6 +726,7 @@ if aba_ativa:
                     st.write("🔥 **Estratégia 1: BMA (Crise + Tendência)**")
                     st.info(f"Foco: **{crise_ct}** (Crise) + **{trend_ct}** (Tendência)")
                     st.table(df_bma_ct) 
+                    st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{risk_bma}**")
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in palpite_bma_ct]), language="text")
                     
@@ -704,6 +734,7 @@ if aba_ativa:
                     st.write("⚖️ **Estratégia 2: Setorizada (4x4x4)**")
                     st.info("Cerca 4 bichos de cada setor (Equilíbrio).")
                     st.table(df_setorizado) 
+                    st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{risk_setor}**")
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
 
@@ -722,24 +753,19 @@ if aba_ativa:
 
             # --- ABA 3: TOP 17 + BUNKER ---
             with tab_top17_bunker:
-                if MODO_INVERSO_ATIVO:
-                    st.error("👻 MODO INVERSO ATIVO! Aposte nas ZEBRAS.")
-                    st.code(", ".join([f"{n:02}" for n in zebras]), language="text")
-                elif ALERTA_FALHA_17:
-                    st.error("🚨 O Top 17 Falhou! Chance de acerto alta.")
-                
                 col_t1, col_t2 = st.columns(2)
                 
                 with col_t1:
                     st.subheader("🛡️ Top 17 (Dinâmico)")
-                    st.caption("Adapta-se ao momento.")
+                    if MODO_INVERSO_ATIVO: st.error("👻 MODO INVERSO ATIVO! Aposte nas ZEBRAS.")
+                    elif ALERTA_FALHA_17: st.error("🚨 O Top 17 Falhou! Chance de acerto alta.")
+                    
                     st.table(df_top17)
                     st.write("📋 **Lista Dinâmica:**")
                     st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                 
                 with col_t2:
                     st.subheader("🧬 DNA Fixo (Bunker)")
-                    st.caption(f"Os mais fortes da história. Acerto Recente: {int(taxa_bunker)}%")
                     st.table(df_bunker)
                     st.write("📋 **Lista Fixa:**")
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
