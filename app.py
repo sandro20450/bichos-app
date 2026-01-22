@@ -485,7 +485,6 @@ def gerar_backtest_setorizado(historico, banca):
     inicio = max(0, len(historico) - 10)
     lista_atual = gerar_palpite_setorizado(historico, banca)
     
-    # Calcular Max Loss (Piso de Vidro) em 50 jogos
     max_derrotas_seq = 0
     temp_derrotas = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -542,7 +541,6 @@ def gerar_backtest_bma_crise_tendencia(historico):
     inicio = max(0, len(historico) - 10)
     palpite_atual, crise_atual, trend_atual = identificar_bma_crise_tendencia(historico)
     
-    # Max Loss Risk
     max_derrotas_seq = 0
     temp_derrotas = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -566,6 +564,45 @@ def gerar_backtest_bma_crise_tendencia(historico):
         if saiu in palpite_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (Crise+Trend)": status})
     return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq
+
+def analisar_dna_banca(historico, banca):
+    if len(historico) < 35: return 0, "Calibrando..."
+    acertos = 0
+    analise = 25
+    for i in range(analise):
+        idx = len(historico) - 1 - i
+        saiu = historico[idx]
+        passado = historico[:idx]
+        ranking = calcular_ranking_forca_completo(passado, banca)[:12]
+        if saiu in ranking: acertos += 1
+    score = (acertos / analise) * 100
+    if score >= 65: status = "DISCIPLINADA"
+    elif score >= 45: status = "EQUILIBRADA"
+    else: status = "CAÓTICA"
+    return score, status
+
+def analisar_tendencia_vitoria(historico, banca):
+    if len(historico) < 30: return 0, 0, "Dados insuficientes"
+    status_lista = []
+    for i in range(len(historico)-30, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        palpite, _ = gerar_palpite_estrategico(passado, banca)
+        status_lista.append(1 if saiu in palpite else 0)
+    vitoria_pos_vitoria = 0
+    total_vitorias = 0
+    vitoria_pos_derrota = 0
+    total_derrotas = 0
+    for i in range(len(status_lista)-1):
+        if status_lista[i] == 1: 
+            total_vitorias += 1
+            if status_lista[i+1] == 1: vitoria_pos_vitoria += 1
+        else:
+            total_derrotas += 1
+            if status_lista[i+1] == 1: vitoria_pos_derrota += 1
+    pct_win_pos_win = (vitoria_pos_vitoria / total_vitorias * 100) if total_vitorias > 0 else 0
+    pct_win_pos_loss = (vitoria_pos_derrota / total_derrotas * 100) if total_derrotas > 0 else 0
+    return pct_win_pos_win, pct_win_pos_loss
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -645,7 +682,6 @@ if aba_ativa:
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
-        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
         # V51/V52/V53 - Setores
@@ -661,6 +697,9 @@ if aba_ativa:
         
         # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
         df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma = gerar_backtest_bma_crise_tendencia(historico)
+        
+        # V49 - IA TENDENCIA
+        pct_win_win, pct_loss_win = analisar_tendencia_vitoria(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -689,7 +728,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V60)
+        # PAINEL DE CONTROLE (V61)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
                 "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
@@ -748,6 +787,18 @@ if aba_ativa:
                 with c_palp2:
                     st.write("❄️ **COBERTURA (2):**")
                     st.code(", ".join([f"{n:02}" for n in palpite_cob]), language="text")
+                
+                st.markdown("---")
+                c_ia1, c_ia2 = st.columns(2)
+                with c_ia1:
+                    st.metric("🏄 Chance de Surf (Win puxa Win)", f"{int(pct_win_win)}%")
+                    if pct_win_win > 50: st.caption("👉 **DICA:** Se o último foi Green, jogue novamente!")
+                    else: st.caption("Cuidado: A banca costuma alternar.")
+                with c_ia2:
+                    st.metric("♻️ Chance de Recuperação (Loss puxa Win)", f"{int(pct_loss_win)}%")
+                    if pct_loss_win < 30: st.caption("⛔ **ALERTA:** Não faça Gale! Derrotas vêm em bloco aqui.")
+                    else: st.caption("Padrão normal de recuperação.")
+                
                 st.caption("Diagnóstico Simples:")
                 st.table(df_back)
 
