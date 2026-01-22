@@ -378,7 +378,7 @@ def gerar_backtest_top17(historico, banca):
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    inicio = max(0, len(historico) - 20)
+    inicio = max(0, len(historico) - 5)
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -403,19 +403,13 @@ def gerar_backtest_top17(historico, banca):
     modo_inverso = contagem_derrotas_17 >= 3
     return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual
 
-# --- ANALISE DE SETORES BMA + 25 COM PORCENTAGEM E RECORDE ---
+# --- ANALISE DE SETORES BMA + 25 ---
 def analisar_setores_bma_com_maximo(historico):
-    if not historico: return {}, {}, [], {}
+    if not historico: return {}, {}, []
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
-    recorte_50 = historico[-50:]
-    total_50 = len(recorte_50)
-    def calc_pct(lista_alvo):
-        qtd = len([x for x in recorte_50 if x in lista_alvo])
-        return (qtd / total_50) * 100 if total_50 > 0 else 0
-    porcentagens = {"BAIXO (01-08)": calc_pct(setor_b), "MÉDIO (09-16)": calc_pct(setor_m), "ALTO (17-24)": calc_pct(setor_a), "CORINGA (25)": calc_pct(setor_25)}
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -424,7 +418,8 @@ def analisar_setores_bma_com_maximo(historico):
             if x in lista_alvo: break
             atraso_atual += 1
         for x in hist:
-            if x not in lista_alvo: contador_temp += 1
+            if x not in lista_alvo:
+                contador_temp += 1
             else:
                 if contador_temp > max_atraso: max_atraso = contador_temp
                 contador_temp = 0
@@ -443,78 +438,18 @@ def analisar_setores_bma_com_maximo(historico):
         elif x <= 16: sigla, classe = "M", "bola-m"
         else: sigla, classe = "A", "bola-a"
         sequencia_visual.append((sigla, classe))
-    return dados_atual, dados_maximo, sequencia_visual, porcentagens
+    return dados_atual, dados_maximo, sequencia_visual
 
-# --- NOVA FUNÇÃO V60: BACKTEST ESTRATEGIA 2 SETORES ---
-def gerar_backtest_setores_estrategico(historico):
-    """
-    Simula a estrategia de escolher 2 setores:
-    1. O mais atrasado (desde que não seja a Vaca, a menos que seja cobertura).
-    2. O mais frequente (para pegar tendencia).
-    """
-    if len(historico) < 20: return pd.DataFrame()
-    
-    resultados_simulacao = []
-    
-    setor_b = list(range(1, 9))
-    setor_m = list(range(9, 17))
-    setor_a = list(range(17, 25))
-    setor_25 = [25]
-    
-    # Analisa os últimos 10 jogos
-    for i in range(len(historico)-10, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i] # O que o robô saberia antes do jogo
-        
-        # Recalcula estatisticas naquele momento
-        dados_atual_temp, _, _, pct_temp = analisar_setores_bma_com_maximo(passado)
-        
-        # Logica de Seleção:
-        # 1. Pega o setor com MAIOR atraso (Excluindo Vaca da prioridade principal se atraso for baixo)
-        lista_atrasos = [
-            ("B", dados_atual_temp["BAIXO (01-08)"], setor_b),
-            ("M", dados_atual_temp["MÉDIO (09-16)"], setor_m),
-            ("A", dados_atual_temp["ALTO (17-24)"], setor_a)
-        ]
-        lista_atrasos.sort(key=lambda x: x[1], reverse=True)
-        setor_atrasado_nome = lista_atrasos[0][0]
-        setor_atrasado_grupos = lista_atrasos[0][2]
-        
-        # 2. Pega o setor com MAIOR frequencia (Tendencia) - Que nao seja o mesmo do atrasado
-        lista_freq = [
-            ("B", pct_temp["BAIXO (01-08)"], setor_b),
-            ("M", pct_temp["MÉDIO (09-16)"], setor_m),
-            ("A", pct_temp["ALTO (17-24)"], setor_a)
-        ]
-        lista_freq.sort(key=lambda x: x[1], reverse=True)
-        
-        setor_frequente_nome = None
-        setor_frequente_grupos = []
-        
-        for nome, _, grps in lista_freq:
-            if nome != setor_atrasado_nome:
-                setor_frequente_nome = nome
-                setor_frequente_grupos = grps
-                break
-        
-        # Palpite Final (16 Grupos)
-        palpite_setores = setor_atrasado_grupos + setor_frequente_grupos
-        
-        # Check Win
-        status = "❌"
-        if saiu in palpite_setores:
-            status = "💚"
-        elif saiu == 25:
-            status = "🐮" # Vaca (Neutro/Cover)
-            
-        resultados_simulacao.insert(0, {
-            "JOGO": f"#{len(historico)-i}", 
-            "SAIU": f"{saiu:02}", 
-            "PALPITE": f"{setor_atrasado_nome} (Crise) + {setor_frequente_nome} (Forte)",
-            "RES": status
-        })
-        
-    return pd.DataFrame(resultados_simulacao)
+def gerar_bussola_dia(historico):
+    if len(historico) < 10: return "Aguardando dados..."
+    recorte = historico[-10:]
+    pares = len([x for x in recorte if x%2==0 and x!=25])
+    impares = len([x for x in recorte if x%2!=0 and x!=25])
+    tend_pi = "PARES" if pares > impares else "ÍMPARES"
+    baixos = len([x for x in recorte if 1<=x<=12])
+    altos = len([x for x in recorte if 13<=x<=24])
+    tend_ab = "BAIXOS" if baixos > altos else "ALTOS"
+    return f"Tendência do Dia: **{tend_pi}** e **{tend_ab}** (Base últimos 10 jogos)"
 
 # --- DNA FIXO (BUNKER) ---
 def analisar_dna_fixo_historico(historico):
@@ -532,6 +467,54 @@ def analisar_dna_fixo_historico(historico):
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER": status})
     taxa_acerto = (acertos / 20) * 100
     return top_17_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto
+
+# --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) V55 ---
+def gerar_palpite_setorizado(historico, banca):
+    """
+    Seleciona os 4 melhores Baixos, 4 melhores Médios e 4 melhores Altos.
+    Total: 12 Grupos equilibrados.
+    """
+    ranking = calcular_ranking_forca_completo(historico, banca)
+    
+    setor_b = [g for g in ranking if 1 <= g <= 8]
+    setor_m = [g for g in ranking if 9 <= g <= 16]
+    # No setor Alto, vamos considerar até o 25 (incluindo vaca) para não deixar ela de fora
+    # Mas como o pedido foi "setores", vamos priorizar a área ALTA padrão (17-24) e o 25 entra se for forte lá
+    setor_a = [g for g in ranking if 17 <= g <= 25] 
+    
+    top4_b = setor_b[:4]
+    top4_m = setor_m[:4]
+    top4_a = setor_a[:4]
+    
+    palpite_equilibrado = top4_b + top4_m + top4_a
+    # Ordena para ficar bonito
+    palpite_equilibrado.sort()
+    
+    return palpite_equilibrado
+
+def gerar_backtest_setorizado(historico, banca):
+    if len(historico) < 30: return pd.DataFrame(), []
+    
+    resultados = []
+    # Analisa últimos 10 jogos
+    inicio = max(0, len(historico) - 10)
+    
+    # Gera a lista ATUAL para exibição
+    lista_atual = gerar_palpite_setorizado(historico, banca)
+    
+    for i in range(inicio, len(historico)):
+        saiu = historico[i]
+        passado = historico[:i]
+        
+        palpite_da_epoca = gerar_palpite_setorizado(passado, banca)
+        
+        status = "❌"
+        if saiu in palpite_da_epoca:
+            status = "💚"
+            
+        resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
+        
+    return pd.DataFrame(resultados[::-1]), lista_atual
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -575,10 +558,7 @@ with st.sidebar:
     
     st.write("📝 **Registrar Sorteio**")
     
-    idx_safe = st.session_state.get('auto_horario_idx', 0)
-    if idx_safe >= len(lista_horarios): idx_safe = 0
-    
-    novo_horario = st.selectbox("Horário:", lista_horarios, index=idx_safe)
+    novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
     novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
     
     col_btn1, col_btn2 = st.columns(2)
@@ -610,20 +590,23 @@ if aba_ativa:
     
     if len(historico) > 0:
         
-        # CÁLCULOS
+        # CÁLCULOS GERAIS
         df_back, EM_CRISE, qtd_derrotas = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
+        bussola_texto = gerar_bussola_dia(historico)
         vicio_ativo = detecting_vicio_repeticao(historico)
         
-        # V55/V56 - NOVOS DADOS
-        dados_atual, dados_maximo, seq_visual_setores, porcentagens = analisar_setores_bma_com_maximo(historico)
+        # V51/V52 - Setores
+        dados_atual, dados_maximo, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
         df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
+        
+        # V53/54 - DNA FIXO
         lista_bunker, df_bunker, taxa_bunker = analisar_dna_fixo_historico(historico)
         
-        # V60 - BACKTEST ESTRATÉGICO 2 SETORES
-        df_backtest_2set = gerar_backtest_setores_estrategico(historico)
+        # V55 - ESTRATEGIA SETORIZADA
+        df_setorizado, lista_setorizada = gerar_backtest_setorizado(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and qtd_derrotas >= 3:
@@ -642,6 +625,8 @@ if aba_ativa:
             """, unsafe_allow_html=True)
         st.write("") 
 
+        st.info(f"🧭 {bussola_texto}")
+
         link = config_atual['url_site']
         site_on, site_tit, _ = verificar_atualizacao_site(link)
         col_mon1, col_mon2 = st.columns([3, 1])
@@ -652,7 +637,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE LOCAL
+        # PAINEL DE CONTROLE (V54 - COM BUNKER)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_diag_12, tab_diag_17, tab_bunker = st.tabs(["🔍 Top 12 (Padrão)", "🛡️ Top 17 (Segurança)", "🧬 DNA Fixo (Bunker)"])
             
@@ -682,11 +667,14 @@ if aba_ativa:
                 
             with tab_bunker:
                 st.write(f"### 🧬 DNA Histórico (Bunker)")
+                st.write(f"Estes são os **17 Grupos mais frequentes da história** desta banca.")
+                
                 col_b1, col_b2 = st.columns([3, 1])
                 with col_b1:
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
                 with col_b2:
                     st.metric("Acertos (Ult. 20)", f"{int(taxa_bunker)}%")
+                
                 st.caption("Comparativo Bunker (Fixo) vs Realidade Recente:")
                 st.table(df_bunker)
 
@@ -711,9 +699,61 @@ if aba_ativa:
             st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
             st.markdown("---")
 
-        # ABAS PRINCIPAIS
-        tab_puxadas, tab_setores, tab_graficos = st.tabs(["🧲 Puxadas (Markov)", "🎯 Setores (B/M/A)", "📈 Gráficos"])
+        # ABAS PRINCIPAIS (V55 - REORDENADAS + ESTRATÉGIA SETORIZADA)
+        tab_setores, tab_puxadas, tab_graficos = st.tabs(["🎯 Setores (BMA)", "🧲 Puxadas (Markov)", "📈 Gráficos"])
         
+        with tab_setores:
+            st.write("### 🎯 Análise de Setores (B.M.A.)")
+            st.write("Histórico Recente (⬅️ Mais Novo):")
+            html_seq = "<div>"
+            for sigla, classe in seq_visual_setores:
+                html_seq += f"<div class='{classe}'>{sigla}</div>"
+            html_seq += "</div>"
+            st.markdown(html_seq, unsafe_allow_html=True)
+            st.markdown("---")
+            
+            c_b, c_m, c_a, c_25 = st.columns(4)
+            
+            recomendacoes = []
+            
+            with c_b:
+                val = dados_atual['BAIXO (01-08)']
+                lim = dados_maximo['BAIXO (01-08)']
+                st.metric("BAIXO (01-08)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("BAIXO")
+                
+            with c_m:
+                val = dados_atual['MÉDIO (09-16)']
+                lim = dados_maximo['MÉDIO (09-16)']
+                st.metric("MÉDIO (09-16)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("MÉDIO")
+                
+            with c_a:
+                val = dados_atual['ALTO (17-24)']
+                lim = dados_maximo['ALTO (17-24)']
+                st.metric("ALTO (17-24)", f"{val}", delta=f"Recorde: {lim}")
+                if val >= (lim - 1): recomendacoes.append("ALTO")
+                
+            with c_25:
+                val = dados_atual['CORINGA (25)']
+                lim = dados_maximo['CORINGA (25)']
+                st.metric("VACA (25)", f"{val}", delta=f"Recorde: {lim}")
+            
+            st.markdown("---")
+            if recomendacoes:
+                st.error(f"🚨 **ALERTA MÁXIMO:** O setor **{' + '.join(recomendacoes)}** está perto do RECORDE HISTÓRICO de atraso!")
+            
+            # --- NOVA ESTRATÉGIA 4x4x4 ---
+            st.markdown("---")
+            st.write("### ⚖️ Estratégia Equilibrada (Cerco 4x4x4)")
+            st.info("Seleciona os 4 melhores de cada setor (B, M, A) para cercar o jogo.")
+            
+            st.write("📊 **Backtest Recente (Últimos 10 Jogos):**")
+            st.table(df_setorizado)
+            
+            st.write("📋 **Lista Pronta (12 Grupos Equilibrados):**")
+            st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
+
         with tab_puxadas:
             st.write(f"### 🧲 Quem puxa quem?")
             st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
@@ -729,79 +769,6 @@ if aba_ativa:
                         st.caption(f"Frequência: {int(pct)}%")
             else:
                 st.warning("Dados insuficientes para calcular puxada.")
-
-        with tab_setores:
-            st.write("### 🎯 Análise de Setores (B.M.A.)")
-            st.write("Histórico Recente (⬅️ Mais Novo):")
-            html_seq = "<div>"
-            for sigla, classe in seq_visual_setores:
-                html_seq += f"<div class='{classe}'>{sigla}</div>"
-            html_seq += "</div>"
-            st.markdown(html_seq, unsafe_allow_html=True)
-            st.markdown("---")
-            
-            # TABELA DE DADOS
-            table_data = []
-            
-            # Helper para status
-            def get_status(atual, recorde):
-                return "⚠️ Crítico" if atual >= (recorde - 1) else "✅ Normal"
-            
-            # BAIXO
-            b_atu = dados_atual['BAIXO (01-08)']
-            b_rec = dados_maximo['BAIXO (01-08)']
-            table_data.append({
-                "SETOR": "BAIXO (01-08)",
-                "ATRASO": b_atu,
-                "RECORDE": b_rec,
-                "FREQ (50)": f"{int(porcentagens['BAIXO (01-08)'])}%",
-                "STATUS": get_status(b_atu, b_rec)
-            })
-            
-            # MEDIO
-            m_atu = dados_atual['MÉDIO (09-16)']
-            m_rec = dados_maximo['MÉDIO (09-16)']
-            table_data.append({
-                "SETOR": "MÉDIO (09-16)",
-                "ATRASO": m_atu,
-                "RECORDE": m_rec,
-                "FREQ (50)": f"{int(porcentagens['MÉDIO (09-16)'])}%",
-                "STATUS": get_status(m_atu, m_rec)
-            })
-            
-            # ALTO
-            a_atu = dados_atual['ALTO (17-24)']
-            a_rec = dados_maximo['ALTO (17-24)']
-            table_data.append({
-                "SETOR": "ALTO (17-24)",
-                "ATRASO": a_atu,
-                "RECORDE": a_rec,
-                "FREQ (50)": f"{int(porcentagens['ALTO (17-24)'])}%",
-                "STATUS": get_status(a_atu, a_rec)
-            })
-            
-            # VACA
-            v_atu = dados_atual['CORINGA (25)']
-            v_rec = dados_maximo['CORINGA (25)']
-            table_data.append({
-                "SETOR": "VACA (25)",
-                "ATRASO": v_atu,
-                "RECORDE": v_rec,
-                "FREQ (50)": f"{int(porcentagens['CORINGA (25)'])}%",
-                "STATUS": get_status(v_atu, v_rec)
-            })
-            
-            df_setores = pd.DataFrame(table_data)
-            st.table(df_setores)
-            
-            criticos = [d['SETOR'] for d in table_data if "⚠️" in d['STATUS']]
-            if criticos: st.error(f"🚨 **ATENÇÃO:** O setor **{', '.join(criticos)}** está próximo do RECORDE HISTÓRICO de atraso!")
-            
-            # --- NOVO BACKTEST DE SETORES (V60) ---
-            st.markdown("---")
-            st.write("#### 🧪 Backtest: Estratégia Dupla (Crise + Tendência)")
-            st.info("Simulação: Apostar sempre no setor Mais Atrasado + Setor Mais Frequente.")
-            st.table(df_backtest_2set)
 
         with tab_graficos:
             st.write("### 🐢 Top Atrasados")
