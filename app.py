@@ -378,7 +378,8 @@ def gerar_backtest_top17(historico, banca):
     resultados = []
     falha_recente = False
     contagem_derrotas_17 = 0
-    inicio = max(0, len(historico) - 5)
+    # AUMENTADO PARA 20 JOGOS
+    inicio = max(0, len(historico) - 20)
     ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
     top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
     sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
@@ -659,7 +660,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V58)
+        # PAINEL DE CONTROLE (V59)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             tab_setores_main, tab_top12, tab_top17_bunker, tab_puxadas_main, tab_graficos_main = st.tabs([
                 "🎯 Setores & Estratégias", "🔍 Top 12", "🛡️ Top 17 + Bunker", "🧲 Puxadas", "📈 Gráficos"
@@ -695,14 +696,14 @@ if aba_ativa:
                 with c_strat1:
                     st.write("🔥 **Estratégia 1: BMA (Crise + Tendência)**")
                     st.info(f"Foco: **{crise_ct}** (Crise) + **{trend_ct}** (Tendência)")
-                    st.table(df_bma_ct) # Backtest BMA Crise+Trend
+                    st.table(df_bma_ct) 
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in palpite_bma_ct]), language="text")
                     
                 with c_strat2:
                     st.write("⚖️ **Estratégia 2: Setorizada (4x4x4)**")
                     st.info("Cerca 4 bichos de cada setor (Equilíbrio).")
-                    st.table(df_setorizado) # Backtest 4x4x4
+                    st.table(df_setorizado) 
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
 
@@ -721,24 +722,27 @@ if aba_ativa:
 
             # --- ABA 3: TOP 17 + BUNKER ---
             with tab_top17_bunker:
-                st.subheader("🛡️ Top 17 (Dinâmico)")
                 if MODO_INVERSO_ATIVO:
                     st.error("👻 MODO INVERSO ATIVO! Aposte nas ZEBRAS.")
                     st.code(", ".join([f"{n:02}" for n in zebras]), language="text")
                 elif ALERTA_FALHA_17:
                     st.error("🚨 O Top 17 Falhou! Chance de acerto alta.")
-                st.write("📋 **Lista dos 17 Grupos:**")
-                st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
-                st.table(df_top17)
                 
-                st.markdown("---")
-                st.subheader("🧬 DNA Fixo (Bunker)")
-                col_b1, col_b2 = st.columns([3, 1])
-                with col_b1:
+                col_t1, col_t2 = st.columns(2)
+                
+                with col_t1:
+                    st.subheader("🛡️ Top 17 (Dinâmico)")
+                    st.caption("Adapta-se ao momento.")
+                    st.table(df_top17)
+                    st.write("📋 **Lista Dinâmica:**")
+                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
+                
+                with col_t2:
+                    st.subheader("🧬 DNA Fixo (Bunker)")
+                    st.caption(f"Os mais fortes da história. Acerto Recente: {int(taxa_bunker)}%")
+                    st.table(df_bunker)
+                    st.write("📋 **Lista Fixa:**")
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
-                with col_b2:
-                    st.metric("Acertos (Ult. 20)", f"{int(taxa_bunker)}%")
-                st.table(df_bunker)
 
             # --- ABA 4: PUXADAS ---
             with tab_puxadas_main:
@@ -773,6 +777,27 @@ if aba_ativa:
                 contagem = Counter(recentes)
                 df_freq = pd.DataFrame.from_dict(contagem, orient='index', columns=['Vezes'])
                 st.bar_chart(df_freq)
+
+        with st.expander("🕒 Grade de Horários da Banca"):
+            df_horarios = pd.DataFrame({
+                "DIA DA SEMANA": ["Segunda a Sábado", "Domingo"],
+                "HORÁRIOS": [config_atual['horarios']['segsab'], config_atual['horarios']['dom']]
+            })
+            st.table(df_horarios)
+
+        st.markdown("---")
+
+        if MODO_BLOQUEIO:
+            st.error(f"⛔ TRAVA DE SEGURANÇA: {qtd_derrotas} Derrotas Seguidas")
+            st.markdown("""
+            <div style="background-color: #330000; padding: 20px; border-radius: 10px; border: 2px solid red; text-align: center;">
+                <h2>NÃO APOSTE AGORA!</h2>
+                <p>A banca está muito instável. Aguarde uma vitória virtual.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.write("🤖 Palpites de Simulação:")
+            st.markdown(html_bolas(palpite_p, "cinza"), unsafe_allow_html=True)
+            st.markdown("---")
 
     else:
         st.warning("⚠️ Planilha vazia. Adicione o primeiro resultado.")
