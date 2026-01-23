@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V70 (CORRIGIDO PARA MÚLTIPLOS FORMATOS DE DATA) ---
+# --- SCRAPING AVANÇADO ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -236,64 +236,44 @@ def raspar_ultimo_resultado_real(url, banca_key):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje = datetime.now(fuso_br)
-        
-        # Lista de formatos possíveis para a data de hoje
-        padroes_data = [
-            hoje.strftime("%d/%m/%Y"),  # Ex: 23/01/2026
-            hoje.strftime("%d-%m-%Y"),  # Ex: 23-01-2026
-            hoje.strftime("%d de"),     # Ex: 23 de (Janeiro)
-            "Hoje"                      # Literal
-        ]
+        hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
         
         candidatos = [] 
+        elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
-        # Varre todos os padrões
-        for padrao in padroes_data:
-            elementos_data = soup.find_all(string=re.compile(re.escape(padrao), re.IGNORECASE))
-            
-            for elem in elementos_data:
-                container = elem.parent
-                for _ in range(4): # Sobe até 4 níveis
-                    if container:
-                        texto_container = container.get_text()
-                        # Procura hora HH:MM ou HHhMM
-                        match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
-                        if match_hora:
-                            horario_str = match_hora.group(1).replace('h', ':')
-                            
-                            # Procura tabela próxima
-                            tabela = container.find_next('table')
-                            if tabela:
-                                linhas = tabela.find_all('tr')
-                                for linha in linhas:
-                                    colunas = linha.find_all('td')
-                                    if len(colunas) >= 3:
-                                        premio = colunas[0].get_text().strip()
-                                        if '1º' in premio or '1' in premio:
-                                            grupo = colunas[2].get_text().strip()
-                                            if grupo.isdigit():
-                                                candidatos.append((horario_str, int(grupo)))
-                                                break 
-                            break 
-                        container = container.parent
-                    else:
-                        break
-            if candidatos: break # Se achou com um padrão, para.
+        for elem in elementos_data:
+            container = elem.parent
+            for _ in range(3): 
+                if container:
+                    texto_container = container.get_text()
+                    match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
+                    if match_hora:
+                        horario_str = match_hora.group(1).replace('h', ':')
+                        tabela = container.find_next('table')
+                        if tabela:
+                            linhas = tabela.find_all('tr')
+                            for linha in linhas:
+                                colunas = linha.find_all('td')
+                                if len(colunas) >= 3:
+                                    premio = colunas[0].get_text().strip()
+                                    if '1º' in premio or '1' in premio:
+                                        grupo = colunas[2].get_text().strip()
+                                        if grupo.isdigit():
+                                            candidatos.append((horario_str, int(grupo)))
+                                            break 
+                        break 
+                    container = container.parent
+                else:
+                    break
 
         if not candidatos: return None, None, "Data Ausente"
-        
-        # Ordena para pegar o mais recente (maior hora)
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        
-        # Remove duplicatas
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
-                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
@@ -419,64 +399,6 @@ def gerar_backtest_e_status(historico, banca):
 
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, curr_streak, max_loss
 
-def gerar_backtest_top17(historico, banca):
-    if len(historico) < 30: return pd.DataFrame(), [], False, False, [], 0, 0
-    resultados = []
-    falha_recente = False
-    contagem_derrotas_17 = 0
-    inicio = max(0, len(historico) - 20)
-    
-    # Max Loss Risk e Streak Atual
-    max_loss = 0
-    temp_loss = 0
-    inicio_risk = max(0, len(historico) - 50)
-    for i in range(inicio_risk, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        ranking_bruto = calcular_ranking_forca_completo(passado, banca)
-        top12_ep, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
-        sobras = [x for x in ranking_bruto if x not in top12_ep]
-        top17 = top12_ep + sobras[:5]
-        if saiu not in top17: temp_loss += 1
-        else:
-            if temp_loss > max_loss: max_loss = temp_loss
-            temp_loss = 0
-    if temp_loss > max_loss: max_loss = temp_loss
-
-    # Streak Atual real
-    streak_atual = 0
-    
-    ranking_bruto_atual = calcular_ranking_forca_completo(historico, banca)
-    top12_atual, _ = gerar_palpite_estrategico(historico, banca, modo_crise=False) 
-    sobras_atual = [x for x in ranking_bruto_atual if x not in top12_atual]
-    top17_atual = top12_atual + sobras_atual[:5]
-    zebras_atual = sobras_atual[5:]
-    
-    for i in range(inicio, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        top12_da_epoca, _ = gerar_palpite_estrategico(passado, banca, modo_crise=False)
-        ranking_bruto_da_epoca = calcular_ranking_forca_completo(passado, banca)
-        sobras = [x for x in ranking_bruto_da_epoca if x not in top12_da_epoca]
-        top17_da_epoca = top12_da_epoca + sobras[:5]
-        status = "❌"
-        if saiu in top17_da_epoca:
-            status = "💚"
-            contagem_derrotas_17 = 0
-        else:
-            contagem_derrotas_17 += 1
-            if i == len(historico) - 1: falha_recente = True
-        resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 17": status})
-    
-    # Recalcula streak real a partir da lista
-    curr_streak = 0
-    for res in reversed(resultados):
-        if res["TOP 17"] == "❌": curr_streak += 1
-        else: break
-        
-    modo_inverso = contagem_derrotas_17 >= 3
-    return pd.DataFrame(resultados[::-1]), top17_atual, falha_recente, modo_inverso, zebras_atual, max_loss, curr_streak
-
 # --- ANALISE DE SETORES BMA + 25 ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, []
@@ -523,18 +445,19 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
     return dados_atual, dados_maximo, df_setores, sequencia_visual
 
-# --- DNA FIXO (BUNKER) ---
+# --- DNA FIXO (BUNKER 12 - V70) ---
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0
     contagem_total = Counter(historico)
-    top_17_fixo = [g for g, freq in contagem_total.most_common(17)]
+    # AGORA COM 12 GRUPOS
+    top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
     
     # Max Loss Risk
     max_loss = 0
     temp_loss = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
-        if historico[i] not in top_17_fixo: temp_loss += 1
+        if historico[i] not in top_12_fixo: temp_loss += 1
         else:
             if temp_loss > max_loss: max_loss = temp_loss
             temp_loss = 0
@@ -545,19 +468,19 @@ def analisar_dna_fixo_historico(historico):
     recorte_teste = historico[-20:]
     for i, saiu in enumerate(recorte_teste):
         status = "❌"
-        if saiu in top_17_fixo:
+        if saiu in top_12_fixo:
             status = "💚"
             acertos += 1
-        resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER": status})
+        resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
     
     # Streak Atual
     curr_streak = 0
     for res in resultados_simulacao: 
-        if res["BUNKER"] == "❌": curr_streak += 1
+        if res["BUNKER 12"] == "❌": curr_streak += 1
         else: break
         
     taxa_acerto = (acertos / 20) * 100
-    return top_17_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto, max_loss, curr_streak
+    return top_12_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto, max_loss, curr_streak
 
 # --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) V55 ---
 def gerar_palpite_setorizado(historico, banca):
@@ -766,10 +689,9 @@ if aba_ativa:
         
         # V51/V52/V53 - Setores
         dados_atual, dados_maximo, df_setores_table, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
-        df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras, max_loss_top17, curr_streak_17 = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
-        # V53/54 - DNA FIXO
+        # V53/54/V70 - DNA FIXO (AGORA 12)
         lista_bunker, df_bunker, taxa_bunker, max_loss_bunker, curr_streak_bunker = analisar_dna_fixo_historico(historico)
         
         # V55/V60 - ESTRATEGIA SETORIZADA + RISK
@@ -818,7 +740,7 @@ if aba_ativa:
             
             # --- ABAS ---
             tab_setores_main, tab_comparativo, tab_puxadas_main, tab_graficos_main = st.tabs([
-                "🎯 Setores & Estratégias", "🆚 Comparativo (3 Mesas)", "🧲 Puxadas", "📈 Gráficos"
+                "🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "🧲 Puxadas", "📈 Gráficos"
             ])
             
             # --- ABA 1: SETORES & ESTRATEGIAS ---
@@ -872,41 +794,31 @@ if aba_ativa:
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
 
-            # --- ABA 2: COMPARATIVO GERAL (3 MESAS) ---
+            # --- ABA 2: COMPARATIVO GERAL (2 MESAS: Top 12 vs Bunker 12) ---
             with tab_comparativo:
-                col1, col2, col3 = st.columns(3)
+                col1, col2 = st.columns(2)
                 
-                # --- MESA 1: TOP 12 ---
+                # --- MESA 1: TOP 12 (DINÂMICO) ---
                 with col1:
-                    st.subheader("🔥 Top 12")
-                    st.caption("Padrão (12 Grupos)")
+                    st.subheader("🔥 Top 12 (Dinâmico)")
+                    st.caption("Adapta-se ao momento.")
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                     st.table(df_back)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top12}**")
                     if curr_streak_12 >= max_loss_top12 and curr_streak_12 > 0:
                         st.error(f"🚨 ALERTA: Recorde atingido!")
 
-                # --- MESA 2: TOP 17 DINÂMICO ---
+                # --- MESA 2: BUNKER 12 (FIXO) ---
                 with col2:
-                    st.subheader("🛡️ Top 17 (Din)")
-                    st.caption("Adaptável")
-                    st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
-                    st.table(df_top17)
-                    st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top17}**")
-                    if curr_streak_17 >= max_loss_top17 and curr_streak_17 > 0:
-                        st.error(f"🚨 ALERTA: Recorde atingido!")
-
-                # --- MESA 3: BUNKER (FIXO) ---
-                with col3:
-                    st.subheader("🧬 Bunker (Fix)")
-                    st.caption("Histórico")
+                    st.subheader("🧬 Bunker 12 (Fixo)")
+                    st.caption("Os 12 Reis da História (Não muda).")
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
                     st.table(df_bunker)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_bunker}**")
                     if curr_streak_bunker >= max_loss_bunker and curr_streak_bunker > 0:
                         st.error(f"🚨 ALERTA: Recorde atingido!")
 
-            # --- ABA 4: PUXADAS ---
+            # --- ABA 3: PUXADAS ---
             with tab_puxadas_main:
                 st.write(f"### 🧲 Quem puxa quem?")
                 st.write(f"Análise baseada no último bicho: **Grupo {ultimo_bicho:02}**")
@@ -922,7 +834,7 @@ if aba_ativa:
                 else:
                     st.warning("Dados insuficientes para calcular puxada.")
 
-            # --- ABA 5: GRAFICOS ---
+            # --- ABA 4: GRAFICOS ---
             with tab_graficos_main:
                 st.write("### 🐢 Top Atrasados")
                 todos_atrasos = calcular_ranking_atraso_completo(historico)
