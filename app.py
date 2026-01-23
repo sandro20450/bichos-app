@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V71 (CORREÇÃO DE BUG "DATA AUSENTE") ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -236,19 +236,35 @@ def raspar_ultimo_resultado_real(url, banca_key):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        hoje = datetime.now(fuso_br)
+        
+        # Regex mais flexível para data (dd/mm, dd-mm, dd de)
+        regex_data = r"({}|{}|{} de)".format(
+            hoje.strftime("%d/%m"), 
+            hoje.strftime("%d-%m"), 
+            hoje.strftime("%d")
+        )
         
         candidatos = [] 
-        elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
+        # Procura qualquer elemento que contenha a data de hoje (mesmo parcial)
+        elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
+        
+        if not elementos_data:
+            # Tenta procurar "Hoje" explicitamente se falhar
+            elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
+
         for elem in elementos_data:
             container = elem.parent
-            for _ in range(3): 
+            for _ in range(5): # Sobe até 5 níveis para garantir
                 if container:
                     texto_container = container.get_text()
-                    match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
+                    # Procura hora HH:MM
+                    match_hora = re.search(r'(\d{2}:\d{2})', texto_container)
                     if match_hora:
-                        horario_str = match_hora.group(1).replace('h', ':')
+                        horario_str = match_hora.group(1)
+                        
+                        # Procura tabela próxima
                         tabela = container.find_next('table')
                         if tabela:
                             linhas = tabela.find_all('tr')
@@ -256,7 +272,8 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                 colunas = linha.find_all('td')
                                 if len(colunas) >= 3:
                                     premio = colunas[0].get_text().strip()
-                                    if '1º' in premio or '1' in premio:
+                                    # Valida se é 1º prêmio
+                                    if any(x in premio for x in ['1º', '1', 'Pri']):
                                         grupo = colunas[2].get_text().strip()
                                         if grupo.isdigit():
                                             candidatos.append((horario_str, int(grupo)))
@@ -265,15 +282,21 @@ def raspar_ultimo_resultado_real(url, banca_key):
                     container = container.parent
                 else:
                     break
+            if candidatos: break # Se achou, ótimo.
 
         if not candidatos: return None, None, "Data Ausente"
+        
+        # Ordena para pegar o mais recente
         candidatos.sort(key=lambda x: x[0], reverse=True)
+        
+        # Remove duplicatas
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
+                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
@@ -350,17 +373,13 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
-    
-    # V68: COBERTURA REMOVIDA (RETORNA VAZIO)
     return top12, []
 
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0, 0
     resultados = []
-    # EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
     
-    # Max Loss Risk e Streak Atual
     max_loss = 0
     temp_loss = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -391,7 +410,6 @@ def gerar_backtest_e_status(historico, banca):
         if i >= len(historico) - 20:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     
-    # Recalcula streak real a partir da lista
     curr_streak = 0
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
@@ -629,6 +647,11 @@ with st.sidebar:
     lista_horarios_str = config_banca['horarios']['dom'] if dia_semana == 6 else config_banca['horarios']['segsab']
     lista_horarios = [h.strip() for h in lista_horarios_str.split('🔹')]
     
+    # --- CORREÇÃO BUG ÍNDICE V71 ---
+    if st.session_state.get('auto_horario_idx', 0) >= len(lista_horarios):
+        st.session_state['auto_horario_idx'] = 0
+    # --------------------------------
+    
     st.markdown("---")
     
     col_import, _ = st.columns([1, 0.1])
@@ -691,7 +714,7 @@ if aba_ativa:
         dados_atual, dados_maximo, df_setores_table, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
-        # V53/54/V70 - DNA FIXO (AGORA 12)
+        # V53/54/V70 - DNA FIXO (AGORA 12 GRUPOS)
         lista_bunker, df_bunker, taxa_bunker, max_loss_bunker, curr_streak_bunker = analisar_dna_fixo_historico(historico)
         
         # V55/V60 - ESTRATEGIA SETORIZADA + RISK
@@ -730,7 +753,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V70)
+        # PAINEL DE CONTROLE (V71) - LAYOUT DE 2 MESAS
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
