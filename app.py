@@ -656,23 +656,33 @@ def gerar_backtest_bma_crise_tendencia(historico):
 
 def monitorar_oportunidades(historico, banca):
     alertas = []
+    tipos = []
     
     # 1. Monitorar Top 12 (Antecipação: Recorde - 1)
     _, _, curr_streak_12, max_loss_top12 = gerar_backtest_e_status(historico, banca)
     if curr_streak_12 >= (max_loss_top12 - 1) and curr_streak_12 > 0:
         alertas.append(f"⚡ OPORTUNIDADE: Top 12 Derrotas ({curr_streak_12}) perto do Recorde ({max_loss_top12}). Bunker é opção!")
+        tipos.append("erro" if curr_streak_12 >= max_loss_top12 else "aviso")
     
     # 2. Monitorar Bunker 12 (Antecipação: Recorde - 1)
     _, _, _, max_loss_bunker, curr_streak_bunker = analisar_dna_fixo_historico(historico)
     if curr_streak_bunker >= (max_loss_bunker - 1) and curr_streak_bunker > 0:
         alertas.append(f"🛡️ OPORTUNIDADE BUNKER: Derrotas ({curr_streak_bunker}) perto do Recorde ({max_loss_bunker}). Jogue agora!")
+        tipos.append("erro" if curr_streak_bunker >= max_loss_bunker else "aviso")
 
     # 3. Monitorar BMA (Antecipação: Recorde - 1)
     _, _, _, _, risk_bma, curr_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
     if curr_streak_bma >= (risk_bma - 1) and curr_streak_bma > 0:
          alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({curr_streak_bma}) perto do Recorde ({risk_bma}). Prepare-se!")
+         tipos.append("erro" if curr_streak_bma >= risk_bma else "aviso")
+         
+    # 4. Monitorar Setorizada (Antecipação: Recorde - 1)
+    _, _, risk_setor, curr_streak_setor = gerar_backtest_setorizado(historico, banca)
+    if curr_streak_setor >= (risk_setor - 1) and curr_streak_setor > 0:
+         alertas.append(f"⚖️ OPORTUNIDADE 4x4x4: Derrotas ({curr_streak_setor}) perto do Recorde ({risk_setor}).")
+         tipos.append("erro" if curr_streak_setor >= risk_setor else "aviso")
     
-    return alertas
+    return alertas, tipos
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -759,7 +769,6 @@ if aba_ativa:
         
         # V51/V52/V53 - Setores
         dados_atual, dados_maximo, df_setores_table, seq_visual_setores = analisar_setores_bma_com_maximo(historico)
-        df_top17, lista_top17, ALERTA_FALHA_17, MODO_INVERSO_ATIVO, zebras, max_loss_top17, curr_streak_17 = gerar_backtest_top17(historico, banca_selecionada)
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
         # V53/54/V70 - DNA FIXO (AGORA 12 GRUPOS)
@@ -771,8 +780,8 @@ if aba_ativa:
         # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
         df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma, curr_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
         
-        # MONITOR DE OPORTUNIDADE
-        alertas_oportunidade = monitorar_oportunidades(historico, banca_selecionada)
+        # MONITOR DE OPORTUNIDADE V73
+        alertas_oportunidade, tipos_alerta = monitorar_oportunidades(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
         if (banca_selecionada == "CAMINHODASORTE" or banca_selecionada == "MONTECAI") and curr_streak_12 >= 3:
@@ -801,13 +810,16 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V72) - ALERTAS UNIFICADOS
+        # PAINEL DE CONTROLE (V73) - ALERTAS COLORIDOS
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
-            # --- MONITOR DE ALERTAS (TOPO) ---
+            # --- ALERTAS INTELIGENTES NO TOPO ---
             if alertas_oportunidade:
-                for alerta in alertas_oportunidade:
-                    st.success(alerta)
+                for i, alerta in enumerate(alertas_oportunidade):
+                    if tipos_alerta[i] == "erro":
+                        st.error(alerta) # Vermelho (Recorde Atingido)
+                    else:
+                        st.warning(alerta) # Amarelo (Perto do Recorde)
             
             # --- ABAS ---
             tab_setores_main, tab_comparativo, tab_puxadas_main, tab_graficos_main = st.tabs([
@@ -847,6 +859,9 @@ if aba_ativa:
                     st.table(df_bma_ct) 
                     st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{risk_bma}**")
                     
+                    if curr_streak_bma >= (risk_bma - 1) and curr_streak_bma > 0:
+                        st.error(f"🚨 **ALERTA MÁXIMO:** Derrotas ({curr_streak_bma}) perto do Recorde ({risk_bma})!")
+                    
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in palpite_bma_ct]), language="text")
                     
@@ -855,6 +870,9 @@ if aba_ativa:
                     st.info("Cerca 4 bichos de cada setor (Equilíbrio).")
                     st.table(df_setorizado) 
                     st.warning(f"⚠️ Pior Sequência de Derrotas (50j): **{risk_setor}**")
+                    
+                    if curr_streak_setor >= (risk_setor - 1) and curr_streak_setor > 0:
+                        st.error(f"🚨 **ALERTA MÁXIMO:** Derrotas ({curr_streak_setor}) perto do Recorde ({risk_setor})!")
                     
                     st.write("**Jogar:**")
                     st.code(", ".join([f"{n:02}" for n in lista_setorizada]), language="text")
@@ -870,6 +888,8 @@ if aba_ativa:
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                     st.table(df_back)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top12}**")
+                    if curr_streak_12 >= (max_loss_top12 - 1) and curr_streak_12 > 0:
+                        st.error(f"🚨 ALERTA: Derrotas ({curr_streak_12}) perto do Recorde!")
 
                 # --- MESA 2: BUNKER 12 (FIXO) ---
                 with col2:
@@ -878,6 +898,8 @@ if aba_ativa:
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
                     st.table(df_bunker)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_bunker}**")
+                    if curr_streak_bunker >= (max_loss_bunker - 1) and curr_streak_bunker > 0:
+                        st.error(f"🚨 ALERTA: Derrotas ({curr_streak_bunker}) perto do Recorde!")
 
             # --- ABA 3: PUXADAS ---
             with tab_puxadas_main:
