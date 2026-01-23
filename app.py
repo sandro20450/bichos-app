@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V70 (CORRIGIDO PARA MÚLTIPLOS FORMATOS DE DATA) ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -236,44 +236,64 @@ def raspar_ultimo_resultado_real(url, banca_key):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje_str = datetime.now(fuso_br).strftime("%d/%m/%Y")
+        hoje = datetime.now(fuso_br)
+        
+        # Lista de formatos possíveis para a data de hoje
+        padroes_data = [
+            hoje.strftime("%d/%m/%Y"),  # Ex: 23/01/2026
+            hoje.strftime("%d-%m-%Y"),  # Ex: 23-01-2026
+            hoje.strftime("%d de"),     # Ex: 23 de (Janeiro)
+            "Hoje"                      # Literal
+        ]
         
         candidatos = [] 
-        elementos_data = soup.find_all(string=re.compile(re.escape(hoje_str)))
         
-        for elem in elementos_data:
-            container = elem.parent
-            for _ in range(3): 
-                if container:
-                    texto_container = container.get_text()
-                    match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
-                    if match_hora:
-                        horario_str = match_hora.group(1).replace('h', ':')
-                        tabela = container.find_next('table')
-                        if tabela:
-                            linhas = tabela.find_all('tr')
-                            for linha in linhas:
-                                colunas = linha.find_all('td')
-                                if len(colunas) >= 3:
-                                    premio = colunas[0].get_text().strip()
-                                    if '1º' in premio or '1' in premio:
-                                        grupo = colunas[2].get_text().strip()
-                                        if grupo.isdigit():
-                                            candidatos.append((horario_str, int(grupo)))
-                                            break 
-                        break 
-                    container = container.parent
-                else:
-                    break
+        # Varre todos os padrões
+        for padrao in padroes_data:
+            elementos_data = soup.find_all(string=re.compile(re.escape(padrao), re.IGNORECASE))
+            
+            for elem in elementos_data:
+                container = elem.parent
+                for _ in range(4): # Sobe até 4 níveis
+                    if container:
+                        texto_container = container.get_text()
+                        # Procura hora HH:MM ou HHhMM
+                        match_hora = re.search(r'(\d{2}[:h]\d{2})', texto_container)
+                        if match_hora:
+                            horario_str = match_hora.group(1).replace('h', ':')
+                            
+                            # Procura tabela próxima
+                            tabela = container.find_next('table')
+                            if tabela:
+                                linhas = tabela.find_all('tr')
+                                for linha in linhas:
+                                    colunas = linha.find_all('td')
+                                    if len(colunas) >= 3:
+                                        premio = colunas[0].get_text().strip()
+                                        if '1º' in premio or '1' in premio:
+                                            grupo = colunas[2].get_text().strip()
+                                            if grupo.isdigit():
+                                                candidatos.append((horario_str, int(grupo)))
+                                                break 
+                            break 
+                        container = container.parent
+                    else:
+                        break
+            if candidatos: break # Se achou com um padrão, para.
 
         if not candidatos: return None, None, "Data Ausente"
+        
+        # Ordena para pegar o mais recente (maior hora)
         candidatos.sort(key=lambda x: x[0], reverse=True)
+        
+        # Remove duplicatas
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
+                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
@@ -788,7 +808,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V69) - LAYOUT DE 3 MESAS RESTAURADO
+        # PAINEL DE CONTROLE (V70)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
@@ -854,13 +874,12 @@ if aba_ativa:
 
             # --- ABA 2: COMPARATIVO GERAL (3 MESAS) ---
             with tab_comparativo:
-                # LAYOUT DE 3 COLUNAS (RESPONSIVO: LADO A LADO NO PC, EMPILHADO NO CELULAR)
                 col1, col2, col3 = st.columns(3)
                 
                 # --- MESA 1: TOP 12 ---
                 with col1:
-                    st.subheader("🔥 Top 12 (Padrão)")
-                    st.caption("Agressivo (Menos grupos, maior risco)")
+                    st.subheader("🔥 Top 12")
+                    st.caption("Padrão (12 Grupos)")
                     st.code(", ".join([f"{n:02}" for n in palpite_p]), language="text")
                     st.table(df_back)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top12}**")
@@ -869,8 +888,8 @@ if aba_ativa:
 
                 # --- MESA 2: TOP 17 DINÂMICO ---
                 with col2:
-                    st.subheader("🛡️ Top 17 (Dinâmico)")
-                    st.caption("Adaptável (Segue a tendência)")
+                    st.subheader("🛡️ Top 17 (Din)")
+                    st.caption("Adaptável")
                     st.code(", ".join([f"{n:02}" for n in lista_top17]), language="text")
                     st.table(df_top17)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_top17}**")
@@ -879,8 +898,8 @@ if aba_ativa:
 
                 # --- MESA 3: BUNKER (FIXO) ---
                 with col3:
-                    st.subheader("🧬 Bunker (Fixo)")
-                    st.caption("Histórico (Os 17 mais fortes de sempre)")
+                    st.subheader("🧬 Bunker (Fix)")
+                    st.caption("Histórico")
                     st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
                     st.table(df_bunker)
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{max_loss_bunker}**")
