@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V75 ---
+# --- SCRAPING AVANÇADO ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -441,13 +441,15 @@ def gerar_backtest_e_status(historico, banca):
 def gerar_backtest_top17(historico, banca):
     return pd.DataFrame(), [], False, False, [], 0, 0
 
-# --- ANALISE DE SETORES BMA + 25 ---
+# --- ANALISE DE SETORES BMA + 25 + MAX WIN (V79) ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, []
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
+    
+    # Função atraso (Derrotas)
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -463,20 +465,42 @@ def analisar_setores_bma_com_maximo(historico):
                 contador_temp = 0
         if contador_temp > max_atraso: max_atraso = contador_temp
         return atraso_atual, max_atraso
-    curr_b, max_b = calcular_atrasos(setor_b, historico)
-    curr_m, max_m = calcular_atrasos(setor_m, historico)
-    curr_a, max_a = calcular_atrasos(setor_a, historico)
-    curr_25, max_25 = calcular_atrasos(setor_25, historico)
     
+    # Função repetição (Vitórias) - NOVA V79
+    def calcular_max_sequencia(lista_alvo, hist):
+        max_seq = 0
+        curr_seq = 0
+        for x in hist:
+            if x in lista_alvo:
+                curr_seq += 1
+            else:
+                if curr_seq > max_seq: max_seq = curr_seq
+                curr_seq = 0
+        if curr_seq > max_seq: max_seq = curr_seq
+        return max_seq
+
+    # Calc Atrasos
+    curr_b, max_b_loss = calcular_atrasos(setor_b, historico)
+    curr_m, max_m_loss = calcular_atrasos(setor_m, historico)
+    curr_a, max_a_loss = calcular_atrasos(setor_a, historico)
+    curr_25, max_25_loss = calcular_atrasos(setor_25, historico)
+    
+    # Calc Sequencias (Wins)
+    max_b_win = calcular_max_sequencia(setor_b, historico)
+    max_m_win = calcular_max_sequencia(setor_m, historico)
+    max_a_win = calcular_max_sequencia(setor_a, historico)
+    max_25_win = calcular_max_sequencia(setor_25, historico)
+    
+    # Tabela com nova coluna
     df_setores = pd.DataFrame([
-        {"SETOR": "BAIXO (01-08)", "ATUAL": curr_b, "RECORDE": max_b},
-        {"SETOR": "MÉDIO (09-16)", "ATUAL": curr_m, "RECORDE": max_m},
-        {"SETOR": "ALTO (17-24)", "ATUAL": curr_a, "RECORDE": max_a},
-        {"SETOR": "VACA (25)", "ATUAL": curr_25, "RECORDE": max_25}
+        {"SETOR": "BAIXO (01-08)", "ATRASO": curr_b, "REC. ATRASO": max_b_loss, "REC. SEQ. (V)": max_b_win},
+        {"SETOR": "MÉDIO (09-16)", "ATRASO": curr_m, "REC. ATRASO": max_m_loss, "REC. SEQ. (V)": max_m_win},
+        {"SETOR": "ALTO (17-24)", "ATRASO": curr_a, "REC. ATRASO": max_a_loss, "REC. SEQ. (V)": max_a_win},
+        {"SETOR": "VACA (25)", "ATRASO": curr_25, "REC. ATRASO": max_25_loss, "REC. SEQ. (V)": max_25_win}
     ])
     
     dados_atual = {"BAIXO (01-08)": curr_b, "MÉDIO (09-16)": curr_m, "ALTO (17-24)": curr_a, "CORINGA (25)": curr_25}
-    dados_maximo = {"BAIXO (01-08)": max_b, "MÉDIO (09-16)": max_m, "ALTO (17-24)": max_a, "CORINGA (25)": max_25}
+    dados_maximo = {"BAIXO (01-08)": max_b_loss, "MÉDIO (09-16)": max_m_loss, "ALTO (17-24)": max_a_loss, "CORINGA (25)": max_25_loss}
     
     sequencia_visual = []
     for x in historico[::-1][:10]:
@@ -489,7 +513,7 @@ def analisar_setores_bma_com_maximo(historico):
 
 # --- DNA FIXO (BUNKER 12) ---
 def analisar_dna_fixo_historico(historico):
-    if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0
+    if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0, 0
     contagem_total = Counter(historico)
     # AGORA COM 12 GRUPOS
     top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
@@ -604,6 +628,8 @@ def identificar_bma_crise_tendencia(historico):
         "MÉDIO": list(range(9, 17)),
         "ALTO": list(range(17, 25))
     }
+    
+    # 1. Identificar Setores
     atrasos = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for nome, nums in mapa_setores.items():
         cnt = 0
@@ -612,6 +638,7 @@ def identificar_bma_crise_tendencia(historico):
             cnt += 1
         atrasos[nome] = cnt
     setor_crise = max(atrasos, key=atrasos.get)
+    
     recorte = historico[-10:]
     freqs = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for x in recorte:
@@ -620,10 +647,12 @@ def identificar_bma_crise_tendencia(historico):
         elif 17 <= x <= 24: freqs["ALTO"] += 1
     setor_tendencia = max(freqs, key=freqs.get)
     
-    ranking_geral = calcular_ranking_forca_completo(historico) 
+    # 2. Filtrar os 6 melhores de cada setor escolhido
+    ranking_geral = calcular_ranking_forca_completo(historico) # Usa ranking global para desempatar
     
     def filtrar_top6(setor_nome):
         candidatos = mapa_setores[setor_nome]
+        # Ordena candidatos pela posição no ranking geral (mais forte primeiro)
         candidatos_ordenados = sorted(candidatos, key=lambda x: ranking_geral.index(x) if x in ranking_geral else 99)
         return candidatos_ordenados[:6]
 
@@ -692,11 +721,11 @@ def calcular_inverso(palpite):
 def monitorar_oportunidades(historico, banca):
     alertas = []
     tipos = []
-    sugestoes_inversas = [] # Nova lista para guardar o Ghost Mode
+    sugestoes_inversas = [] 
     
     # 1. Top 12 (Antecipação: Recorde - 1)
     _, _, curr_streak_12, max_loss_top12, max_win_top12, curr_win_streak_12 = gerar_backtest_e_status(historico, banca)
-    palpite_top12, _ = gerar_palpite_estrategico(historico, banca) # Pega o palpite atual para calcular o inverso
+    palpite_top12, _ = gerar_palpite_estrategico(historico, banca) 
     
     if curr_streak_12 >= (max_loss_top12 - 1) and curr_streak_12 > 0:
         alertas.append(f"⚡ OPORTUNIDADE: Top 12 Derrotas ({curr_streak_12}) perto do Recorde ({max_loss_top12}). Bunker é opção!")
@@ -706,7 +735,7 @@ def monitorar_oportunidades(historico, banca):
     if curr_win_streak_12 >= (max_win_top12 - 1) and curr_win_streak_12 > 0:
         alertas.append(f"🛑 CUIDADO TOP 12: {curr_win_streak_12} Vitórias seguidas. Perto do Recorde ({max_win_top12}).")
         tipos.append("aviso")
-        sugestoes_inversas.append(calcular_inverso(palpite_top12)) # Ativa Ghost Mode
+        sugestoes_inversas.append(calcular_inverso(palpite_top12)) 
     
     # 2. Bunker 12
     top_12_fixo, _, _, max_loss_bunker, curr_streak_bunker, max_win_bunker, curr_win_streak_bunker = analisar_dna_fixo_historico(historico)
@@ -719,7 +748,7 @@ def monitorar_oportunidades(historico, banca):
     if curr_win_streak_bunker >= (max_win_bunker - 1) and curr_win_streak_bunker > 0:
         alertas.append(f"🛑 CUIDADO BUNKER: {curr_win_streak_bunker} Vitórias seguidas. Perto do Recorde ({max_win_bunker}).")
         tipos.append("aviso")
-        sugestoes_inversas.append(calcular_inverso(top_12_fixo)) # Ativa Ghost Mode
+        sugestoes_inversas.append(calcular_inverso(top_12_fixo)) 
 
     # 3. BMA
     _, palpite_bma, _, _, risk_bma, curr_streak_bma, max_win_bma, curr_win_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
@@ -732,7 +761,7 @@ def monitorar_oportunidades(historico, banca):
     if curr_win_streak_bma >= (max_win_bma - 1) and curr_win_streak_bma > 0:
          alertas.append(f"🛑 CUIDADO BMA: {curr_win_streak_bma} Vitórias seguidas. Perto do Recorde ({max_win_bma}).")
          tipos.append("aviso")
-         sugestoes_inversas.append(calcular_inverso(palpite_bma)) # Ativa Ghost Mode
+         sugestoes_inversas.append(calcular_inverso(palpite_bma)) 
          
     # 4. Setorizada
     _, palpite_setor, risk_setor, curr_streak_setor, max_win_setor, curr_win_streak_setor = gerar_backtest_setorizado(historico, banca)
@@ -745,7 +774,7 @@ def monitorar_oportunidades(historico, banca):
     if curr_win_streak_setor >= (max_win_setor - 1) and curr_win_streak_setor > 0:
          alertas.append(f"🛑 CUIDADO 4x4x4: {curr_win_streak_setor} Vitórias seguidas. Perto do Recorde ({max_win_setor}).")
          tipos.append("aviso")
-         sugestoes_inversas.append(calcular_inverso(palpite_setor)) # Ativa Ghost Mode
+         sugestoes_inversas.append(calcular_inverso(palpite_setor)) 
     
     return alertas, tipos, sugestoes_inversas
 
