@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V75 (HÍBRIDO: DATA + TABELA DIRETA) ---
+# --- SCRAPING AVANÇADO ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -237,15 +237,15 @@ def raspar_ultimo_resultado_real(url, banca_key):
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
-        
-        candidatos = [] 
-        
-        # 1. TENTA ACHAR POR DATA (Padrão)
         regex_data = r"({}|{}|{} de)".format(
-            hoje.strftime("%d/%m"), hoje.strftime("%d-%m"), hoje.strftime("%d")
+            hoje.strftime("%d/%m"), 
+            hoje.strftime("%d-%m"), 
+            hoje.strftime("%d")
         )
+        candidatos = [] 
         elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
-        if not elementos_data: elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
+        if not elementos_data:
+            elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
 
         for elem in elementos_data:
             container = elem.parent
@@ -269,35 +269,11 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                             break 
                         break 
                     container = container.parent
-                else: break
+                else:
+                    break
             if candidatos: break 
 
-        # 2. FALLBACK: SE NÃO ACHOU POR DATA, PROCURA DIRETO "1º PRÊMIO"
-        # (Assume que a página carregada já é a de hoje)
-        if not candidatos:
-            tabelas = soup.find_all('table')
-            for tabela in tabelas:
-                if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
-                    horario_str = "00:00"
-                    # Tenta achar horário perto
-                    anterior = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
-                    if anterior:
-                        match = re.search(r'(\d{2}:\d{2})', anterior)
-                        if match: horario_str = match.group(1)
-                    
-                    linhas = tabela.find_all('tr')
-                    for linha in linhas:
-                        colunas = linha.find_all('td')
-                        if len(colunas) >= 3:
-                            premio = colunas[0].get_text().strip()
-                            if any(x in premio for x in ['1º', '1', 'Pri']):
-                                grupo = colunas[2].get_text().strip()
-                                if grupo.isdigit():
-                                    candidatos.append((horario_str, int(grupo)))
-                                    break
-
         if not candidatos: return None, None, "Data Ausente"
-        
         candidatos.sort(key=lambda x: x[0], reverse=True)
         candidatos_unicos = []
         vistos = set()
@@ -305,9 +281,7 @@ def raspar_ultimo_resultado_real(url, banca_key):
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
-                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
-        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # --- RADAR DE VÍCIO ---
@@ -584,7 +558,7 @@ def gerar_backtest_setorizado(historico, banca):
         
     return pd.DataFrame(resultados[::-1]), lista_atual, max_derrotas_seq, curr_streak, max_win_seq
 
-# --- ESTRATEGIA 1: CRISE + TENDENCIA (BMA) V58/V74 ---
+# --- ESTRATEGIA 1: BMA REFINADA (6+6) V76 ---
 def identificar_bma_crise_tendencia(historico):
     if not historico: return [], "", ""
     mapa_setores = {
@@ -592,6 +566,8 @@ def identificar_bma_crise_tendencia(historico):
         "MÉDIO": list(range(9, 17)),
         "ALTO": list(range(17, 25))
     }
+    
+    # 1. Identificar Setores
     atrasos = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for nome, nums in mapa_setores.items():
         cnt = 0
@@ -600,6 +576,7 @@ def identificar_bma_crise_tendencia(historico):
             cnt += 1
         atrasos[nome] = cnt
     setor_crise = max(atrasos, key=atrasos.get)
+    
     recorte = historico[-10:]
     freqs = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for x in recorte:
@@ -607,8 +584,22 @@ def identificar_bma_crise_tendencia(historico):
         elif 9 <= x <= 16: freqs["MÉDIO"] += 1
         elif 17 <= x <= 24: freqs["ALTO"] += 1
     setor_tendencia = max(freqs, key=freqs.get)
-    palpite = list(set(mapa_setores[setor_crise] + mapa_setores[setor_tendencia]))
+    
+    # 2. Filtrar os 6 melhores de cada setor escolhido
+    ranking_geral = calcular_ranking_forca_completo(historico) # Usa ranking global para desempatar
+    
+    def filtrar_top6(setor_nome):
+        candidatos = mapa_setores[setor_nome]
+        # Ordena candidatos pela posição no ranking geral (mais forte primeiro)
+        candidatos_ordenados = sorted(candidatos, key=lambda x: ranking_geral.index(x) if x in ranking_geral else 99)
+        return candidatos_ordenados[:6]
+
+    top6_crise = filtrar_top6(setor_crise)
+    top6_tendencia = filtrar_top6(setor_tendencia)
+    
+    palpite = list(set(top6_crise + top6_tendencia))
     palpite.sort()
+    
     return palpite, setor_crise, setor_tendencia
 
 def gerar_backtest_bma_crise_tendencia(historico):
@@ -775,7 +766,7 @@ if aba_ativa:
         # V55/V60 - ESTRATEGIA SETORIZADA + RISK
         df_setorizado, lista_setorizada, risk_setor, curr_streak_setor, max_win_setor = gerar_backtest_setorizado(historico, banca_selecionada)
         
-        # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
+        # V58/V60/V76 - ESTRATEGIA BMA (6+6) + RISK
         df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma, curr_streak_bma, max_win_bma = gerar_backtest_bma_crise_tendencia(historico)
         
         # MONITOR DE OPORTUNIDADE
@@ -808,7 +799,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V74) - METRICAS COMPLETAS (WIN/LOSS)
+        # PAINEL DE CONTROLE (V76)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
@@ -853,7 +844,7 @@ if aba_ativa:
                 
                 with c_strat1:
                     st.write("🔥 **Estratégia 1: BMA (Crise + Tendência)**")
-                    st.info(f"Foco: **{crise_ct}** (Crise) + **{trend_ct}** (Tendência)")
+                    st.info(f"Foco: **{crise_ct}** (6 Melhores) + **{trend_ct}** (6 Melhores)")
                     st.table(df_bma_ct) 
                     st.warning(f"⚠️ Recorde Derrotas (50j): **{risk_bma}**")
                     st.info(f"🏆 Recorde Vitórias (50j): **{max_win_bma}**")
