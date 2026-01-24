@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V75 (HÍBRIDO: DATA + TABELA DIRETA) ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -237,15 +237,15 @@ def raspar_ultimo_resultado_real(url, banca_key):
         soup = BeautifulSoup(r.text, 'html.parser')
         fuso_br = pytz.timezone('America/Sao_Paulo')
         hoje = datetime.now(fuso_br)
-        regex_data = r"({}|{}|{} de)".format(
-            hoje.strftime("%d/%m"), 
-            hoje.strftime("%d-%m"), 
-            hoje.strftime("%d")
-        )
+        
         candidatos = [] 
+        
+        # 1. TENTA ACHAR POR DATA (Padrão)
+        regex_data = r"({}|{}|{} de)".format(
+            hoje.strftime("%d/%m"), hoje.strftime("%d-%m"), hoje.strftime("%d")
+        )
         elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
-        if not elementos_data:
-            elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
+        if not elementos_data: elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
 
         for elem in elementos_data:
             container = elem.parent
@@ -269,11 +269,35 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                             break 
                         break 
                     container = container.parent
-                else:
-                    break
+                else: break
             if candidatos: break 
 
+        # 2. FALLBACK: SE NÃO ACHOU POR DATA, PROCURA DIRETO "1º PRÊMIO"
+        # (Assume que a página carregada já é a de hoje)
+        if not candidatos:
+            tabelas = soup.find_all('table')
+            for tabela in tabelas:
+                if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
+                    horario_str = "00:00"
+                    # Tenta achar horário perto
+                    anterior = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
+                    if anterior:
+                        match = re.search(r'(\d{2}:\d{2})', anterior)
+                        if match: horario_str = match.group(1)
+                    
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
+                            if any(x in premio for x in ['1º', '1', 'Pri']):
+                                grupo = colunas[2].get_text().strip()
+                                if grupo.isdigit():
+                                    candidatos.append((horario_str, int(grupo)))
+                                    break
+
         if not candidatos: return None, None, "Data Ausente"
+        
         candidatos.sort(key=lambda x: x[0], reverse=True)
         candidatos_unicos = []
         vistos = set()
@@ -281,7 +305,9 @@ def raspar_ultimo_resultado_real(url, banca_key):
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
+                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
+        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # --- RADAR DE VÍCIO ---
@@ -366,7 +392,7 @@ def gerar_backtest_e_status(historico, banca):
     # EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
     
-    # Max Loss Risk e Streak Atual e MAX WIN
+    # Max Loss Risk e Streak Atual
     max_loss = 0
     temp_loss = 0
     max_win = 0
@@ -782,7 +808,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V74) - METRICAS COMPLETAS
+        # PAINEL DE CONTROLE (V74) - METRICAS COMPLETAS (WIN/LOSS)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
