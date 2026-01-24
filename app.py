@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V80 (CORREÇÃO CRÍTICA DE LOOP) ---
+# --- SCRAPING AVANÇADO V80 ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -244,7 +244,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
         )
         candidatos = [] 
         
-        # 1. Busca por Data
         elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
         if not elementos_data:
             elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
@@ -268,14 +267,13 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                         grupo = colunas[2].get_text().strip()
                                         if grupo.isdigit():
                                             candidatos.append((horario_str, int(grupo)))
-                                            break # Sai da linha, vai para proximo elemento_data
+                                            break 
                         break 
                     container = container.parent
                 else:
                     break
-            # REMOVIDO: if candidatos: break (O BUG ERA AQUI)
+            # Varre todos, não para
 
-        # 2. Fallback: Procura tabelas soltas se nada foi achado por data
         if not candidatos:
             tabelas = soup.find_all('table')
             for tabela in tabelas:
@@ -291,26 +289,21 @@ def raspar_ultimo_resultado_real(url, banca_key):
                         if len(colunas) >= 3:
                             premio = colunas[0].get_text().strip()
                             if any(x in premio for x in ['1º', '1', 'Pri']):
-                                grupo = colunas[2].get_text().strip()
-                                if grupo.isdigit():
-                                    candidatos.append((horario_str, int(grupo)))
+                                group = colunas[2].get_text().strip()
+                                if group.isdigit():
+                                    candidatos.append((horario_str, int(group)))
                                     break
 
         if not candidatos: return None, None, "Data Ausente"
         
-        # Ordena para pegar o MAIS RECENTE (maior horário)
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        
-        # Remove duplicatas mantendo ordem
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
-                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
-        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # --- RADAR DE VÍCIO ---
@@ -386,7 +379,6 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         top12.pop() 
         top12.insert(0, ultimo) 
     
-    # V68: COBERTURA REMOVIDA (RETORNA VAZIO)
     return top12, []
 
 def gerar_backtest_e_status(historico, banca):
@@ -401,22 +393,32 @@ def gerar_backtest_e_status(historico, banca):
     max_win = 0
     temp_win = 0
     
+    # SIMULADOR DE CRISE (V81 - CORRIGIDO)
+    # Precisamos simular o estado da crise passo a passo
+    derrotas_simuladas = 0
+    
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
-        p_princ, _ = gerar_palpite_estrategico(passado, banca)
+        
+        # Simula se estaria em crise neste ponto
+        em_crise_simulada = derrotas_simuladas >= 2
+        p_princ, _ = gerar_palpite_estrategico(passado, banca, em_crise_simulada)
         
         if saiu not in p_princ:
             temp_loss += 1
             temp_win = 0
+            derrotas_simuladas += 1 # Aumenta a crise simulada
         else:
             temp_win += 1
             temp_loss = 0
+            derrotas_simuladas = 0 # Reseta crise simulada
             
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
 
+    # Geração da Tabela Visual
     derrotas = 0
     for i in range(inicio, len(historico)):
         saiu = historico[i]
@@ -436,7 +438,6 @@ def gerar_backtest_e_status(historico, banca):
     curr_streak = 0
     curr_win_streak = 0
     
-    # Recalcula streaks atuais
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
         else: break
@@ -458,7 +459,6 @@ def analisar_setores_bma_com_maximo(historico):
     setor_a = list(range(17, 25))
     setor_25 = [25]
     
-    # Função atraso (Derrotas)
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -475,7 +475,6 @@ def analisar_setores_bma_com_maximo(historico):
         if contador_temp > max_atraso: max_atraso = contador_temp
         return atraso_atual, max_atraso
     
-    # Função repetição (Vitórias) - NOVA V79
     def calcular_max_sequencia(lista_alvo, hist):
         max_seq = 0
         curr_seq = 0
@@ -488,19 +487,16 @@ def analisar_setores_bma_com_maximo(historico):
         if curr_seq > max_seq: max_seq = curr_seq
         return max_seq
 
-    # Calc Atrasos
     curr_b, max_b_loss = calcular_atrasos(setor_b, historico)
     curr_m, max_m_loss = calcular_atrasos(setor_m, historico)
     curr_a, max_a_loss = calcular_atrasos(setor_a, historico)
     curr_25, max_25_loss = calcular_atrasos(setor_25, historico)
     
-    # Calc Sequencias (Wins)
     max_b_win = calcular_max_sequencia(setor_b, historico)
     max_m_win = calcular_max_sequencia(setor_m, historico)
     max_a_win = calcular_max_sequencia(setor_a, historico)
     max_25_win = calcular_max_sequencia(setor_25, historico)
     
-    # Tabela com nova coluna
     df_setores = pd.DataFrame([
         {"SETOR": "BAIXO (01-08)", "ATRASO": curr_b, "REC. ATRASO": max_b_loss, "REC. SEQ. (V)": max_b_win},
         {"SETOR": "MÉDIO (09-16)", "ATRASO": curr_m, "REC. ATRASO": max_m_loss, "REC. SEQ. (V)": max_m_win},
@@ -524,10 +520,8 @@ def analisar_setores_bma_com_maximo(historico):
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0, 0
     contagem_total = Counter(historico)
-    # AGORA COM 12 GRUPOS
     top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
     
-    # Max Loss Risk e Max Win
     max_loss = 0
     temp_loss = 0
     max_win = 0
@@ -883,7 +877,7 @@ if aba_ativa:
         # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
         df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma, curr_streak_bma, max_win_bma, curr_win_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
         
-        # MONITOR DE OPORTUNIDADE V78
+        # MONITOR DE OPORTUNIDADE
         alertas_oportunidade, tipos_alerta, sugestoes_inversas = monitorar_oportunidades(historico, banca_selecionada)
         
         MODO_BLOQUEIO = False
@@ -913,17 +907,17 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V78) - ALERTAS COM GHOST MODE
+        # PAINEL DE CONTROLE (V81)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
+            # --- ALERTAS INTELIGENTES NO TOPO ---
             if alertas_oportunidade:
                 for i, alerta in enumerate(alertas_oportunidade):
                     if tipos_alerta[i] == "erro":
                         st.error(alerta) 
                     else:
                         st.warning(alerta) 
-                        
-                    # EXIBIR SUGESTÃO INVERSA (SE HOUVER)
+                    
                     if sugestoes_inversas[i]:
                         st.info("👻 **MODO INVERSO (Os 13 do Contra):**")
                         st.code(", ".join([f"{n:02}" for n in sugestoes_inversas[i]]), language="text")
