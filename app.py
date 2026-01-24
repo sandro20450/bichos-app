@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V75 ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -272,6 +272,26 @@ def raspar_ultimo_resultado_real(url, banca_key):
                 else:
                     break
             if candidatos: break 
+
+        if not candidatos:
+            tabelas = soup.find_all('table')
+            for tabela in tabelas:
+                if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
+                    horario_str = "00:00"
+                    anterior = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
+                    if anterior:
+                        match = re.search(r'(\d{2}:\d{2})', anterior)
+                        if match: horario_str = match.group(1)
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
+                            if any(x in premio for x in ['1º', '1', 'Pri']):
+                                grupo = colunas[2].get_text().strip()
+                                if grupo.isdigit():
+                                    candidatos.append((horario_str, int(grupo)))
+                                    break
 
         if not candidatos: return None, None, "Data Ausente"
         candidatos.sort(key=lambda x: x[0], reverse=True)
@@ -357,16 +377,16 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
         top12.pop() 
         top12.insert(0, ultimo) 
     
-    # V68: COBERTURA REMOVIDA (RETORNA VAZIO)
+    # V68: COBERTURA REMOVIDA
     return top12, []
 
 def gerar_backtest_e_status(historico, banca):
-    if len(historico) < 30: return pd.DataFrame(), False, 0, 0, 0
+    if len(historico) < 30: return pd.DataFrame(), False, 0, 0, 0, 0
     resultados = []
     # EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
     
-    # Max Loss Risk e Streak Atual
+    # Max Loss Risk e Streak Atual e MAX WIN
     max_loss = 0
     temp_loss = 0
     max_win = 0
@@ -405,13 +425,21 @@ def gerar_backtest_e_status(historico, banca):
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
     
     curr_streak = 0
+    curr_win_streak = 0
+    
+    # Recalcula streaks atuais
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
         else: break
+        
+    for res in reversed(resultados):
+        if res["TOP 12"] == "💚": curr_win_streak += 1
+        else: break
 
-    return pd.DataFrame(resultados[::-1]), derrotas >= 2, curr_streak, max_loss, max_win
+    return pd.DataFrame(resultados[::-1]), derrotas >= 2, curr_streak, max_loss, max_win, curr_win_streak
 
 def gerar_backtest_top17(historico, banca):
+    # Removido (Retorna vazio)
     return pd.DataFrame(), [], False, False, [], 0, 0
 
 # --- ANALISE DE SETORES BMA + 25 ---
@@ -460,9 +488,9 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
     return dados_atual, dados_maximo, df_setores, sequencia_visual
 
-# --- DNA FIXO (BUNKER 12 - V70/V74) ---
+# --- DNA FIXO (BUNKER 12) ---
 def analisar_dna_fixo_historico(historico):
-    if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0
+    if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0, 0
     contagem_total = Counter(historico)
     # AGORA COM 12 GRUPOS
     top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
@@ -496,14 +524,19 @@ def analisar_dna_fixo_historico(historico):
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
     
     curr_streak = 0
+    curr_win_streak = 0
     for res in resultados_simulacao: 
         if res["BUNKER 12"] == "❌": curr_streak += 1
         else: break
         
+    for res in resultados_simulacao:
+        if res["BUNKER 12"] == "💚": curr_win_streak += 1
+        else: break
+        
     taxa_acerto = (acertos / 20) * 100
-    return top_12_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto, max_loss, curr_streak, max_win
+    return top_12_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto, max_loss, curr_streak, max_win, curr_win_streak
 
-# --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) V55/V74 ---
+# --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) ---
 def gerar_palpite_setorizado(historico, banca):
     ranking = calcular_ranking_forca_completo(historico, banca)
     setor_b = [g for g in ranking if 1 <= g <= 8]
@@ -517,7 +550,7 @@ def gerar_palpite_setorizado(historico, banca):
     return palpite_equilibrado
 
 def gerar_backtest_setorizado(historico, banca):
-    if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0
+    if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
     inicio = max(0, len(historico) - 10)
     lista_atual = gerar_palpite_setorizado(historico, banca)
@@ -552,13 +585,19 @@ def gerar_backtest_setorizado(historico, banca):
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
     
     curr_streak = 0
+    curr_win_streak = 0
+    
     for res in reversed(resultados):
         if res["RES (4x4x4)"] == "❌": curr_streak += 1
         else: break
         
-    return pd.DataFrame(resultados[::-1]), lista_atual, max_derrotas_seq, curr_streak, max_win_seq
+    for res in reversed(resultados):
+        if res["RES (4x4x4)"] == "💚": curr_win_streak += 1
+        else: break
+        
+    return pd.DataFrame(resultados[::-1]), lista_atual, max_derrotas_seq, curr_streak, max_win_seq, curr_win_streak
 
-# --- ESTRATEGIA 1: BMA REFINADA (6+6) V76 ---
+# --- ESTRATEGIA 1: BMA REFINADA (6+6) ---
 def identificar_bma_crise_tendencia(historico):
     if not historico: return [], "", ""
     mapa_setores = {
@@ -637,39 +676,66 @@ def gerar_backtest_bma_crise_tendencia(historico):
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (Crise+Trend)": status})
     
     curr_streak = 0
+    curr_win_streak = 0
+    
     for res in reversed(resultados):
         if res["BMA (Crise+Trend)"] == "❌": curr_streak += 1
         else: break
         
-    return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq, curr_streak, max_win_seq
+    for res in reversed(resultados):
+        if res["BMA (Crise+Trend)"] == "💚": curr_win_streak += 1
+        else: break
+        
+    return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq, curr_streak, max_win_seq, curr_win_streak
 
 def monitorar_oportunidades(historico, banca):
     alertas = []
     tipos = []
     
-    # 1. Monitorar Top 12 (Antecipação: Recorde - 1)
-    _, _, curr_streak_12, max_loss_top12, _ = gerar_backtest_e_status(historico, banca)
-    if curr_streak_12 >= (max_loss_top12 - 1) and curr_streak_12 > 0:
-        alertas.append(f"⚡ OPORTUNIDADE: Top 12 Derrotas ({curr_streak_12}) perto do Recorde ({max_loss_top12}). Bunker é opção!")
-        tipos.append("erro" if curr_streak_12 >= max_loss_top12 else "aviso")
+    # 1. Monitorar Top 12 (Antecipação: Recorde - 1) + WIN RISK
+    _, _, curr_streak_12, max_loss_top12, max_win_top12, curr_win_streak_12 = gerar_backtest_e_status(historico, banca)
     
-    # 2. Monitorar Bunker 12 (Antecipação: Recorde - 1)
-    _, _, _, max_loss_bunker, curr_streak_bunker, _ = analisar_dna_fixo_historico(historico)
+    # Opportunity (Loss)
+    if curr_streak_12 >= (max_loss_top12 - 1) and curr_streak_12 > 0:
+        alertas.append(f"⚡ OPORTUNIDADE TOP 12: Derrotas ({curr_streak_12}) perto do Recorde ({max_loss_top12}).")
+        tipos.append("erro" if curr_streak_12 >= max_loss_top12 else "aviso")
+    # Risk (Win)
+    if curr_win_streak_12 >= (max_win_top12 - 1) and curr_win_streak_12 > 0:
+        alertas.append(f"🛑 CUIDADO TOP 12: {curr_win_streak_12} Vitórias seguidas. Perto do Recorde ({max_win_top12}). Risco de quebra!")
+        tipos.append("aviso")
+    
+    # 2. Monitorar Bunker 12
+    _, _, _, max_loss_bunker, curr_streak_bunker, max_win_bunker, curr_win_streak_bunker = analisar_dna_fixo_historico(historico)
+    
     if curr_streak_bunker >= (max_loss_bunker - 1) and curr_streak_bunker > 0:
         alertas.append(f"🛡️ OPORTUNIDADE BUNKER: Derrotas ({curr_streak_bunker}) perto do Recorde ({max_loss_bunker}). Jogue agora!")
         tipos.append("erro" if curr_streak_bunker >= max_loss_bunker else "aviso")
+    
+    if curr_win_streak_bunker >= (max_win_bunker - 1) and curr_win_streak_bunker > 0:
+        alertas.append(f"🛑 CUIDADO BUNKER: {curr_win_streak_bunker} Vitórias seguidas. Perto do Recorde ({max_win_bunker}).")
+        tipos.append("aviso")
 
-    # 3. Monitorar BMA (Antecipação: Recorde - 1)
-    _, _, _, _, risk_bma, curr_streak_bma, _ = gerar_backtest_bma_crise_tendencia(historico)
+    # 3. Monitorar BMA
+    _, _, _, _, risk_bma, curr_streak_bma, max_win_bma, curr_win_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
+    
     if curr_streak_bma >= (risk_bma - 1) and curr_streak_bma > 0:
          alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({curr_streak_bma}) perto do Recorde ({risk_bma}). Prepare-se!")
          tipos.append("erro" if curr_streak_bma >= risk_bma else "aviso")
          
-    # 4. Monitorar Setorizada (Antecipação: Recorde - 1)
-    _, _, risk_setor, curr_streak_setor, _ = gerar_backtest_setorizado(historico, banca)
+    if curr_win_streak_bma >= (max_win_bma - 1) and curr_win_streak_bma > 0:
+         alertas.append(f"🛑 CUIDADO BMA: {curr_win_streak_bma} Vitórias seguidas. Perto do Recorde ({max_win_bma}).")
+         tipos.append("aviso")
+         
+    # 4. Monitorar Setorizada
+    _, _, risk_setor, curr_streak_setor, max_win_setor, curr_win_streak_setor = gerar_backtest_setorizado(historico, banca)
+    
     if curr_streak_setor >= (risk_setor - 1) and curr_streak_setor > 0:
          alertas.append(f"⚖️ OPORTUNIDADE 4x4x4: Derrotas ({curr_streak_setor}) perto do Recorde ({risk_setor}).")
          tipos.append("erro" if curr_streak_setor >= risk_setor else "aviso")
+         
+    if curr_win_streak_setor >= (max_win_setor - 1) and curr_win_streak_setor > 0:
+         alertas.append(f"🛑 CUIDADO 4x4x4: {curr_win_streak_setor} Vitórias seguidas. Perto do Recorde ({max_win_setor}).")
+         tipos.append("aviso")
     
     return alertas, tipos
 
@@ -751,7 +817,7 @@ if aba_ativa:
     if len(historico) > 0:
         
         # CÁLCULOS GERAIS
-        df_back, EM_CRISE, curr_streak_12, max_loss_top12, max_win_top12 = gerar_backtest_e_status(historico, banca_selecionada)
+        df_back, EM_CRISE, curr_streak_12, max_loss_top12, max_win_top12, curr_win_streak_12 = gerar_backtest_e_status(historico, banca_selecionada)
         palpite_p, palpite_cob = gerar_palpite_estrategico(historico, banca_selecionada, EM_CRISE)
         texto_horario_futuro = calcular_proximo_horario(banca_selecionada, ultimo_horario_salvo)
         vicio_ativo = detecting_vicio_repeticao(historico)
@@ -761,13 +827,13 @@ if aba_ativa:
         ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
         # V53/54/V70 - DNA FIXO (AGORA 12 GRUPOS)
-        lista_bunker, df_bunker, taxa_bunker, max_loss_bunker, curr_streak_bunker, max_win_bunker = analisar_dna_fixo_historico(historico)
+        lista_bunker, df_bunker, taxa_bunker, max_loss_bunker, curr_streak_bunker, max_win_bunker, curr_win_streak_bunker = analisar_dna_fixo_historico(historico)
         
         # V55/V60 - ESTRATEGIA SETORIZADA + RISK
-        df_setorizado, lista_setorizada, risk_setor, curr_streak_setor, max_win_setor = gerar_backtest_setorizado(historico, banca_selecionada)
+        df_setorizado, lista_setorizada, risk_setor, curr_streak_setor, max_win_setor, curr_win_streak_setor = gerar_backtest_setorizado(historico, banca_selecionada)
         
-        # V58/V60/V76 - ESTRATEGIA BMA (6+6) + RISK
-        df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma, curr_streak_bma, max_win_bma = gerar_backtest_bma_crise_tendencia(historico)
+        # V58/V60 - ESTRATEGIA BMA CRISE+TREND + RISK
+        df_bma_ct, palpite_bma_ct, crise_ct, trend_ct, risk_bma, curr_streak_bma, max_win_bma, curr_win_streak_bma = gerar_backtest_bma_crise_tendencia(historico)
         
         # MONITOR DE OPORTUNIDADE
         alertas_oportunidade, tipos_alerta = monitorar_oportunidades(historico, banca_selecionada)
@@ -799,7 +865,7 @@ if aba_ativa:
         with col_mon2: 
             if link: st.link_button("🔗 Abrir Site", link)
 
-        # PAINEL DE CONTROLE (V76)
+        # PAINEL DE CONTROLE (V77) - METRICAS COMPLETAS (WIN/LOSS)
         with st.expander("📊 Painel de Controle (Local)", expanded=True):
             
             # --- ALERTAS INTELIGENTES NO TOPO ---
