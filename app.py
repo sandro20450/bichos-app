@@ -227,7 +227,7 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO ---
+# --- SCRAPING AVANÇADO V80 (CORREÇÃO CRÍTICA DE LOOP) ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -243,6 +243,8 @@ def raspar_ultimo_resultado_real(url, banca_key):
             hoje.strftime("%d")
         )
         candidatos = [] 
+        
+        # 1. Busca por Data
         elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
         if not elementos_data:
             elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
@@ -266,13 +268,14 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                         grupo = colunas[2].get_text().strip()
                                         if grupo.isdigit():
                                             candidatos.append((horario_str, int(grupo)))
-                                            break 
+                                            break # Sai da linha, vai para proximo elemento_data
                         break 
                     container = container.parent
                 else:
                     break
-            if candidatos: break 
+            # REMOVIDO: if candidatos: break (O BUG ERA AQUI)
 
+        # 2. Fallback: Procura tabelas soltas se nada foi achado por data
         if not candidatos:
             tabelas = soup.find_all('table')
             for tabela in tabelas:
@@ -294,14 +297,20 @@ def raspar_ultimo_resultado_real(url, banca_key):
                                     break
 
         if not candidatos: return None, None, "Data Ausente"
+        
+        # Ordena para pegar o MAIS RECENTE (maior horário)
         candidatos.sort(key=lambda x: x[0], reverse=True)
+        
+        # Remove duplicatas mantendo ordem
         candidatos_unicos = []
         vistos = set()
         for h, g in candidatos:
             if h not in vistos:
                 candidatos_unicos.append((h, g))
                 vistos.add(h)
+                
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
+        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # --- RADAR DE VÍCIO ---
@@ -573,7 +582,7 @@ def gerar_palpite_setorizado(historico, banca):
     return palpite_equilibrado
 
 def gerar_backtest_setorizado(historico, banca):
-    if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0
+    if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
     inicio = max(0, len(historico) - 10)
     lista_atual = gerar_palpite_setorizado(historico, banca)
