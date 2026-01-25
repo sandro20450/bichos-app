@@ -92,10 +92,9 @@ def deletar_ultimo():
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DE SIMULAÇÃO ROBUSTA (TIME MACHINE) ---
+# --- 3. LÓGICA DE SIMULAÇÃO ROBUSTA ---
 # =============================================================================
 
-# --- A. MAPAS E UTILITÁRIOS ---
 def gerar_universo_duques():
     todos = []
     for i in range(1, 26):
@@ -115,15 +114,36 @@ def formatar_palpite(lista_tuplas):
         texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
-# --- B. GERADORES DE ESTRATÉGIA (REUTILIZÁVEIS) ---
-# Estas funções recebem um "recorte do passado" e devolvem o palpite para aquele momento
+# --- CÁLCULO INVERSO OTIMIZADO (126 DUQUES) ---
+def calcular_inverso_otimizado(palpite_atual, historico):
+    # 1. Pega os 325 duques
+    todos, _ = gerar_universo_duques()
+    
+    # 2. Descobre quem são os 199 excluídos (Ghost Pool)
+    set_palpite = set(palpite_atual)
+    pool_inverso = [d for d in todos if d not in set_palpite]
+    
+    # 3. Classifica esses 199 por força (Dinâmica)
+    hist_rev = historico[::-1]
+    scores = {d: 0 for d in pool_inverso}
+    
+    c_curto = Counter(hist_rev[:20])
+    c_medio = Counter(hist_rev[:50])
+    
+    for d in pool_inverso:
+        # Usa a mesma lógica de peso do Dinâmico para achar os melhores do resto
+        val = (c_curto[d] * 3.0) + (c_medio[d] * 1.0)
+        scores[d] = val
+        
+    # 4. Pega os TOP 126 desse grupo inverso
+    rank = sorted(pool_inverso, key=lambda x: scores[x], reverse=True)
+    return rank[:126]
 
+# --- ESTRATÉGIAS ---
 def estrategia_bma(historico_slice):
     if len(historico_slice) < 10: return []
     _, mapa_setores = gerar_universo_duques()
     c_duques = Counter(historico_slice)
-    
-    # Identificar Crise (Atraso)
     atrasos = {"S1": 0, "S2": 0, "S3": 0}
     for nome, lista in mapa_setores.items():
         cnt = 0
@@ -131,8 +151,6 @@ def estrategia_bma(historico_slice):
             if sorteio in lista: break
             cnt += 1
         atrasos[nome] = cnt
-        
-    # Identificar Tendência (Freq Recente)
     recorte = historico_slice[-20:]
     freqs = {"S1": 0, "S2": 0, "S3": 0}
     for sorteio in recorte:
@@ -140,15 +158,10 @@ def estrategia_bma(historico_slice):
             if sorteio in lista:
                 freqs[nome] += 1
                 break
-    
     s_crise = max(atrasos, key=atrasos.get)
     s_trend = max(freqs, key=freqs.get)
-    
-    def get_best(lista, n):
-        return sorted(lista, key=lambda x: c_duques[x], reverse=True)[:n]
-    
-    if s_crise == s_trend:
-        return get_best(mapa_setores[s_crise], 126)
+    def get_best(lista, n): return sorted(lista, key=lambda x: c_duques[x], reverse=True)[:n]
+    if s_crise == s_trend: return get_best(mapa_setores[s_crise], 126)
     else:
         p1 = get_best(mapa_setores[s_crise], 63)
         p2 = get_best(mapa_setores[s_trend], 63)
@@ -158,10 +171,7 @@ def estrategia_setorizada(historico_slice):
     if len(historico_slice) < 10: return []
     _, mapa_setores = gerar_universo_duques()
     c_duques = Counter(historico_slice)
-    
-    def get_best(lista, n):
-        return sorted(lista, key=lambda x: c_duques[x], reverse=True)[:n]
-        
+    def get_best(lista, n): return sorted(lista, key=lambda x: c_duques[x], reverse=True)[:n]
     p1 = get_best(mapa_setores["S1"], 42)
     p2 = get_best(mapa_setores["S2"], 42)
     p3 = get_best(mapa_setores["S3"], 42)
@@ -170,13 +180,10 @@ def estrategia_setorizada(historico_slice):
 def estrategia_dinamica(historico_slice):
     hist_rev = historico_slice[::-1]
     scores = {d: 0 for d in gerar_universo_duques()[0]}
-    
     c_curto = Counter(hist_rev[:20])
     c_medio = Counter(hist_rev[:50])
-    
     for d, f in c_curto.items(): scores[d] += (f * 3.0)
     for d, f in c_medio.items(): scores[d] += (f * 1.0)
-    
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [d for d, s in rank][:126]
 
@@ -185,27 +192,19 @@ def estrategia_bunker(historico_slice):
     rank = c.most_common()
     return [d for d, qtd in rank][:126]
 
-# --- C. MOTOR DE SIMULAÇÃO (ROLLING WINDOW) ---
-# Esta função roda qualquer uma das estratégias acima passo a passo no tempo
+# --- MOTOR DE SIMULAÇÃO (ROLLING WINDOW) ---
 def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
-    if len(historico_completo) < n_jogos + 10: return pd.DataFrame(), 0, 0, 0
-    
+    if len(historico_completo) < n_jogos + 10: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
     max_loss = 0; temp_loss = 0
     max_win = 0; temp_win = 0
-    
     start_idx = len(historico_completo) - n_jogos
     
-    # Loop "Viajando no Tempo"
     for i in range(start_idx, len(historico_completo)):
-        # 1. Defina a realidade naquele momento (passado)
         hist_momento = historico_completo[:i]
         resultado_real = historico_completo[i]
-        
-        # 2. Peça o palpite para a estratégia usando SÓ o passado
         palpite_momento = func_estrategia(hist_momento)
         
-        # 3. Confira
         if resultado_real in palpite_momento:
             status = "💚"
             temp_win += 1
@@ -217,7 +216,6 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
             if temp_win > max_win: max_win = temp_win
             temp_win = 0
             
-        # Salva para tabela (ultimos 20)
         if i >= len(historico_completo) - 20:
             resultados.append({
                 "JOGO": f"#{len(historico_completo)-i}",
@@ -225,44 +223,40 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
                 "RES": status
             })
             
-    # Fecha conta dos recordes
     if temp_loss > max_loss: max_loss = temp_loss
     if temp_win > max_win: max_win = temp_win
     
-    # Calcula Streak Atual
-    curr_streak = 0
+    curr_streak_loss = 0
+    curr_streak_win = 0
+    
     df_res = pd.DataFrame(resultados[::-1])
     if not df_res.empty:
         for r in df_res.to_dict('records'):
-            if r["RES"] == "❌": curr_streak += 1
+            if r["RES"] == "❌": curr_streak_loss += 1
+            else: break
+        for r in df_res.to_dict('records'):
+            if r["RES"] == "💚": curr_streak_win += 1
             else: break
             
-    return df_res, max_loss, curr_streak, max_win
+    return df_res, max_loss, curr_streak_loss, max_win, curr_streak_win
 
-# --- D. METRICAS DE STRESS (VISUAL APENAS) ---
+# --- METRICAS DE STRESS ---
 def calcular_tabela_stress(historico):
     _, mapa = gerar_universo_duques()
     recorte = historico[-20:]
     tabela = []
-    
-    # Crise/Trend Atuais (Para Info)
     atrasos = {}; freqs = {}
     
     for nome, lista in mapa.items():
-        # Atraso Atual
         atraso = 0
         for x in reversed(historico):
             if x in lista: break
             atraso += 1
         atrasos[nome] = atraso
-        
-        # Freq Recente
         count = 0
         for x in recorte:
             if x in lista: count += 1
         freqs[nome] = count
-        
-        # Recordes (Varredura total)
         max_atraso = 0; tmp_atraso = 0
         max_win = 0; tmp_win = 0
         for x in historico:
@@ -276,17 +270,10 @@ def calcular_tabela_stress(historico):
                 tmp_win = 0
         if tmp_atraso > max_atraso: max_atraso = tmp_atraso
         if tmp_win > max_win: max_win = tmp_win
-        
-        tabela.append({
-            "SETOR": nome, 
-            "ATRASO": atraso, 
-            "REC. ATRASO": max_atraso, 
-            "REC. SEQ. (V)": max_win
-        })
+        tabela.append({"SETOR": nome, "ATRASO": atraso, "REC. ATRASO": max_atraso, "REC. SEQ. (V)": max_win})
         
     s_crise = max(atrasos, key=atrasos.get)
     s_trend = max(freqs, key=freqs.get)
-    
     return pd.DataFrame(tabela), s_crise, s_trend
 
 # =============================================================================
@@ -316,25 +303,33 @@ st.title(f"👑 {CONFIG_BANCA['display_name']}")
 if len(historico) > 0:
     st.info(f"Base de Dados: {len(historico)} Sorteios Registrados")
     
-    # 1. Dados Estáticos Atuais (Para Tabela e Palpite de HOJE)
     df_stress, s_crise, s_trend = calcular_tabela_stress(historico)
     
-    # Palpites para JOGAR HOJE (Baseado em todo histórico)
     palp_bma_hoje = estrategia_bma(historico)
     palp_set_hoje = estrategia_setorizada(historico)
     palp_din_hoje = estrategia_dinamica(historico)
     palp_bun_hoje = estrategia_bunker(historico)
     
-    # 2. Simulação Real (Backtest Honesto)
-    # Roda as estratégias passo a passo no passado para validar
     with st.spinner("Processando Simulação Real (Isso garante honestidade)..."):
-        bt_bma, ml_bma, cl_bma, mw_bma = rodar_simulacao_real(historico, estrategia_bma)
-        bt_set, ml_set, cl_set, mw_set = rodar_simulacao_real(historico, estrategia_setorizada)
-        bt_din, ml_din, cl_din, mw_din = rodar_simulacao_real(historico, estrategia_dinamica)
-        bt_bun, ml_bun, cl_bun, mw_bun = rodar_simulacao_real(historico, estrategia_bunker)
+        bt_bma, ml_bma, cl_bma, mw_bma, cw_bma = rodar_simulacao_real(historico, estrategia_bma)
+        bt_set, ml_set, cl_set, mw_set, cw_set = rodar_simulacao_real(historico, estrategia_setorizada)
+        bt_din, ml_din, cl_din, mw_din, cw_din = rodar_simulacao_real(historico, estrategia_dinamica)
+        bt_bun, ml_bun, cl_bun, mw_bun, cw_bun = rodar_simulacao_real(historico, estrategia_bunker)
     
-    # Alertas
+    # --- SISTEMA DE ALERTAS E INVERSÃO OTIMIZADA ---
     alertas = []
+    
+    # Função para exibir alerta e botão de inverso
+    def exibir_alerta_inverso(nome_strat, curr_win, max_win, palpite_original):
+        msg = f"🛑 CUIDADO {nome_strat}: {curr_win} Vitórias seguidas. Perto do Recorde ({max_win}). O Inverso Otimizado é indicado!"
+        st.warning(msg)
+        # Calcula apenas 126 duques (os melhores dentre os rejeitados)
+        inverso_top = calcular_inverso_otimizado(palpite_original, historico)
+        with st.expander(f"👻 Ver {nome_strat} INVERSO (Top 126 do Contra)"):
+            st.info("Jogar CONTRA a tendência usando os 126 melhores rejeitados:")
+            st.code(formatar_palpite(inverso_top), language="text")
+
+    # Alertas de Oportunidade (Verde/Derrota)
     if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
     if cl_set >= (ml_set - 1): alertas.append(f"⚖️ OPORTUNIDADE SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
     if cl_din >= (ml_din - 1): alertas.append(f"🚀 OPORTUNIDADE DINÂMICA: Derrotas ({cl_din}) perto do Recorde ({ml_din})!")
@@ -342,6 +337,12 @@ if len(historico) > 0:
     
     if alertas:
         for al in alertas: st.error(al)
+        
+    # Alertas de Inversão (Vermelho/Vitória) - Aciona perto ou no recorde
+    if cw_bma >= (mw_bma - 1) and cw_bma > 0: exibir_alerta_inverso("BMA", cw_bma, mw_bma, palp_bma_hoje)
+    if cw_set >= (mw_set - 1) and cw_set > 0: exibir_alerta_inverso("SETORIZADA", cw_set, mw_set, palp_set_hoje)
+    if cw_din >= (mw_din - 1) and cw_din > 0: exibir_alerta_inverso("DINÂMICA", cw_din, mw_din, palp_din_hoje)
+    if cw_bun >= (mw_bun - 1) and cw_bun > 0: exibir_alerta_inverso("BUNKER", cw_bun, mw_bun, palp_bun_hoje)
     
     tab1, tab2, tab3 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "📜 Histórico"])
     
@@ -380,10 +381,8 @@ if len(historico) > 0:
             with st.expander("Ver Palpite HOJE (126 Duques)"):
                 st.code(formatar_palpite(palp_set_hoje), language="text")
 
-    # --- ABA COMPARATIVO ---
     with tab2:
         col_comp1, col_comp2 = st.columns(2)
-        
         with col_comp1:
             st.markdown("### 🚀 Top 126 Dinâmico")
             st.caption("Adapta-se ao momento (Frequência Ponderada)")
@@ -395,7 +394,7 @@ if len(historico) > 0:
         
         with col_comp2:
             st.markdown("### 🧬 Bunker 126 (Fixo)")
-            st.caption("Os 126 Reis da História (Não muda)")
+            st.caption("Simulação Real (Sem vazamento de dados)")
             st.table(bt_bun)
             st.markdown(f'<div class="metric-box-loss">⚠️ Recorde Derrotas (50j): {ml_bun}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-box-win">🏆 Recorde Vitórias (50j): {mw_bun}</div>', unsafe_allow_html=True)
