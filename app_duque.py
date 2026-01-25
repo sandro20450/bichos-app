@@ -28,6 +28,13 @@ st.markdown(f"""
     h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown {{ color: {CONFIG_BANCA['cor_texto']} !important; }}
     .stNumberInput input {{ color: white !important; }}
     [data-testid="stTable"] {{ color: white !important; }}
+    
+    /* Estilo das Bolinhas de Histórico (S1, S2, S3) */
+    .bola-s1 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }}
+    .bola-s2 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }}
+    .bola-s3 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }}
+    
+    /* Estilo da Bola do Duque (Histórico Geral) */
     .bola-duque {{ display: inline-block; width: 60px; height: 35px; line-height: 35px; border-radius: 15px; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
 </style>
 """, unsafe_allow_html=True)
@@ -96,7 +103,7 @@ def gerar_universo_duques():
         if d <= (5, 15): setor1.append(d)
         elif d <= (11, 16): setor2.append(d)
         else: setor3.append(d)
-    return todos, {"SETOR 1": setor1, "SETOR 2": setor2, "SETOR 3": setor3}
+    return todos, {"SETOR 1 (01-01 a 05-15)": setor1, "SETOR 2 (05-16 a 11-16)": setor2, "SETOR 3 (11-17 a 25-25)": setor3}
 
 def analisar_estrategias(historico):
     if len(historico) < 10: return None
@@ -151,9 +158,9 @@ def analisar_estrategias(historico):
         p2 = get_best(mapa_setores[s_trend], 63)
         palpite_bma = list(set(p1 + p2))
         
-    p_s1 = get_best(mapa_setores["SETOR 1"], 42)
-    p_s2 = get_best(mapa_setores["SETOR 2"], 42)
-    p_s3 = get_best(mapa_setores["SETOR 3"], 42)
+    p_s1 = get_best(mapa_setores["SETOR 1 (01-01 a 05-15)"], 42)
+    p_s2 = get_best(mapa_setores["SETOR 2 (05-16 a 11-16)"], 42)
+    p_s3 = get_best(mapa_setores["SETOR 3 (11-17 a 25-25)"], 42)
     palpite_setor = list(set(p_s1 + p_s2 + p_s3))
     
     return df_stress, palpite_bma, palpite_setor, s_crise, s_trend
@@ -215,6 +222,25 @@ if len(historico) > 0:
     tab1, tab2 = st.tabs(["📊 Setores & Estratégias", "📜 Histórico"])
     
     with tab1:
+        # --- NOVO: Histórico Visual de Setores (Bolinhas) ---
+        st.write("Histórico Recente por Setor (⬅️ Mais Novo):")
+        _, mapa_setores_vis = gerar_universo_duques()
+        
+        html_bolas = "<div>"
+        # Pega os ultimos 12 para caber na tela
+        for duque in reversed(historico[-12:]):
+            if duque in mapa_setores_vis["SETOR 1 (01-01 a 05-15)"]:
+                classe, sigla = "bola-s1", "S1"
+            elif duque in mapa_setores_vis["SETOR 2 (05-16 a 11-16)"]:
+                classe, sigla = "bola-s2", "S2"
+            else:
+                classe, sigla = "bola-s3", "S3"
+            html_bolas += f"<div class='{classe}'>{sigla}</div>"
+        html_bolas += "</div>"
+        st.markdown(html_bolas, unsafe_allow_html=True)
+        st.markdown("---")
+        # ----------------------------------------------------
+
         st.subheader("📡 Radar de Setores")
         st.table(df_stress)
         c_strat1, c_strat2 = st.columns(2)
