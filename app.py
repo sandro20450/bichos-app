@@ -205,7 +205,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ ---
+# --- 3. LÓGICA DO ROBÔ (PADRÃO E COMUM) ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -264,7 +264,6 @@ def calcular_proximo_horario(banca, ultimo_horario):
         return "Palpite para: Amanhã/Próximo Dia"
     except: return "Palpite para: Próximo Sorteio"
 
-# --- SCRAPING AVANÇADO V80 ---
 def raspar_ultimo_resultado_real(url, banca_key):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -280,7 +279,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
             hoje.strftime("%d")
         )
         candidatos = [] 
-        
         elementos_data = soup.find_all(string=re.compile(regex_data, re.IGNORECASE))
         if not elementos_data:
             elementos_data = soup.find_all(string=re.compile("Hoje", re.IGNORECASE))
@@ -309,7 +307,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
                     container = container.parent
                 else:
                     break
-            if candidatos: break 
 
         if not candidatos:
             tabelas = soup.find_all('table')
@@ -343,7 +340,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
         return candidatos_unicos[0][1], candidatos_unicos[0][0], "Sucesso"
     except Exception as e: return None, None, f"Erro: {e}"
 
-# --- RADAR DE VÍCIO ---
 def detecting_vicio_repeticao(historico):
     if len(historico) < 10: return False
     repeticoes = 0
@@ -353,7 +349,6 @@ def detecting_vicio_repeticao(historico):
             repeticoes += 1
     return repeticoes >= 2
 
-# --- CÁLCULO DE PUXADAS ---
 def calcular_puxada_do_ultimo(historico):
     if len(historico) < 2: return None, []
     ultimo = historico[-1]
@@ -415,31 +410,23 @@ def gerar_palpite_estrategico(historico, banca, modo_crise=False):
     if vicio and (ultimo not in top12):
         top12.pop() 
         top12.insert(0, ultimo) 
-    
     return top12, []
 
 def gerar_backtest_e_status(historico, banca):
     if len(historico) < 30: return pd.DataFrame(), False, 0, 0, 0, 0
     resultados = []
-    # EXIBIR 20 JOGOS
     inicio = max(0, len(historico) - 25)
-    
-    # Max Loss Risk e Streak Atual e MAX WIN
     max_loss = 0
     temp_loss = 0
     max_win = 0
     temp_win = 0
-    
     derrotas_simuladas = 0
-    
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
-        
         em_crise_simulada = derrotas_simuladas >= 2
         p_princ, _ = gerar_palpite_estrategico(passado, banca, em_crise_simulada)
-        
         if saiu not in p_princ:
             temp_loss += 1
             temp_win = 0
@@ -448,11 +435,8 @@ def gerar_backtest_e_status(historico, banca):
             temp_win += 1
             temp_loss = 0
             derrotas_simuladas = 0 
-            
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
-
-    # Geração da Tabela Visual
     derrotas = 0
     for i in range(inicio, len(historico)):
         saiu = historico[i]
@@ -465,34 +449,27 @@ def gerar_backtest_e_status(historico, banca):
             derrotas = 0
         else:
             derrotas += 1
-        
         if i >= len(historico) - 20:
             resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
-    
     curr_streak = 0
     curr_win_streak = 0
-    
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
         else: break
-        
     for res in reversed(resultados):
         if res["TOP 12"] == "💚": curr_win_streak += 1
         else: break
-
     return pd.DataFrame(resultados[::-1]), derrotas >= 2, curr_streak, max_loss, max_win, curr_win_streak
 
 def gerar_backtest_top17(historico, banca):
     return pd.DataFrame(), [], False, False, [], 0, 0
 
-# --- ANALISE DE SETORES BMA + 25 + MAX WIN ---
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, []
     setor_b = list(range(1, 9))
     setor_m = list(range(9, 17))
     setor_a = list(range(17, 25))
     setor_25 = [25]
-    
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0
         max_atraso = 0
@@ -508,7 +485,6 @@ def analisar_setores_bma_com_maximo(historico):
                 contador_temp = 0
         if contador_temp > max_atraso: max_atraso = contador_temp
         return atraso_atual, max_atraso
-    
     def calcular_max_sequencia(lista_alvo, hist):
         max_seq = 0
         curr_seq = 0
@@ -520,27 +496,22 @@ def analisar_setores_bma_com_maximo(historico):
                 curr_seq = 0
         if curr_seq > max_seq: max_seq = curr_seq
         return max_seq
-
     curr_b, max_b_loss = calcular_atrasos(setor_b, historico)
     curr_m, max_m_loss = calcular_atrasos(setor_m, historico)
     curr_a, max_a_loss = calcular_atrasos(setor_a, historico)
     curr_25, max_25_loss = calcular_atrasos(setor_25, historico)
-    
     max_b_win = calcular_max_sequencia(setor_b, historico)
     max_m_win = calcular_max_sequencia(setor_m, historico)
     max_a_win = calcular_max_sequencia(setor_a, historico)
     max_25_win = calcular_max_sequencia(setor_25, historico)
-    
     df_setores = pd.DataFrame([
         {"SETOR": "BAIXO (01-08)", "ATRASO": curr_b, "REC. ATRASO": max_b_loss, "REC. SEQ. (V)": max_b_win},
         {"SETOR": "MÉDIO (09-16)", "ATRASO": curr_m, "REC. ATRASO": max_m_loss, "REC. SEQ. (V)": max_m_win},
         {"SETOR": "ALTO (17-24)", "ATRASO": curr_a, "REC. ATRASO": max_a_loss, "REC. SEQ. (V)": max_a_win},
         {"SETOR": "VACA (25)", "ATRASO": curr_25, "REC. ATRASO": max_25_loss, "REC. SEQ. (V)": max_25_win}
     ])
-    
     dados_atual = {"BAIXO (01-08)": curr_b, "MÉDIO (09-16)": curr_m, "ALTO (17-24)": curr_a, "CORINGA (25)": curr_25}
     dados_maximo = {"BAIXO (01-08)": max_b_loss, "MÉDIO (09-16)": max_m_loss, "ALTO (17-24)": max_a_loss, "CORINGA (25)": max_25_loss}
-    
     sequencia_visual = []
     for x in historico[::-1][:10]:
         if x == 25: sigla, classe = "25", "bola-25"
@@ -550,17 +521,14 @@ def analisar_setores_bma_com_maximo(historico):
         sequencia_visual.append((sigla, classe))
     return dados_atual, dados_maximo, df_setores, sequencia_visual
 
-# --- DNA FIXO (BUNKER 12) ---
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0.0, 0, 0, 0, 0
     contagem_total = Counter(historico)
     top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
-    
     max_loss = 0
     temp_loss = 0
     max_win = 0
     temp_win = 0
-    
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
         if historico[i] not in top_12_fixo: 
@@ -569,10 +537,8 @@ def analisar_dna_fixo_historico(historico):
         else:
             temp_win += 1
             temp_loss = 0
-            
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
-
     resultados_simulacao = []
     acertos = 0
     recorte_teste = historico[-20:]
@@ -582,21 +548,17 @@ def analisar_dna_fixo_historico(historico):
             status = "💚"
             acertos += 1
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
-    
     curr_streak = 0
     curr_win_streak = 0
     for res in resultados_simulacao: 
         if res["BUNKER 12"] == "❌": curr_streak += 1
         else: break
-        
     for res in resultados_simulacao:
         if res["BUNKER 12"] == "💚": curr_win_streak += 1
         else: break
-        
     taxa_acerto = (acertos / 20) * 100
     return top_12_fixo, pd.DataFrame(resultados_simulacao), taxa_acerto, max_loss, curr_streak, max_win, curr_win_streak
 
-# --- NOVA ESTRATÉGIA SETORIZADA (4x4x4) ---
 def gerar_palpite_setorizado(historico, banca):
     ranking = calcular_ranking_forca_completo(historico, banca)
     setor_b = [g for g in ranking if 1 <= g <= 8]
@@ -614,14 +576,11 @@ def gerar_backtest_setorizado(historico, banca):
     resultados = []
     inicio = max(0, len(historico) - 10)
     lista_atual = gerar_palpite_setorizado(historico, banca)
-    
     max_derrotas_seq = 0
     temp_derrotas = 0
     max_win_seq = 0
     temp_win = 0
-    
     inicio_risk = max(0, len(historico) - 50)
-    
     for i in range(inicio_risk, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -632,10 +591,8 @@ def gerar_backtest_setorizado(historico, banca):
         else:
             temp_win += 1
             temp_derrotas = 0
-            
         if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
         if temp_win > max_win_seq: max_win_seq = temp_win
-    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -643,21 +600,16 @@ def gerar_backtest_setorizado(historico, banca):
         status = "❌"
         if saiu in palpite_da_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
-    
     curr_streak = 0
     curr_win_streak = 0
-    
     for res in reversed(resultados):
         if res["RES (4x4x4)"] == "❌": curr_streak += 1
         else: break
-        
     for res in reversed(resultados):
         if res["RES (4x4x4)"] == "💚": curr_win_streak += 1
         else: break
-        
     return pd.DataFrame(resultados[::-1]), lista_atual, max_derrotas_seq, curr_streak, max_win_seq, curr_win_streak
 
-# --- ESTRATEGIA 1: BMA REFINADA (6+6) ---
 def identificar_bma_crise_tendencia(historico):
     if not historico: return [], "", ""
     mapa_setores = {
@@ -665,7 +617,6 @@ def identificar_bma_crise_tendencia(historico):
         "MÉDIO": list(range(9, 17)),
         "ALTO": list(range(17, 25))
     }
-    
     atrasos = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for nome, nums in mapa_setores.items():
         cnt = 0
@@ -674,7 +625,6 @@ def identificar_bma_crise_tendencia(historico):
             cnt += 1
         atrasos[nome] = cnt
     setor_crise = max(atrasos, key=atrasos.get)
-    
     recorte = historico[-10:]
     freqs = {"BAIXO": 0, "MÉDIO": 0, "ALTO": 0}
     for x in recorte:
@@ -682,34 +632,26 @@ def identificar_bma_crise_tendencia(historico):
         elif 9 <= x <= 16: freqs["MÉDIO"] += 1
         elif 17 <= x <= 24: freqs["ALTO"] += 1
     setor_tendencia = max(freqs, key=freqs.get)
-    
     ranking_geral = calcular_ranking_forca_completo(historico) 
-    
     def filtrar_top6(setor_nome):
         candidatos = mapa_setores[setor_nome]
         candidatos_ordenados = sorted(candidatos, key=lambda x: ranking_geral.index(x) if x in ranking_geral else 99)
         return candidatos_ordenados[:6]
-
     top6_crise = filtrar_top6(setor_crise)
     top6_tendencia = filtrar_top6(setor_tendencia)
-    
     palpite = list(set(top6_crise + top6_tendencia))
     palpite.sort()
-    
     return palpite, setor_crise, setor_tendencia
 
 def gerar_backtest_bma_crise_tendencia(historico):
     resultados = []
     inicio = max(0, len(historico) - 10)
     palpite_atual, crise_atual, trend_atual = identificar_bma_crise_tendencia(historico)
-    
     max_derrotas_seq = 0
     temp_derrotas = 0
     max_win_seq = 0
     temp_win = 0
-    
     inicio_risk = max(0, len(historico) - 50)
-    
     for i in range(inicio_risk, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -720,10 +662,8 @@ def gerar_backtest_bma_crise_tendencia(historico):
         else:
             temp_win += 1
             temp_derrotas = 0
-            
         if temp_derrotas > max_derrotas_seq: max_derrotas_seq = temp_derrotas
         if temp_win > max_win_seq: max_win_seq = temp_win
-    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -731,20 +671,16 @@ def gerar_backtest_bma_crise_tendencia(historico):
         status = "❌"
         if saiu in palpite_epoca: status = "💚"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (Crise+Trend)": status})
-    
     curr_streak = 0
     curr_win_streak = 0
     for res in reversed(resultados):
         if res["BMA (Crise+Trend)"] == "❌": curr_streak += 1
         else: break
-        
     for res in reversed(resultados):
         if res["BMA (Crise+Trend)"] == "💚": curr_win_streak += 1
         else: break
-        
     return pd.DataFrame(resultados[::-1]), palpite_atual, crise_atual, trend_atual, max_derrotas_seq, curr_streak, max_win_seq, curr_win_streak
 
-# --- FUNÇÃO AUXILIAR PARA CALCULAR INVERSO ---
 def calcular_inverso(palpite):
     universo = set(range(1, 26))
     palpite_set = set(palpite)
@@ -839,9 +775,6 @@ def analisar_duque_estrategias(historico_duques):
     
     todos, mapa_setores = gerar_universo_duques()
     
-    def par_saiu(par_apostado, par_sorteado):
-        return par_apostado == par_sorteado
-    
     # --- 1. ESTRATÉGIA BMA DUQUE ---
     atrasos = {"S1": 0, "S2": 0, "S3": 0}
     for nome, lista in mapa_setores.items():
@@ -891,9 +824,11 @@ def analisar_duque_estrategias(historico_duques):
         for i in range(len(historico_duques)):
             saiu = historico_duques[i]
             if saiu in palpite_func:
-                temp_win += 1; temp_loss = 0
+                temp_win += 1
+                temp_loss = 0
             else:
-                temp_loss += 1; temp_win = 0
+                temp_loss += 1
+                temp_win = 0
             if temp_loss > max_loss: max_loss = temp_loss
             if temp_win > max_win: max_win = temp_win
             
