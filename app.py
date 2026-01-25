@@ -205,7 +205,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ (PADRÃO E COMUM) ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -749,7 +749,7 @@ def monitorar_oportunidades(historico, banca):
     return alertas, tipos, sugestoes_inversas
 
 # =============================================================================
-# --- 5. LÓGICA ESPECÍFICA DO DUQUE (V83) ---
+# --- 5. LÓGICA ESPECÍFICA DO DUQUE ---
 # =============================================================================
 
 def gerar_universo_duques():
@@ -774,6 +774,9 @@ def analisar_duque_estrategias(historico_duques):
     if len(historico_duques) < 10: return None
     
     todos, mapa_setores = gerar_universo_duques()
+    
+    def par_saiu(par_apostado, par_sorteado):
+        return par_apostado == par_sorteado
     
     # --- 1. ESTRATÉGIA BMA DUQUE ---
     atrasos = {"S1": 0, "S2": 0, "S3": 0}
