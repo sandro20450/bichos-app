@@ -106,18 +106,17 @@ def gerar_universo_duques():
         else: setor3.append(d)
     return todos, {"SETOR 1 (01-01 a 05-15)": setor1, "SETOR 2 (05-16 a 11-16)": setor2, "SETOR 3 (11-17 a 25-25)": setor3}
 
-# --- FUNÇÃO FORMATAR ORDENADA (NOVA) ---
 def formatar_palpite(lista_tuplas):
-    # Ordena a lista de palpites do menor para o maior (ex: [1,2] antes de [2,5])
     lista_ordenada = sorted(lista_tuplas)
     texto = ""
     for p in lista_ordenada:
         texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
-# Ranking Dinâmico
-def calcular_ranking_dinamico(historico):
-    hist_rev = historico[::-1]
+# --- RANKINGS (FUNÇÕES PURAS) ---
+def get_rank_dinamico(dados_historicos):
+    # Calcula ranking baseado apenas nos dados passados
+    hist_rev = dados_historicos[::-1]
     scores = {d: 0 for d in gerar_universo_duques()[0]}
     
     c_curto = Counter(hist_rev[:20]) 
@@ -129,13 +128,13 @@ def calcular_ranking_dinamico(historico):
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [d for d, s in rank]
 
-# Ranking Bunker
-def calcular_ranking_bunker(historico):
-    c = Counter(historico)
+def get_rank_bunker(dados_historicos):
+    c = Counter(dados_historicos)
     rank = c.most_common()
     return [d for d, qtd in rank]
 
-def analisar_estrategias(historico):
+# --- ANÁLISE DE SETORES (BMA / SETORIZADA) ---
+def analisar_estrategias_setores(historico):
     if len(historico) < 10: return None
     todos, mapa_setores = gerar_universo_duques()
     c_duques = Counter(historico)
@@ -192,22 +191,75 @@ def analisar_estrategias(historico):
     p_s3 = get_best(mapa_setores["SETOR 3 (11-17 a 25-25)"], 42)
     palpite_setor = list(set(p_s1 + p_s2 + p_s3))
     
-    rank_din = calcular_ranking_dinamico(historico)
-    palpite_dinamico = rank_din[:126]
-    
-    rank_bun = calcular_ranking_bunker(historico)
-    palpite_bunker = rank_bun[:126]
-    
-    return df_stress, palpite_bma, palpite_setor, palpite_dinamico, palpite_bunker, s_crise, s_trend
+    return df_stress, palpite_bma, palpite_setor, s_crise, s_trend
 
-def backtest_duque(historico, palpite, limit=50):
-    if not palpite: return pd.DataFrame(), 0, 0, 0
+# --- BACKTEST COM SIMULAÇÃO REAL (ROLLING WINDOW) ---
+def backtest_simulado_real(historico, tipo_estrategia, n_simulacoes=50):
+    # tipo_estrategia: 'dinamico' ou 'bunker'
     
-    recorte_risk = historico[-limit:] if len(historico) > limit else historico
+    if len(historico) < n_simulacoes + 10: return pd.DataFrame(), 0, 0, 0
     
+    res = []
     max_loss = 0; temp_loss = 0
     max_win = 0; temp_win = 0
     
+    # Loop de Simulação "Viajando no Tempo"
+    # Começa em (Hoje - 50 jogos) e vai até Hoje
+    inicio_sim = len(historico) - n_simulacoes
+    
+    for i in range(inicio_sim, len(historico)):
+        resultado_real = historico[i]
+        
+        # O PULO DO GATO:
+        # Usa APENAS o histórico ANTERIOR ao jogo 'i' para calcular o palpite
+        historico_passado = historico[:i] 
+        
+        palpite_da_epoca = []
+        if tipo_estrategia == 'dinamico':
+            palpite_da_epoca = get_rank_dinamico(historico_passado)[:126]
+        elif tipo_estrategia == 'bunker':
+            palpite_da_epoca = get_rank_bunker(historico_passado)[:126]
+            
+        # Confere se ganhou
+        if resultado_real in palpite_da_epoca:
+            status = "💚"
+            temp_win += 1
+            if temp_loss > max_loss: max_loss = temp_loss
+            temp_loss = 0
+        else:
+            status = "❌"
+            temp_loss += 1
+            if temp_win > max_win: max_win = temp_win
+            temp_win = 0
+            
+        # Adiciona na tabela (apenas os ultimos 20 para visualização)
+        if i >= len(historico) - 20:
+            res.append({
+                "JOGO": f"#{len(historico)-i}", 
+                "SAIU": f"{resultado_real[0]:02}-{resultado_real[1]:02}", 
+                "RES": status
+            })
+            
+    # Verifica recordes finais do loop
+    if temp_loss > max_loss: max_loss = temp_loss
+    if temp_win > max_win: max_win = temp_win
+    
+    # Streak Atual
+    curr_streak = 0
+    df_res = pd.DataFrame(res[::-1])
+    
+    if not df_res.empty:
+        for r in df_res.to_dict('records'):
+            if r["RES"] == "❌": curr_streak += 1
+            else: break
+            
+    return df_res, max_loss, curr_streak, max_win
+
+# Backtest Simples para BMA/Setor (Estatístico Fixo)
+def backtest_fixo(historico, palpite, limit=50):
+    if not palpite: return pd.DataFrame(), 0, 0, 0
+    recorte_risk = historico[-limit:] if len(historico) > limit else historico
+    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     for x in recorte_risk:
         if x in palpite:
             temp_win += 1
@@ -219,19 +271,16 @@ def backtest_duque(historico, palpite, limit=50):
             temp_win = 0
     if temp_loss > max_loss: max_loss = temp_loss
     if temp_win > max_win: max_win = temp_win
-            
     res = []
     inicio = max(0, len(historico)-20)
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         status = "💚" if saiu in palpite else "❌"
         res.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu[0]:02}-{saiu[1]:02}", "RES": status})
-        
     curr_streak = 0
     for r in reversed(res):
         if r["RES"] == "❌": curr_streak += 1
         else: break
-        
     return pd.DataFrame(res[::-1]), max_loss, curr_streak, max_win
 
 # =============================================================================
@@ -261,13 +310,23 @@ st.title(f"👑 {CONFIG_BANCA['display_name']}")
 if len(historico) > 0:
     st.info(f"Base de Dados: {len(historico)} Sorteios Registrados")
     
-    df_stress, palp_bma, palp_set, palp_din, palp_bun, s_crise, s_trend = analisar_estrategias(historico)
+    # 1. Estratégias de Setor (Padrão)
+    df_stress, palp_bma, palp_set, s_crise, s_trend = analisar_estrategias_setores(historico)
     
-    bt_bma, ml_bma, cl_bma, mw_bma = backtest_duque(historico, palp_bma)
-    bt_set, ml_set, cl_set, mw_set = backtest_duque(historico, palp_set)
-    bt_din, ml_din, cl_din, mw_din = backtest_duque(historico, palp_din)
-    bt_bun, ml_bun, cl_bun, mw_bun = backtest_duque(historico, palp_bun) 
+    # 2. Palpites ATUAIS para Dinâmico e Bunker (Para jogar HOJE)
+    palp_din_hoje = get_rank_dinamico(historico)[:126]
+    palp_bun_hoje = get_rank_bunker(historico)[:126]
     
+    # 3. Backtests (Calculos)
+    # BMA e Setor usam cálculo fixo estatístico
+    bt_bma, ml_bma, cl_bma, mw_bma = backtest_fixo(historico, palp_bma)
+    bt_set, ml_set, cl_set, mw_set = backtest_fixo(historico, palp_set)
+    
+    # Dinâmico e Bunker usam SIMULAÇÃO REAL (Rolling Window) para não mentir
+    bt_din, ml_din, cl_din, mw_din = backtest_simulado_real(historico, 'dinamico')
+    bt_bun, ml_bun, cl_bun, mw_bun = backtest_simulado_real(historico, 'bunker')
+    
+    # Alertas
     alertas = []
     if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
     if cl_set >= (ml_set - 1): alertas.append(f"⚖️ OPORTUNIDADE SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
@@ -320,21 +379,21 @@ if len(historico) > 0:
         
         with col_comp1:
             st.markdown("### 🚀 Top 126 Dinâmico")
-            st.caption("Adapta-se ao momento (Frequência Ponderada)")
+            st.caption("Simulação Real (Sem vazamento de dados)")
             st.table(bt_din)
             st.markdown(f'<div class="metric-box-loss">⚠️ Recorde Derrotas (50j): {ml_din}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-box-win">🏆 Recorde Vitórias (50j): {mw_din}</div>', unsafe_allow_html=True)
-            with st.expander("Ver Palpite (126 Dinâmicos)"):
-                st.code(formatar_palpite(palp_din), language="text")
+            with st.expander("Ver Palpite HOJE (126 Dinâmicos)"):
+                st.code(formatar_palpite(palp_din_hoje), language="text")
         
         with col_comp2:
             st.markdown("### 🧬 Bunker 126 (Fixo)")
-            st.caption("Os 126 Reis da História (Não muda)")
+            st.caption("Simulação Real (Sem vazamento de dados)")
             st.table(bt_bun)
             st.markdown(f'<div class="metric-box-loss">⚠️ Recorde Derrotas (50j): {ml_bun}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-box-win">🏆 Recorde Vitórias (50j): {mw_bun}</div>', unsafe_allow_html=True)
-            with st.expander("Ver Palpite (126 Bunker)"):
-                st.code(formatar_palpite(palp_bun), language="text")
+            with st.expander("Ver Palpite HOJE (126 Bunker)"):
+                st.code(formatar_palpite(palp_bun_hoje), language="text")
 
     with tab3:
         st.write("Últimos resultados:")
