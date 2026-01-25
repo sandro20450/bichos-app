@@ -106,19 +106,20 @@ def gerar_universo_duques():
         else: setor3.append(d)
     return todos, {"SETOR 1 (01-01 a 05-15)": setor1, "SETOR 2 (05-16 a 11-16)": setor2, "SETOR 3 (11-17 a 25-25)": setor3}
 
+# --- FUNÇÃO FORMATAR ORDENADA (NOVA) ---
 def formatar_palpite(lista_tuplas):
+    # Ordena a lista de palpites do menor para o maior (ex: [1,2] antes de [2,5])
+    lista_ordenada = sorted(lista_tuplas)
     texto = ""
-    for p in lista_tuplas:
+    for p in lista_ordenada:
         texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
 # Ranking Dinâmico
 def calcular_ranking_dinamico(historico):
     hist_rev = historico[::-1]
-    # Inicia com todos os duques zerados
     scores = {d: 0 for d in gerar_universo_duques()[0]}
     
-    # Pesos
     c_curto = Counter(hist_rev[:20]) 
     c_medio = Counter(hist_rev[:50])
     
@@ -191,14 +192,12 @@ def analisar_estrategias(historico):
     p_s3 = get_best(mapa_setores["SETOR 3 (11-17 a 25-25)"], 42)
     palpite_setor = list(set(p_s1 + p_s2 + p_s3))
     
-    # NOVAS ESTRATEGIAS (Correção aqui: Palpites são gerados e retornados)
     rank_din = calcular_ranking_dinamico(historico)
     palpite_dinamico = rank_din[:126]
     
     rank_bun = calcular_ranking_bunker(historico)
     palpite_bunker = rank_bun[:126]
     
-    # Retorna TUDO na ordem certa
     return df_stress, palpite_bma, palpite_setor, palpite_dinamico, palpite_bunker, s_crise, s_trend
 
 def backtest_duque(historico, palpite, limit=50):
@@ -262,14 +261,12 @@ st.title(f"👑 {CONFIG_BANCA['display_name']}")
 if len(historico) > 0:
     st.info(f"Base de Dados: {len(historico)} Sorteios Registrados")
     
-    # Desempacota os 7 valores retornados (AGORA CORRETO)
     df_stress, palp_bma, palp_set, palp_din, palp_bun, s_crise, s_trend = analisar_estrategias(historico)
     
-    # Backtests
     bt_bma, ml_bma, cl_bma, mw_bma = backtest_duque(historico, palp_bma)
     bt_set, ml_set, cl_set, mw_set = backtest_duque(historico, palp_set)
     bt_din, ml_din, cl_din, mw_din = backtest_duque(historico, palp_din)
-    bt_bun, ml_bun, cl_bun, mw_bun = backtest_duque(historico, palp_bun) # Aqui estava o erro bunker
+    bt_bun, ml_bun, cl_bun, mw_bun = backtest_duque(historico, palp_bun) 
     
     alertas = []
     if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
