@@ -35,7 +35,6 @@ st.markdown(f"""
     
     .bola-duque {{ display: inline-block; width: 60px; height: 35px; line-height: 35px; border-radius: 15px; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
     
-    /* Box de metricas */
     .metric-box-loss {{ background-color: #583b00; border: 1px solid #d4af37; color: #ffd700; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 5px; font-weight: bold; }}
     .metric-box-win {{ background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 5px; font-weight: bold; }}
 </style>
@@ -113,14 +112,15 @@ def formatar_palpite(lista_tuplas):
         texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
-# --- CÁLCULO DE RANKING DINÂMICO (PESOS) ---
+# Ranking Dinâmico
 def calcular_ranking_dinamico(historico):
     hist_rev = historico[::-1]
+    # Inicia com todos os duques zerados
     scores = {d: 0 for d in gerar_universo_duques()[0]}
     
     # Pesos
-    c_curto = Counter(hist_rev[:20]) # Ultimos 20 valem 3 pontos
-    c_medio = Counter(hist_rev[:50]) # Ultimos 50 valem 1 ponto
+    c_curto = Counter(hist_rev[:20]) 
+    c_medio = Counter(hist_rev[:50])
     
     for d, freq in c_curto.items(): scores[d] += (freq * 3.0)
     for d, freq in c_medio.items(): scores[d] += (freq * 1.0)
@@ -128,13 +128,12 @@ def calcular_ranking_dinamico(historico):
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [d for d, s in rank]
 
-# --- CÁLCULO DE BUNKER (FIXO GERAL) ---
+# Ranking Bunker
 def calcular_ranking_bunker(historico):
     c = Counter(historico)
     rank = c.most_common()
     return [d for d, qtd in rank]
 
-# --- ANÁLISE GERAL ---
 def analisar_estrategias(historico):
     if len(historico) < 10: return None
     todos, mapa_setores = gerar_universo_duques()
@@ -165,7 +164,6 @@ def analisar_estrategias(historico):
 
     for nome, lista in mapa_setores.items():
         curr_l, max_l, max_w = calc_metrics(lista)
-        # NOME DA COLUNA AJUSTADO
         dados_tabela.append({"SETOR": nome, "ATRASO": curr_l, "REC. ATRASO": max_l, "REC. SEQ. (V)": max_w})
         atrasos_atuais[nome] = curr_l
         count = 0
@@ -193,19 +191,19 @@ def analisar_estrategias(historico):
     p_s3 = get_best(mapa_setores["SETOR 3 (11-17 a 25-25)"], 42)
     palpite_setor = list(set(p_s1 + p_s2 + p_s3))
     
-    # NOVAS ESTRATEGIAS
+    # NOVAS ESTRATEGIAS (Correção aqui: Palpites são gerados e retornados)
     rank_din = calcular_ranking_dinamico(historico)
     palpite_dinamico = rank_din[:126]
     
     rank_bun = calcular_ranking_bunker(historico)
     palpite_bunker = rank_bun[:126]
     
+    # Retorna TUDO na ordem certa
     return df_stress, palpite_bma, palpite_setor, palpite_dinamico, palpite_bunker, s_crise, s_trend
 
 def backtest_duque(historico, palpite, limit=50):
-    if not palpite: return pd.DataFrame(), 0, 0, 0, 0
+    if not palpite: return pd.DataFrame(), 0, 0, 0
     
-    # 1. Backtest Histórico (Ultimos 50 jogos para metricas)
     recorte_risk = historico[-limit:] if len(historico) > limit else historico
     
     max_loss = 0; temp_loss = 0
@@ -220,11 +218,9 @@ def backtest_duque(historico, palpite, limit=50):
             temp_loss += 1
             if temp_win > max_win: max_win = temp_win
             temp_win = 0
-    # Final checks
     if temp_loss > max_loss: max_loss = temp_loss
     if temp_win > max_win: max_win = temp_win
             
-    # 2. Tabela Visual (Ultimos 20 jogos)
     res = []
     inicio = max(0, len(historico)-20)
     for i in range(inicio, len(historico)):
@@ -232,7 +228,6 @@ def backtest_duque(historico, palpite, limit=50):
         status = "💚" if saiu in palpite else "❌"
         res.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu[0]:02}-{saiu[1]:02}", "RES": status})
         
-    # Streak Atual
     curr_streak = 0
     for r in reversed(res):
         if r["RES"] == "❌": curr_streak += 1
@@ -266,13 +261,15 @@ st.title(f"👑 {CONFIG_BANCA['display_name']}")
 
 if len(historico) > 0:
     st.info(f"Base de Dados: {len(historico)} Sorteios Registrados")
+    
+    # Desempacota os 7 valores retornados (AGORA CORRETO)
     df_stress, palp_bma, palp_set, palp_din, palp_bun, s_crise, s_trend = analisar_estrategias(historico)
     
-    # Backtests (Metrics 50j)
+    # Backtests
     bt_bma, ml_bma, cl_bma, mw_bma = backtest_duque(historico, palp_bma)
     bt_set, ml_set, cl_set, mw_set = backtest_duque(historico, palp_set)
     bt_din, ml_din, cl_din, mw_din = backtest_duque(historico, palp_din)
-    bt_bun, ml_bun, cl_bun, mw_bun = backtest_duque(historico, palp_bunker)
+    bt_bun, ml_bun, cl_bun, mw_bun = backtest_duque(historico, palp_bun) # Aqui estava o erro bunker
     
     alertas = []
     if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
@@ -286,7 +283,6 @@ if len(historico) > 0:
     tab1, tab2, tab3 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "📜 Histórico"])
     
     with tab1:
-        # --- Histórico Visual de Setores (Bolinhas) ---
         st.write("Histórico Recente por Setor (⬅️ Mais Novo):")
         _, mapa_setores_vis = gerar_universo_duques()
         html_bolas = "<div>"
@@ -321,7 +317,7 @@ if len(historico) > 0:
             with st.expander("Ver Palpite (126 Duques)"):
                 st.code(formatar_palpite(palp_set), language="text")
 
-    # --- ABA COMPARATIVO (NOVA) ---
+    # --- ABA COMPARATIVO ---
     with tab2:
         col_comp1, col_comp2 = st.columns(2)
         
@@ -348,7 +344,6 @@ if len(historico) > 0:
         for p in reversed(historico[-10:]):
             st.markdown(f"<div class='bola-duque'>{p[0]:02} - {p[1]:02}</div>", unsafe_allow_html=True)
             
-    # --- RODAPÉ: GRADE DE HORÁRIOS ---
     st.markdown("---")
     with st.expander("🕒 Grade de Horários da Banca"):
         df_horarios = pd.DataFrame({
