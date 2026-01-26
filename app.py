@@ -235,7 +235,7 @@ def gerar_palpite_estrategico(historico):
     todos_forca = calcular_ranking_forca_completo(historico)
     return todos_forca[:12]
 
-# --- LÓGICA DE CICLOS (NOVO) ---
+# --- LÓGICA DE CICLOS ---
 def analisar_ciclo_atual(historico):
     if not historico: return [], 0, [], 0
     ciclos_fechados = []
@@ -498,38 +498,46 @@ def calcular_inverso(palpite):
     inverso.sort()
     return inverso
 
-def monitorar_oportunidades(historico):
+# --- FUNÇÃO DE ALERTAS ATUALIZADA (V106) ---
+def monitorar_oportunidades(historico, df_setores):
     alertas = []; tipos = []; sugestoes = []
     
-    # 1. Top 12
+    # 1. Alertas de Estratégias (Padrão)
     _, curr_loss_12, max_loss_12, max_win_12, curr_win_12 = gerar_backtest_e_status(historico)
     palp_12 = gerar_palpite_estrategico(historico)
-    if curr_loss_12 >= (max_loss_12 - 1) and curr_loss_12 > 0:
-        alertas.append(f"⚡ TOP 12: Derrotas ({curr_loss_12}) perto do Recorde ({max_loss_12})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_12 >= (max_win_12 - 1) and curr_win_12 > 0:
-        alertas.append(f"🛑 TOP 12: {curr_win_12} Vitórias. Perto do Recorde ({max_win_12})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_12))
-        
-    # 2. Bunker
+    if curr_loss_12 >= (max_loss_12 - 1) and curr_loss_12 > 0: alertas.append(f"⚡ TOP 12: Derrotas ({curr_loss_12}) perto do Recorde ({max_loss_12})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_12 >= (max_win_12 - 1) and curr_win_12 > 0: alertas.append(f"🛑 TOP 12: {curr_win_12} Vitórias. Perto do Recorde ({max_win_12})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_12))
+    
     palp_bunker, _, max_loss_bun, curr_loss_bun, max_win_bun, curr_win_bun = analisar_dna_fixo_historico(historico)
-    if curr_loss_bun >= (max_loss_bun - 1) and curr_loss_bun > 0:
-        alertas.append(f"🛡️ BUNKER: Derrotas ({curr_loss_bun}) perto do Recorde ({max_loss_bun})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_bun >= (max_win_bun - 1) and curr_win_bun > 0:
-        alertas.append(f"🛑 BUNKER: {curr_win_bun} Vitórias. Perto do Recorde ({max_win_bun})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bunker))
-        
-    # 3. BMA
+    if curr_loss_bun >= (max_loss_bun - 1) and curr_loss_bun > 0: alertas.append(f"🛡️ BUNKER: Derrotas ({curr_loss_bun}) perto do Recorde ({max_loss_bun})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_bun >= (max_win_bun - 1) and curr_win_bun > 0: alertas.append(f"🛑 BUNKER: {curr_win_bun} Vitórias. Perto do Recorde ({max_win_bun})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bunker))
+    
     _, palp_bma, _, _, risk_bma, curr_loss_bma, max_win_bma, curr_win_bma = gerar_backtest_bma(historico)
-    if curr_loss_bma >= (risk_bma - 1) and curr_loss_bma > 0:
-        alertas.append(f"🔥 BMA: Derrotas ({curr_loss_bma}) perto do Recorde ({risk_bma})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_bma >= (max_win_bma - 1) and curr_win_bma > 0:
-        alertas.append(f"🛑 BMA: {curr_win_bma} Vitórias. Perto do Recorde ({max_win_bma})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bma))
-        
-    # 4. Setorizada
+    if curr_loss_bma >= (risk_bma - 1) and curr_loss_bma > 0: alertas.append(f"🔥 BMA: Derrotas ({curr_loss_bma}) perto do Recorde ({risk_bma})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_bma >= (max_win_bma - 1) and curr_win_bma > 0: alertas.append(f"🛑 BMA: {curr_win_bma} Vitórias. Perto do Recorde ({max_win_bma})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bma))
+    
     _, palp_set, risk_set, curr_loss_set, max_win_set, curr_win_set = gerar_backtest_setorizado(historico)
-    if curr_loss_set >= (risk_set - 1) and curr_loss_set > 0:
-        alertas.append(f"⚖️ SETORIZADA: Derrotas ({curr_loss_set}) perto do Recorde ({risk_set})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_set >= (max_win_set - 1) and curr_win_set > 0:
-        alertas.append(f"🛑 SETORIZADA: {curr_win_set} Vitórias. Perto do Recorde ({max_win_set})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_set))
-        
+    if curr_loss_set >= (risk_set - 1) and curr_loss_set > 0: alertas.append(f"⚖️ SETORIZADA: Derrotas ({curr_loss_set}) perto do Recorde ({risk_set})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_set >= (max_win_set - 1) and curr_win_set > 0: alertas.append(f"🛑 SETORIZADA: {curr_win_set} Vitórias. Perto do Recorde ({max_win_set})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_set))
+    
+    # 2. NOVOS ALERTAS DE SETORES (V106)
+    if not df_setores.empty:
+        for idx, row in df_setores.iterrows():
+            nome = row['SETOR']
+            atraso = row['ATRASO']
+            rec_atraso = row['REC. ATRASO']
+            rec_win = row['REC. SEQ. (V)']
+            
+            # Alerta de Atraso (Crise) - Bateu ou passou recorde
+            if atraso >= rec_atraso and atraso > 0:
+                alertas.append(f"⚠️ SETOR {nome}: Atraso ({atraso}) igualou o Recorde!")
+                tipos.append("erro")
+                sugestoes.append(None)
+            
+            # Nota: Não temos o contador atual de vitórias do setor no DF, 
+            # mas podemos adicionar se quiser futuramente. 
+            # Por enquanto monitoramos o ATRASO CRÍTICO que foi o pedido principal.
+
     return alertas, tipos, sugestoes
 
 # =============================================================================
@@ -615,7 +623,8 @@ if aba_ativa:
         # --- CICLOS ---
         bichos_faltantes, duracao_ciclo, historico_ciclos, progresso_ciclo = analisar_ciclo_atual(historico)
         
-        alertas, tipos, sugestoes = monitorar_oportunidades(historico)
+        # Atualizado com df_setores para monitoramento de crise
+        alertas, tipos, sugestoes = monitorar_oportunidades(historico, df_setores)
 
         # Cabeçalho
         col_head1, col_head2 = st.columns([1, 4])
