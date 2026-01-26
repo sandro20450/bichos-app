@@ -16,9 +16,6 @@ from bs4 import BeautifulSoup
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# CONFIGURAÇÃO DE PAGAMENTO
-COTACAO_GRUPO = 23.0 
-
 # --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -619,7 +616,9 @@ if aba_ativa:
                     else: st.warning(alerta)
                     if sugestoes[i]:
                         st.info("👻 **MODO INVERSO (Os 13 do Contra):**")
-                        st.markdown(html_bolas(sugestoes[i], "cinza"), unsafe_allow_html=True)
+                        # CORREÇÃO AQUI: Em vez de bolinhas HTML, usa st.code copiável
+                        txt_inv = ", ".join([f"{n:02}" for n in sugestoes[i]])
+                        st.code(txt_inv, language="text")
 
         # --- ABAS PRINCIPAIS ---
         tab_setores, tab_comp, tab_pux, tab_graf = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "🧲 Puxadas", "📈 Gráficos"])
