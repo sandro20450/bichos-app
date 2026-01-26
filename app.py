@@ -101,6 +101,8 @@ def aplicar_estilo_banca(banca_key):
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
+        
+        .bola-puxada {{ display: inline-block; width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -227,7 +229,10 @@ def gerar_palpite_estrategico(historico):
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
+    
+    # AJUSTE AQUI: Mostrar os últimos 25 jogos na tabela
     inicio = max(0, len(historico) - 25)
+    
     max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
@@ -327,10 +332,11 @@ def analisar_dna_fixo_historico(historico):
         if temp_win > max_win: max_win = temp_win
     
     resultados_simulacao = []
-    for i, saiu in enumerate(historico[-20:]):
+    # AJUSTE AQUI: Mostrar 25 jogos na tabela Bunker
+    for i, saiu in enumerate(historico[-25:]):
         status = "❌"
         if saiu in top_12_fixo: status = "💚"
-        resultados_simulacao.insert(0, {"JOGO": f"Ult-{20-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
+        resultados_simulacao.insert(0, {"JOGO": f"Ult-{25-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
         
     curr_streak = 0; curr_win_streak = 0
     for res in resultados_simulacao: 
@@ -354,7 +360,9 @@ def gerar_palpite_setorizado(historico):
 def gerar_backtest_setorizado(historico):
     if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
-    inicio = max(0, len(historico) - 10)
+    # AJUSTE AQUI: Mostrar 25 jogos na tabela Setorizada
+    inicio = max(0, len(historico) - 25)
+    
     lista_atual = gerar_palpite_setorizado(historico)
     max_derrotas = 0; temp_derrotas = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -432,7 +440,9 @@ def gerar_backtest_bma(historico):
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
         
-    inicio = max(0, len(historico) - 10)
+    # AJUSTE AQUI: Mostrar 25 jogos na tabela BMA
+    inicio = max(0, len(historico) - 25)
+    
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
