@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
+# CONFIGURAÇÃO DE PAGAMENTO
+COTACAO_GRUPO = 23.0 
+
 # --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -98,8 +101,6 @@ def aplicar_estilo_banca(banca_key):
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
-        
-        .bola-puxada {{ display: inline-block; width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -208,23 +209,6 @@ def raspar_ultimo_resultado_real(url, banca_key):
         return candidatos[0][1], candidatos[0][0], "Sucesso"
     except Exception as e: return None, None, f"Erro: {e}"
 
-def calcular_puxada_do_ultimo(historico):
-    if len(historico) < 2: return None, []
-    ultimo = historico[-1]
-    seguintes = []
-    for i in range(len(historico)-1):
-        if historico[i] == ultimo:
-            seguintes.append(historico[i+1])
-    if not seguintes: return ultimo, []
-    contagem = Counter(seguintes)
-    total_ocorrencias = len(seguintes)
-    rank = contagem.most_common(3)
-    puxadas_com_pct = []
-    for grupo, freq in rank:
-        pct = (freq / total_ocorrencias) * 100
-        puxadas_com_pct.append((grupo, pct))
-    return ultimo, puxadas_com_pct
-
 def calcular_ranking_forca_completo(historico):
     if not historico: return []
     hist_reverso = historico[::-1]
@@ -234,17 +218,6 @@ def calcular_ranking_forca_completo(historico):
     c_medio = Counter(hist_reverso[:50])
     for g, f in c_medio.items(): scores[g] += (f * 1.0)
     rank = sorted(scores.items(), key=lambda x: -x[1])
-    return [g for g, s in rank]
-
-def calcular_ranking_atraso_completo(historico):
-    if not historico: return []
-    atrasos = {}
-    total = len(historico)
-    for b in range(1, 26):
-        indices = [i for i, x in enumerate(historico) if x == b]
-        val = total - 1 - indices[-1] if indices else total
-        atrasos[b] = val
-    rank = sorted(atrasos.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
 def gerar_palpite_estrategico(historico):
@@ -588,7 +561,6 @@ if aba_ativa:
         palp_top12 = gerar_palpite_estrategico(historico)
         
         df_setores, seq_visual = analisar_setores_bma_com_maximo(historico)
-        ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
         lista_bunker, df_bunker, max_loss_bun, curr_loss_bun, max_win_bun, curr_win_bun = analisar_dna_fixo_historico(historico)
         
@@ -616,12 +588,12 @@ if aba_ativa:
                     else: st.warning(alerta)
                     if sugestoes[i]:
                         st.info("👻 **MODO INVERSO (Os 13 do Contra):**")
-                        # CORREÇÃO AQUI: Em vez de bolinhas HTML, usa st.code copiável
+                        # CORREÇÃO AQUI: Lista copiável
                         txt_inv = ", ".join([f"{n:02}" for n in sugestoes[i]])
                         st.code(txt_inv, language="text")
 
         # --- ABAS PRINCIPAIS ---
-        tab_setores, tab_comp, tab_pux, tab_graf = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "🧲 Puxadas", "📈 Gráficos"])
+        tab_setores, tab_comp = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)"])
         
         with tab_setores:
             st.write("Visual Recente (⬅️ Mais Novo):")
@@ -663,29 +635,6 @@ if aba_ativa:
                 st.table(df_bunker)
                 st.warning(f"⚠️ Rec. Derrotas: {max_loss_bun} | 🏆 Rec. Vitórias: {max_win_bun}")
                 with st.expander("Ver Palpite Bunker"): st.markdown(html_bolas(lista_bunker, "azul"), unsafe_allow_html=True)
-
-        with tab_pux:
-            st.write(f"### 🧲 Quem puxa quem? (Baseado no {ultimo_bicho:02})")
-            if lista_puxadas:
-                c_p1, c_p2, c_p3 = st.columns(3)
-                cols_p = [c_p1, c_p2, c_p3]
-                for i, (grupo, pct) in enumerate(lista_puxadas):
-                    with cols_p[i]:
-                        st.markdown(f"<div style='text-align:center;'><h4>{i+1}º Mais Forte</h4></div>", unsafe_allow_html=True)
-                        st.markdown(f"<div style='display:flex;justify-content:center;'><div class='bola-puxada'>{grupo:02}</div></div>", unsafe_allow_html=True)
-                        st.progress(int(pct)); st.caption(f"Freq: {int(pct)}%")
-            else: st.warning("Dados insuficientes.")
-
-        with tab_graf:
-            st.write("### 🐢 Top Atrasados")
-            todos_atrasos = calcular_ranking_atraso_completo(historico)
-            atrasos_dict = {}
-            total = len(historico)
-            for b in todos_atrasos[:12]:
-                indices = [i for i, x in enumerate(historico) if x == b]
-                val = total - 1 - indices[-1] if indices else total
-                atrasos_dict[f"Gr {b:02}"] = val
-            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
 
         st.markdown("---")
         with st.expander("🕒 Grade de Horários da Banca"):
