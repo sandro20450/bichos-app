@@ -109,63 +109,36 @@ def deletar_ultimo():
         except: return False
     return False
 
-# --- IMPORTAÇÃO DO SITE (NOVA) ---
 def raspar_site_tradicional(url):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code != 200: return None, None, None, "Erro Site"
-        
         soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Procura blocos de sorteio
-        # No resultado facil geralmente tem divs com horarios ou "Loteria Tradicional"
-        # Vamos pegar o PRIMEIRO bloco que tiver premios (assumindo ser o mais recente)
-        
-        # Estrategia: Buscar tabelas e validar se tem "1º" e "Grupo"
         tabelas = soup.find_all('table')
-        
-        bicho1 = None
-        bicho2 = None
-        horario_encontrado = "00:00"
-        
+        bicho1 = None; bicho2 = None; horario_encontrado = "00:00"
         for tabela in tabelas:
             texto_tabela = tabela.get_text()
             if "1º" in texto_tabela and "Grupo" in texto_tabela:
-                # Tenta achar horario logo antes da tabela
-                # Procura no container pai ou anteriores
                 container = tabela.parent
                 texto_container = container.get_text() if container else ""
                 match_hora = re.search(r'(\d{2}:\d{2})', texto_container)
-                
-                # Se nao achou no pai, tenta no anterior (comum em sites de resultado)
                 if not match_hora:
                     prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                     if prev: match_hora = re.search(r'(\d{2}:\d{2})', prev)
-                
-                if match_hora:
-                    horario_encontrado = match_hora.group(1)
-                
-                # Extrai os bichos (1º e 2º premio)
+                if match_hora: horario_encontrado = match_hora.group(1)
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
                     cols = linha.find_all('td')
                     if len(cols) >= 2:
                         txt_premio = cols[0].get_text().strip()
-                        # A coluna do grupo geralmente é a ultima ou a 3a
                         txt_grupo = cols[-1].get_text().strip() 
-                        
-                        # Verifica se é numero
                         if txt_grupo.isdigit():
                             grp = int(txt_grupo)
                             if "1º" in txt_premio or "1" == txt_premio: bicho1 = grp
                             elif "2º" in txt_premio or "2" == txt_premio: bicho2 = grp
-                
-                # Se achou os dois, para tudo e retorna
-                if bicho1 and bicho2:
-                    return bicho1, bicho2, horario_encontrado, "Sucesso"
-                    
-        return None, None, None, "Dados não encontrados no HTML"
+                if bicho1 and bicho2: return bicho1, bicho2, horario_encontrado, "Sucesso"
+        return None, None, None, "Dados não encontrados"
     except Exception as e: return None, None, None, f"Erro: {e}"
 
 # =============================================================================
@@ -183,8 +156,9 @@ def gerar_universo_duques():
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite(lista_tuplas):
+    lista_ordenada = sorted(lista_tuplas)
     texto = ""
-    for p in sorted(lista_tuplas): texto += f"[{p[0]:02},{p[1]:02}], "
+    for p in lista_ordenada: texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
 def calcular_inverso_otimizado(palpite_atual, historico):
@@ -200,7 +174,7 @@ def calcular_inverso_otimizado(palpite_atual, historico):
     rank = sorted(pool_inverso, key=lambda x: scores[x], reverse=True)
     return rank[:126]
 
-# Estrategias
+# --- ESTRATÉGIAS ---
 def estrategia_bma(historico_slice):
     if len(historico_slice) < 10: return []
     _, mapa_setores = gerar_universo_duques()
@@ -241,6 +215,19 @@ def estrategia_dinamica(historico_slice):
 
 def estrategia_bunker(historico_slice):
     return [d for d, qtd in Counter(historico_slice).most_common()][:126]
+
+# NOVA: ESTRATÉGIA ICEBERG (ATRASADOS)
+def estrategia_iceberg(historico_slice):
+    todos, _ = gerar_universo_duques()
+    ultima_vez = {d: -1 for d in todos}
+    # Encontra o índice da última aparição (quanto menor o índice, mais antigo)
+    for i, sorteio in enumerate(historico_slice):
+        ultima_vez[sorteio] = i
+    
+    # Ordena pelo índice (crescente). Quem apareceu no índice 0 (ou -1) é o mais velho.
+    # Quem apareceu no índice 'len-1' é o mais novo.
+    rank = sorted(ultima_vez.items(), key=lambda x: x[1])
+    return [d for d, idx in rank][:126]
 
 def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
     if len(historico_completo) < n_jogos + 10: return pd.DataFrame(), 0, 0, 0, 0
@@ -304,7 +291,6 @@ with st.sidebar:
     st.image(CONFIG_BANCA['logo_url'], width=100)
     st.title("MENU DUQUE")
     
-    # IMPORTAR DO SITE (NOVO)
     if st.button("📡 Importar do Site"):
         with st.spinner("Buscando na central..."):
             b1, b2, hor, msg = raspar_site_tradicional(CONFIG_BANCA['url_site'])
@@ -312,16 +298,12 @@ with st.sidebar:
                 st.session_state['auto_g1'] = b1
                 st.session_state['auto_g2'] = b2
                 st.success(f"Achado! {b1}-{b2} às {hor}")
-                # Tenta casar horario
                 h_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
                 if hor in h_list: st.session_state['auto_idx_h'] = h_list.index(hor)
-            else:
-                st.error(msg)
+            else: st.error(msg)
 
     st.markdown("---")
     horarios_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
-    
-    # Inputs Controlados pelo Session State
     h_sel = st.selectbox("Horário:", horarios_list, index=st.session_state['auto_idx_h'])
     c1, c2 = st.columns(2)
     with c1: b1_in = st.number_input("1º Bicho", 1, 25, st.session_state['auto_g1'])
@@ -345,18 +327,21 @@ if len(historico) > 0:
     st.info(f"📊 Jogos: {len(historico)} | 🏁 Último: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo})")
     
     df_stress, s_crise, s_trend = calcular_tabela_stress(historico)
+    
     palp_bma = estrategia_bma(historico)
     palp_set = estrategia_setorizada(historico)
     palp_din = estrategia_dinamica(historico)
     palp_bun = estrategia_bunker(historico)
+    palp_ice = estrategia_iceberg(historico) # NOVO
     
     with st.spinner("Processando Simulação Real..."):
         bt_bma, ml_bma, cl_bma, mw_bma, cw_bma = rodar_simulacao_real(historico, estrategia_bma)
         bt_set, ml_set, cl_set, mw_set, cw_set = rodar_simulacao_real(historico, estrategia_setorizada)
         bt_din, ml_din, cl_din, mw_din, cw_din = rodar_simulacao_real(historico, estrategia_dinamica)
         bt_bun, ml_bun, cl_bun, mw_bun, cw_bun = rodar_simulacao_real(historico, estrategia_bunker)
+        bt_ice, ml_ice, cl_ice, mw_ice, cw_ice = rodar_simulacao_real(historico, estrategia_iceberg)
     
-    # --- ÁREA DE ALERTAS ---
+    # --- ALERTAS E INVERSÃO ---
     alertas = []
     
     def criar_alerta_inverso(nome, curr, max_w, palp):
@@ -369,6 +354,7 @@ if len(historico) > 0:
     if cl_set >= (ml_set - 1): alertas.append(f"⚖️ SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
     if cl_din >= (ml_din - 1): alertas.append(f"🚀 DINÂMICA: Derrotas ({cl_din}) perto do Recorde ({ml_din})!")
     if cl_bun >= (ml_bun - 1): alertas.append(f"🧬 BUNKER: Derrotas ({cl_bun}) perto do Recorde ({ml_bun})!")
+    if cl_ice >= (ml_ice - 1): alertas.append(f"🥶 ICEBERG: Derrotas ({cl_ice}) perto do Recorde ({ml_ice})!")
     
     if alertas:
         for al in alertas: st.error(al)
@@ -377,12 +363,12 @@ if len(historico) > 0:
     if cw_set >= (mw_set - 1) and cw_set > 0: criar_alerta_inverso("SETORIZADA", cw_set, mw_set, palp_set)
     if cw_din >= (mw_din - 1) and cw_din > 0: criar_alerta_inverso("DINÂMICA", cw_din, mw_din, palp_din)
     if cw_bun >= (mw_bun - 1) and cw_bun > 0: criar_alerta_inverso("BUNKER", cw_bun, mw_bun, palp_bun)
+    if cw_ice >= (mw_ice - 1) and cw_ice > 0: criar_alerta_inverso("ICEBERG", cw_ice, mw_ice, palp_ice)
     
     # --- PAINEL PRINCIPAL ---
-    tab1, tab2 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (2 Mesas)"])
+    tab1, tab2 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (3 Mesas)"])
     
     with tab1:
-        # Histórico Visual (Bolinhas)
         _, mapa_vis = gerar_universo_duques()
         html_b = "<div>"
         for d in reversed(historico[-12:]):
@@ -412,28 +398,42 @@ if len(historico) > 0:
             with st.expander("Ver Palpite HOJE"): st.code(formatar_palpite(palp_set), language="text")
 
     with tab2:
-        c1, c2 = st.columns(2)
+        # AGORA SÃO 3 COLUNAS PARA CABER A ICEBERG
+        c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown("### 🚀 Top 126 Dinâmico")
+            st.markdown("### 🚀 Dinâmica")
+            st.caption("Os Quentes do Momento")
             st.table(bt_din)
-            st.markdown(f'<div class="metric-box-loss">⚠️ Derrotas Recorde: {ml_din}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-box-win">🏆 Vitórias Recorde: {mw_din}</div>', unsafe_allow_html=True)
-            with st.expander("Ver Palpite HOJE"): st.code(formatar_palpite(palp_din), language="text")
+            st.markdown(f'<div class="metric-box-loss">⚠️ Max Loss: {ml_din}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-box-win">🏆 Max Win: {mw_din}</div>', unsafe_allow_html=True)
+            with st.expander("Ver Dinâmica"): st.code(formatar_palpite(palp_din), language="text")
         with c2:
-            st.markdown("### 🧬 Bunker 126 (Fixo)")
+            st.markdown("### 🧬 Bunker")
+            st.caption("Força Histórica (Fixa)")
             st.table(bt_bun)
-            st.markdown(f'<div class="metric-box-loss">⚠️ Derrotas Recorde: {ml_bun}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-box-win">🏆 Vitórias Recorde: {mw_bun}</div>', unsafe_allow_html=True)
-            with st.expander("Ver Palpite HOJE"): st.code(formatar_palpite(palp_bun), language="text")
+            st.markdown(f'<div class="metric-box-loss">⚠️ Max Loss: {ml_bun}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-box-win">🏆 Max Win: {mw_bun}</div>', unsafe_allow_html=True)
+            with st.expander("Ver Bunker"): st.code(formatar_palpite(palp_bun), language="text")
+        with c3:
+            st.markdown("### 🥶 Iceberg")
+            st.caption("Os 126 Mais Atrasados")
+            st.table(bt_ice)
+            st.markdown(f'<div class="metric-box-loss">⚠️ Max Loss: {ml_ice}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-box-win">🏆 Max Win: {mw_ice}</div>', unsafe_allow_html=True)
+            with st.expander("Ver Iceberg"): st.code(formatar_palpite(palp_ice), language="text")
 
-    # --- NOVO: FERRAMENTAS EXTRAS ---
     st.markdown("---")
     with st.expander("🛠️ Ferramentas Extras (Inverso Manual)"):
-        st.write("Gere o **Inverso Otimizado** manualmente, mesmo sem alerta de risco.")
-        if st.button("🔄 Gerar Inverso Dinâmico (126 do Contra)"):
-            inv_din = calcular_inverso_otimizado(palp_din, historico)
-            st.info("Aqui estão os 126 melhores duques que NÃO estão no palpite Dinâmico:")
-            st.code(formatar_palpite(inv_din), language="text")
+        st.write("Gere o **Inverso Otimizado** manualmente.")
+        strat_choice = st.selectbox("Escolha a Estratégia Base:", ["DINÂMICA", "BUNKER", "ICEBERG"])
+        if st.button("🔄 Gerar Inverso"):
+            base = []
+            if strat_choice == "DINÂMICA": base = palp_din
+            elif strat_choice == "BUNKER": base = palp_bun
+            elif strat_choice == "ICEBERG": base = palp_ice
+            inv = calcular_inverso_otimizado(base, historico)
+            st.info(f"Top 126 Jogando CONTRA {strat_choice}:")
+            st.code(formatar_palpite(inv), language="text")
 
     st.markdown("---")
     with st.expander("🕒 Grade de Horários"):
