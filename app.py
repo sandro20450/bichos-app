@@ -155,7 +155,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ (PADRÃO) ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -211,6 +211,23 @@ def raspar_ultimo_resultado_real(url, banca_key):
         return candidatos[0][1], candidatos[0][0], "Sucesso"
     except Exception as e: return None, None, f"Erro: {e}"
 
+def calcular_puxada_do_ultimo(historico):
+    if len(historico) < 2: return None, []
+    ultimo = historico[-1]
+    seguintes = []
+    for i in range(len(historico)-1):
+        if historico[i] == ultimo:
+            seguintes.append(historico[i+1])
+    if not seguintes: return ultimo, []
+    contagem = Counter(seguintes)
+    total_ocorrencias = len(seguintes)
+    rank = contagem.most_common(3)
+    puxadas_com_pct = []
+    for grupo, freq in rank:
+        pct = (freq / total_ocorrencias) * 100
+        puxadas_com_pct.append((grupo, pct))
+    return ultimo, puxadas_com_pct
+
 def calcular_ranking_forca_completo(historico):
     if not historico: return []
     hist_reverso = historico[::-1]
@@ -222,17 +239,47 @@ def calcular_ranking_forca_completo(historico):
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
+def calcular_ranking_atraso_completo(historico):
+    if not historico: return []
+    atrasos = {}
+    total = len(historico)
+    for b in range(1, 26):
+        indices = [i for i, x in enumerate(historico) if x == b]
+        val = total - 1 - indices[-1] if indices else total
+        atrasos[b] = val
+    rank = sorted(atrasos.items(), key=lambda x: -x[1])
+    return [g for g, s in rank]
+
 def gerar_palpite_estrategico(historico):
     todos_forca = calcular_ranking_forca_completo(historico)
     return todos_forca[:12]
 
+# --- LÓGICA DE CICLOS (NOVO) ---
+def analisar_ciclo_atual(historico):
+    if not historico: return [], 0, [], 0
+    ciclos_fechados = []
+    conjunto_atual = set()
+    inicio_ciclo = 0
+    
+    for i, bicho in enumerate(historico):
+        conjunto_atual.add(bicho)
+        if len(conjunto_atual) == 25:
+            duracao = i - inicio_ciclo + 1
+            ciclos_fechados.append(duracao)
+            conjunto_atual = set()
+            inicio_ciclo = i + 1
+            
+    # Estado atual
+    faltam_sair = list(set(range(1, 26)) - conjunto_atual)
+    faltam_sair.sort()
+    duracao_atual = len(historico) - inicio_ciclo
+    
+    return faltam_sair, duracao_atual, ciclos_fechados, len(conjunto_atual)
+
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
-    
-    # AJUSTE AQUI: Mostrar os últimos 25 jogos na tabela
-    inicio = max(0, len(historico) - 25)
-    
+    inicio = max(0, len(historico) - 25) # 25 Jogos
     max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
@@ -332,8 +379,7 @@ def analisar_dna_fixo_historico(historico):
         if temp_win > max_win: max_win = temp_win
     
     resultados_simulacao = []
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela Bunker
-    for i, saiu in enumerate(historico[-25:]):
+    for i, saiu in enumerate(historico[-25:]): # 25 Jogos
         status = "❌"
         if saiu in top_12_fixo: status = "💚"
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{25-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
@@ -360,9 +406,7 @@ def gerar_palpite_setorizado(historico):
 def gerar_backtest_setorizado(historico):
     if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela Setorizada
-    inicio = max(0, len(historico) - 25)
-    
+    inicio = max(0, len(historico) - 25) # 25 Jogos
     lista_atual = gerar_palpite_setorizado(historico)
     max_derrotas = 0; temp_derrotas = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
@@ -440,9 +484,7 @@ def gerar_backtest_bma(historico):
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
         
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela BMA
-    inicio = max(0, len(historico) - 25)
-    
+    inicio = max(0, len(historico) - 25) # 25 Jogos
     for i in range(inicio, len(historico)):
         saiu = historico[i]
         passado = historico[:i]
@@ -571,12 +613,16 @@ if aba_ativa:
         palp_top12 = gerar_palpite_estrategico(historico)
         
         df_setores, seq_visual = analisar_setores_bma_com_maximo(historico)
+        ultimo_bicho, lista_puxadas = calcular_puxada_do_ultimo(historico)
         
         lista_bunker, df_bunker, max_loss_bun, curr_loss_bun, max_win_bun, curr_win_bun = analisar_dna_fixo_historico(historico)
         
         df_setor, lista_setor, risk_setor, curr_loss_set, max_win_set, curr_win_set = gerar_backtest_setorizado(historico)
         
         df_bma, palp_bma, crise_bma, trend_bma, risk_bma, curr_loss_bma, max_win_bma, curr_win_bma = gerar_backtest_bma(historico)
+        
+        # --- CICLOS ---
+        bichos_faltantes, duracao_ciclo, historico_ciclos, progresso_ciclo = analisar_ciclo_atual(historico)
         
         alertas, tipos, sugestoes = monitorar_oportunidades(historico)
 
@@ -598,12 +644,12 @@ if aba_ativa:
                     else: st.warning(alerta)
                     if sugestoes[i]:
                         st.info("👻 **MODO INVERSO (Os 13 do Contra):**")
-                        # CORREÇÃO AQUI: Lista copiável
+                        # Lista copiável
                         txt_inv = ", ".join([f"{n:02}" for n in sugestoes[i]])
                         st.code(txt_inv, language="text")
 
         # --- ABAS PRINCIPAIS ---
-        tab_setores, tab_comp = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)"])
+        tab_setores, tab_comp, tab_ciclos, tab_pux, tab_graf = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "🔄 Ciclos", "🧲 Puxadas", "📈 Gráficos"])
         
         with tab_setores:
             st.write("Visual Recente (⬅️ Mais Novo):")
@@ -645,6 +691,49 @@ if aba_ativa:
                 st.table(df_bunker)
                 st.warning(f"⚠️ Rec. Derrotas: {max_loss_bun} | 🏆 Rec. Vitórias: {max_win_bun}")
                 with st.expander("Ver Palpite Bunker"): st.markdown(html_bolas(lista_bunker, "azul"), unsafe_allow_html=True)
+        
+        with tab_ciclos:
+            st.subheader("🔄 Monitor de Ciclos (1-25)")
+            st.write(f"**Status Atual:** {progresso_ciclo} de 25 bichos já saíram.")
+            st.progress(progresso_ciclo / 25)
+            
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                st.metric("Jogos no Ciclo Atual", f"{duracao_ciclo} Jogos")
+            with col_c2:
+                if historico_ciclos:
+                    avg_ciclo = sum(historico_ciclos) / len(historico_ciclos)
+                    st.metric("Média Histórica para Fechar", f"{avg_ciclo:.1f} Jogos")
+            
+            st.markdown("### 🎯 Faltam Sair (Sugestão de Jogo):")
+            if bichos_faltantes:
+                txt_ciclo = ", ".join([f"{n:02}" for n in bichos_faltantes])
+                st.code(txt_ciclo, language="text")
+            else:
+                st.success("O ciclo acabou de fechar! Um novo começou agora.")
+
+        with tab_pux:
+            st.write(f"### 🧲 Quem puxa quem? (Baseado no {ultimo_bicho:02})")
+            if lista_puxadas:
+                c_p1, c_p2, c_p3 = st.columns(3)
+                cols_p = [c_p1, c_p2, c_p3]
+                for i, (grupo, pct) in enumerate(lista_puxadas):
+                    with cols_p[i]:
+                        st.markdown(f"<div style='text-align:center;'><h4>{i+1}º Mais Forte</h4></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='display:flex;justify-content:center;'><div class='bola-puxada'>{grupo:02}</div></div>", unsafe_allow_html=True)
+                        st.progress(int(pct)); st.caption(f"Freq: {int(pct)}%")
+            else: st.warning("Dados insuficientes.")
+
+        with tab_graf:
+            st.write("### 🐢 Top Atrasados")
+            todos_atrasos = calcular_ranking_atraso_completo(historico)
+            atrasos_dict = {}
+            total = len(historico)
+            for b in todos_atrasos[:12]:
+                indices = [i for i, x in enumerate(historico) if x == b]
+                val = total - 1 - indices[-1] if indices else total
+                atrasos_dict[f"Gr {b:02}"] = val
+            st.bar_chart(pd.DataFrame.from_dict(atrasos_dict, orient='index', columns=['Jogos']))
 
         st.markdown("---")
         with st.expander("🕒 Grade de Horários da Banca"):
