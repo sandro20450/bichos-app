@@ -220,6 +220,17 @@ def calcular_ranking_forca_completo(historico):
     rank = sorted(scores.items(), key=lambda x: -x[1])
     return [g for g, s in rank]
 
+def calcular_ranking_atraso_completo(historico):
+    if not historico: return []
+    atrasos = {}
+    total = len(historico)
+    for b in range(1, 26):
+        indices = [i for i, x in enumerate(historico) if x == b]
+        val = total - 1 - indices[-1] if indices else total
+        atrasos[b] = val
+    rank = sorted(atrasos.items(), key=lambda x: -x[1])
+    return [g for g, s in rank]
+
 def gerar_palpite_estrategico(historico):
     todos_forca = calcular_ranking_forca_completo(historico)
     return todos_forca[:12]
@@ -543,18 +554,21 @@ with st.sidebar:
     
     st.markdown("---")
     
-    col_import, _ = st.columns([1, 0.1])
-    with col_import:
-        if st.button("📡 Importar Resultado do Site"):
-            with st.spinner("Buscando dados na central..."):
+    c1_imp, c2_link = st.columns(2)
+    with c1_imp:
+        if st.button("📡 Importar"):
+            with st.spinner("Buscando dados..."):
                 grp, hor, msg = raspar_ultimo_resultado_real(config_banca['url_site'], banca_selecionada)
                 if grp:
-                    st.success(f"Encontrado! G{grp:02} às {hor}")
+                    st.success(f"G{grp:02} às {hor}")
                     st.session_state['auto_grupo'] = grp
                     if hor in lista_horarios:
                         st.session_state['auto_horario_idx'] = lista_horarios.index(hor)
                 else:
-                    st.error(f"Não encontrado ou Data antiga ({msg})")
+                    st.error(f"Erro: {msg}")
+    
+    with c2_link:
+        st.link_button("🔗 Ver Site", config_banca['url_site'])
     
     st.write("📝 **Registrar Sorteio**")
     novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
@@ -626,7 +640,6 @@ if aba_ativa:
                         st.code(txt_inv, language="text")
 
         # --- ABAS PRINCIPAIS ---
-        # CORREÇÃO AQUI: Apenas 3 abas, removidos Gráficos e Puxadas.
         tab_setores, tab_comp, tab_ciclos = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "🔄 Ciclos"])
         
         with tab_setores:
