@@ -9,7 +9,7 @@ import pytz
 import time
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES ---
+# --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
 # =============================================================================
 st.set_page_config(page_title="Central DUQUE (Tradicional)", page_icon="👑", layout="wide")
 
@@ -21,6 +21,26 @@ CONFIG_BANCA = {
     "card_bg": "rgba(255, 255, 255, 0.1)",
     "horarios": "11:20 🔹 12:20 🔹 13:20 🔹 14:20 🔹 18:20 🔹 19:20 🔹 20:20 🔹 21:20 🔹 22:20 🔹 23:20"
 }
+
+# Inicialização de Estados de Som
+if 'tocar_som_salvar' not in st.session_state:
+    st.session_state['tocar_som_salvar'] = False
+if 'tocar_som_apagar' not in st.session_state:
+    st.session_state['tocar_som_apagar'] = False
+
+def reproduzir_som(tipo):
+    if tipo == 'sucesso':
+        sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
+    elif tipo == 'apagar':
+        sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
+    else:
+        return
+        
+    st.markdown(f"""
+        <audio autoplay style="display:none;">
+            <source src="{sound_url}" type="audio/mpeg">
+        </audio>
+    """, unsafe_allow_html=True)
 
 st.markdown(f"""
 <style>
@@ -39,6 +59,15 @@ st.markdown(f"""
     .metric-box-win {{ background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 5px; font-weight: bold; }}
 </style>
 """, unsafe_allow_html=True)
+
+# Executa som se necessário
+if st.session_state['tocar_som_salvar']:
+    reproduzir_som('sucesso')
+    st.session_state['tocar_som_salvar'] = False
+
+if st.session_state['tocar_som_apagar']:
+    reproduzir_som('apagar')
+    st.session_state['tocar_som_apagar'] = False
 
 # =============================================================================
 # --- 2. CONEXÃO ---
@@ -61,14 +90,18 @@ def carregar_dados():
     if worksheet:
         dados_completos = worksheet.get_all_values()
         lista_duques = []
+        ultimo_horario = "--:--"
         try:
             for row in dados_completos:
                 if len(row) >= 2 and row[0].isdigit() and row[1].isdigit():
                     g1, g2 = int(row[0]), int(row[1])
                     lista_duques.append(tuple(sorted((g1, g2))))
+                    # Tenta pegar o horario (Coluna C / índice 2)
+                    if len(row) >= 3:
+                        ultimo_horario = row[2]
         except: pass
-        return lista_duques
-    return []
+        return lista_duques, ultimo_horario
+    return [], "--:--"
 
 def salvar_duque(b1, b2, horario):
     worksheet = conectar_planilha()
@@ -114,28 +147,21 @@ def formatar_palpite(lista_tuplas):
         texto += f"[{p[0]:02},{p[1]:02}], "
     return texto.rstrip(", ")
 
-# --- CÁLCULO INVERSO OTIMIZADO (126 DUQUES) ---
+# --- CÁLCULO INVERSO OTIMIZADO ---
 def calcular_inverso_otimizado(palpite_atual, historico):
-    # 1. Pega os 325 duques
     todos, _ = gerar_universo_duques()
-    
-    # 2. Descobre quem são os 199 excluídos (Ghost Pool)
     set_palpite = set(palpite_atual)
     pool_inverso = [d for d in todos if d not in set_palpite]
     
-    # 3. Classifica esses 199 por força (Dinâmica)
     hist_rev = historico[::-1]
     scores = {d: 0 for d in pool_inverso}
-    
     c_curto = Counter(hist_rev[:20])
     c_medio = Counter(hist_rev[:50])
     
     for d in pool_inverso:
-        # Usa a mesma lógica de peso do Dinâmico para achar os melhores do resto
         val = (c_curto[d] * 3.0) + (c_medio[d] * 1.0)
         scores[d] = val
         
-    # 4. Pega os TOP 126 desse grupo inverso
     rank = sorted(pool_inverso, key=lambda x: scores[x], reverse=True)
     return rank[:126]
 
@@ -290,18 +316,24 @@ with st.sidebar:
     c1, c2 = st.columns(2)
     with c1: b1 = st.number_input("1º Bicho", 1, 25, st.session_state['g1'])
     with c2: b2 = st.number_input("2º Bicho", 1, 25, st.session_state['g2'])
+    
     if st.button("💾 SALVAR DUQUE", type="primary"):
         if salvar_duque(b1, b2, h_sel):
+            st.session_state['tocar_som_salvar'] = True
             st.toast("Duque Salvo!", icon="✅"); time.sleep(0.5); st.rerun()
+            
     if st.button("🗑️ APAGAR ÚLTIMO"):
         if deletar_ultimo():
+            st.session_state['tocar_som_apagar'] = True
             st.toast("Apagado!", icon="🗑️"); time.sleep(0.5); st.rerun()
 
-historico = carregar_dados()
+historico, ultimo_horario_salvo = carregar_dados()
 st.title(f"👑 {CONFIG_BANCA['display_name']}")
 
 if len(historico) > 0:
-    st.info(f"Base de Dados: {len(historico)} Sorteios Registrados")
+    # --- CABEÇALHO ATUALIZADO ---
+    ultimo_res = historico[-1]
+    st.info(f"📊 Base de Dados: {len(historico)} Jogos | 🏁 Último: {ultimo_res[0]:02}-{ultimo_res[1]:02} às {ultimo_horario_salvo}")
     
     df_stress, s_crise, s_trend = calcular_tabela_stress(historico)
     
@@ -316,20 +348,17 @@ if len(historico) > 0:
         bt_din, ml_din, cl_din, mw_din, cw_din = rodar_simulacao_real(historico, estrategia_dinamica)
         bt_bun, ml_bun, cl_bun, mw_bun, cw_bun = rodar_simulacao_real(historico, estrategia_bunker)
     
-    # --- SISTEMA DE ALERTAS E INVERSÃO OTIMIZADA ---
+    # --- ALERTAS E INVERSÃO ---
     alertas = []
     
-    # Função para exibir alerta e botão de inverso
     def exibir_alerta_inverso(nome_strat, curr_win, max_win, palpite_original):
         msg = f"🛑 CUIDADO {nome_strat}: {curr_win} Vitórias seguidas. Perto do Recorde ({max_win}). O Inverso Otimizado é indicado!"
         st.warning(msg)
-        # Calcula apenas 126 duques (os melhores dentre os rejeitados)
         inverso_top = calcular_inverso_otimizado(palpite_original, historico)
         with st.expander(f"👻 Ver {nome_strat} INVERSO (Top 126 do Contra)"):
             st.info("Jogar CONTRA a tendência usando os 126 melhores rejeitados:")
             st.code(formatar_palpite(inverso_top), language="text")
 
-    # Alertas de Oportunidade (Verde/Derrota)
     if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 OPORTUNIDADE BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
     if cl_set >= (ml_set - 1): alertas.append(f"⚖️ OPORTUNIDADE SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
     if cl_din >= (ml_din - 1): alertas.append(f"🚀 OPORTUNIDADE DINÂMICA: Derrotas ({cl_din}) perto do Recorde ({ml_din})!")
@@ -338,13 +367,13 @@ if len(historico) > 0:
     if alertas:
         for al in alertas: st.error(al)
         
-    # Alertas de Inversão (Vermelho/Vitória) - Aciona perto ou no recorde
     if cw_bma >= (mw_bma - 1) and cw_bma > 0: exibir_alerta_inverso("BMA", cw_bma, mw_bma, palp_bma_hoje)
     if cw_set >= (mw_set - 1) and cw_set > 0: exibir_alerta_inverso("SETORIZADA", cw_set, mw_set, palp_set_hoje)
     if cw_din >= (mw_din - 1) and cw_din > 0: exibir_alerta_inverso("DINÂMICA", cw_din, mw_din, palp_din_hoje)
     if cw_bun >= (mw_bun - 1) and cw_bun > 0: exibir_alerta_inverso("BUNKER", cw_bun, mw_bun, palp_bun_hoje)
     
-    tab1, tab2, tab3 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (2 Mesas)", "📜 Histórico"])
+    # --- ABAS (REDUZIDAS: Histórico removido) ---
+    tab1, tab2 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (2 Mesas)"])
     
     with tab1:
         st.write("Histórico Recente por Setor (⬅️ Mais Novo):")
@@ -400,11 +429,6 @@ if len(historico) > 0:
             st.markdown(f'<div class="metric-box-win">🏆 Recorde Vitórias (50j): {mw_bun}</div>', unsafe_allow_html=True)
             with st.expander("Ver Palpite HOJE (126 Bunker)"):
                 st.code(formatar_palpite(palp_bun_hoje), language="text")
-
-    with tab3:
-        st.write("Últimos resultados:")
-        for p in reversed(historico[-10:]):
-            st.markdown(f"<div class='bola-duque'>{p[0]:02} - {p[1]:02}</div>", unsafe_allow_html=True)
             
     st.markdown("---")
     with st.expander("🕒 Grade de Horários da Banca"):
