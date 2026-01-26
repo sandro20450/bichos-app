@@ -16,10 +16,6 @@ from bs4 import BeautifulSoup
 # =============================================================================
 st.set_page_config(page_title="BICHOS da LOTECA", page_icon="🦅", layout="wide")
 
-# CONFIGURAÇÃO DE PAGAMENTO
-COTACAO_GRUPO = 23.0 
-
-# --- CENTRAL DE CONFIGURAÇÃO ---
 CONFIG_BANCAS = {
     "LOTEP": {
         "display_name": "LOTEP PARAÍBA",
@@ -28,10 +24,7 @@ CONFIG_BANCAS = {
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
         "url_site": "https://www.resultadofacil.com.br/resultados-lotep-de-hoje",
-        "horarios": {
-            "segsab": "10:45 🔹 12:45 🔹 15:45 🔹 18:00",
-            "dom": "10:00 🔹 12:45"
-        }
+        "horarios": {"segsab": "10:45 🔹 12:45 🔹 15:45 🔹 18:00", "dom": "10:00 🔹 12:45"}
     },
     "CAMINHODASORTE": {
         "display_name": "CAMINHO DA SORTE",
@@ -40,10 +33,7 @@ CONFIG_BANCAS = {
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
         "url_site": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-de-hoje",
-        "horarios": {
-            "segsab": "09:40 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 20:00 🔹 21:00",
-            "dom": "09:40 🔹 11:00 🔹 12:40"
-        }
+        "horarios": {"segsab": "09:40 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 20:00 🔹 21:00", "dom": "09:40 🔹 11:00 🔹 12:40"}
     },
     "MONTECAI": {
         "display_name": "MONTE CARLOS",
@@ -52,36 +42,25 @@ CONFIG_BANCAS = {
         "cor_texto": "#ffffff",
         "card_bg": "rgba(255, 255, 255, 0.1)",
         "url_site": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje",
-        "horarios": {
-            "segsab": "10:00 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 21:00",
-            "dom": "10:00 🔹 11:00 🔹 12:40"
-        }
+        "horarios": {"segsab": "10:00 🔹 11:00 🔹 12:40 🔹 14:00 🔹 15:40 🔹 17:00 🔹 18:30 🔹 21:00", "dom": "10:00 🔹 11:00 🔹 12:40"}
     }
 }
-
 BANCA_OPCOES = list(CONFIG_BANCAS.keys())
 
-# Estados de Som
 if 'tocar_som_salvar' not in st.session_state: st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state: st.session_state['tocar_som_apagar'] = False
 if 'auto_grupo' not in st.session_state: st.session_state['auto_grupo'] = 1
 if 'auto_horario_idx' not in st.session_state: st.session_state['auto_horario_idx'] = 0
 
 def reproduzir_som(tipo):
-    if tipo == 'sucesso':
-        sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
-    elif tipo == 'alerta':
-        sound_url = "https://cdn.pixabay.com/download/audio/2021/08/09/audio_0083556434.mp3?filename=error-2-126514.mp3"
-    else:
-        sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
+    if tipo == 'sucesso': sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
+    elif tipo == 'alerta': sound_url = "https://cdn.pixabay.com/download/audio/2021/08/09/audio_0083556434.mp3?filename=error-2-126514.mp3"
+    else: sound_url = "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=crumpling-paper-1-6240.mp3"
     st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
 
 def aplicar_estilo_banca(banca_key):
     config = CONFIG_BANCAS.get(banca_key)
-    bg_color = config["cor_fundo"]
-    text_color = config["cor_texto"]
-    card_bg = config["card_bg"]
-
+    bg_color = config["cor_fundo"]; text_color = config["cor_texto"]; card_bg = config["card_bg"]
     st.markdown(f"""
     <style>
         [data-testid="stAppViewContainer"] {{ background-color: {bg_color}; transition: background-color 0.5s; }}
@@ -91,18 +70,14 @@ def aplicar_estilo_banca(banca_key):
         [data-testid="stTable"] {{ background-color: transparent !important; color: white !important; }}
         thead tr th {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.3) !important; }}
         tbody tr td {{ color: {text_color} !important; text-align: center !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }}
-        .metric-card {{ background-color: {card_bg}; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); text-align: center; }}
-        
         .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
         .bola-25 {{ display: inline-block; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; background-color: white; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 3px solid #d4af37; box-shadow: 0px 0px 10px #d4af37; }}
-        
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-a {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
-        
-        .bola-puxada {{ display: inline-block; width: 45px; height: 45px; line-height: 45px; border-radius: 50%; background-color: #ffd700; color: black !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }}
+        .investigador-box {{ background-color: rgba(255, 215, 0, 0.15); border: 1px solid #ffd700; padding: 15px; border-radius: 10px; margin-bottom: 20px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -116,9 +91,7 @@ def conectar_planilha(nome_aba):
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         gc = gspread.authorize(credentials)
         try:
-            sh = gc.open("CentralBichos")
-            worksheet = sh.worksheet(nome_aba)
-            return worksheet
+            sh = gc.open("CentralBichos"); return sh.worksheet(nome_aba)
         except: return None
     return None
 
@@ -127,8 +100,7 @@ def carregar_dados(worksheet):
         valores = worksheet.col_values(1)
         grupos = [int(v) for v in valores if v.isdigit()]
         try:
-            horarios = worksheet.col_values(2)
-            ultimo_horario = horarios[-1] if horarios else ""
+            horarios = worksheet.col_values(2); ultimo_horario = horarios[-1] if horarios else ""
         except: ultimo_horario = ""
         return grupos, ultimo_horario
     return [], ""
@@ -137,8 +109,7 @@ def salvar_na_nuvem(worksheet, dados_jogo, horario):
     if worksheet:
         try:
             data_hoje = datetime.now().strftime("%Y-%m-%d")
-            linha = [int(dados_jogo), str(horario), data_hoje]
-            worksheet.append_row(linha)
+            worksheet.append_row([int(dados_jogo), str(horario), data_hoje])
             return True
         except: return False
     return False
@@ -147,29 +118,14 @@ def deletar_ultimo_registro(worksheet):
     if worksheet:
         try:
             todos = worksheet.get_all_values()
-            total_linhas = len(todos)
-            if total_linhas > 0:
-                worksheet.delete_rows(total_linhas)
-                return True
+            if len(todos) > 0: worksheet.delete_rows(len(todos)); return True
         except: return False
     return False
-
-# =============================================================================
-# --- 3. LÓGICA DO ROBÔ (PADRÃO) ---
-# =============================================================================
-def html_bolas(lista, cor="verde"):
-    html = "<div>"
-    classe = f"bola-{cor}"
-    for n in lista:
-        html += f"<div class='{classe}'>{n:02}</div>"
-    html += "</div>"
-    return html
 
 def verificar_atualizacao_site(url):
     if not url: return False, "Sem Link", ""
     try:
-        fuso_br = pytz.timezone('America/Sao_Paulo')
-        hoje = datetime.now(fuso_br)
+        fuso_br = pytz.timezone('America/Sao_Paulo'); hoje = datetime.now(fuso_br)
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=4)
         if r.status_code == 200:
@@ -185,15 +141,10 @@ def raspar_ultimo_resultado_real(url, banca_key):
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
         if r.status_code != 200: return None, None, "Erro Site"
-        
-        soup = BeautifulSoup(r.text, 'html.parser')
-        # Lógica simplificada
-        candidatos = []
-        tabelas = soup.find_all('table')
+        soup = BeautifulSoup(r.text, 'html.parser'); candidatos = []; tabelas = soup.find_all('table')
         for tabela in tabelas:
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
-                horario_str = "00:00"
-                prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
+                horario_str = "00:00"; prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_str = m.group(1)
@@ -205,55 +156,39 @@ def raspar_ultimo_resultado_real(url, banca_key):
                         if any(x in premio for x in ['1º', '1', 'Pri']):
                             grp = colunas[2].get_text().strip()
                             if grp.isdigit():
-                                candidatos.append((horario_str, int(grp)))
-                                break
+                                candidatos.append((horario_str, int(grp))); break
         if not candidatos: return None, None, "Não encontrado"
         return candidatos[0][1], candidatos[0][0], "Sucesso"
     except Exception as e: return None, None, f"Erro: {e}"
 
+# --- ESTRATÉGIAS ---
 def calcular_ranking_forca_completo(historico):
     if not historico: return []
-    hist_reverso = historico[::-1]
-    scores = {g: 0 for g in range(1, 26)}
+    hist_reverso = historico[::-1]; scores = {g: 0 for g in range(1, 26)}
     c_curto = Counter(hist_reverso[:10])
     for g, f in c_curto.items(): scores[g] += (f * 2.0)
     c_medio = Counter(hist_reverso[:50])
     for g, f in c_medio.items(): scores[g] += (f * 1.0)
-    rank = sorted(scores.items(), key=lambda x: -x[1])
-    return [g for g, s in rank]
+    return [g for g, s in sorted(scores.items(), key=lambda x: -x[1])]
 
 def gerar_palpite_estrategico(historico):
-    todos_forca = calcular_ranking_forca_completo(historico)
-    return todos_forca[:12]
+    return calcular_ranking_forca_completo(historico)[:12]
 
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
-    resultados = []
-    
-    # AJUSTE AQUI: Mostrar os últimos 25 jogos na tabela
-    inicio = max(0, len(historico) - 25)
-    
-    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
+    resultados = []; inicio = max(0, len(historico) - 25); max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
+        saiu = historico[i]; passado = historico[:i]
         p_princ = gerar_palpite_estrategico(passado)
-        if saiu not in p_princ:
-            temp_loss += 1; temp_win = 0
-        else:
-            temp_win += 1; temp_loss = 0
+        if saiu not in p_princ: temp_loss += 1; temp_win = 0
+        else: temp_win += 1; temp_loss = 0
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
-    
     for i in range(inicio, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        p_princ = gerar_palpite_estrategico(passado)
-        status = "❌"
-        if saiu in p_princ: status = "💚"
+        saiu = historico[i]; passado = historico[:i]; p_princ = gerar_palpite_estrategico(passado)
+        status = "💚" if saiu in p_princ else "❌"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "TOP 12": status})
-    
     curr_streak = 0; curr_win_streak = 0
     for res in reversed(resultados):
         if res["TOP 12"] == "❌": curr_streak += 1
@@ -265,10 +200,7 @@ def gerar_backtest_e_status(historico):
 
 def analisar_setores_bma_com_maximo(historico):
     if not historico: return {}, {}, [], []
-    setor_b = list(range(1, 9))
-    setor_m = list(range(9, 17))
-    setor_a = list(range(17, 25))
-    setor_25 = [25]
+    setor_b = list(range(1, 9)); setor_m = list(range(9, 17)); setor_a = list(range(17, 25)); setor_25 = [25]
     def calcular_atrasos(lista_alvo, hist):
         atraso_atual = 0; max_atraso = 0; contador_temp = 0
         for x in reversed(hist):
@@ -290,24 +222,16 @@ def analisar_setores_bma_com_maximo(historico):
                 curr_seq = 0
         if curr_seq > max_seq: max_seq = curr_seq
         return max_seq
-    
-    curr_b, max_b_loss = calcular_atrasos(setor_b, historico)
-    curr_m, max_m_loss = calcular_atrasos(setor_m, historico)
-    curr_a, max_a_loss = calcular_atrasos(setor_a, historico)
-    curr_25, max_25_loss = calcular_atrasos(setor_25, historico)
-    
-    max_b_win = calcular_max_sequencia(setor_b, historico)
-    max_m_win = calcular_max_sequencia(setor_m, historico)
-    max_a_win = calcular_max_sequencia(setor_a, historico)
-    max_25_win = calcular_max_sequencia(setor_25, historico)
-    
+    curr_b, max_b_loss = calcular_atrasos(setor_b, historico); curr_m, max_m_loss = calcular_atrasos(setor_m, historico)
+    curr_a, max_a_loss = calcular_atrasos(setor_a, historico); curr_25, max_25_loss = calcular_atrasos(setor_25, historico)
+    max_b_win = calcular_max_sequencia(setor_b, historico); max_m_win = calcular_max_sequencia(setor_m, historico)
+    max_a_win = calcular_max_sequencia(setor_a, historico); max_25_win = calcular_max_sequencia(setor_25, historico)
     df_setores = pd.DataFrame([
         {"SETOR": "BAIXO (01-08)", "ATRASO": curr_b, "REC. ATRASO": max_b_loss, "REC. SEQ. (V)": max_b_win},
         {"SETOR": "MÉDIO (09-16)", "ATRASO": curr_m, "REC. ATRASO": max_m_loss, "REC. SEQ. (V)": max_m_win},
         {"SETOR": "ALTO (17-24)", "ATRASO": curr_a, "REC. ATRASO": max_a_loss, "REC. SEQ. (V)": max_a_win},
         {"SETOR": "VACA (25)", "ATRASO": curr_25, "REC. ATRASO": max_25_loss, "REC. SEQ. (V)": max_25_win}
     ])
-    
     sequencia_visual = []
     for x in historico[::-1][:12]:
         if x == 25: sigla, classe = "25", "bola-25"
@@ -319,25 +243,17 @@ def analisar_setores_bma_com_maximo(historico):
 
 def analisar_dna_fixo_historico(historico):
     if len(historico) < 50: return [], pd.DataFrame(), 0, 0, 0, 0
-    contagem_total = Counter(historico)
-    top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
-    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
-    inicio_risk = max(0, len(historico) - 50)
+    contagem_total = Counter(historico); top_12_fixo = [g for g, freq in contagem_total.most_common(12)]
+    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0; inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
-        if historico[i] not in top_12_fixo: 
-            temp_loss += 1; temp_win = 0
-        else:
-            temp_win += 1; temp_loss = 0
+        if historico[i] not in top_12_fixo: temp_loss += 1; temp_win = 0
+        else: temp_win += 1; temp_loss = 0
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
-    
     resultados_simulacao = []
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela Bunker
     for i, saiu in enumerate(historico[-25:]):
-        status = "❌"
-        if saiu in top_12_fixo: status = "💚"
+        status = "💚" if saiu in top_12_fixo else "❌"
         resultados_simulacao.insert(0, {"JOGO": f"Ult-{25-i}", "SAIU": f"{saiu:02}", "BUNKER 12": status})
-        
     curr_streak = 0; curr_win_streak = 0
     for res in resultados_simulacao: 
         if res["BUNKER 12"] == "❌": curr_streak += 1
@@ -352,39 +268,22 @@ def gerar_palpite_setorizado(historico):
     setor_b = [g for g in ranking if 1 <= g <= 8]
     setor_m = [g for g in ranking if 9 <= g <= 16]
     setor_a = [g for g in ranking if 17 <= g <= 25] 
-    top4_b = setor_b[:4]; top4_m = setor_m[:4]; top4_a = setor_a[:4]
-    palpite = top4_b + top4_m + top4_a
-    palpite.sort()
-    return palpite
+    return sorted(setor_b[:4] + setor_m[:4] + setor_a[:4])
 
 def gerar_backtest_setorizado(historico):
     if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
-    resultados = []
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela Setorizada
-    inicio = max(0, len(historico) - 25)
-    
-    lista_atual = gerar_palpite_setorizado(historico)
-    max_derrotas = 0; temp_derrotas = 0; max_win = 0; temp_win = 0
-    inicio_risk = max(0, len(historico) - 50)
+    resultados = []; inicio = max(0, len(historico) - 25); lista_atual = gerar_palpite_setorizado(historico)
+    max_derrotas = 0; temp_derrotas = 0; max_win = 0; temp_win = 0; inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        pulp = gerar_palpite_setorizado(passado)
-        if saiu not in pulp:
-            temp_derrotas += 1; temp_win = 0
-        else:
-            temp_win += 1; temp_derrotas = 0
+        saiu = historico[i]; passado = historico[:i]; pulp = gerar_palpite_setorizado(passado)
+        if saiu not in pulp: temp_derrotas += 1; temp_win = 0
+        else: temp_win += 1; temp_derrotas = 0
         if temp_derrotas > max_derrotas: max_derrotas = temp_derrotas
         if temp_win > max_win: max_win = temp_win
-        
     for i in range(inicio, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        palpite_da_epoca = gerar_palpite_setorizado(passado)
-        status = "❌"
-        if saiu in palpite_da_epoca: status = "💚"
+        saiu = historico[i]; passado = historico[:i]; palpite_da_epoca = gerar_palpite_setorizado(passado)
+        status = "💚" if saiu in palpite_da_epoca else "❌"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "RES (4x4x4)": status})
-        
     curr_streak = 0; curr_win_streak = 0
     for res in reversed(resultados):
         if res["RES (4x4x4)"] == "❌": curr_streak += 1
@@ -412,45 +311,28 @@ def identificar_bma_crise_tendencia(historico):
         elif 9 <= x <= 16: freqs["MÉDIO"] += 1
         elif 17 <= x <= 24: freqs["ALTO"] += 1
     setor_tendencia = max(freqs, key=freqs.get)
-    
     ranking_geral = calcular_ranking_forca_completo(historico)
     def filtrar_top6(setor_nome):
         candidatos = mapa_setores[setor_nome]
         candidatos_ordenados = sorted(candidatos, key=lambda x: ranking_geral.index(x) if x in ranking_geral else 99)
         return candidatos_ordenados[:6]
-    top6_crise = filtrar_top6(setor_crise)
-    top6_tendencia = filtrar_top6(setor_tendencia)
-    palpite = list(set(top6_crise + top6_tendencia))
-    palpite.sort()
+    palpite = sorted(list(set(filtrar_top6(setor_crise) + filtrar_top6(setor_tendencia))))
     return palpite, setor_crise, setor_tendencia
 
 def gerar_backtest_bma(historico):
-    resultados = []
-    palpite_atual, crise, trend = identificar_bma_crise_tendencia(historico)
-    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
-    inicio_risk = max(0, len(historico) - 50)
+    resultados = []; palpite_atual, crise, trend = identificar_bma_crise_tendencia(historico)
+    max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0; inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        pulp, _, _ = identificar_bma_crise_tendencia(passado)
-        if saiu not in pulp:
-            temp_loss += 1; temp_win = 0
-        else:
-            temp_win += 1; temp_loss = 0
+        saiu = historico[i]; passado = historico[:i]; pulp, _, _ = identificar_bma_crise_tendencia(passado)
+        if saiu not in pulp: temp_loss += 1; temp_win = 0
+        else: temp_win += 1; temp_loss = 0
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
-        
-    # AJUSTE AQUI: Mostrar 25 jogos na tabela BMA
     inicio = max(0, len(historico) - 25)
-    
     for i in range(inicio, len(historico)):
-        saiu = historico[i]
-        passado = historico[:i]
-        palpite_epoca, _, _ = identificar_bma_crise_tendencia(passado)
-        status = "❌"
-        if saiu in palpite_epoca: status = "💚"
+        saiu = historico[i]; passado = historico[:i]; palpite_epoca, _, _ = identificar_bma_crise_tendencia(passado)
+        status = "💚" if saiu in palpite_epoca else "❌"
         resultados.append({"JOGO": f"#{len(historico)-i}", "SAIU": f"{saiu:02}", "BMA (C+T)": status})
-        
     curr_streak = 0; curr_win_streak = 0
     for res in reversed(resultados):
         if res["BMA (C+T)"] == "❌": curr_streak += 1
@@ -461,44 +343,64 @@ def gerar_backtest_bma(historico):
     return pd.DataFrame(resultados[::-1]), palpite_atual, crise, trend, max_loss, curr_streak, max_win, curr_win_streak
 
 def calcular_inverso(palpite):
-    universo = set(range(1, 26))
-    palpite_set = set(palpite)
-    inverso = list(universo - palpite_set)
-    inverso.sort()
+    universo = set(range(1, 26)); palpite_set = set(palpite); inverso = list(universo - palpite_set); inverso.sort()
     return inverso
+
+# --- INVESTIGADOR DE PADRÕES ---
+def investigar_padrao_setor_bma(historico):
+    if len(historico) < 100: return 0, 0, 0
+    # Simula o passado
+    eventos_gatilho = 0
+    acertos_bma_pos_gatilho = 0
+    
+    for i in range(50, len(historico)-1):
+        # Contexto: Olhando para o jogo 'i'
+        passado_i = historico[:i]
+        passado_anterior = historico[:i-1]
+        
+        # Pega resultado Setorizada em i e i-1
+        pulp_set_i = gerar_palpite_setorizado(passado_i)
+        pulp_set_ant = gerar_palpite_setorizado(passado_anterior)
+        
+        saiu_i = historico[i]
+        saiu_ant = historico[i-1]
+        
+        loss_i = saiu_i not in pulp_set_i
+        loss_ant = saiu_ant not in pulp_set_ant
+        
+        # Gatilho: 2 Derrotas seguidas da Setorizada
+        if loss_i and loss_ant:
+            eventos_gatilho += 1
+            # Verifica o BMA no jogo seguinte (i+1)
+            passado_prox = historico[:i+1]
+            pulp_bma, _, _ = identificar_bma_crise_tendencia(passado_prox)
+            saiu_prox = historico[i+1]
+            
+            if saiu_prox in pulp_bma:
+                acertos_bma_pos_gatilho += 1
+                
+    pct = (acertos_bma_pos_gatilho / eventos_gatilho * 100) if eventos_gatilho > 0 else 0
+    return eventos_gatilho, acertos_bma_pos_gatilho, pct
 
 def monitorar_oportunidades(historico):
     alertas = []; tipos = []; sugestoes = []
     
-    # 1. Top 12
-    _, curr_loss_12, max_loss_12, max_win_12, curr_win_12 = gerar_backtest_e_status(historico)
-    palp_12 = gerar_palpite_estrategico(historico)
-    if curr_loss_12 >= (max_loss_12 - 1) and curr_loss_12 > 0:
-        alertas.append(f"⚡ TOP 12: Derrotas ({curr_loss_12}) perto do Recorde ({max_loss_12})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_12 >= (max_win_12 - 1) and curr_win_12 > 0:
-        alertas.append(f"🛑 TOP 12: {curr_win_12} Vitórias. Perto do Recorde ({max_win_12})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_12))
-        
-    # 2. Bunker
+    _, curr_loss_12, max_loss_12, max_win_12, curr_win_12 = gerar_backtest_e_status(historico); palp_12 = gerar_palpite_estrategico(historico)
+    if curr_loss_12 >= (max_loss_12 - 1) and curr_loss_12 > 0: alertas.append(f"⚡ TOP 12: Derrotas ({curr_loss_12}) perto do Recorde ({max_loss_12})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_12 >= (max_win_12 - 1) and curr_win_12 > 0: alertas.append(f"🛑 TOP 12: {curr_win_12} Vitórias. Perto do Recorde ({max_win_12})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_12))
+    
     palp_bunker, _, max_loss_bun, curr_loss_bun, max_win_bun, curr_win_bun = analisar_dna_fixo_historico(historico)
-    if curr_loss_bun >= (max_loss_bun - 1) and curr_loss_bun > 0:
-        alertas.append(f"🛡️ BUNKER: Derrotas ({curr_loss_bun}) perto do Recorde ({max_loss_bun})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_bun >= (max_win_bun - 1) and curr_win_bun > 0:
-        alertas.append(f"🛑 BUNKER: {curr_win_bun} Vitórias. Perto do Recorde ({max_win_bun})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bunker))
-        
-    # 3. BMA
+    if curr_loss_bun >= (max_loss_bun - 1) and curr_loss_bun > 0: alertas.append(f"🛡️ BUNKER: Derrotas ({curr_loss_bun}) perto do Recorde ({max_loss_bun})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_bun >= (max_win_bun - 1) and curr_win_bun > 0: alertas.append(f"🛑 BUNKER: {curr_win_bun} Vitórias. Perto do Recorde ({max_win_bun})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bunker))
+    
     _, palp_bma, _, _, risk_bma, curr_loss_bma, max_win_bma, curr_win_bma = gerar_backtest_bma(historico)
-    if curr_loss_bma >= (risk_bma - 1) and curr_loss_bma > 0:
-        alertas.append(f"🔥 BMA: Derrotas ({curr_loss_bma}) perto do Recorde ({risk_bma})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_bma >= (max_win_bma - 1) and curr_win_bma > 0:
-        alertas.append(f"🛑 BMA: {curr_win_bma} Vitórias. Perto do Recorde ({max_win_bma})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bma))
-        
-    # 4. Setorizada
+    if curr_loss_bma >= (risk_bma - 1) and curr_loss_bma > 0: alertas.append(f"🔥 BMA: Derrotas ({curr_loss_bma}) perto do Recorde ({risk_bma})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_bma >= (max_win_bma - 1) and curr_win_bma > 0: alertas.append(f"🛑 BMA: {curr_win_bma} Vitórias. Perto do Recorde ({max_win_bma})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_bma))
+    
     _, palp_set, risk_set, curr_loss_set, max_win_set, curr_win_set = gerar_backtest_setorizado(historico)
-    if curr_loss_set >= (risk_set - 1) and curr_loss_set > 0:
-        alertas.append(f"⚖️ SETORIZADA: Derrotas ({curr_loss_set}) perto do Recorde ({risk_set})!"); tipos.append("erro"); sugestoes.append(None)
-    if curr_win_set >= (max_win_set - 1) and curr_win_set > 0:
-        alertas.append(f"🛑 SETORIZADA: {curr_win_set} Vitórias. Perto do Recorde ({max_win_set})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_set))
-        
+    if curr_loss_set >= (risk_set - 1) and curr_loss_set > 0: alertas.append(f"⚖️ SETORIZADA: Derrotas ({curr_loss_set}) perto do Recorde ({risk_set})!"); tipos.append("erro"); sugestoes.append(None)
+    if curr_win_set >= (max_win_set - 1) and curr_win_set > 0: alertas.append(f"🛑 SETORIZADA: {curr_win_set} Vitórias. Perto do Recorde ({max_win_set})!"); tipos.append("aviso"); sugestoes.append(calcular_inverso(palp_set))
+    
     return alertas, tipos, sugestoes
 
 # =============================================================================
@@ -513,14 +415,9 @@ with st.sidebar:
     banca_selecionada = st.selectbox("Selecione a Banca:", BANCA_OPCOES)
     config_banca = CONFIG_BANCAS[banca_selecionada]
     
-    fuso_br = pytz.timezone('America/Sao_Paulo')
-    dia_semana = datetime.now(fuso_br).weekday()
-    lista_horarios_str = config_banca['horarios']['dom'] if dia_semana == 6 else config_banca['horarios']['segsab']
-    lista_horarios = [h.strip() for h in lista_horarios_str.split('🔹')]
-    
-    if st.session_state.get('auto_horario_idx', 0) >= len(lista_horarios):
-        st.session_state['auto_horario_idx'] = 0
-    
+    fuso_br = pytz.timezone('America/Sao_Paulo'); dia_semana = datetime.now(fuso_br).weekday()
+    lista_horarios = [h.strip() for h in (config_banca['horarios']['dom'] if dia_semana == 6 else config_banca['horarios']['segsab']).split('🔹')]
+    if st.session_state.get('auto_horario_idx', 0) >= len(lista_horarios): st.session_state['auto_horario_idx'] = 0
     st.markdown("---")
     
     col_import, _ = st.columns([1, 0.1])
@@ -531,10 +428,8 @@ with st.sidebar:
                 if grp:
                     st.success(f"Encontrado! G{grp:02} às {hor}")
                     st.session_state['auto_grupo'] = grp
-                    if hor in lista_horarios:
-                        st.session_state['auto_horario_idx'] = lista_horarios.index(hor)
-                else:
-                    st.error(f"Não encontrado ou Data antiga ({msg})")
+                    if hor in lista_horarios: st.session_state['auto_horario_idx'] = lista_horarios.index(hor)
+                else: st.error(f"Não encontrado ou Data antiga ({msg})")
     
     st.write("📝 **Registrar Sorteio**")
     novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
@@ -549,7 +444,6 @@ with st.sidebar:
                 st.toast("Salvo! 🔔", icon="✅"); time.sleep(0.5); st.rerun()
     with col_btn2:
         if st.button("🔄 REBOOT"): st.rerun()
-            
     with st.expander("🗑️ Área de Perigo"):
         if st.button("APAGAR ÚLTIMO"):
             aba = conectar_planilha(banca_selecionada)
@@ -561,36 +455,26 @@ aba_ativa = conectar_planilha(banca_selecionada)
 
 if aba_ativa:
     historico, ultimo_horario_salvo = carregar_dados(aba_ativa)
-    
     if len(historico) > 0:
-        aplicar_estilo_banca(banca_selecionada)
-        config_atual = CONFIG_BANCAS[banca_selecionada]
+        aplicar_estilo_banca(banca_selecionada); config_atual = CONFIG_BANCAS[banca_selecionada]
         
         # --- PROCESSAMENTO ---
-        df_top12, curr_loss_12, max_loss_12, max_win_12, curr_win_12 = gerar_backtest_e_status(historico)
-        palp_top12 = gerar_palpite_estrategico(historico)
-        
+        df_top12, curr_loss_12, max_loss_12, max_win_12, curr_win_12 = gerar_backtest_e_status(historico); palp_top12 = gerar_palpite_estrategico(historico)
         df_setores, seq_visual = analisar_setores_bma_com_maximo(historico)
-        
         lista_bunker, df_bunker, max_loss_bun, curr_loss_bun, max_win_bun, curr_win_bun = analisar_dna_fixo_historico(historico)
-        
         df_setor, lista_setor, risk_setor, curr_loss_set, max_win_set, curr_win_set = gerar_backtest_setorizado(historico)
-        
         df_bma, palp_bma, crise_bma, trend_bma, risk_bma, curr_loss_bma, max_win_bma, curr_win_bma = gerar_backtest_bma(historico)
-        
         alertas, tipos, sugestoes = monitorar_oportunidades(historico)
+        
+        # --- CALCULO INVESTIGADOR ---
+        total_ev, total_win_invest, pct_invest = investigar_padrao_setor_bma(historico)
 
-        # Cabeçalho
         col_head1, col_head2 = st.columns([1, 4])
         with col_head1: st.image(config_atual['logo_url'], width=80)
-        with col_head2:
-            st.markdown(f"## {config_atual['display_name']}")
-            st.caption(f"Último: Grupo {historico[-1]:02} | Hora: {ultimo_horario_salvo}")
-
+        with col_head2: st.markdown(f"## {config_atual['display_name']}"); st.caption(f"Último: Grupo {historico[-1]:02} | Hora: {ultimo_horario_salvo}")
         site_on, site_tit, _ = verificar_atualizacao_site(config_atual['url_site'])
         if not site_on: st.warning(f"Status do Site: {site_tit}")
 
-        # --- PAINEL DE ALERTAS ---
         if alertas:
             with st.expander("🚨 CENTRO DE ALERTAS", expanded=True):
                 for i, alerta in enumerate(alertas):
@@ -598,23 +482,29 @@ if aba_ativa:
                     else: st.warning(alerta)
                     if sugestoes[i]:
                         st.info("👻 **MODO INVERSO (Os 13 do Contra):**")
-                        # CORREÇÃO AQUI: Lista copiável
-                        txt_inv = ", ".join([f"{n:02}" for n in sugestoes[i]])
-                        st.code(txt_inv, language="text")
+                        st.code(", ".join([f"{n:02}" for n in sugestoes[i]]), language="text")
 
-        # --- ABAS PRINCIPAIS ---
         tab_setores, tab_comp = st.tabs(["🎯 Setores & Estratégias", "🆚 Comparativo (2 Mesas)"])
         
         with tab_setores:
+            # --- ÁREA DO INVESTIGADOR (NOVA) ---
+            st.markdown(f"""
+            <div class='investigador-box'>
+                <h4>🕵️ Tira-Teima: Padrão Setorizada ➡️ BMA</h4>
+                <p>Ocorrências no histórico onde a <b>Setorizada perdeu 2x seguidas</b>: <b>{total_ev}</b> vezes.</p>
+                <p>Dessas, o <b>BMA ganhou logo depois</b> em: <b>{total_win_invest}</b> vezes.</p>
+                <h3>Taxa de Acerto do Padrão: {pct_invest:.1f}% ✅</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            # -----------------------------------
+            
             st.write("Visual Recente (⬅️ Mais Novo):")
             html_seq = "<div>"
             for sigla, classe in seq_visual: html_seq += f"<div class='{classe}'>{sigla}</div>"
             html_seq += "</div>"
-            st.markdown(html_seq, unsafe_allow_html=True)
-            st.markdown("---")
+            st.markdown(html_seq, unsafe_allow_html=True); st.markdown("---")
             st.write("📊 **Tabela de Stress (Atraso vs Recorde):**")
             st.table(df_setores)
-            
             c_strat1, c_strat2 = st.columns(2)
             with c_strat1:
                 st.write("🔥 **Estratégia 1: BMA (Crise + Tendência)**")
@@ -622,7 +512,6 @@ if aba_ativa:
                 st.table(df_bma)
                 st.warning(f"⚠️ Rec. Derrotas: {risk_bma} | 🏆 Rec. Vitórias: {max_win_bma}")
                 with st.expander("Ver Palpite BMA"): st.markdown(html_bolas(palp_bma, "verde"), unsafe_allow_html=True)
-                
             with c_strat2:
                 st.write("⚖️ **Estratégia 2: Setorizada (4x4x4)**")
                 st.caption("Equilíbrio dos 3 setores")
@@ -638,7 +527,6 @@ if aba_ativa:
                 st.table(df_top12)
                 st.warning(f"⚠️ Rec. Derrotas: {max_loss_12} | 🏆 Rec. Vitórias: {max_win_12}")
                 with st.expander("Ver Palpite Top 12"): st.markdown(html_bolas(palp_top12, "verde"), unsafe_allow_html=True)
-                
             with col2:
                 st.subheader("🧬 Bunker 12 (Fixo)")
                 st.caption("Baseado na frequência histórica total")
@@ -647,10 +535,6 @@ if aba_ativa:
                 with st.expander("Ver Palpite Bunker"): st.markdown(html_bolas(lista_bunker, "azul"), unsafe_allow_html=True)
 
         st.markdown("---")
-        with st.expander("🕒 Grade de Horários da Banca"):
-            st.write(config_atual['horarios'])
-
-    else:
-        st.warning("⚠️ Planilha vazia. Adicione o primeiro resultado.")
-else:
-    st.info("Conectando...")
+        with st.expander("🕒 Grade de Horários da Banca"): st.write(config_atual['horarios'])
+    else: st.warning("⚠️ Planilha vazia. Adicione o primeiro resultado.")
+else: st.info("Conectando...")
