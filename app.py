@@ -185,9 +185,10 @@ def raspar_ultimo_resultado_real(url, banca_key):
         if r.status_code != 200: return None, None, "Erro Site"
         
         soup = BeautifulSoup(r.text, 'html.parser')
-        # Lógica simplificada
         candidatos = []
         tabelas = soup.find_all('table')
+        
+        # CORREÇÃO: Removemos o break para ler todas as tabelas
         for tabela in tabelas:
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_str = "00:00"
@@ -195,6 +196,7 @@ def raspar_ultimo_resultado_real(url, banca_key):
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_str = m.group(1)
+                
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
                     colunas = linha.find_all('td')
@@ -204,9 +206,17 @@ def raspar_ultimo_resultado_real(url, banca_key):
                             grp = colunas[2].get_text().strip()
                             if grp.isdigit():
                                 candidatos.append((horario_str, int(grp)))
-                                break
+                                # Não damos break aqui, continuamos procurando
+        
         if not candidatos: return None, None, "Não encontrado"
-        return candidatos[0][1], candidatos[0][0], "Sucesso"
+        
+        # Ordenamos por horário (string) para garantir que pegamos o último
+        # Como o formato é HH:MM, a ordenação alfabética funciona para o mesmo dia
+        candidatos.sort(key=lambda x: x[0])
+        
+        ultimo = candidatos[-1] # Pega o último da lista (mais tarde)
+        return ultimo[1], ultimo[0], "Sucesso"
+        
     except Exception as e: return None, None, f"Erro: {e}"
 
 def calcular_ranking_forca_completo(historico):
@@ -261,7 +271,6 @@ def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
     
-    # AJUSTE: Mostrar os últimos 25 jogos na tabela
     inicio = max(0, len(historico) - 25)
     
     max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
@@ -363,7 +372,6 @@ def analisar_dna_fixo_historico(historico):
         if temp_win > max_win: max_win = temp_win
     
     resultados_simulacao = []
-    # AJUSTE: Mostrar 25 jogos na tabela Bunker
     for i, saiu in enumerate(historico[-25:]):
         status = "❌"
         if saiu in top_12_fixo: status = "💚"
@@ -391,7 +399,6 @@ def gerar_palpite_setorizado(historico):
 def gerar_backtest_setorizado(historico):
     if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
-    # AJUSTE: Mostrar 25 jogos na tabela Setorizada
     inicio = max(0, len(historico) - 25)
     
     lista_atual = gerar_palpite_setorizado(historico)
@@ -471,7 +478,6 @@ def gerar_backtest_bma(historico):
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
         
-    # AJUSTE: Mostrar 25 jogos na tabela BMA
     inicio = max(0, len(historico) - 25)
     
     for i in range(inicio, len(historico)):
@@ -498,7 +504,6 @@ def calcular_inverso(palpite):
     inverso.sort()
     return inverso
 
-# --- FUNÇÃO DE ALERTAS ATUALIZADA (V106) ---
 def monitorar_oportunidades(historico, df_setores):
     alertas = []; tipos = []; sugestoes = []
     
@@ -533,10 +538,6 @@ def monitorar_oportunidades(historico, df_setores):
                 alertas.append(f"⚠️ SETOR {nome}: Atraso ({atraso}) igualou o Recorde!")
                 tipos.append("erro")
                 sugestoes.append(None)
-            
-            # Nota: Não temos o contador atual de vitórias do setor no DF, 
-            # mas podemos adicionar se quiser futuramente. 
-            # Por enquanto monitoramos o ATRASO CRÍTICO que foi o pedido principal.
 
     return alertas, tipos, sugestoes
 
@@ -623,7 +624,6 @@ if aba_ativa:
         # --- CICLOS ---
         bichos_faltantes, duracao_ciclo, historico_ciclos, progresso_ciclo = analisar_ciclo_atual(historico)
         
-        # Atualizado com df_setores para monitoramento de crise
         alertas, tipos, sugestoes = monitorar_oportunidades(historico, df_setores)
 
         # Cabeçalho
