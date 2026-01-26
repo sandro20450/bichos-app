@@ -93,6 +93,7 @@ def aplicar_estilo_banca(banca_key):
         .bola-verde {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #28a745; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-azul {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; }}
         .bola-ice {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #00bcd4; color: white !important; text-align: center; font-weight: bold; margin: 2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3); border: 2px solid white; text-shadow: 1px 1px 2px black; }}
+        .bola-cinza {{ display: inline-block; width: 38px; height: 38px; line-height: 38px; border-radius: 50%; background-color: #555; color: #ccc !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #777; }}
         
         .bola-b {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
         .bola-m {{ display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid #fff; }}
@@ -182,19 +183,16 @@ def raspar_ultimo_resultado_real(url, banca_key):
         if r.status_code != 200: return None, None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Lógica simplificada de raspagem (mesma do original)
         candidatos = []
         tabelas = soup.find_all('table')
         for tabela in tabelas:
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_str = "00:00"
-                # Tenta achar horario
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_str = m.group(1)
                 
-                # Acha grupo
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
                     colunas = linha.find_all('td')
@@ -214,18 +212,18 @@ def raspar_ultimo_resultado_real(url, banca_key):
 # 1. Top 12 (Frequência)
 def gerar_palpite_top12(historico):
     if not historico: return []
-    c = Counter(historico[-50:]) # Ultimos 50 jogos
+    c = Counter(historico[-50:])
     rank = c.most_common(12)
     return [x[0] for x in rank]
 
 # 2. Bunker 12 (Frequência Global Fixa)
 def gerar_palpite_bunker(historico):
     if not historico: return []
-    c = Counter(historico) # Histórico todo
+    c = Counter(historico)
     rank = c.most_common(12)
     return [x[0] for x in rank]
 
-# 3. Iceberg 10 (Atrasados) - NOVO!
+# 3. Iceberg 10 (Atrasados)
 def gerar_palpite_iceberg(historico):
     if not historico: return []
     atrasos = {}
@@ -240,7 +238,6 @@ def gerar_palpite_iceberg(historico):
     
     # Ordena pelos mais atrasados (maior atraso)
     rank = sorted(atrasos.items(), key=lambda x: -x[1])
-    # Pega os Top 10 mais atrasados
     return [x[0] for x in rank[:10]]
 
 # --- BACKTEST (SIMULAÇÃO REAL) ---
@@ -255,7 +252,6 @@ def rodar_simulacao_real(historico, estrategia_func, n_jogos=50):
     for i in range(start_idx, len(historico)):
         hist_momento = historico[:i]
         res_real = historico[i]
-        
         palpite = estrategia_func(hist_momento)
         
         if res_real in palpite:
@@ -308,7 +304,6 @@ def calcular_inverso_grupo(palpite):
 # --- 4. INTERFACE PRINCIPAL ---
 # =============================================================================
 
-# Lógica de som
 if st.session_state['tocar_som_salvar']: reproduzir_som('sucesso'); st.session_state['tocar_som_salvar'] = False
 if st.session_state['tocar_som_apagar']: reproduzir_som('apagar'); st.session_state['tocar_som_apagar'] = False
 
@@ -384,12 +379,12 @@ if aba_ativa:
         # --- PROCESSAMENTO ESTRATÉGIAS ---
         palp_top12 = gerar_palpite_top12(historico)
         palp_bunker = gerar_palpite_bunker(historico)
-        palp_ice = gerar_palpite_iceberg(historico) # NOVO!
+        palp_ice = gerar_palpite_iceberg(historico)
         
         with st.spinner("Simulando estratégias..."):
             bt_top, ml_top, cl_top, mw_top, cw_top = rodar_simulacao_real(historico, gerar_palpite_top12)
             bt_bun, ml_bun, cl_bun, mw_bun, cw_bun = rodar_simulacao_real(historico, gerar_palpite_bunker)
-            bt_ice, ml_ice, cl_ice, mw_ice, cw_ice = rodar_simulacao_real(historico, gerar_palpite_iceberg) # NOVO!
+            bt_ice, ml_ice, cl_ice, mw_ice, cw_ice = rodar_simulacao_real(historico, gerar_palpite_iceberg)
             
         # --- ALERTAS ---
         alertas = []
@@ -415,9 +410,11 @@ if aba_ativa:
         
         with tab_set:
             st.write("Visual Recente (⬅️ Mais Novo):")
-            seq_vis = analisar_setores_bma(historico)
+            # --- CORREÇÃO AQUI ---
+            seq_visual = analisar_setores_bma(historico) # Variável correta agora
             html_seq = "<div>"
-            for sigla, classe in seq_visual: html_seq += f"<div class='{classe}'>{sigla}</div>"
+            for sigla, classe in seq_visual: 
+                html_seq += f"<div class='{classe}'>{sigla}</div>"
             html_seq += "</div>"
             st.markdown(html_seq, unsafe_allow_html=True)
             st.info("Estratégia BMA (Baixo/Médio/Alto) é visual. Observe a sequência acima.")
