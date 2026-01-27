@@ -161,7 +161,7 @@ def raspar_dupla_por_horario(url, horario_alvo):
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA DE SIMULAÇÃO (CORRIGIDA V112) ---
+# --- 3. LÓGICA DE SIMULAÇÃO (V112) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -284,19 +284,14 @@ def calcular_tabela_stress(historico):
     tabela = []; atrasos = {}; freqs = {}
     
     for nome, lista in mapa.items():
-        # Cálculo do Atraso Atual (Simples e Correto)
         atraso = 0
         for x in reversed(historico):
             if x in lista: break
             atraso += 1
         atrasos[nome] = atraso
-        
         count = sum(1 for x in recorte if x in lista)
         freqs[nome] = count
-        
-        # Cálculo de Recordes (Corrigido V112)
         max_atraso = 0; tmp_atraso = 0; max_win = 0; tmp_win = 0
-        
         for x in historico:
             if x in lista: # Saiu o setor
                 tmp_win += 1
@@ -306,13 +301,9 @@ def calcular_tabela_stress(historico):
                 tmp_atraso += 1
                 if tmp_win > max_win: max_win = tmp_win
                 tmp_win = 0 # ZERA A VITÓRIA SEMPRE
-        
-        # Checagem final após o loop
         if tmp_atraso > max_atraso: max_atraso = tmp_atraso
         if tmp_win > max_win: max_win = tmp_win
-        
         tabela.append({"SETOR": nome, "ATRASO": atraso, "REC. ATRASO": max_atraso, "REC. SEQ. (V)": max_win})
-        
     return pd.DataFrame(tabela), max(atrasos, key=atrasos.get), max(freqs, key=freqs.get)
 
 # =============================================================================
@@ -410,7 +401,20 @@ if len(historico) > 0:
             else: c, s = "bola-s3", "S3"
             html_b += f"<div class='{c}'>{s}</div>"
         html_b += "</div>"
-        st.markdown(html_b, unsafe_allow_html=True); st.markdown("---")
+        st.markdown(html_b, unsafe_allow_html=True)
+        
+        # --- ATUALIZAÇÃO V113: COMPOSIÇÃO DOS SETORES ---
+        with st.expander("🔍 Ver Composição dos Setores (S1, S2, S3)"):
+            _, mapa_copy = gerar_universo_duques()
+            st.caption("Copie os duques de cada setor para seus jogos:")
+            st.text("🔵 Setor 1 (S1):")
+            st.code(formatar_palpite(mapa_copy["S1"]), language="text")
+            st.text("🟠 Setor 2 (S2):")
+            st.code(formatar_palpite(mapa_copy["S2"]), language="text")
+            st.text("🔴 Setor 3 (S3):")
+            st.code(formatar_palpite(mapa_copy["S3"]), language="text")
+            
+        st.markdown("---")
 
         st.subheader("📡 Radar de Setores (Equilibrado)")
         st.table(df_stress)
