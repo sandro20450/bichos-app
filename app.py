@@ -153,7 +153,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ (ATUALIZADA V109) ---
+# --- 3. LÓGICA DO ROBÔ ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -178,7 +178,7 @@ def verificar_atualizacao_site(url):
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
 
-# --- NOVA FUNÇÃO: BUSCAR POR HORÁRIO ESPECÍFICO ---
+# --- NOVA FUNÇÃO: BUSCAR POR HORÁRIO ESPECÍFICO (CORRIGIDA LOTEP) ---
 def raspar_resultado_por_horario(url, horario_alvo):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -208,7 +208,8 @@ def raspar_resultado_por_horario(url, horario_alvo):
                             premio = colunas[0].get_text().strip()
                             
                             # IGNORA 10º PREMIO (Correção LOTEP)
-                            if "10" in premio: continue
+                            if "10" in premio: 
+                                continue
                             
                             # Pega o 1º Premio
                             if any(x in premio for x in ['1º', '1', 'Pri']):
@@ -578,7 +579,7 @@ with st.sidebar:
     st.write("📝 **Registrar Sorteio**")
     novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
     
-    # --- NOVA FUNCIONALIDADE: BUSCA ESPECÍFICA (V109) ---
+    # --- BUSCA ESPECÍFICA (V109) ---
     if st.button(f"🔍 Checar {novo_horario}"):
         with st.spinner("Varrendo o site..."):
             grp, msg = raspar_resultado_por_horario(config_banca['url_site'], novo_horario)
@@ -674,14 +675,18 @@ if aba_ativa:
                 st.caption(f"Foco: {crise_bma} + {trend_bma}")
                 st.table(df_bma)
                 st.warning(f"⚠️ Rec. Derrotas: {risk_bma} | 🏆 Rec. Vitórias: {max_win_bma}")
-                with st.expander("Ver Palpite BMA"): st.markdown(html_bolas(palp_bma, "verde"), unsafe_allow_html=True)
+                # CORREÇÃO: Palpite copiável
+                with st.expander("Ver Palpite BMA"): 
+                    st.code(", ".join([f"{n:02}" for n in palp_bma]), language="text")
                 
             with c_strat2:
                 st.write("⚖️ **Estratégia 2: Setorizada (4x4x4)**")
                 st.caption("Equilíbrio dos 3 setores")
                 st.table(df_setor)
                 st.warning(f"⚠️ Rec. Derrotas: {risk_setor} | 🏆 Rec. Vitórias: {max_win_set}")
-                with st.expander("Ver Palpite Setorizada"): st.markdown(html_bolas(lista_setor, "verde"), unsafe_allow_html=True)
+                # CORREÇÃO: Palpite copiável
+                with st.expander("Ver Palpite Setorizada"): 
+                    st.code(", ".join([f"{n:02}" for n in lista_setor]), language="text")
 
         with tab_comp:
             col1, col2 = st.columns(2)
@@ -690,14 +695,18 @@ if aba_ativa:
                 st.caption("Baseado na frequência recente")
                 st.table(df_top12)
                 st.warning(f"⚠️ Rec. Derrotas: {max_loss_12} | 🏆 Rec. Vitórias: {max_win_12}")
-                with st.expander("Ver Palpite Top 12"): st.markdown(html_bolas(palp_top12, "verde"), unsafe_allow_html=True)
+                # CORREÇÃO: Palpite copiável
+                with st.expander("Ver Palpite Top 12"): 
+                    st.code(", ".join([f"{n:02}" for n in palp_top12]), language="text")
                 
             with col2:
                 st.subheader("🧬 Bunker 12 (Fixo)")
                 st.caption("Baseado na frequência histórica total")
                 st.table(df_bunker)
                 st.warning(f"⚠️ Rec. Derrotas: {max_loss_bun} | 🏆 Rec. Vitórias: {max_win_bun}")
-                with st.expander("Ver Palpite Bunker"): st.markdown(html_bolas(lista_bunker, "azul"), unsafe_allow_html=True)
+                # CORREÇÃO: Palpite copiável
+                with st.expander("Ver Palpite Bunker"): 
+                    st.code(", ".join([f"{n:02}" for n in lista_bunker]), language="text")
         
         with tab_ciclos:
             st.subheader("🔄 Monitor de Ciclos (1-25)")
