@@ -109,37 +109,56 @@ def deletar_ultimo():
         except: return False
     return False
 
-def raspar_site_tradicional(url):
+# --- FUNÇÃO NOVA: SCRAPING POR HORÁRIO ESPECÍFICO (V110) ---
+def raspar_dupla_por_horario(url, horario_alvo):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code != 200: return None, None, None, "Erro Site"
+        if r.status_code != 200: return None, None, "Erro Site"
+        
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        bicho1 = None; bicho2 = None; horario_encontrado = "00:00"
+        
         for tabela in tabelas:
-            texto_tabela = tabela.get_text()
-            if "1º" in texto_tabela and "Grupo" in texto_tabela:
-                container = tabela.parent
-                texto_container = container.get_text() if container else ""
-                match_hora = re.search(r'(\d{2}:\d{2})', texto_container)
-                if not match_hora:
-                    prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
-                    if prev: match_hora = re.search(r'(\d{2}:\d{2})', prev)
-                if match_hora: horario_encontrado = match_hora.group(1)
-                linhas = tabela.find_all('tr')
-                for linha in linhas:
-                    cols = linha.find_all('td')
-                    if len(cols) >= 2:
-                        txt_premio = cols[0].get_text().strip()
-                        txt_grupo = cols[-1].get_text().strip() 
-                        if txt_grupo.isdigit():
-                            grp = int(txt_grupo)
-                            if "1º" in txt_premio or "1" == txt_premio: bicho1 = grp
-                            elif "2º" in txt_premio or "2" == txt_premio: bicho2 = grp
-                if bicho1 and bicho2: return bicho1, bicho2, horario_encontrado, "Sucesso"
-        return None, None, None, "Dados não encontrados"
-    except Exception as e: return None, None, None, f"Erro: {e}"
+            # Verifica se é uma tabela de premios
+            if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
+                horario_encontrado = None
+                
+                # Tenta achar o horario ANTES da tabela
+                prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
+                if prev: 
+                    m = re.search(r'(\d{2}:\d{2})', prev)
+                    if m: horario_encontrado = m.group(1)
+                
+                # Se achou horario e é o que queremos
+                if horario_encontrado == horario_alvo:
+                    bicho1 = None
+                    bicho2 = None
+                    
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
+                            grp_txt = colunas[2].get_text().strip()
+                            
+                            if grp_txt.isdigit():
+                                grp = int(grp_txt)
+                                # Pega o 1º
+                                if (any(x in premio for x in ['1º', '1', 'Pri']) and "10" not in premio):
+                                    bicho1 = grp
+                                # Pega o 2º
+                                elif any(x in premio for x in ['2º', '2', 'Seg']):
+                                    bicho2 = grp
+                    
+                    if bicho1 and bicho2:
+                        return bicho1, bicho2, "Sucesso"
+                    else:
+                        return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
+                    
+        return None, None, "Horário ainda não saiu"
+        
+    except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
 # --- 3. LÓGICA DE SIMULAÇÃO (TIME MACHINE) ---
@@ -291,20 +310,24 @@ with st.sidebar:
     st.image(CONFIG_BANCA['logo_url'], width=100)
     st.title("MENU DUQUE")
     
-    if st.button("📡 Importar do Site"):
-        with st.spinner("Buscando na central..."):
-            b1, b2, hor, msg = raspar_site_tradicional(CONFIG_BANCA['url_site'])
+    # --- NOVIDADE 1: LINK VER SITE ---
+    st.link_button("🔗 Ver Site Oficial", CONFIG_BANCA['url_site'])
+    st.markdown("---")
+
+    # --- NOVIDADE 2: BUSCA POR HORÁRIO (V110) ---
+    horarios_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
+    h_sel = st.selectbox("Horário:", horarios_list, index=st.session_state['auto_idx_h'])
+    
+    if st.button(f"🔍 Checar {h_sel}"):
+        with st.spinner(f"Buscando 1º e 2º prêmios das {h_sel}..."):
+            b1, b2, msg = raspar_dupla_por_horario(CONFIG_BANCA['url_site'], h_sel)
             if b1 and b2:
                 st.session_state['auto_g1'] = b1
                 st.session_state['auto_g2'] = b2
-                st.success(f"Achado! {b1}-{b2} às {hor}")
-                h_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
-                if hor in h_list: st.session_state['auto_idx_h'] = h_list.index(hor)
-            else: st.error(msg)
+                st.success(f"Encontrado: {b1}-{b2}")
+            else:
+                st.error(f"Erro: {msg}")
 
-    st.markdown("---")
-    horarios_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
-    h_sel = st.selectbox("Horário:", horarios_list, index=st.session_state['auto_idx_h'])
     c1, c2 = st.columns(2)
     with c1: b1_in = st.number_input("1º Bicho", 1, 25, st.session_state['auto_g1'])
     with c2: b2_in = st.number_input("2º Bicho", 1, 25, st.session_state['auto_g2'])
