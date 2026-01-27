@@ -188,8 +188,8 @@ def raspar_ultimo_resultado_real(url, banca_key):
         candidatos = []
         tabelas = soup.find_all('table')
         
-        # CORREÇÃO: Removemos o break para ler todas as tabelas
         for tabela in tabelas:
+            # Tenta encontrar o horário
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_str = "00:00"
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
@@ -202,19 +202,24 @@ def raspar_ultimo_resultado_real(url, banca_key):
                     colunas = linha.find_all('td')
                     if len(colunas) >= 3:
                         premio = colunas[0].get_text().strip()
+                        
+                        # CORREÇÃO CRÍTICA: Ignorar explicitamente o 10º prêmio
+                        if "10" in premio: 
+                            continue 
+                            
+                        # Procura 1º, 1 ou Pri (Primeiro)
                         if any(x in premio for x in ['1º', '1', 'Pri']):
                             grp = colunas[2].get_text().strip()
                             if grp.isdigit():
                                 candidatos.append((horario_str, int(grp)))
-                                # Não damos break aqui, continuamos procurando
+                                # CORREÇÃO: Parar de procurar nesta tabela assim que achar o 1º
+                                break 
         
         if not candidatos: return None, None, "Não encontrado"
         
-        # Ordenamos por horário (string) para garantir que pegamos o último
-        # Como o formato é HH:MM, a ordenação alfabética funciona para o mesmo dia
+        # Ordena por horário e pega o último
         candidatos.sort(key=lambda x: x[0])
-        
-        ultimo = candidatos[-1] # Pega o último da lista (mais tarde)
+        ultimo = candidatos[-1] 
         return ultimo[1], ultimo[0], "Sucesso"
         
     except Exception as e: return None, None, f"Erro: {e}"
@@ -270,9 +275,7 @@ def analisar_ciclo_atual(historico):
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
-    
     inicio = max(0, len(historico) - 25)
-    
     max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
@@ -531,7 +534,6 @@ def monitorar_oportunidades(historico, df_setores):
             nome = row['SETOR']
             atraso = row['ATRASO']
             rec_atraso = row['REC. ATRASO']
-            rec_win = row['REC. SEQ. (V)']
             
             # Alerta de Atraso (Crise) - Bateu ou passou recorde
             if atraso >= rec_atraso and atraso > 0:
