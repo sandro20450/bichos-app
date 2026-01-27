@@ -120,35 +120,48 @@ def raspar_dupla_por_horario(url, horario_alvo):
         tabelas = soup.find_all('table')
         
         for tabela in tabelas:
+            # Verifica se é uma tabela de premios
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_encontrado = None
+                
+                # Tenta achar o horario ANTES da tabela
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_encontrado = m.group(1)
                 
+                # Se achou horario e é o que queremos
                 if horario_encontrado == horario_alvo:
                     bicho1 = None
                     bicho2 = None
+                    
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
                         colunas = linha.find_all('td')
                         if len(colunas) >= 3:
                             premio = colunas[0].get_text().strip()
                             grp_txt = colunas[2].get_text().strip()
+                            
                             if grp_txt.isdigit():
                                 grp = int(grp_txt)
+                                # Pega o 1º (Ignora 10º)
                                 if (any(x in premio for x in ['1º', '1', 'Pri']) and "10" not in premio):
                                     bicho1 = grp
+                                # Pega o 2º
                                 elif any(x in premio for x in ['2º', '2', 'Seg']):
                                     bicho2 = grp
-                    if bicho1 and bicho2: return bicho1, bicho2, "Sucesso"
-                    else: return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
+                    
+                    if bicho1 and bicho2:
+                        return bicho1, bicho2, "Sucesso"
+                    else:
+                        return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
+                    
         return None, None, "Horário ainda não saiu"
+        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA DE SIMULAÇÃO (ATUALIZADA V111 - BALANCEAMENTO) ---
+# --- 3. LÓGICA DE SIMULAÇÃO (CORRIGIDA V112) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -156,11 +169,10 @@ def gerar_universo_duques():
     for i in range(1, 26):
         for j in range(i, 26): todos.append((i, j))
     
-    # ATUALIZAÇÃO V111: Distribuição Alternada (Round Robin)
-    # Isso garante que S1, S2 e S3 tenham números baixos, médios e altos misturados.
-    setor1 = [d for k, d in enumerate(todos) if k % 3 == 0] # Índices 0, 3, 6...
-    setor2 = [d for k, d in enumerate(todos) if k % 3 == 1] # Índices 1, 4, 7...
-    setor3 = [d for k, d in enumerate(todos) if k % 3 == 2] # Índices 2, 5, 8...
+    # Distribuição Alternada (Round Robin)
+    setor1 = [d for k, d in enumerate(todos) if k % 3 == 0]
+    setor2 = [d for k, d in enumerate(todos) if k % 3 == 1]
+    setor3 = [d for k, d in enumerate(todos) if k % 3 == 2]
     
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
@@ -244,10 +256,12 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
         palpite = func_estrategia(hist_momento)
         if res_real in palpite:
             status = "💚"; temp_win += 1
-            if temp_loss > max_loss: max_loss = temp_loss; temp_loss = 0
+            if temp_loss > max_loss: max_loss = temp_loss
+            temp_loss = 0 # Reset Loss
         else:
             status = "❌"; temp_loss += 1
-            if temp_win > max_win: max_win = temp_win; temp_win = 0
+            if temp_win > max_win: max_win = temp_win
+            temp_win = 0 # Reset Win
         if i >= len(historico_completo) - 20:
             resultados.append({"JOGO": f"#{len(historico_completo)-i}", "SAIU": f"{res_real[0]:02}-{res_real[1]:02}", "RES": status})
     if temp_loss > max_loss: max_loss = temp_loss
@@ -263,29 +277,42 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
             else: break
     return df_res, max_loss, curr_streak_loss, max_win, curr_streak_win
 
+# --- CORREÇÃO DO CÁLCULO DE TABELA (V112) ---
 def calcular_tabela_stress(historico):
     _, mapa = gerar_universo_duques()
     recorte = historico[-20:]
     tabela = []; atrasos = {}; freqs = {}
+    
     for nome, lista in mapa.items():
+        # Cálculo do Atraso Atual (Simples e Correto)
         atraso = 0
         for x in reversed(historico):
             if x in lista: break
             atraso += 1
         atrasos[nome] = atraso
+        
         count = sum(1 for x in recorte if x in lista)
         freqs[nome] = count
+        
+        # Cálculo de Recordes (Corrigido V112)
         max_atraso = 0; tmp_atraso = 0; max_win = 0; tmp_win = 0
+        
         for x in historico:
-            if x in lista:
+            if x in lista: # Saiu o setor
                 tmp_win += 1
-                if tmp_atraso > max_atraso: max_atraso = tmp_atraso; tmp_atraso = 0
-            else:
+                if tmp_atraso > max_atraso: max_atraso = tmp_atraso
+                tmp_atraso = 0 # ZERA O ATRASO SEMPRE
+            else: # Não saiu o setor
                 tmp_atraso += 1
-                if tmp_win > max_win: max_win = tmp_win; tmp_win = 0
+                if tmp_win > max_win: max_win = tmp_win
+                tmp_win = 0 # ZERA A VITÓRIA SEMPRE
+        
+        # Checagem final após o loop
         if tmp_atraso > max_atraso: max_atraso = tmp_atraso
         if tmp_win > max_win: max_win = tmp_win
+        
         tabela.append({"SETOR": nome, "ATRASO": atraso, "REC. ATRASO": max_atraso, "REC. SEQ. (V)": max_win})
+        
     return pd.DataFrame(tabela), max(atrasos, key=atrasos.get), max(freqs, key=freqs.get)
 
 # =============================================================================
