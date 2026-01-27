@@ -120,58 +120,48 @@ def raspar_dupla_por_horario(url, horario_alvo):
         tabelas = soup.find_all('table')
         
         for tabela in tabelas:
-            # Verifica se é uma tabela de premios
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_encontrado = None
-                
-                # Tenta achar o horario ANTES da tabela
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_encontrado = m.group(1)
                 
-                # Se achou horario e é o que queremos
                 if horario_encontrado == horario_alvo:
                     bicho1 = None
                     bicho2 = None
-                    
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
                         colunas = linha.find_all('td')
                         if len(colunas) >= 3:
                             premio = colunas[0].get_text().strip()
                             grp_txt = colunas[2].get_text().strip()
-                            
                             if grp_txt.isdigit():
                                 grp = int(grp_txt)
-                                # Pega o 1º
                                 if (any(x in premio for x in ['1º', '1', 'Pri']) and "10" not in premio):
                                     bicho1 = grp
-                                # Pega o 2º
                                 elif any(x in premio for x in ['2º', '2', 'Seg']):
                                     bicho2 = grp
-                    
-                    if bicho1 and bicho2:
-                        return bicho1, bicho2, "Sucesso"
-                    else:
-                        return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
-                    
+                    if bicho1 and bicho2: return bicho1, bicho2, "Sucesso"
+                    else: return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
         return None, None, "Horário ainda não saiu"
-        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA DE SIMULAÇÃO (TIME MACHINE) ---
+# --- 3. LÓGICA DE SIMULAÇÃO (ATUALIZADA V111 - BALANCEAMENTO) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
+    # Gera 325 combinações (incluindo dobras 1-1, 2-2...)
     for i in range(1, 26):
-        for j in range(i, 26): todos.append((i, j)) 
-    setor1, setor2, setor3 = [], [], []
-    for d in todos:
-        if d <= (5, 15): setor1.append(d)
-        elif d <= (11, 16): setor2.append(d)
-        else: setor3.append(d)
+        for j in range(i, 26): todos.append((i, j))
+    
+    # ATUALIZAÇÃO V111: Distribuição Alternada (Round Robin)
+    # Isso garante que S1, S2 e S3 tenham números baixos, médios e altos misturados.
+    setor1 = [d for k, d in enumerate(todos) if k % 3 == 0] # Índices 0, 3, 6...
+    setor2 = [d for k, d in enumerate(todos) if k % 3 == 1] # Índices 1, 4, 7...
+    setor3 = [d for k, d in enumerate(todos) if k % 3 == 2] # Índices 2, 5, 8...
+    
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite(lista_tuplas):
@@ -235,16 +225,11 @@ def estrategia_dinamica(historico_slice):
 def estrategia_bunker(historico_slice):
     return [d for d, qtd in Counter(historico_slice).most_common()][:126]
 
-# NOVA: ESTRATÉGIA ICEBERG (ATRASADOS)
 def estrategia_iceberg(historico_slice):
     todos, _ = gerar_universo_duques()
     ultima_vez = {d: -1 for d in todos}
-    # Encontra o índice da última aparição (quanto menor o índice, mais antigo)
     for i, sorteio in enumerate(historico_slice):
         ultima_vez[sorteio] = i
-    
-    # Ordena pelo índice (crescente). Quem apareceu no índice 0 (ou -1) é o mais velho.
-    # Quem apareceu no índice 'len-1' é o mais novo.
     rank = sorted(ultima_vez.items(), key=lambda x: x[1])
     return [d for d, idx in rank][:126]
 
@@ -310,11 +295,9 @@ with st.sidebar:
     st.image(CONFIG_BANCA['logo_url'], width=100)
     st.title("MENU DUQUE")
     
-    # --- NOVIDADE 1: LINK VER SITE ---
     st.link_button("🔗 Ver Site Oficial", CONFIG_BANCA['url_site'])
     st.markdown("---")
 
-    # --- NOVIDADE 2: BUSCA POR HORÁRIO (V110) ---
     horarios_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
     h_sel = st.selectbox("Horário:", horarios_list, index=st.session_state['auto_idx_h'])
     
@@ -355,7 +338,7 @@ if len(historico) > 0:
     palp_set = estrategia_setorizada(historico)
     palp_din = estrategia_dinamica(historico)
     palp_bun = estrategia_bunker(historico)
-    palp_ice = estrategia_iceberg(historico) # NOVO
+    palp_ice = estrategia_iceberg(historico)
     
     with st.spinner("Processando Simulação Real..."):
         bt_bma, ml_bma, cl_bma, mw_bma, cw_bma = rodar_simulacao_real(historico, estrategia_bma)
@@ -402,7 +385,7 @@ if len(historico) > 0:
         html_b += "</div>"
         st.markdown(html_b, unsafe_allow_html=True); st.markdown("---")
 
-        st.subheader("📡 Radar de Setores")
+        st.subheader("📡 Radar de Setores (Equilibrado)")
         st.table(df_stress)
         c1, c2 = st.columns(2)
         with c1:
@@ -421,7 +404,6 @@ if len(historico) > 0:
             with st.expander("Ver Palpite HOJE"): st.code(formatar_palpite(palp_set), language="text")
 
     with tab2:
-        # AGORA SÃO 3 COLUNAS PARA CABER A ICEBERG
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown("### 🚀 Dinâmica")
