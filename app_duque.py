@@ -28,7 +28,6 @@ CONFIG_BANCA = {
 # Inicialização de Estados
 if 'tocar_som_salvar' not in st.session_state: st.session_state['tocar_som_salvar'] = False
 if 'tocar_som_apagar' not in st.session_state: st.session_state['tocar_som_apagar'] = False
-# Estados para Importação Automática
 if 'auto_g1' not in st.session_state: st.session_state['auto_g1'] = 1
 if 'auto_g2' not in st.session_state: st.session_state['auto_g2'] = 2
 if 'auto_idx_h' not in st.session_state: st.session_state['auto_idx_h'] = 0
@@ -120,44 +119,31 @@ def raspar_dupla_por_horario(url, horario_alvo):
         tabelas = soup.find_all('table')
         
         for tabela in tabelas:
-            # Verifica se é uma tabela de premios
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
                 horario_encontrado = None
-                
-                # Tenta achar o horario ANTES da tabela
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
                     if m: horario_encontrado = m.group(1)
                 
-                # Se achou horario e é o que queremos
                 if horario_encontrado == horario_alvo:
                     bicho1 = None
                     bicho2 = None
-                    
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
                         colunas = linha.find_all('td')
                         if len(colunas) >= 3:
                             premio = colunas[0].get_text().strip()
                             grp_txt = colunas[2].get_text().strip()
-                            
                             if grp_txt.isdigit():
                                 grp = int(grp_txt)
-                                # Pega o 1º (Ignora 10º)
                                 if (any(x in premio for x in ['1º', '1', 'Pri']) and "10" not in premio):
                                     bicho1 = grp
-                                # Pega o 2º
                                 elif any(x in premio for x in ['2º', '2', 'Seg']):
                                     bicho2 = grp
-                    
-                    if bicho1 and bicho2:
-                        return bicho1, bicho2, "Sucesso"
-                    else:
-                        return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
-                    
+                    if bicho1 and bicho2: return bicho1, bicho2, "Sucesso"
+                    else: return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
         return None, None, "Horário ainda não saiu"
-        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
@@ -165,15 +151,11 @@ def raspar_dupla_por_horario(url, horario_alvo):
 # =============================================================================
 def gerar_universo_duques():
     todos = []
-    # Gera 325 combinações (incluindo dobras 1-1, 2-2...)
     for i in range(1, 26):
         for j in range(i, 26): todos.append((i, j))
-    
-    # Distribuição Alternada (Round Robin)
     setor1 = [d for k, d in enumerate(todos) if k % 3 == 0]
     setor2 = [d for k, d in enumerate(todos) if k % 3 == 1]
     setor3 = [d for k, d in enumerate(todos) if k % 3 == 2]
-    
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite(lista_tuplas):
@@ -257,11 +239,11 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
         if res_real in palpite:
             status = "💚"; temp_win += 1
             if temp_loss > max_loss: max_loss = temp_loss
-            temp_loss = 0 # Reset Loss
+            temp_loss = 0 
         else:
             status = "❌"; temp_loss += 1
             if temp_win > max_win: max_win = temp_win
-            temp_win = 0 # Reset Win
+            temp_win = 0 
         if i >= len(historico_completo) - 20:
             resultados.append({"JOGO": f"#{len(historico_completo)-i}", "SAIU": f"{res_real[0]:02}-{res_real[1]:02}", "RES": status})
     if temp_loss > max_loss: max_loss = temp_loss
@@ -277,12 +259,10 @@ def rodar_simulacao_real(historico_completo, func_estrategia, n_jogos=50):
             else: break
     return df_res, max_loss, curr_streak_loss, max_win, curr_streak_win
 
-# --- CORREÇÃO DO CÁLCULO DE TABELA (V112) ---
 def calcular_tabela_stress(historico):
     _, mapa = gerar_universo_duques()
     recorte = historico[-20:]
     tabela = []; atrasos = {}; freqs = {}
-    
     for nome, lista in mapa.items():
         atraso = 0
         for x in reversed(historico):
@@ -293,14 +273,14 @@ def calcular_tabela_stress(historico):
         freqs[nome] = count
         max_atraso = 0; tmp_atraso = 0; max_win = 0; tmp_win = 0
         for x in historico:
-            if x in lista: # Saiu o setor
+            if x in lista:
                 tmp_win += 1
                 if tmp_atraso > max_atraso: max_atraso = tmp_atraso
-                tmp_atraso = 0 # ZERA O ATRASO SEMPRE
-            else: # Não saiu o setor
+                tmp_atraso = 0 
+            else:
                 tmp_atraso += 1
                 if tmp_win > max_win: max_win = tmp_win
-                tmp_win = 0 # ZERA A VITÓRIA SEMPRE
+                tmp_win = 0 
         if tmp_atraso > max_atraso: max_atraso = tmp_atraso
         if tmp_win > max_win: max_win = tmp_win
         tabela.append({"SETOR": nome, "ATRASO": atraso, "REC. ATRASO": max_atraso, "REC. SEQ. (V)": max_win})
@@ -365,29 +345,35 @@ if len(historico) > 0:
         bt_bun, ml_bun, cl_bun, mw_bun, cw_bun = rodar_simulacao_real(historico, estrategia_bunker)
         bt_ice, ml_ice, cl_ice, mw_ice, cw_ice = rodar_simulacao_real(historico, estrategia_iceberg)
     
-    # --- ALERTAS E INVERSÃO ---
-    alertas = []
-    
-    def criar_alerta_inverso(nome, curr, max_w, palp):
-        st.warning(f"🛑 CUIDADO {nome}: {curr} Vitórias. Perto do Recorde ({max_w}). Inverso Recomendado!")
-        inv = calcular_inverso_otimizado(palp, historico)
-        with st.expander(f"👻 Ver {nome} INVERSO (Top 126 do Contra)"):
-            st.code(formatar_palpite(inv), language="text")
+    # --- CENTRAL DE ALERTAS (V114 - UI MATCHING) ---
+    lista_alertas = []
+    alertas_inversos = [] # Tuplas (Nome, Palpite)
 
-    if cl_bma >= (ml_bma - 1): alertas.append(f"🔥 BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
-    if cl_set >= (ml_set - 1): alertas.append(f"⚖️ SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
-    if cl_din >= (ml_din - 1): alertas.append(f"🚀 DINÂMICA: Derrotas ({cl_din}) perto do Recorde ({ml_din})!")
-    if cl_bun >= (ml_bun - 1): alertas.append(f"🧬 BUNKER: Derrotas ({cl_bun}) perto do Recorde ({ml_bun})!")
-    if cl_ice >= (ml_ice - 1): alertas.append(f"🥶 ICEBERG: Derrotas ({cl_ice}) perto do Recorde ({ml_ice})!")
+    # Coleta de Alertas de Derrota
+    if cl_bma >= (ml_bma - 1): lista_alertas.append(f"🔥 BMA: Derrotas ({cl_bma}) perto do Recorde ({ml_bma})!")
+    if cl_set >= (ml_set - 1): lista_alertas.append(f"⚖️ SETOR: Derrotas ({cl_set}) perto do Recorde ({ml_set})!")
+    if cl_din >= (ml_din - 1): lista_alertas.append(f"🚀 DINÂMICA: Derrotas ({cl_din}) perto do Recorde ({ml_din})!")
+    if cl_bun >= (ml_bun - 1): lista_alertas.append(f"🧬 BUNKER: Derrotas ({cl_bun}) perto do Recorde ({ml_bun})!")
+    if cl_ice >= (ml_ice - 1): lista_alertas.append(f"🥶 ICEBERG: Derrotas ({cl_ice}) perto do Recorde ({ml_ice})!")
     
-    if alertas:
-        for al in alertas: st.error(al)
-        
-    if cw_bma >= (mw_bma - 1) and cw_bma > 0: criar_alerta_inverso("BMA", cw_bma, mw_bma, palp_bma)
-    if cw_set >= (mw_set - 1) and cw_set > 0: criar_alerta_inverso("SETORIZADA", cw_set, mw_set, palp_set)
-    if cw_din >= (mw_din - 1) and cw_din > 0: criar_alerta_inverso("DINÂMICA", cw_din, mw_din, palp_din)
-    if cw_bun >= (mw_bun - 1) and cw_bun > 0: criar_alerta_inverso("BUNKER", cw_bun, mw_bun, palp_bun)
-    if cw_ice >= (mw_ice - 1) and cw_ice > 0: criar_alerta_inverso("ICEBERG", cw_ice, mw_ice, palp_ice)
+    # Coleta de Alertas de Vitória (Inverso)
+    if cw_bma >= (mw_bma - 1) and cw_bma > 0: alertas_inversos.append(("BMA", cw_bma, mw_bma, palp_bma))
+    if cw_set >= (mw_set - 1) and cw_set > 0: alertas_inversos.append(("SETORIZADA", cw_set, mw_set, palp_set))
+    if cw_din >= (mw_din - 1) and cw_din > 0: alertas_inversos.append(("DINÂMICA", cw_din, mw_din, palp_din))
+    if cw_bun >= (mw_bun - 1) and cw_bun > 0: alertas_inversos.append(("BUNKER", cw_bun, mw_bun, palp_bun))
+    if cw_ice >= (mw_ice - 1) and cw_ice > 0: alertas_inversos.append(("ICEBERG", cw_ice, mw_ice, palp_ice))
+
+    # Exibição Unificada (Igual App Bichos)
+    if lista_alertas or alertas_inversos:
+        with st.expander("🚨 CENTRO DE ALERTAS", expanded=True):
+            for alerta in lista_alertas:
+                st.error(alerta)
+            
+            for nome, curr, max_w, palp in alertas_inversos:
+                st.warning(f"🛑 CUIDADO {nome}: {curr} Vitórias. Perto do Recorde ({max_w}). Inverso Recomendado!")
+                inv = calcular_inverso_otimizado(palp, historico)
+                st.info(f"👻 Inverso {nome} (Top 126):")
+                st.code(formatar_palpite(inv), language="text")
     
     # --- PAINEL PRINCIPAL ---
     tab1, tab2 = st.tabs(["📊 Setores & Estratégias", "🆚 Comparativo (3 Mesas)"])
@@ -403,7 +389,6 @@ if len(historico) > 0:
         html_b += "</div>"
         st.markdown(html_b, unsafe_allow_html=True)
         
-        # --- ATUALIZAÇÃO V113: COMPOSIÇÃO DOS SETORES ---
         with st.expander("🔍 Ver Composição dos Setores (S1, S2, S3)"):
             _, mapa_copy = gerar_universo_duques()
             st.caption("Copie os duques de cada setor para seus jogos:")
