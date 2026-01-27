@@ -153,7 +153,7 @@ def deletar_ultimo_registro(worksheet):
     return False
 
 # =============================================================================
-# --- 3. LÓGICA DO ROBÔ ---
+# --- 3. LÓGICA DO ROBÔ (ATUALIZADA V109) ---
 # =============================================================================
 def html_bolas(lista, cor="verde"):
     html = "<div>"
@@ -178,51 +178,51 @@ def verificar_atualizacao_site(url):
         return False, "🔴 OFF", "Erro site."
     except: return False, "🔴 ERRO", "Falha conexão."
 
-def raspar_ultimo_resultado_real(url, banca_key):
+# --- NOVA FUNÇÃO: BUSCAR POR HORÁRIO ESPECÍFICO ---
+def raspar_resultado_por_horario(url, horario_alvo):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code != 200: return None, None, "Erro Site"
+        if r.status_code != 200: return None, "Erro Site"
         
         soup = BeautifulSoup(r.text, 'html.parser')
-        candidatos = []
         tabelas = soup.find_all('table')
         
         for tabela in tabelas:
-            # Tenta encontrar o horário
+            # Verifica se é uma tabela de premios
             if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
-                horario_str = "00:00"
+                horario_encontrado = None
+                
+                # Tenta achar o horario ANTES da tabela
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev: 
                     m = re.search(r'(\d{2}:\d{2})', prev)
-                    if m: horario_str = m.group(1)
+                    if m: horario_encontrado = m.group(1)
                 
-                linhas = tabela.find_all('tr')
-                for linha in linhas:
-                    colunas = linha.find_all('td')
-                    if len(colunas) >= 3:
-                        premio = colunas[0].get_text().strip()
-                        
-                        # CORREÇÃO CRÍTICA: Ignorar explicitamente o 10º prêmio
-                        if "10" in premio: 
-                            continue 
+                # Se achou horario e é o que queremos
+                if horario_encontrado == horario_alvo:
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        colunas = linha.find_all('td')
+                        if len(colunas) >= 3:
+                            premio = colunas[0].get_text().strip()
                             
-                        # Procura 1º, 1 ou Pri (Primeiro)
-                        if any(x in premio for x in ['1º', '1', 'Pri']):
-                            grp = colunas[2].get_text().strip()
-                            if grp.isdigit():
-                                candidatos.append((horario_str, int(grp)))
-                                # CORREÇÃO: Parar de procurar nesta tabela assim que achar o 1º
-                                break 
+                            # IGNORA 10º PREMIO (Correção LOTEP)
+                            if "10" in premio: continue
+                            
+                            # Pega o 1º Premio
+                            if any(x in premio for x in ['1º', '1', 'Pri']):
+                                grp = colunas[2].get_text().strip()
+                                if grp.isdigit():
+                                    return int(grp), "Sucesso"
+                                break # Parar de ler linhas se achou o 1º
+                    
+                    # Se leu a tabela do horario e não achou, retorna
+                    return None, "Horário achado, prêmio não"
+                    
+        return None, "Horário ainda não saiu"
         
-        if not candidatos: return None, None, "Não encontrado"
-        
-        # Ordena por horário e pega o último
-        candidatos.sort(key=lambda x: x[0])
-        ultimo = candidatos[-1] 
-        return ultimo[1], ultimo[0], "Sucesso"
-        
-    except Exception as e: return None, None, f"Erro: {e}"
+    except Exception as e: return None, f"Erro: {e}"
 
 def calcular_ranking_forca_completo(historico):
     if not historico: return []
@@ -275,7 +275,10 @@ def analisar_ciclo_atual(historico):
 def gerar_backtest_e_status(historico):
     if len(historico) < 30: return pd.DataFrame(), 0, 0, 0, 0
     resultados = []
+    
+    # AJUSTE: Mostrar os últimos 25 jogos na tabela
     inicio = max(0, len(historico) - 25)
+    
     max_loss = 0; temp_loss = 0; max_win = 0; temp_win = 0
     inicio_risk = max(0, len(historico) - 50)
     for i in range(inicio_risk, len(historico)):
@@ -375,6 +378,7 @@ def analisar_dna_fixo_historico(historico):
         if temp_win > max_win: max_win = temp_win
     
     resultados_simulacao = []
+    # AJUSTE: Mostrar 25 jogos na tabela Bunker
     for i, saiu in enumerate(historico[-25:]):
         status = "❌"
         if saiu in top_12_fixo: status = "💚"
@@ -402,6 +406,7 @@ def gerar_palpite_setorizado(historico):
 def gerar_backtest_setorizado(historico):
     if len(historico) < 30: return pd.DataFrame(), [], 0, 0, 0, 0
     resultados = []
+    # AJUSTE: Mostrar 25 jogos na tabela Setorizada
     inicio = max(0, len(historico) - 25)
     
     lista_atual = gerar_palpite_setorizado(historico)
@@ -481,6 +486,7 @@ def gerar_backtest_bma(historico):
         if temp_loss > max_loss: max_loss = temp_loss
         if temp_win > max_win: max_win = temp_win
         
+    # AJUSTE: Mostrar 25 jogos na tabela BMA
     inicio = max(0, len(historico) - 25)
     
     for i in range(inicio, len(historico)):
@@ -565,24 +571,23 @@ with st.sidebar:
     
     st.markdown("---")
     
-    c1_imp, c2_link = st.columns(2)
-    with c1_imp:
-        if st.button("📡 Importar"):
-            with st.spinner("Buscando dados..."):
-                grp, hor, msg = raspar_ultimo_resultado_real(config_banca['url_site'], banca_selecionada)
-                if grp:
-                    st.success(f"G{grp:02} às {hor}")
-                    st.session_state['auto_grupo'] = grp
-                    if hor in lista_horarios:
-                        st.session_state['auto_horario_idx'] = lista_horarios.index(hor)
-                else:
-                    st.error(f"Erro: {msg}")
-    
-    with c2_link:
-        st.link_button("🔗 Ver Site", config_banca['url_site'])
+    c_link, _ = st.columns([1, 0.1])
+    with c_link:
+        st.link_button("🔗 Ver Site Oficial", config_banca['url_site'])
     
     st.write("📝 **Registrar Sorteio**")
     novo_horario = st.selectbox("Horário:", lista_horarios, index=st.session_state.get('auto_horario_idx', 0))
+    
+    # --- NOVA FUNCIONALIDADE: BUSCA ESPECÍFICA (V109) ---
+    if st.button(f"🔍 Checar {novo_horario}"):
+        with st.spinner("Varrendo o site..."):
+            grp, msg = raspar_resultado_por_horario(config_banca['url_site'], novo_horario)
+            if grp:
+                st.session_state['auto_grupo'] = grp
+                st.success(f"Encontrado: Grupo {grp:02}")
+            else:
+                st.error(f"Não encontrado: {msg}")
+    
     novo_bicho = st.number_input("Grupo:", 1, 25, st.session_state.get('auto_grupo', 1))
     
     col_btn1, col_btn2 = st.columns(2)
