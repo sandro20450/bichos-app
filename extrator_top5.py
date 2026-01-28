@@ -5,7 +5,7 @@ from google.oauth2.service_account import Credentials
 import requests
 from bs4 import BeautifulSoup
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 
 # =============================================================================
@@ -44,19 +44,29 @@ def conectar_planilha(nome_aba):
         return ws
     return None
 
-def raspar_dia_completo(banca_key, data_alvo):
-    data_str = data_alvo.strftime("%Y-%m-%d")
-    slug = CONFIG_BANCAS[banca_key]['slug']
+def montar_url_correta(slug, data_alvo):
+    hoje = date.today()
+    delta = (hoje - data_alvo).days
     
-    # URL Padrão: https://www.resultadofacil.com.br/resultados-lotep-de-2024-01-28
-    url = f"https://www.resultadofacil.com.br/resultados-{slug}-de-{data_str}"
+    base = "https://www.resultadofacil.com.br"
     
-    # Se for hoje, tenta URL específica as vezes necessária
-    if data_alvo == date.today():
-        # Mas geralmente o site redireciona a data de hoje para /hoje, então vamos testar a URL data primeiro
-        pass
+    if delta == 0:
+        # URL de Hoje: resultados-lotep-de-hoje
+        return f"{base}/resultados-{slug}-de-hoje"
+    elif delta == 1:
+        # URL de Ontem: resultados-lotep-de-ontem
+        return f"{base}/resultados-{slug}-de-ontem"
+    else:
+        # URL Antiga: resultados-lotep-do-dia-2026-01-08
+        # AQUI ESTAVA O ERRO: mudamos de '-de-' para '-do-dia-'
+        data_str = data_alvo.strftime("%Y-%m-%d")
+        return f"{base}/resultados-{slug}-do-dia-{data_str}"
 
-    st.write(f"🔍 Tentando acessar: {url}") # Debug visual para você
+def raspar_dia_completo(banca_key, data_alvo):
+    slug = CONFIG_BANCAS[banca_key]['slug']
+    url = montar_url_correta(slug, data_alvo)
+    
+    st.info(f"🔎 Robô acessando: {url}") # Mostra na tela para conferência
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -67,7 +77,6 @@ def raspar_dia_completo(banca_key, data_alvo):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Verifica se a página diz "Não foram encontrados resultados"
         if "Não foram encontrados resultados" in soup.get_text():
             return [], "Site diz: Sem resultados para esta data."
 
@@ -75,13 +84,12 @@ def raspar_dia_completo(banca_key, data_alvo):
         resultados_do_dia = []
         
         for tabela in tabelas:
-            # Critério mais flexível para achar tabela de resultado
             texto_tab = tabela.get_text()
+            # Busca tabelas que tenham "1º" ou "Prêmio"
             if "Prêmio" in texto_tab or "1º" in texto_tab:
                 
-                # Tenta achar o horário
+                # Tenta achar o horário no bloco anterior
                 horario = "00:00"
-                # Procura no container anterior (título do sorteio)
                 prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
                 if prev:
                     m = re.search(r'(\d{2}:\d{2})', prev)
@@ -92,33 +100,32 @@ def raspar_dia_completo(banca_key, data_alvo):
                 for linha in linhas:
                     cols = linha.find_all('td')
                     if len(cols) >= 3:
-                        premio = cols[0].get_text().strip()
-                        grupo = cols[2].get_text().strip() # Assumindo coluna 3 é grupo
+                        premio_txt = cols[0].get_text().strip()
+                        grupo_txt = cols[2].get_text().strip()
                         
-                        # Validação forte de grupo (tem que ser numérico)
-                        if not grupo.isdigit(): continue
+                        if not grupo_txt.isdigit(): continue
                         
-                        # Filtra 1 a 5
-                        # Pega o número do prêmio (ex: "1º" -> "1")
-                        nums = re.findall(r'\d+', premio)
+                        # Extrai a posição do prêmio (1º, 2º...)
+                        nums = re.findall(r'\d+', premio_txt)
                         if nums:
                             posicao = int(nums[0])
+                            # Filtra apenas do 1 ao 5
+                            # OBS: Se o site listar até o 10º, ignoramos do 6 pra cima
                             if 1 <= posicao <= 5:
-                                bichos.append(int(grupo))
+                                bichos.append(int(grupo_txt))
                 
-                # Se pegou 5 bichos, salva
+                # Só salva se tiver encontrado pelo menos 5 bichos
                 if len(bichos) >= 5:
-                    # Garante que pegou na ordem certa (a lista append segue a ordem da tabela)
-                    top5 = bichos[:5]
+                    top5 = bichos[:5] # Garante só os 5 primeiros
                     
-                    # Evita duplicatas de horário na mesma extração
+                    # Evita duplicar horário no mesmo dia
                     ja_tem = False
-                    for r in resultados_do_dia:
-                        if r['horario'] == horario: ja_tem = True
+                    for x in resultados_do_dia:
+                        if x['horario'] == horario: ja_tem = True
                     
                     if not ja_tem:
                         resultados_do_dia.append({
-                            "data": data_str,
+                            "data": data_alvo.strftime("%Y-%m-%d"),
                             "horario": horario,
                             "premios": top5
                         })
@@ -131,7 +138,7 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V2.0")
+st.title("🏗️ Robô Extrator V2.1 (Correção URL)")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -150,10 +157,8 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
             if dados:
                 st.success(f"📦 Encontrados {len(dados)} sorteios!")
                 
-                # Check de duplicidade simples
                 try:
                     existentes = ws.get_all_values()
-                    # Cria lista de chaves unicas (Data+Horario)
                     chaves_existentes = [f"{row[0]}|{row[1]}" for row in existentes if len(row) > 1]
                 except: chaves_existentes = []
                 
@@ -169,9 +174,8 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.warning("Todos os sorteios encontrados já estavam salvos.")
+                    st.warning("Todos os sorteios encontrados JÁ estavam salvos.")
                 
-                st.write("Visualização do que foi encontrado:")
                 st.json(dados)
             else:
                 st.error(f"Nada encontrado. Msg: {msg}")
