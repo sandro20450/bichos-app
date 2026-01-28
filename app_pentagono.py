@@ -7,7 +7,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V2 - Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V3 - Legacy", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -24,12 +24,12 @@ CONFIG_BANCAS = {
     }
 }
 
-# LÓGICA DE SETORES EQUILIBRADOS (ROUND ROBIN 1-2-3)
-# Garantia de que nenhum setor fique viciado em numeros altos ou baixos
+# LÓGICA CLÁSSICA (BICHOS APP)
 SETORES = {
-    "S1": [1, 4, 7, 10, 13, 16, 19, 22, 25],
-    "S2": [2, 5, 8, 11, 14, 17, 20, 23],
-    "S3": [3, 6, 9, 12, 15, 18, 21, 24]
+    "BAIXO (01-08)": list(range(1, 9)),
+    "MÉDIO (09-16)": list(range(9, 17)),
+    "ALTO (17-24)": list(range(17, 25)),
+    "VACA (25)": [25]
 }
 
 def aplicar_estilo():
@@ -38,7 +38,17 @@ def aplicar_estilo():
         .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
-        h1, h2, h3 { color: #ffffff !important; }
+        
+        /* Estilo das Bolinhas */
+        .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        
+        /* Tabela Personalizada */
+        div[data-testid="stTable"] table { color: white; }
+        thead tr th:first-child {display:none}
+        tbody th {display:none}
     </style>
     """, unsafe_allow_html=True)
 
@@ -61,64 +71,91 @@ def carregar_dados_top5(nome_aba):
         if len(raw) < 2: return []
         dados_processados = []
         for row in raw[1:]:
-            # Garante que tem data, hora e 5 premios
             if len(row) >= 7:
                 try:
-                    # Tenta converter as colunas 2,3,4,5,6 para int
                     premios = [int(p) for p in row[2:7] if p.isdigit()]
                     if len(premios) == 5:
                         dados_processados.append({
                             "data": row[0],
                             "horario": row[1],
-                            "premios": premios # [P1, P2, P3, P4, P5]
+                            "premios": premios 
                         })
                 except: pass
         return dados_processados
     return []
 
 # =============================================================================
-# --- 3. CÁLCULO DE STRESS POR POSIÇÃO (LÓGICA SNIPER) ---
+# --- 3. CÁLCULO DE STRESS (LÓGICA ANTIGA) ---
 # =============================================================================
-def calcular_stress_individual(historico, indice_premio):
+def calcular_stress_tabela(historico, indice_premio):
     """
-    Analisa apenas uma coluna verticalmente (ex: só o 4º prêmio de todos os dias).
-    indice_premio: 0=1º, 1=2º, 2=3º, 3=4º, 4=5º
+    Gera a tabela exata: SETOR | ATRASO | REC. ATRASO | REC. SEQ. (V)
     """
-    stats = {}
+    stats = []
     
     for nome_setor, lista_bichos in SETORES.items():
-        recorde_atraso = 0
-        tmp_atraso = 0
+        # Variáveis de cálculo
+        max_atraso = 0
+        curr_atraso = 0
+        max_seq_v = 0
+        curr_seq_v = 0
         
-        # 1. Calcula o Recorde Histórico (Varrendo do passado pro presente)
+        # 1. Varredura Histórica (Recordes)
         for jogo in historico:
-            bicho_na_posicao = jogo['premios'][indice_premio]
+            bicho = jogo['premios'][indice_premio]
             
-            if bicho_na_posicao in lista_bichos:
-                # Setor saiu nesta posição -> Zera contagem temporária
-                if tmp_atraso > recorde_atraso: recorde_atraso = tmp_atraso
-                tmp_atraso = 0
+            if bicho in lista_bichos:
+                # ACERTOU O SETOR
+                curr_seq_v += 1 # Aumenta sequencia de vitoria
+                if curr_atraso > max_atraso: max_atraso = curr_atraso # Salva recorde de atraso antes de zerar
+                curr_atraso = 0 # Zera atraso
             else:
-                # Setor não saiu -> Aumenta contagem
-                tmp_atraso += 1
+                # ERROU O SETOR
+                curr_atraso += 1 # Aumenta atraso
+                if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v # Salva recorde de vitoria antes de zerar
+                curr_seq_v = 0 # Zera sequencia vitoria
         
-        # Checagem final do loop
-        if tmp_atraso > recorde_atraso: recorde_atraso = tmp_atraso
+        # Checks finais do loop
+        if curr_atraso > max_atraso: max_atraso = curr_atraso
+        if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         
-        # 2. Calcula o Atraso Atual (Varrendo do presente pro passado até achar a última saída)
+        # 2. Atraso Real (Contando de trás pra frente)
         atraso_real = 0
         for jogo in reversed(historico):
-            bicho_na_posicao = jogo['premios'][indice_premio]
-            if bicho_na_posicao in lista_bichos:
-                break # Encontrou a última vez que saiu, para de contar
+            bicho = jogo['premios'][indice_premio]
+            if bicho in lista_bichos: break
             atraso_real += 1
             
-        stats[nome_setor] = {
-            "atraso": atraso_real,
-            "recorde": recorde_atraso
-        }
+        stats.append({
+            "SETOR": nome_setor,
+            "ATRASO": atraso_real,
+            "REC. ATRASO": max_atraso,
+            "REC. SEQ. (V)": max_seq_v
+        })
         
-    return stats
+    return pd.DataFrame(stats)
+
+def gerar_bolinhas_recentes(historico, indice_premio):
+    # Pega os últimos 12 resultados
+    html = "<div>"
+    for jogo in reversed(historico[-12:]):
+        bicho = jogo['premios'][indice_premio]
+        
+        classe = ""
+        letra = ""
+        
+        if bicho in SETORES["BAIXO (01-08)"]: 
+            classe = "bola-b"; letra = "B"
+        elif bicho in SETORES["MÉDIO (09-16)"]: 
+            classe = "bola-m"; letra = "M"
+        elif bicho in SETORES["ALTO (17-24)"]: 
+            classe = "bola-a"; letra = "A"
+        elif bicho == 25: 
+            classe = "bola-v"; letra = "V"
+            
+        html += f"<div class='{classe}'>{letra}</div>"
+    html += "</div>"
+    return html
 
 # =============================================================================
 # --- 4. INTERFACE ---
@@ -126,98 +163,84 @@ def calcular_stress_individual(historico, indice_premio):
 aplicar_estilo()
 
 with st.sidebar:
-    st.title("🎯 SNIPER V2")
+    st.title("🎯 SNIPER V3")
     banca_selecionada = st.selectbox("Selecione a Banca:", list(CONFIG_BANCAS.keys()))
     st.markdown("---")
-    
-    st.info("💡 **Dica:** Este app analisa cada prêmio individualmente. Se o radar apontar o 4º Prêmio, jogue APENAS no 4º Prêmio.")
-    
+    st.info("💡 **Lógica Clássica:**\n- Baixo (01-08)\n- Médio (09-16)\n- Alto (17-24)\n- Vaca (25)")
     if st.button("🔄 Atualizar"): st.rerun()
 
 config = CONFIG_BANCAS[banca_selecionada]
-st.header(f"🔭 Análise Individual (1º ao 5º) - {config['display_name']}")
+st.header(f"🔭 Análise Clássica (1º ao 5º) - {config['display_name']}")
 
-with st.spinner("Carregando base de dados e calculando estatísticas..."):
+with st.spinner("Carregando base de dados..."):
     historico = carregar_dados_top5(config['nome_aba'])
 
 if len(historico) > 0:
     ult = historico[-1]
-    st.caption(f"📅 Base de Dados: {len(historico)} sorteios carregados. | Último registro: {ult['data']} às {ult['horario']}")
+    st.caption(f"📅 Base de Dados: {len(historico)} sorteios. | Último: {ult['data']} às {ult['horario']}")
     
-    # --- 1. RADAR DE OPORTUNIDADES (TOPO) ---
+    # --- 1. RADAR DE DISPAROS (TOPO) ---
     st.subheader("🚨 Radar de Disparos")
     
     alertas_encontrados = 0
     nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
     
     # Grid de Alertas
+    col_alerts = st.container()
+    
     for idx_pos, nome_pos in enumerate(nomes_posicoes):
-        dados_pos = calcular_stress_individual(historico, idx_pos)
+        df = calcular_stress_tabela(historico, idx_pos)
         
-        for setor, info in dados_pos.items():
-            atraso = info['atraso']
-            recorde = info['recorde']
-            margem = recorde - atraso
+        for index, row in df.iterrows():
+            atraso = row['ATRASO']
+            recorde = row['REC. ATRASO']
+            setor = row['SETOR']
             
-            # LÓGICA DE TIRO: 
-            # Se o atraso estiver IGUAL ou MAIOR que o recorde, ou FALTANDO 1 para bater.
-            # (Filtro: Recorde deve ser pelo menos 5 para evitar falsos positivos de início de planilha)
-            if margem <= 1 and recorde >= 5:
+            # Lógica de Alerta (Margem de 1 ou estourado)
+            # Para a Vaca (25), como demora muito, exigimos recorde > 15 para alertar
+            min_rec = 15 if "VACA" in setor else 5
+            
+            if (recorde - atraso) <= 1 and recorde >= min_rec:
                 alertas_encontrados += 1
                 
-                if margem <= 0:
-                    classe = "box-alerta"
-                    icone = "🔥"
-                    txt_extra = "**ESTOURADO!** (Bateu/Passou Recorde)"
-                else:
-                    classe = "box-aviso"
-                    icone = "⚠️"
-                    txt_extra = "Zona de Tiro (Falta 1)"
+                classe = "box-alerta" if atraso >= recorde else "box-aviso"
+                msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
                 
-                st.markdown(f"""
-                <div class="{classe}">
-                    <h3>{icone} {nome_pos} -> {setor}</h3>
-                    <p><b>Atraso Atual: {atraso}</b> | Recorde Histórico: {recorde}</p>
-                    <p>{txt_extra}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                with col_alerts:
+                    st.markdown(f"""
+                    <div class="{classe}">
+                        <b>{nome_pos} | {setor}</b><br>
+                        Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}
+                    </div>
+                    """, unsafe_allow_html=True)
     
     if alertas_encontrados == 0:
-        st.success("✅ Mercado Estável: Nenhuma oportunidade crítica encontrada no momento.")
+        st.success("✅ Mercado Estável. Nenhuma oportunidade crítica encontrada.")
     
     st.markdown("---")
 
     # --- 2. ABAS DETALHADAS ---
-    st.subheader("📊 Detalhes por Posição")
     abas = st.tabs(nomes_posicoes)
     
     for idx_aba, aba in enumerate(abas):
         with aba:
-            st.markdown(f"#### Estatísticas do {nomes_posicoes[idx_aba]}")
-            stats = calcular_stress_individual(historico, idx_aba)
+            st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
             
-            c1, c2, c3 = st.columns(3)
+            # VISUAL RECENTE (BOLINHAS)
+            st.markdown("**Visual Recente (⬅️ Mais Novo):**")
+            st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            def render_card(col, titulo, dados, cor):
-                at = dados['atraso']
-                rec = dados['recorde']
-                # Evita divisão por zero
-                progresso = at / rec if rec > 0 else 0
-                progresso = min(1.0, progresso)
-                
-                with col:
-                    st.markdown(f"<h4 style='color:{cor}; text-align:center;'>{titulo}</h4>", unsafe_allow_html=True)
-                    st.metric("Atraso", f"{at}", delta=f"Recorde: {rec}", delta_color="off")
-                    st.progress(progresso)
+            # TABELA DE STRESS
+            st.markdown("**📉 Tabela de Stress (Atraso vs Recorde):**")
+            df_stats = calcular_stress_tabela(historico, idx_aba)
+            st.table(df_stats)
             
-            render_card(c1, "Setor 1 (S1)", stats["S1"], "#17a2b8")
-            render_card(c2, "Setor 2 (S2)", stats["S2"], "#fd7e14")
-            render_card(c3, "Setor 3 (S3)", stats["S3"], "#dc3545")
-            
-            with st.expander("🔍 Ver Grupos deste Setor"):
-                st.write("**🔵 S1:** 1, 4, 7, 10, 13, 16, 19, 22, 25")
-                st.write("**🟠 S2:** 2, 5, 8, 11, 14, 17, 20, 23")
-                st.write("**🔴 S3:** 3, 6, 9, 12, 15, 18, 21, 24")
+            # Explicação da Vaca
+            if "VACA (25)" in df_stats['SETOR'].values:
+                row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
+                if row_vaca['ATRASO'] > 20:
+                    st.info(f"ℹ️ **Nota sobre a Vaca:** Ela está com atraso de {row_vaca['ATRASO']}. Lembre-se que ela sai menos vezes estatisticamente (1 chance em 25). Só jogue se estiver próxima do recorde histórico ({row_vaca['REC. ATRASO']}).")
 
 else:
-    st.warning("⚠️ Base de dados vazia ou incompleta. Use o 'Robô Extrator' para preencher a planilha primeiro.")
+    st.warning("⚠️ Base de dados vazia. Use o Robô Extrator primeiro.")
