@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V4 - Híbrido", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V5 - Final", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -42,6 +42,14 @@ SETORES = {
     "VACA (25)": [25]
 }
 
+# Inicializa estado do som
+if 'tocar_som' not in st.session_state: st.session_state['tocar_som'] = False
+
+def reproduzir_som():
+    # Som de sucesso (Caixa Registradora / Sucesso)
+    sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
+    st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
+
 def aplicar_estilo():
     st.markdown("""
     <style>
@@ -61,6 +69,11 @@ def aplicar_estilo():
         tbody th {display:none}
     </style>
     """, unsafe_allow_html=True)
+
+# Toca o som se o estado estiver ativo
+if st.session_state['tocar_som']:
+    reproduzir_som()
+    st.session_state['tocar_som'] = False
 
 # =============================================================================
 # --- 2. CONEXÃO GOOGLE SHEETS ---
@@ -118,25 +131,18 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        
-        # Regex para achar 12:40 ou 18h
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
         
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # Busca horário
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
                     if m:
                         raw = m.group(1)
-                        # Normaliza 18h -> 18:00
-                        if 'h' in raw and ':' not in raw:
-                            h_detect = raw.replace('h', '').zfill(2) + ":00"
-                        else:
-                            h_detect = raw
+                        if 'h' in raw and ':' not in raw: h_detect = raw.replace('h', '').zfill(2) + ":00"
+                        else: h_detect = raw
                         
-                        # Se for o horário que queremos
                         if h_detect == horario_alvo:
                             bichos = []
                             linhas = tabela.find_all('tr')
@@ -150,12 +156,9 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
                                         if nums and 1 <= int(nums[0]) <= 5:
                                             bichos.append(int(grp))
                             
-                            if len(bichos) >= 5:
-                                return bichos[:5], "Sucesso"
-                            else:
-                                return None, "Horário achado, mas incompleto (menos de 5 bichos)."
-                                
-        return None, "Horário não encontrado na página."
+                            if len(bichos) >= 5: return bichos[:5], "Sucesso"
+                            else: return None, "Incompleto"
+        return None, "Horário não encontrado"
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
@@ -213,9 +216,15 @@ def gerar_bolinhas_recentes(historico, indice_premio):
 aplicar_estilo()
 
 with st.sidebar:
-    st.title("🎯 SNIPER V4")
+    st.title("🎯 SNIPER V5")
     banca_selecionada = st.selectbox("Selecione a Banca:", list(CONFIG_BANCAS.keys()))
     config_banca = CONFIG_BANCAS[banca_selecionada]
+    
+    st.markdown("---")
+    
+    # --- NOVO: LINK VER SITE ---
+    url_site = f"https://www.resultadofacil.com.br/resultados-{config_banca['slug']}-de-hoje"
+    st.link_button("🔗 Ver Site Oficial", url_site)
     
     st.markdown("---")
     
@@ -233,7 +242,6 @@ with st.sidebar:
             ws = conectar_planilha(config_banca['nome_aba'])
             if ws:
                 with st.spinner(f"Buscando {horario_busca}..."):
-                    # 1. Verifica se já existe
                     try:
                         existentes = ws.get_all_values()
                         chaves = [f"{row[0]}|{row[1]}" for row in existentes if len(row)>1]
@@ -242,22 +250,20 @@ with st.sidebar:
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
                     
                     if chave_atual in chaves:
-                        st.warning("Este resultado já está salvo!")
+                        st.warning("Resultado já existe!")
                     else:
-                        # 2. Faz a raspagem
                         top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
-                        
                         if top5:
-                            # 3. Salva
                             row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
                             ws.append_row(row)
-                            st.success(f"Salvo: {top5}")
+                            st.session_state['tocar_som'] = True # Ativa o som
+                            st.toast(f"Sucesso! {top5}", icon="✅")
                             time.sleep(1)
                             st.rerun()
                         else:
                             st.error(msg)
             else:
-                st.error("Erro Conexão Planilha")
+                st.error("Erro Planilha")
 
 # --- CONTEÚDO PRINCIPAL ---
 st.header(f"🔭 Análise Clássica (1º ao 5º) - {config_banca['display_name']}")
@@ -269,7 +275,7 @@ if len(historico) > 0:
     ult = historico[-1]
     st.caption(f"📅 Base: {len(historico)} sorteios | Último: {ult['data']} às {ult['horario']}")
     
-    # RADAR
+    # RADAR (SEM VACA)
     st.subheader("🚨 Radar de Disparos")
     alertas_encontrados = 0
     nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
@@ -279,9 +285,12 @@ if len(historico) > 0:
         df = calcular_stress_tabela(historico, idx_pos)
         for index, row in df.iterrows():
             atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
-            min_rec = 15 if "VACA" in setor else 5
             
-            if (recorde - atraso) <= 1 and recorde >= min_rec:
+            # FILTRO: IGNORA VACA NO RADAR DO TOPO
+            if "VACA" in setor: continue 
+            
+            # Alerta normal para B, M, A
+            if (recorde - atraso) <= 1 and recorde >= 5:
                 alertas_encontrados += 1
                 classe = "box-alerta" if atraso >= recorde else "box-aviso"
                 msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
@@ -304,10 +313,11 @@ if len(historico) > 0:
             df_stats = calcular_stress_tabela(historico, idx_aba)
             st.table(df_stats)
             
-            # Alerta Vaca
+            # NOTA DE RODAPÉ (VACA APARECE AQUI)
             if "VACA (25)" in df_stats['SETOR'].values:
                 row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
-                if row_vaca['ATRASO'] > 20:
-                    st.info(f"ℹ️ **Vaca (25):** Atraso {row_vaca['ATRASO']} (Recorde: {row_vaca['REC. ATRASO']}).")
+                # Só mostra mensagem se atraso for relevante (>15)
+                if row_vaca['ATRASO'] > 15:
+                    st.info(f"ℹ️ **Monitoramento Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
 else:
     st.warning("⚠️ Base vazia.")
