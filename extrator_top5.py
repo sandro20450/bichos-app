@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator TOP 5", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator TOP 5 (Universal)", page_icon="🏗️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -78,8 +78,11 @@ def raspar_dia_completo(banca_key, data_alvo):
         tabelas = soup.find_all('table')
         resultados_do_dia = []
         
-        # Padrão para pegar "HH:MM" ou "HHh" (ex: 18h)
-        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
+        # --- REGEX ATUALIZADO (CORREÇÃO CAMINHO DA SORTE "17") ---
+        # \d{1,2}:\d{2}  -> Pega 12:45
+        # \d{1,2}h       -> Pega 18h
+        # \b\d{1,2}\b    -> Pega 17 (Número solto entre bordas)
+        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
 
         for tabela in tabelas:
             texto_tab = tabela.get_text()
@@ -91,12 +94,18 @@ def raspar_dia_completo(banca_key, data_alvo):
                 if prev:
                     m = re.search(padrao_hora, prev)
                     if m: 
-                        raw_hora = m.group(1)
-                        # Se achou "18h", converte para "18:00"
-                        if 'h' in raw_hora and ':' not in raw_hora:
-                            horario = raw_hora.replace('h', '').zfill(2) + ":00"
+                        raw = m.group(1).strip()
+                        
+                        # Normalização Inteligente
+                        if ':' in raw:
+                            # Formato 12:45 (Mantém)
+                            horario = raw
+                        elif 'h' in raw:
+                            # Formato 18h -> 18:00
+                            horario = raw.replace('h', '').strip().zfill(2) + ":00"
                         else:
-                            horario = raw_hora
+                            # Formato 17 -> 17:00 (Novo Fix)
+                            horario = raw.strip().zfill(2) + ":00"
                 
                 bichos = []
                 linhas = tabela.find_all('tr')
@@ -136,7 +145,7 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V2.2 (Fix 18h)")
+st.title("🏗️ Robô Extrator V3.0 (Correção Universal)")
 
 c1, c2 = st.columns(2)
 with c1:
