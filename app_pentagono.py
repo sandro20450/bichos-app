@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V6 - Dashboard", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V7 - Ciclos", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -62,6 +62,9 @@ def aplicar_estilo():
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
+        
+        /* Estilo Ciclos */
+        .ciclo-box { border: 1px solid #444; padding: 15px; border-radius: 10px; background-color: rgba(0,0,0,0.2); margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -133,6 +136,34 @@ def calcular_stress_tabela(historico, indice_premio):
         })
     return pd.DataFrame(stats)
 
+# --- NOVO: LÓGICA DE CICLOS ---
+def calcular_ciclo(historico, indice_premio):
+    ciclos_fechados = []
+    bichos_vistos = set()
+    contador_jogos = 0
+    
+    # Percorre toda a história para calcular médias
+    for jogo in historico:
+        bicho = jogo['premios'][indice_premio]
+        contador_jogos += 1
+        bichos_vistos.add(bicho)
+        
+        if len(bichos_vistos) == 25:
+            ciclos_fechados.append(contador_jogos)
+            bichos_vistos = set()
+            contador_jogos = 0
+            
+    # O estado final do loop é o ciclo atual (aberto)
+    faltam = list(set(range(1, 26)) - bichos_vistos)
+    media = sum(ciclos_fechados) / len(ciclos_fechados) if ciclos_fechados else 0
+    
+    return {
+        "vistos": len(bichos_vistos),
+        "jogos_atual": contador_jogos,
+        "media_historica": media,
+        "faltam": sorted(faltam)
+    }
+
 # ROBÔ
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
@@ -192,7 +223,7 @@ def gerar_bolinhas_recentes(historico, indice_premio):
     return html
 
 # =============================================================================
-# --- 3. DASHBOARD GERAL (NOVA FUNÇÃO V6) ---
+# --- 3. DASHBOARD GERAL ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTRO DE COMANDO (Pentágono)")
@@ -207,19 +238,14 @@ def tela_dashboard_global():
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
-                # Varre os 5 prêmios
                 for idx_pos in range(5):
                     df = calcular_stress_tabela(historico, idx_pos)
                     for _, row in df.iterrows():
                         atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
-                        
-                        # IGNORA VACA NO RADAR GERAL
                         if "VACA" in setor: continue
-                        
-                        # Lógica de Alerta Global
                         if (recorde - atraso) <= 1 and recorde >= 5:
                             alertas_globais.append({
-                                "banca": config['display_name'].split("(")[0].strip(), # Pega só o nome
+                                "banca": config['display_name'].split("(")[0].strip(),
                                 "premio": f"{idx_pos+1}º Prêmio",
                                 "setor": setor,
                                 "atraso": atraso,
@@ -232,14 +258,11 @@ def tela_dashboard_global():
         st.markdown("---")
         
         if alertas_globais:
-            st.warning("🚨 Oportunidades Encontradas (Sugestão: Vá no menu e selecione a banca para operar)")
-            
-            # Grid de Cards
+            st.warning("🚨 Oportunidades Encontradas")
             cols = st.columns(2)
             for i, alerta in enumerate(alertas_globais):
                 classe = "box-alerta" if alerta['atraso'] >= alerta['recorde'] else "box-aviso"
                 status = "ESTOURADO!" if alerta['atraso'] >= alerta['recorde'] else "Zona de Tiro"
-                
                 with cols[i % 2]:
                     st.markdown(f"""
                     <div class="{classe}">
@@ -250,15 +273,13 @@ def tela_dashboard_global():
                     </div>
                     """, unsafe_allow_html=True)
         else:
-            st.success("✅ Tudo calmo. Nenhuma oportunidade crítica (Estourada) nas 3 bancas.")
-            st.info("Dica: Use o menu lateral para análises manuais ou importar novos resultados.")
+            st.success("✅ Tudo calmo nas 3 bancas.")
 
 # =============================================================================
 # --- 4. FLUXO PRINCIPAL DO APP ---
 # =============================================================================
 aplicar_estilo()
 
-# Menu Lateral Diferenciado
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
@@ -266,7 +287,6 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
     tela_dashboard_global()
 
 else:
-    # --- MODO ESPECÍFICO (INTERFACE V5) ---
     banca_selecionada = escolha_menu
     config_banca = CONFIG_BANCAS[banca_selecionada]
     
@@ -275,7 +295,6 @@ else:
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    # Importação
     with st.sidebar.expander("📥 Importar Resultado", expanded=True):
         opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
         if opcao_data == "Hoje": data_busca = date.today()
@@ -292,7 +311,6 @@ else:
                         existentes = ws.get_all_values()
                         chaves = [f"{row[0]}|{row[1]}" for row in existentes if len(row)>1]
                     except: chaves = []
-                    
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
                     if chave_atual in chaves: st.warning("Resultado já existe!")
                     else:
@@ -307,7 +325,6 @@ else:
                         else: st.error(msg)
             else: st.error("Erro Planilha")
 
-    # Tela da Banca
     st.header(f"🔭 {config_banca['display_name']}")
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_top5(config_banca['nome_aba'])
@@ -316,7 +333,6 @@ else:
         ult = historico[-1]
         st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
         
-        # Radar Local (Topo da Banca)
         st.subheader(f"🚨 Radar Local: {config_banca['display_name'].split('(')[0]}")
         nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
         col_alerts = st.container()
@@ -337,7 +353,6 @@ else:
         if alertas_locais == 0: st.success("Sem alertas críticos nesta banca.")
         st.markdown("---")
 
-        # Abas Detalhadas
         abas = st.tabs(nomes_posicoes)
         for idx_aba, aba in enumerate(abas):
             with aba:
@@ -345,9 +360,36 @@ else:
                 st.markdown("**Visual Recente (⬅️ Mais Novo):**")
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
+                
                 st.markdown("**📉 Tabela de Stress:**")
                 df_stats = calcular_stress_tabela(historico, idx_aba)
                 st.table(df_stats)
+                
+                # --- MONITOR DE CICLOS (NOVO) ---
+                st.markdown("---")
+                st.subheader("🔄 Monitor de Ciclos (1-25)")
+                stats_ciclo = calcular_ciclo(historico, idx_aba)
+                
+                # Barra de Progresso Visual
+                prog_val = stats_ciclo['vistos'] / 25.0
+                st.progress(prog_val)
+                st.caption(f"Status Atual: {stats_ciclo['vistos']} de 25 bichos já saíram.")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']} Jogos")
+                with c2:
+                    st.metric("Média Histórica para Fechar", f"{stats_ciclo['media_historica']:.1f} Jogos")
+                
+                if stats_ciclo['faltam']:
+                    st.markdown("#### 🎯 Faltam Sair (Sugestão de Jogo):")
+                    st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
+                else:
+                    st.success("🎉 Ciclo acabou de Fechar! O próximo sorteio iniciará um novo ciclo.")
+                # --------------------------------
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
                 if "VACA (25)" in df_stats['SETOR'].values:
                     row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
                     if row_vaca['ATRASO'] > 15:
