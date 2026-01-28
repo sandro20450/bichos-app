@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V8 - Diamond", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V9 - Tabela Inteligente", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -62,9 +62,6 @@ def aplicar_estilo():
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
-        
-        /* Estilos Novos */
-        .diamante-box { border: 1px solid #00d2ff; background-color: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -152,35 +149,67 @@ def calcular_ciclo(historico, indice_premio):
     media = sum(ciclos_fechados) / len(ciclos_fechados) if ciclos_fechados else 0
     return { "vistos": len(bichos_vistos), "jogos_atual": contador_jogos, "media_historica": media, "faltam": sorted(faltam) }
 
-# --- NOVO: LÓGICA DE ALTA FREQUÊNCIA (DIAMANTES) ---
-def calcular_diamantes(historico, indice_premio):
-    # Analisa os últimos 30 jogos (Janela de Tendência)
+# --- NOVA LÓGICA DE TABELA INTELIGENTE (DIAMANTES V9) ---
+def calcular_tabela_diamante(historico, indice_premio):
     janela = 30
-    recorte = historico[-janela:]
-    total_jogos = len(recorte)
+    recorte = historico[-janela:] # Últimos 30 jogos
+    # Inverter recorte para calcular "última vez visto" mais fácil (do mais novo pro antigo)
+    recorte_invertido = recorte[::-1] 
     
-    if total_jogos < 10: return [] # Precisa de mínimo de dados
+    if len(recorte) < 10: return pd.DataFrame()
     
     contagem = {}
-    for jogo in recorte:
+    ultimo_visto = {} # Guarda o índice de quando foi visto pela última vez (0 = jogo atual, 1 = jogo anterior...)
+
+    for i, jogo in enumerate(recorte_invertido):
         bicho = jogo['premios'][indice_premio]
         contagem[bicho] = contagem.get(bicho, 0) + 1
         
-    diamantes = []
-    for bicho, qtd in contagem.items():
-        if qtd >= 2: # Mínimo 2 aparições para considerar tendência
-            media_aparicao = total_jogos / qtd
-            # Se a média for menor que 22, é matematicamente lucrativo (pagamento 23x)
-            if media_aparicao < 22:
-                diamantes.append({
-                    "grupo": bicho,
-                    "qtd": qtd,
-                    "media": media_aparicao
-                })
+        # Se ainda não registramos a última vez deste bicho, registra agora (porque estamos vindo do mais novo)
+        if bicho not in ultimo_visto:
+            ultimo_visto[bicho] = i
+
+    tabela_dados = []
     
-    # Ordena pelos que saíram mais vezes
-    diamantes.sort(key=lambda x: x['qtd'], reverse=True)
-    return diamantes
+    for bicho, qtd in contagem.items():
+        # FILTRO: Mínimo 3 vezes para ser Diamante
+        if qtd >= 3:
+            media = 30 / qtd
+            atraso_atual = ultimo_visto.get(bicho, 0)
+            
+            # LÓGICA DE DECISÃO (MOMENTO DE ENTRADA)
+            status = ""
+            if atraso_atual <= 2:
+                # Saiu agora ou no jogo anterior. Cuidado, repetição imediata é possível mas menos provável que a média.
+                status = "❄️ Saiu Agora (Aguarde)"
+            elif atraso_atual >= media:
+                # O atraso já superou a média de frequência -> Está "atrasado" dentro da tendência de alta.
+                status = "🔥 PONTO DE ENTRADA"
+            elif atraso_atual >= (media * 0.6):
+                # Já passou de 60% do tempo da média
+                status = "⏳ Aquece (Quase lá)"
+            else:
+                status = "💤 Neutro"
+
+            tabela_dados.append({
+                "GRUPO": bicho,
+                "SAÍDAS (30 Jogos)": qtd,
+                "MÉDIA": f"1 a cada {media:.1f}",
+                "ÚLTIMA VEZ": f"Há {atraso_atual} jogos",
+                "STATUS / DICA": status
+            })
+    
+    # Ordenar por Status (Prioridade para Ponto de Entrada)
+    def sort_key(x):
+        s = x['STATUS / DICA']
+        if "🔥" in s: return 0
+        if "⏳" in s: return 1
+        if "❄️" in s: return 3
+        return 2
+        
+    tabela_dados.sort(key=sort_key)
+    
+    return pd.DataFrame(tabela_dados)
 
 # ROBÔ
 def montar_url_correta(slug, data_alvo):
@@ -397,26 +426,15 @@ else:
                     st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
                 else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
 
-                # DIAMANTES (ALTA FREQUÊNCIA)
+                # DIAMANTES (ALTA FREQUÊNCIA - TABELA INTELIGENTE)
                 st.markdown("---")
-                st.subheader("💎 DIAMANTES (Alta Frequência - Últimos 30)")
-                diamantes = calcular_diamantes(historico, idx_aba)
+                st.subheader("💎 DIAMANTES (Elite 3x - Últimos 30 Jogos)")
+                df_diamante = calcular_tabela_diamante(historico, idx_aba)
                 
-                if diamantes:
-                    cols_d = st.columns(4)
-                    for i, d in enumerate(diamantes):
-                        lucro_txt = "Lucro Alto" if d['media'] < 15 else "Lucrativo"
-                        with cols_d[i % 4]:
-                            st.markdown(f"""
-                            <div class="diamante-box">
-                                <h3>Grupo {d['grupo']}</h3>
-                                <p>Saiu <b>{d['qtd']}x</b></p>
-                                <p>Média: 1 a cada {d['media']:.1f}</p>
-                                <small style='color:#00ff00'>{lucro_txt}</small>
-                            </div>
-                            """, unsafe_allow_html=True)
+                if not df_diamante.empty:
+                    st.table(df_diamante)
                 else:
-                    st.info("Nenhum grupo com alta frequência (>2x) detectado nos últimos 30 jogos.")
+                    st.info("Nenhum grupo de Alta Frequência (3x ou mais) encontrado recentemente.")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if "VACA (25)" in df_stats['SETOR'].values:
