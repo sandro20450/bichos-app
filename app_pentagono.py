@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V9 - Tabela Inteligente", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V10 - Fix Caminho", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -62,6 +62,8 @@ def aplicar_estilo():
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
+        
+        .diamante-box { border: 1px solid #00d2ff; background-color: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -149,48 +151,27 @@ def calcular_ciclo(historico, indice_premio):
     media = sum(ciclos_fechados) / len(ciclos_fechados) if ciclos_fechados else 0
     return { "vistos": len(bichos_vistos), "jogos_atual": contador_jogos, "media_historica": media, "faltam": sorted(faltam) }
 
-# --- NOVA LÓGICA DE TABELA INTELIGENTE (DIAMANTES V9) ---
 def calcular_tabela_diamante(historico, indice_premio):
     janela = 30
-    recorte = historico[-janela:] # Últimos 30 jogos
-    # Inverter recorte para calcular "última vez visto" mais fácil (do mais novo pro antigo)
+    recorte = historico[-janela:]
     recorte_invertido = recorte[::-1] 
-    
     if len(recorte) < 10: return pd.DataFrame()
-    
     contagem = {}
-    ultimo_visto = {} # Guarda o índice de quando foi visto pela última vez (0 = jogo atual, 1 = jogo anterior...)
-
+    ultimo_visto = {} 
     for i, jogo in enumerate(recorte_invertido):
         bicho = jogo['premios'][indice_premio]
         contagem[bicho] = contagem.get(bicho, 0) + 1
-        
-        # Se ainda não registramos a última vez deste bicho, registra agora (porque estamos vindo do mais novo)
-        if bicho not in ultimo_visto:
-            ultimo_visto[bicho] = i
-
+        if bicho not in ultimo_visto: ultimo_visto[bicho] = i
     tabela_dados = []
-    
     for bicho, qtd in contagem.items():
-        # FILTRO: Mínimo 3 vezes para ser Diamante
         if qtd >= 3:
             media = 30 / qtd
             atraso_atual = ultimo_visto.get(bicho, 0)
-            
-            # LÓGICA DE DECISÃO (MOMENTO DE ENTRADA)
             status = ""
-            if atraso_atual <= 2:
-                # Saiu agora ou no jogo anterior. Cuidado, repetição imediata é possível mas menos provável que a média.
-                status = "❄️ Saiu Agora (Aguarde)"
-            elif atraso_atual >= media:
-                # O atraso já superou a média de frequência -> Está "atrasado" dentro da tendência de alta.
-                status = "🔥 PONTO DE ENTRADA"
-            elif atraso_atual >= (media * 0.6):
-                # Já passou de 60% do tempo da média
-                status = "⏳ Aquece (Quase lá)"
-            else:
-                status = "💤 Neutro"
-
+            if atraso_atual <= 2: status = "❄️ Saiu Agora (Aguarde)"
+            elif atraso_atual >= media: status = "🔥 PONTO DE ENTRADA"
+            elif atraso_atual >= (media * 0.6): status = "⏳ Aquece (Quase lá)"
+            else: status = "💤 Neutro"
             tabela_dados.append({
                 "GRUPO": bicho,
                 "SAÍDAS (30 Jogos)": qtd,
@@ -198,20 +179,16 @@ def calcular_tabela_diamante(historico, indice_premio):
                 "ÚLTIMA VEZ": f"Há {atraso_atual} jogos",
                 "STATUS / DICA": status
             })
-    
-    # Ordenar por Status (Prioridade para Ponto de Entrada)
     def sort_key(x):
         s = x['STATUS / DICA']
         if "🔥" in s: return 0
         if "⏳" in s: return 1
         if "❄️" in s: return 3
         return 2
-        
     tabela_dados.sort(key=sort_key)
-    
     return pd.DataFrame(tabela_dados)
 
-# ROBÔ
+# ROBÔ COM CORREÇÃO PARA "17" (SEM H E SEM :)
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
@@ -229,16 +206,28 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
+        
+        # --- CORREÇÃO DO REGEX ---
+        # Aceita: 12:45 | 18h | 17 (apenas número solto)
+        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
+        
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
                     if m:
-                        raw = m.group(1)
-                        if 'h' in raw and ':' not in raw: h_detect = raw.replace('h', '').zfill(2) + ":00"
-                        else: h_detect = raw
+                        raw = m.group(1).strip()
+                        
+                        # Normalização Inteligente
+                        if ':' in raw:
+                            h_detect = raw
+                        elif 'h' in raw:
+                            h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
+                        else:
+                            # Caso onde acha só "17" -> Converte para "17:00"
+                            h_detect = raw.zfill(2) + ":00"
+                        
                         if h_detect == horario_alvo:
                             bichos = []
                             linhas = tabela.find_all('tr')
@@ -411,7 +400,6 @@ else:
                 df_stats = calcular_stress_tabela(historico, idx_aba)
                 st.table(df_stats)
                 
-                # MONITOR DE CICLOS
                 st.markdown("---")
                 st.subheader("🔄 Monitor de Ciclos")
                 stats_ciclo = calcular_ciclo(historico, idx_aba)
@@ -426,11 +414,9 @@ else:
                     st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
                 else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
 
-                # DIAMANTES (ALTA FREQUÊNCIA - TABELA INTELIGENTE)
                 st.markdown("---")
                 st.subheader("💎 DIAMANTES (Elite 3x - Últimos 30 Jogos)")
                 df_diamante = calcular_tabela_diamante(historico, idx_aba)
-                
                 if not df_diamante.empty:
                     st.table(df_diamante)
                 else:
