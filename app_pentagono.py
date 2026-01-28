@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V5 - Final", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V6 - Dashboard", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -34,7 +34,6 @@ CONFIG_BANCAS = {
     }
 }
 
-# LÓGICA CLÁSSICA (BICHOS APP)
 SETORES = {
     "BAIXO (01-08)": list(range(1, 9)),
     "MÉDIO (09-16)": list(range(9, 17)),
@@ -42,11 +41,9 @@ SETORES = {
     "VACA (25)": [25]
 }
 
-# Inicializa estado do som
 if 'tocar_som' not in st.session_state: st.session_state['tocar_som'] = False
 
 def reproduzir_som():
-    # Som de sucesso (Caixa Registradora / Sucesso)
     sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
     st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
 
@@ -57,26 +54,23 @@ def aplicar_estilo():
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
         
-        /* Bolinhas */
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         
-        /* Tabela Personalizada */
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
     </style>
     """, unsafe_allow_html=True)
 
-# Toca o som se o estado estiver ativo
 if st.session_state['tocar_som']:
     reproduzir_som()
     st.session_state['tocar_som'] = False
 
 # =============================================================================
-# --- 2. CONEXÃO GOOGLE SHEETS ---
+# --- 2. CONEXÃO E LÓGICA ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -107,63 +101,6 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# =============================================================================
-# --- 3. ROBÔ IMPORTADOR (EMBUTIDO) ---
-# =============================================================================
-def montar_url_correta(slug, data_alvo):
-    hoje = date.today()
-    delta = (hoje - data_alvo).days
-    base = "https://www.resultadofacil.com.br"
-    if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
-    elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
-    else:
-        data_str = data_alvo.strftime("%Y-%m-%d")
-        return f"{base}/resultados-{slug}-do-dia-{data_str}"
-
-def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
-    config = CONFIG_BANCAS[banca_key]
-    url = montar_url_correta(config['slug'], data_alvo)
-    
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=10)
-        if r.status_code != 200: return None, "Erro Site"
-        
-        soup = BeautifulSoup(r.text, 'html.parser')
-        tabelas = soup.find_all('table')
-        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
-        
-        for tabela in tabelas:
-            if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                prev = tabela.find_previous(string=padrao_hora)
-                if prev:
-                    m = re.search(padrao_hora, prev)
-                    if m:
-                        raw = m.group(1)
-                        if 'h' in raw and ':' not in raw: h_detect = raw.replace('h', '').zfill(2) + ":00"
-                        else: h_detect = raw
-                        
-                        if h_detect == horario_alvo:
-                            bichos = []
-                            linhas = tabela.find_all('tr')
-                            for linha in linhas:
-                                cols = linha.find_all('td')
-                                if len(cols) >= 3:
-                                    grp = cols[2].get_text().strip()
-                                    premio = cols[0].get_text().strip()
-                                    if grp.isdigit():
-                                        nums = re.findall(r'\d+', premio)
-                                        if nums and 1 <= int(nums[0]) <= 5:
-                                            bichos.append(int(grp))
-                            
-                            if len(bichos) >= 5: return bichos[:5], "Sucesso"
-                            else: return None, "Incompleto"
-        return None, "Horário não encontrado"
-    except Exception as e: return None, f"Erro: {e}"
-
-# =============================================================================
-# --- 4. CÁLCULO ESTATÍSTICO ---
-# =============================================================================
 def calcular_stress_tabela(historico, indice_premio):
     stats = []
     for nome_setor, lista_bichos in SETORES.items():
@@ -196,6 +133,50 @@ def calcular_stress_tabela(historico, indice_premio):
         })
     return pd.DataFrame(stats)
 
+# ROBÔ
+def montar_url_correta(slug, data_alvo):
+    hoje = date.today()
+    delta = (hoje - data_alvo).days
+    base = "https://www.resultadofacil.com.br"
+    if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
+    elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
+    else: return f"{base}/resultados-{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+
+def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
+    config = CONFIG_BANCAS[banca_key]
+    url = montar_url_correta(config['slug'], data_alvo)
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code != 200: return None, "Erro Site"
+        soup = BeautifulSoup(r.text, 'html.parser')
+        tabelas = soup.find_all('table')
+        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
+        for tabela in tabelas:
+            if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
+                prev = tabela.find_previous(string=padrao_hora)
+                if prev:
+                    m = re.search(padrao_hora, prev)
+                    if m:
+                        raw = m.group(1)
+                        if 'h' in raw and ':' not in raw: h_detect = raw.replace('h', '').zfill(2) + ":00"
+                        else: h_detect = raw
+                        if h_detect == horario_alvo:
+                            bichos = []
+                            linhas = tabela.find_all('tr')
+                            for linha in linhas:
+                                cols = linha.find_all('td')
+                                if len(cols) >= 3:
+                                    grp = cols[2].get_text().strip()
+                                    premio = cols[0].get_text().strip()
+                                    if grp.isdigit():
+                                        nums = re.findall(r'\d+', premio)
+                                        if nums and 1 <= int(nums[0]) <= 5: bichos.append(int(grp))
+                            if len(bichos) >= 5: return bichos[:5], "Sucesso"
+                            else: return None, "Incompleto"
+        return None, "Horário não encontrado"
+    except Exception as e: return None, f"Erro: {e}"
+
 def gerar_bolinhas_recentes(historico, indice_premio):
     html = "<div>"
     for jogo in reversed(historico[-12:]):
@@ -211,30 +192,95 @@ def gerar_bolinhas_recentes(historico, indice_premio):
     return html
 
 # =============================================================================
-# --- 5. INTERFACE PRINCIPAL ---
+# --- 3. DASHBOARD GERAL (NOVA FUNÇÃO V6) ---
+# =============================================================================
+def tela_dashboard_global():
+    st.title("🛡️ CENTRO DE COMANDO (Pentágono)")
+    st.markdown("### 📡 Varredura de Oportunidades em Tempo Real")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Bancas Monitoradas", "3", "LOTEP, CAMINHO, MONTE")
+    
+    with st.spinner("Escaneando todas as bancas e prêmios..."):
+        alertas_globais = []
+        
+        for banca_key, config in CONFIG_BANCAS.items():
+            historico = carregar_dados_top5(config['nome_aba'])
+            if len(historico) > 0:
+                # Varre os 5 prêmios
+                for idx_pos in range(5):
+                    df = calcular_stress_tabela(historico, idx_pos)
+                    for _, row in df.iterrows():
+                        atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                        
+                        # IGNORA VACA NO RADAR GERAL
+                        if "VACA" in setor: continue
+                        
+                        # Lógica de Alerta Global
+                        if (recorde - atraso) <= 1 and recorde >= 5:
+                            alertas_globais.append({
+                                "banca": config['display_name'].split("(")[0].strip(), # Pega só o nome
+                                "premio": f"{idx_pos+1}º Prêmio",
+                                "setor": setor,
+                                "atraso": atraso,
+                                "recorde": recorde
+                            })
+        
+        col2.metric("Base de Dados", "Conectada", "Google Sheets")
+        col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
+        
+        st.markdown("---")
+        
+        if alertas_globais:
+            st.warning("🚨 Oportunidades Encontradas (Sugestão: Vá no menu e selecione a banca para operar)")
+            
+            # Grid de Cards
+            cols = st.columns(2)
+            for i, alerta in enumerate(alertas_globais):
+                classe = "box-alerta" if alerta['atraso'] >= alerta['recorde'] else "box-aviso"
+                status = "ESTOURADO!" if alerta['atraso'] >= alerta['recorde'] else "Zona de Tiro"
+                
+                with cols[i % 2]:
+                    st.markdown(f"""
+                    <div class="{classe}">
+                        <h3>{alerta['banca']}</h3>
+                        <p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p>
+                        <p>Atraso: {alerta['atraso']} (Recorde: {alerta['recorde']})</p>
+                        <p><b>STATUS: {status}</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.success("✅ Tudo calmo. Nenhuma oportunidade crítica (Estourada) nas 3 bancas.")
+            st.info("Dica: Use o menu lateral para análises manuais ou importar novos resultados.")
+
+# =============================================================================
+# --- 4. FLUXO PRINCIPAL DO APP ---
 # =============================================================================
 aplicar_estilo()
 
-with st.sidebar:
-    st.title("🎯 SNIPER V5")
-    banca_selecionada = st.selectbox("Selecione a Banca:", list(CONFIG_BANCAS.keys()))
+# Menu Lateral Diferenciado
+menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
+escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
+
+if escolha_menu == "🏠 RADAR GERAL (Home)":
+    tela_dashboard_global()
+
+else:
+    # --- MODO ESPECÍFICO (INTERFACE V5) ---
+    banca_selecionada = escolha_menu
     config_banca = CONFIG_BANCAS[banca_selecionada]
     
-    st.markdown("---")
-    
-    # --- NOVO: LINK VER SITE ---
+    st.sidebar.markdown("---")
     url_site = f"https://www.resultadofacil.com.br/resultados-{config_banca['slug']}-de-hoje"
-    st.link_button("🔗 Ver Site Oficial", url_site)
+    st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
+    st.sidebar.markdown("---")
     
-    st.markdown("---")
-    
-    # --- ÁREA DE IMPORTAÇÃO ---
-    with st.expander("📥 Importar Resultado", expanded=True):
+    # Importação
+    with st.sidebar.expander("📥 Importar Resultado", expanded=True):
         opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
-        
         if opcao_data == "Hoje": data_busca = date.today()
         elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-        else: data_busca = st.date_input("Escolha:", date.today())
+        else: data_busca = st.sidebar.date_input("Escolha:", date.today())
         
         horario_busca = st.selectbox("Horário:", config_banca['horarios'])
         
@@ -248,76 +294,63 @@ with st.sidebar:
                     except: chaves = []
                     
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
-                    
-                    if chave_atual in chaves:
-                        st.warning("Resultado já existe!")
+                    if chave_atual in chaves: st.warning("Resultado já existe!")
                     else:
                         top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
                         if top5:
                             row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
                             ws.append_row(row)
-                            st.session_state['tocar_som'] = True # Ativa o som
+                            st.session_state['tocar_som'] = True
                             st.toast(f"Sucesso! {top5}", icon="✅")
                             time.sleep(1)
                             st.rerun()
-                        else:
-                            st.error(msg)
-            else:
-                st.error("Erro Planilha")
+                        else: st.error(msg)
+            else: st.error("Erro Planilha")
 
-# --- CONTEÚDO PRINCIPAL ---
-st.header(f"🔭 Análise Clássica (1º ao 5º) - {config_banca['display_name']}")
+    # Tela da Banca
+    st.header(f"🔭 {config_banca['display_name']}")
+    with st.spinner("Carregando dados..."):
+        historico = carregar_dados_top5(config_banca['nome_aba'])
 
-with st.spinner("Carregando dados..."):
-    historico = carregar_dados_top5(config_banca['nome_aba'])
+    if len(historico) > 0:
+        ult = historico[-1]
+        st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
+        
+        # Radar Local (Topo da Banca)
+        st.subheader(f"🚨 Radar Local: {config_banca['display_name'].split('(')[0]}")
+        nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
+        col_alerts = st.container()
+        alertas_locais = 0
+        
+        for idx_pos, nome_pos in enumerate(nomes_posicoes):
+            df = calcular_stress_tabela(historico, idx_pos)
+            for index, row in df.iterrows():
+                atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                if "VACA" in setor: continue 
+                if (recorde - atraso) <= 1 and recorde >= 5:
+                    alertas_locais += 1
+                    classe = "box-alerta" if atraso >= recorde else "box-aviso"
+                    msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
+                    with col_alerts:
+                        st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
+        
+        if alertas_locais == 0: st.success("Sem alertas críticos nesta banca.")
+        st.markdown("---")
 
-if len(historico) > 0:
-    ult = historico[-1]
-    st.caption(f"📅 Base: {len(historico)} sorteios | Último: {ult['data']} às {ult['horario']}")
-    
-    # RADAR (SEM VACA)
-    st.subheader("🚨 Radar de Disparos")
-    alertas_encontrados = 0
-    nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
-    col_alerts = st.container()
-    
-    for idx_pos, nome_pos in enumerate(nomes_posicoes):
-        df = calcular_stress_tabela(historico, idx_pos)
-        for index, row in df.iterrows():
-            atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
-            
-            # FILTRO: IGNORA VACA NO RADAR DO TOPO
-            if "VACA" in setor: continue 
-            
-            # Alerta normal para B, M, A
-            if (recorde - atraso) <= 1 and recorde >= 5:
-                alertas_encontrados += 1
-                classe = "box-alerta" if atraso >= recorde else "box-aviso"
-                msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
-                with col_alerts:
-                    st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
-    
-    if alertas_encontrados == 0: st.success("✅ Mercado Estável.")
-    st.markdown("---")
-
-    # ABAS
-    abas = st.tabs(nomes_posicoes)
-    for idx_aba, aba in enumerate(abas):
-        with aba:
-            st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
-            st.markdown("**Visual Recente (⬅️ Mais Novo):**")
-            st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            st.markdown("**📉 Tabela de Stress:**")
-            df_stats = calcular_stress_tabela(historico, idx_aba)
-            st.table(df_stats)
-            
-            # NOTA DE RODAPÉ (VACA APARECE AQUI)
-            if "VACA (25)" in df_stats['SETOR'].values:
-                row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
-                # Só mostra mensagem se atraso for relevante (>15)
-                if row_vaca['ATRASO'] > 15:
-                    st.info(f"ℹ️ **Monitoramento Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
-else:
-    st.warning("⚠️ Base vazia.")
+        # Abas Detalhadas
+        abas = st.tabs(nomes_posicoes)
+        for idx_aba, aba in enumerate(abas):
+            with aba:
+                st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
+                st.markdown("**Visual Recente (⬅️ Mais Novo):**")
+                st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("**📉 Tabela de Stress:**")
+                df_stats = calcular_stress_tabela(historico, idx_aba)
+                st.table(df_stats)
+                if "VACA (25)" in df_stats['SETOR'].values:
+                    row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
+                    if row_vaca['ATRASO'] > 15:
+                        st.info(f"ℹ️ **Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
+    else:
+        st.warning("⚠️ Base vazia.")
