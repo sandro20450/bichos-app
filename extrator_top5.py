@@ -47,18 +47,13 @@ def conectar_planilha(nome_aba):
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
-    
     base = "https://www.resultadofacil.com.br"
     
     if delta == 0:
-        # URL de Hoje: resultados-lotep-de-hoje
         return f"{base}/resultados-{slug}-de-hoje"
     elif delta == 1:
-        # URL de Ontem: resultados-lotep-de-ontem
         return f"{base}/resultados-{slug}-de-ontem"
     else:
-        # URL Antiga: resultados-lotep-do-dia-2026-01-08
-        # AQUI ESTAVA O ERRO: mudamos de '-de-' para '-do-dia-'
         data_str = data_alvo.strftime("%Y-%m-%d")
         return f"{base}/resultados-{slug}-do-dia-{data_str}"
 
@@ -66,7 +61,7 @@ def raspar_dia_completo(banca_key, data_alvo):
     slug = CONFIG_BANCAS[banca_key]['slug']
     url = montar_url_correta(slug, data_alvo)
     
-    st.info(f"🔎 Robô acessando: {url}") # Mostra na tela para conferência
+    st.info(f"🔎 Robô acessando: {url}")
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -83,17 +78,25 @@ def raspar_dia_completo(banca_key, data_alvo):
         tabelas = soup.find_all('table')
         resultados_do_dia = []
         
+        # Padrão para pegar "HH:MM" ou "HHh" (ex: 18h)
+        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h)')
+
         for tabela in tabelas:
             texto_tab = tabela.get_text()
-            # Busca tabelas que tenham "1º" ou "Prêmio"
             if "Prêmio" in texto_tab or "1º" in texto_tab:
                 
-                # Tenta achar o horário no bloco anterior
                 horario = "00:00"
-                prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
+                # Procura hora no texto anterior à tabela
+                prev = tabela.find_previous(string=padrao_hora)
                 if prev:
-                    m = re.search(r'(\d{2}:\d{2})', prev)
-                    if m: horario = m.group(1)
+                    m = re.search(padrao_hora, prev)
+                    if m: 
+                        raw_hora = m.group(1)
+                        # Se achou "18h", converte para "18:00"
+                        if 'h' in raw_hora and ':' not in raw_hora:
+                            horario = raw_hora.replace('h', '').zfill(2) + ":00"
+                        else:
+                            horario = raw_hora
                 
                 bichos = []
                 linhas = tabela.find_all('tr')
@@ -105,20 +108,15 @@ def raspar_dia_completo(banca_key, data_alvo):
                         
                         if not grupo_txt.isdigit(): continue
                         
-                        # Extrai a posição do prêmio (1º, 2º...)
                         nums = re.findall(r'\d+', premio_txt)
                         if nums:
                             posicao = int(nums[0])
-                            # Filtra apenas do 1 ao 5
-                            # OBS: Se o site listar até o 10º, ignoramos do 6 pra cima
                             if 1 <= posicao <= 5:
                                 bichos.append(int(grupo_txt))
                 
-                # Só salva se tiver encontrado pelo menos 5 bichos
                 if len(bichos) >= 5:
-                    top5 = bichos[:5] # Garante só os 5 primeiros
+                    top5 = bichos[:5]
                     
-                    # Evita duplicar horário no mesmo dia
                     ja_tem = False
                     for x in resultados_do_dia:
                         if x['horario'] == horario: ja_tem = True
@@ -138,7 +136,7 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V2.1 (Correção URL)")
+st.title("🏗️ Robô Extrator V2.2 (Fix 18h)")
 
 c1, c2 = st.columns(2)
 with c1:
