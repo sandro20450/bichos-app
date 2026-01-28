@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator TOP 5 (Universal)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator TOP 5 (Anti-Federal)", page_icon="🏗️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -78,34 +78,30 @@ def raspar_dia_completo(banca_key, data_alvo):
         tabelas = soup.find_all('table')
         resultados_do_dia = []
         
-        # --- REGEX ATUALIZADO (CORREÇÃO CAMINHO DA SORTE "17") ---
-        # \d{1,2}:\d{2}  -> Pega 12:45
-        # \d{1,2}h       -> Pega 18h
-        # \b\d{1,2}\b    -> Pega 17 (Número solto entre bordas)
+        # Regex HORA (Inclui fix para "17" e "18h")
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
 
         for tabela in tabelas:
             texto_tab = tabela.get_text()
             if "Prêmio" in texto_tab or "1º" in texto_tab:
                 
+                # --- 🛡️ FILTRO ANTI-FEDERAL ---
+                # Procura o texto "Resultado do dia" que fica logo acima da tabela
+                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+                if cabecalho and "FEDERAL" in cabecalho.upper():
+                    # st.warning("Federal detectada e ignorada.") # (Opcional: Debug)
+                    continue # Pula esta tabela e vai para a próxima
+                # -------------------------------
+
                 horario = "00:00"
-                # Procura hora no texto anterior à tabela
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
                     if m: 
                         raw = m.group(1).strip()
-                        
-                        # Normalização Inteligente
-                        if ':' in raw:
-                            # Formato 12:45 (Mantém)
-                            horario = raw
-                        elif 'h' in raw:
-                            # Formato 18h -> 18:00
-                            horario = raw.replace('h', '').strip().zfill(2) + ":00"
-                        else:
-                            # Formato 17 -> 17:00 (Novo Fix)
-                            horario = raw.strip().zfill(2) + ":00"
+                        if ':' in raw: horario = raw
+                        elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
+                        else: horario = raw.strip().zfill(2) + ":00"
                 
                 bichos = []
                 linhas = tabela.find_all('tr')
@@ -125,7 +121,6 @@ def raspar_dia_completo(banca_key, data_alvo):
                 
                 if len(bichos) >= 5:
                     top5 = bichos[:5]
-                    
                     ja_tem = False
                     for x in resultados_do_dia:
                         if x['horario'] == horario: ja_tem = True
@@ -145,7 +140,8 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V3.0 (Correção Universal)")
+st.title("🏗️ Robô Extrator V3.1 (Anti-Federal)")
+st.caption("Correção: Reconhece '17' como hora e ignora sorteios 'FEDERAL'.")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -162,7 +158,7 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
             dados, msg = raspar_dia_completo(banca, data_sel)
             
             if dados:
-                st.success(f"📦 Encontrados {len(dados)} sorteios!")
+                st.success(f"📦 Encontrados {len(dados)} sorteios válidos!")
                 
                 try:
                     existentes = ws.get_all_values()
