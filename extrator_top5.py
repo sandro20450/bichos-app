@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V11 - Inversão", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V12 - Inversão Fix", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -53,7 +53,8 @@ def aplicar_estilo():
         .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
-        .box-inverso { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; }
+        .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
+        .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -117,11 +118,13 @@ def calcular_stress_tabela(historico, indice_premio):
                 if curr_atraso > max_atraso: max_atraso = curr_atraso
                 curr_atraso = 0
             else:
-                curr_atraso += 1
+                # Se quebrou a sequencia, verifica se foi recorde
                 if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
                 curr_seq_v = 0
+                
+                curr_atraso += 1
         
-        # Checks finais
+        # Checks finais (para o caso de estar acontecendo agora)
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         
@@ -132,7 +135,7 @@ def calcular_stress_tabela(historico, indice_premio):
             if bicho in lista_bichos: break
             atraso_real += 1
             
-        # 3. Sequência Atual (NOVO: Para alerta de repetição)
+        # 3. Sequência Atual (CORRIGIDA: Conta quantas vezes seguidas o setor saiu no final do histórico)
         seq_atual = 0
         for jogo in reversed(historico):
             bicho = jogo['premios'][indice_premio]
@@ -145,7 +148,7 @@ def calcular_stress_tabela(historico, indice_premio):
             "SETOR": nome_setor,
             "ATRASO": atraso_real,
             "REC. ATRASO": max_atraso,
-            "SEQ. ATUAL": seq_atual, # Coluna nova (interna)
+            "SEQ. ATUAL": seq_atual,
             "REC. SEQ. (V)": max_seq_v
         })
     return pd.DataFrame(stats)
@@ -203,7 +206,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# ROBÔ COM CORREÇÃO PARA "17" (SEM H E SEM :)
+# ROBÔ COM CORREÇÃO PARA "17" E FILTRO FEDERAL
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
@@ -226,6 +229,10 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
         
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
+                # Filtro Anti-Federal
+                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+                if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
+
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -288,7 +295,7 @@ def tela_dashboard_global():
                         
                         if "VACA" in setor: continue
                         
-                        # ALERTA 1: ATRASO (Oportunidade de Entrada)
+                        # ALERTA 1: ATRASO (Entrada a Favor)
                         if (recorde - atraso) <= 1 and recorde >= 5:
                             alertas_globais.append({
                                 "tipo": "ATRASO",
@@ -300,9 +307,10 @@ def tela_dashboard_global():
                                 "msg_extra": "ZONA DE TIRO (Atraso)"
                             })
                             
-                        # ALERTA 2: REPETIÇÃO (Oportunidade de Inversão)
-                        # Se a sequência atual já bateu ou está a 1 de bater o recorde, e o recorde é relevante (>2)
-                        if (recorde_seq - seq_atual) <= 0 and recorde_seq >= 3:
+                        # ALERTA 2: REPETIÇÃO (Entrada Inversa - FIX)
+                        # Avisa se faltar 1 para o recorde ou se já bateu/passou
+                        margem_seq = recorde_seq - seq_atual
+                        if margem_seq <= 1 and recorde_seq >= 3:
                             alertas_globais.append({
                                 "tipo": "REPETICAO",
                                 "banca": config['display_name'].split("(")[0].strip(),
@@ -310,6 +318,7 @@ def tela_dashboard_global():
                                 "setor": setor,
                                 "val_atual": seq_atual,
                                 "val_rec": recorde_seq,
+                                "margem": margem_seq,
                                 "msg_extra": "REPETIÇÃO MÁXIMA (Jogue no Inverso)"
                             })
         
@@ -327,8 +336,17 @@ def tela_dashboard_global():
                     classe = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso"
                     titulo_val = "Atraso"
                 else: # REPETICAO
-                    classe = "box-inverso"
+                    # Se margem <= 0 (Já bateu recorde): Roxo Forte (Critico)
+                    # Se margem == 1 (Quase batendo): Roxo Claro (Atenção)
+                    if alerta['margem'] <= 0:
+                        classe = "box-inverso-critico"
+                        msg_status = "ESTOURADO! (Bateu Recorde)"
+                    else:
+                        classe = "box-inverso-atencao"
+                        msg_status = "Atenção (Próximo do Recorde)"
+                        
                     titulo_val = "Sequência"
+                    alerta['msg_extra'] = msg_status + " - Inverso Recomendado"
                 
                 with cols[i % 2]:
                     st.markdown(f"""
@@ -420,11 +438,17 @@ else:
                     with col_alerts:
                         st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
                 
-                # Alerta Repetição (INVERSO)
-                if (recorde_seq - seq_atual) <= 0 and recorde_seq >= 3:
+                # Alerta Repetição (INVERSO) - FIX
+                margem_seq = recorde_seq - seq_atual
+                if margem_seq <= 1 and recorde_seq >= 3:
                     alertas_locais += 1
-                    classe = "box-inverso"
-                    msg_extra = "🔁 REPETIÇÃO MÁXIMA (Jogue no Inverso)"
+                    if margem_seq <= 0:
+                        classe = "box-inverso-critico"
+                        msg_extra = "🔁 REPETIÇÃO MÁXIMA (Inverso Recomendado)"
+                    else:
+                        classe = "box-inverso-atencao"
+                        msg_extra = "⚠️ Atenção: Sequência Alta (Quase no Recorde)"
+                        
                     with col_alerts:
                         st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Sequência Atual: {seq_atual}x (Recorde: {recorde_seq})<br>{msg_extra}</div>", unsafe_allow_html=True)
 
@@ -441,7 +465,7 @@ else:
                 
                 st.markdown("**📉 Tabela de Stress:**")
                 df_stats = calcular_stress_tabela(historico, idx_aba)
-                # Remove coluna 'SEQ. ATUAL' da visualização da tabela para não poluir, mas usa no cálculo
+                # Remove coluna 'SEQ. ATUAL' da visualização da tabela para não poluir
                 df_visual = df_stats.drop(columns=['SEQ. ATUAL'])
                 st.table(df_visual)
                 
