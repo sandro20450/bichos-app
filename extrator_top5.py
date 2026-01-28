@@ -9,176 +9,468 @@ from datetime import datetime, date, timedelta
 import time
 
 # =============================================================================
-# CONFIGURAÇÕES
+# --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator TOP 5 (Anti-Federal)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V11 - Inversão", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
+        "display_name": "LOTEP (1º ao 5º)",
+        "nome_aba": "LOTEP_TOP5",
         "slug": "lotep",
-        "nome_aba": "LOTEP_TOP5"
+        "horarios": ["10:45", "12:45", "15:45", "18:00"]
     },
     "CAMINHODASORTE": {
+        "display_name": "CAMINHO (1º ao 5º)",
+        "nome_aba": "CAMINHO_TOP5",
         "slug": "caminho-da-sorte",
-        "nome_aba": "CAMINHO_TOP5"
+        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"]
     },
     "MONTECAI": {
+        "display_name": "MONTE CARLOS (1º ao 5º)",
+        "nome_aba": "MONTE_TOP5",
         "slug": "nordeste-monte-carlos",
-        "nome_aba": "MONTE_TOP5"
+        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"]
     }
 }
 
+SETORES = {
+    "BAIXO (01-08)": list(range(1, 9)),
+    "MÉDIO (09-16)": list(range(9, 17)),
+    "ALTO (17-24)": list(range(17, 25)),
+    "VACA (25)": [25]
+}
+
+if 'tocar_som' not in st.session_state: st.session_state['tocar_som'] = False
+
+def reproduzir_som():
+    sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
+    st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
+
+def aplicar_estilo():
+    st.markdown("""
+    <style>
+        .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
+        .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
+        .box-inverso { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; }
+        
+        .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        
+        div[data-testid="stTable"] table { color: white; }
+        thead tr th:first-child {display:none}
+        tbody th {display:none}
+        
+        .diamante-box { border: 1px solid #00d2ff; background-color: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+if st.session_state['tocar_som']:
+    reproduzir_som()
+    st.session_state['tocar_som'] = False
+
 # =============================================================================
-# FUNÇÕES
+# --- 2. CONEXÃO E LÓGICA ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         gc = gspread.authorize(creds)
         sh = gc.open("CentralBichos")
-        try:
-            ws = sh.worksheet(nome_aba)
-        except:
-            ws = sh.add_worksheet(title=nome_aba, rows=1000, cols=10)
-            ws.append_row(["DATA", "HORARIO", "P1", "P2", "P3", "P4", "P5"])
-        return ws
+        try: return sh.worksheet(nome_aba)
+        except: return None
     return None
 
+def carregar_dados_top5(nome_aba):
+    ws = conectar_planilha(nome_aba)
+    if ws:
+        raw = ws.get_all_values()
+        if len(raw) < 2: return []
+        dados_processados = []
+        for row in raw[1:]:
+            if len(row) >= 7:
+                try:
+                    premios = [int(p) for p in row[2:7] if p.isdigit()]
+                    if len(premios) == 5:
+                        dados_processados.append({
+                            "data": row[0],
+                            "horario": row[1],
+                            "premios": premios 
+                        })
+                except: pass
+        return dados_processados
+    return []
+
+def calcular_stress_tabela(historico, indice_premio):
+    stats = []
+    for nome_setor, lista_bichos in SETORES.items():
+        max_atraso = 0; curr_atraso = 0; max_seq_v = 0; curr_seq_v = 0
+        
+        # 1. Varredura Histórica (Recordes)
+        for jogo in historico:
+            bicho = jogo['premios'][indice_premio]
+            if bicho in lista_bichos:
+                curr_seq_v += 1
+                if curr_atraso > max_atraso: max_atraso = curr_atraso
+                curr_atraso = 0
+            else:
+                curr_atraso += 1
+                if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
+                curr_seq_v = 0
+        
+        # Checks finais
+        if curr_atraso > max_atraso: max_atraso = curr_atraso
+        if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
+        
+        # 2. Atraso Real (Contando de trás pra frente)
+        atraso_real = 0
+        for jogo in reversed(historico):
+            bicho = jogo['premios'][indice_premio]
+            if bicho in lista_bichos: break
+            atraso_real += 1
+            
+        # 3. Sequência Atual (NOVO: Para alerta de repetição)
+        seq_atual = 0
+        for jogo in reversed(historico):
+            bicho = jogo['premios'][indice_premio]
+            if bicho in lista_bichos:
+                seq_atual += 1
+            else:
+                break
+
+        stats.append({
+            "SETOR": nome_setor,
+            "ATRASO": atraso_real,
+            "REC. ATRASO": max_atraso,
+            "SEQ. ATUAL": seq_atual, # Coluna nova (interna)
+            "REC. SEQ. (V)": max_seq_v
+        })
+    return pd.DataFrame(stats)
+
+def calcular_ciclo(historico, indice_premio):
+    ciclos_fechados = []
+    bichos_vistos = set()
+    contador_jogos = 0
+    for jogo in historico:
+        bicho = jogo['premios'][indice_premio]
+        contador_jogos += 1
+        bichos_vistos.add(bicho)
+        if len(bichos_vistos) == 25:
+            ciclos_fechados.append(contador_jogos)
+            bichos_vistos = set()
+            contador_jogos = 0
+    faltam = list(set(range(1, 26)) - bichos_vistos)
+    media = sum(ciclos_fechados) / len(ciclos_fechados) if ciclos_fechados else 0
+    return { "vistos": len(bichos_vistos), "jogos_atual": contador_jogos, "media_historica": media, "faltam": sorted(faltam) }
+
+def calcular_tabela_diamante(historico, indice_premio):
+    janela = 30
+    recorte = historico[-janela:]
+    recorte_invertido = recorte[::-1] 
+    if len(recorte) < 10: return pd.DataFrame()
+    contagem = {}
+    ultimo_visto = {} 
+    for i, jogo in enumerate(recorte_invertido):
+        bicho = jogo['premios'][indice_premio]
+        contagem[bicho] = contagem.get(bicho, 0) + 1
+        if bicho not in ultimo_visto: ultimo_visto[bicho] = i
+    tabela_dados = []
+    for bicho, qtd in contagem.items():
+        if qtd >= 3:
+            media = 30 / qtd
+            atraso_atual = ultimo_visto.get(bicho, 0)
+            status = ""
+            if atraso_atual <= 2: status = "❄️ Saiu Agora (Aguarde)"
+            elif atraso_atual >= media: status = "🔥 PONTO DE ENTRADA"
+            elif atraso_atual >= (media * 0.6): status = "⏳ Aquece (Quase lá)"
+            else: status = "💤 Neutro"
+            tabela_dados.append({
+                "GRUPO": bicho,
+                "SAÍDAS (30 Jogos)": qtd,
+                "MÉDIA": f"1 a cada {media:.1f}",
+                "ÚLTIMA VEZ": f"Há {atraso_atual} jogos",
+                "STATUS / DICA": status
+            })
+    def sort_key(x):
+        s = x['STATUS / DICA']
+        if "🔥" in s: return 0
+        if "⏳" in s: return 1
+        if "❄️" in s: return 3
+        return 2
+    tabela_dados.sort(key=sort_key)
+    return pd.DataFrame(tabela_dados)
+
+# ROBÔ COM CORREÇÃO PARA "17" (SEM H E SEM :)
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
     base = "https://www.resultadofacil.com.br"
-    
-    if delta == 0:
-        return f"{base}/resultados-{slug}-de-hoje"
-    elif delta == 1:
-        return f"{base}/resultados-{slug}-de-ontem"
-    else:
-        data_str = data_alvo.strftime("%Y-%m-%d")
-        return f"{base}/resultados-{slug}-do-dia-{data_str}"
+    if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
+    elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
+    else: return f"{base}/resultados-{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
 
-def raspar_dia_completo(banca_key, data_alvo):
-    slug = CONFIG_BANCAS[banca_key]['slug']
-    url = montar_url_correta(slug, data_alvo)
-    
-    st.info(f"🔎 Robô acessando: {url}")
-
+def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
+    config = CONFIG_BANCAS[banca_key]
+    url = montar_url_correta(config['slug'], data_alvo)
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        r = requests.get(url, headers=headers, timeout=15)
-        
-        if r.status_code != 200: 
-            return [], f"Erro HTTP {r.status_code}"
-        
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
-        
-        if "Não foram encontrados resultados" in soup.get_text():
-            return [], "Site diz: Sem resultados para esta data."
-
         tabelas = soup.find_all('table')
-        resultados_do_dia = []
         
-        # Regex HORA (Inclui fix para "17" e "18h")
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-
+        
         for tabela in tabelas:
-            texto_tab = tabela.get_text()
-            if "Prêmio" in texto_tab or "1º" in texto_tab:
-                
-                # --- 🛡️ FILTRO ANTI-FEDERAL ---
-                # Procura o texto "Resultado do dia" que fica logo acima da tabela
-                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-                if cabecalho and "FEDERAL" in cabecalho.upper():
-                    # st.warning("Federal detectada e ignorada.") # (Opcional: Debug)
-                    continue # Pula esta tabela e vai para a próxima
-                # -------------------------------
-
-                horario = "00:00"
+            if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
-                    if m: 
+                    if m:
                         raw = m.group(1).strip()
-                        if ':' in raw: horario = raw
-                        elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
-                        else: horario = raw.strip().zfill(2) + ":00"
-                
-                bichos = []
-                linhas = tabela.find_all('tr')
-                for linha in linhas:
-                    cols = linha.find_all('td')
-                    if len(cols) >= 3:
-                        premio_txt = cols[0].get_text().strip()
-                        grupo_txt = cols[2].get_text().strip()
+                        if ':' in raw: h_detect = raw
+                        elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
+                        else: h_detect = raw.strip().zfill(2) + ":00"
                         
-                        if not grupo_txt.isdigit(): continue
+                        if h_detect == horario_alvo:
+                            bichos = []
+                            linhas = tabela.find_all('tr')
+                            for linha in linhas:
+                                cols = linha.find_all('td')
+                                if len(cols) >= 3:
+                                    grp = cols[2].get_text().strip()
+                                    premio = cols[0].get_text().strip()
+                                    if grp.isdigit():
+                                        nums = re.findall(r'\d+', premio)
+                                        if nums and 1 <= int(nums[0]) <= 5: bichos.append(int(grp))
+                            if len(bichos) >= 5: return bichos[:5], "Sucesso"
+                            else: return None, "Incompleto"
+        return None, "Horário não encontrado"
+    except Exception as e: return None, f"Erro: {e}"
+
+def gerar_bolinhas_recentes(historico, indice_premio):
+    html = "<div>"
+    for jogo in reversed(historico[-12:]):
+        bicho = jogo['premios'][indice_premio]
+        classe = ""
+        letra = ""
+        if bicho in SETORES["BAIXO (01-08)"]: classe = "bola-b"; letra = "B"
+        elif bicho in SETORES["MÉDIO (09-16)"]: classe = "bola-m"; letra = "M"
+        elif bicho in SETORES["ALTO (17-24)"]: classe = "bola-a"; letra = "A"
+        elif bicho == 25: classe = "bola-v"; letra = "V"
+        html += f"<div class='{classe}'>{letra}</div>"
+    html += "</div>"
+    return html
+
+# =============================================================================
+# --- 3. DASHBOARD GERAL ---
+# =============================================================================
+def tela_dashboard_global():
+    st.title("🛡️ CENTRO DE COMANDO (Pentágono)")
+    st.markdown("### 📡 Varredura de Oportunidades em Tempo Real")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Bancas Monitoradas", "3", "LOTEP, CAMINHO, MONTE")
+    
+    with st.spinner("Escaneando todas as bancas e prêmios..."):
+        alertas_globais = []
+        for banca_key, config in CONFIG_BANCAS.items():
+            historico = carregar_dados_top5(config['nome_aba'])
+            if len(historico) > 0:
+                for idx_pos in range(5):
+                    df = calcular_stress_tabela(historico, idx_pos)
+                    for _, row in df.iterrows():
+                        atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                        seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
                         
-                        nums = re.findall(r'\d+', premio_txt)
-                        if nums:
-                            posicao = int(nums[0])
-                            if 1 <= posicao <= 5:
-                                bichos.append(int(grupo_txt))
-                
-                if len(bichos) >= 5:
-                    top5 = bichos[:5]
-                    ja_tem = False
-                    for x in resultados_do_dia:
-                        if x['horario'] == horario: ja_tem = True
-                    
-                    if not ja_tem:
-                        resultados_do_dia.append({
-                            "data": data_alvo.strftime("%Y-%m-%d"),
-                            "horario": horario,
-                            "premios": top5
-                        })
-                    
-        return resultados_do_dia, "Sucesso"
+                        if "VACA" in setor: continue
+                        
+                        # ALERTA 1: ATRASO (Oportunidade de Entrada)
+                        if (recorde - atraso) <= 1 and recorde >= 5:
+                            alertas_globais.append({
+                                "tipo": "ATRASO",
+                                "banca": config['display_name'].split("(")[0].strip(),
+                                "premio": f"{idx_pos+1}º Prêmio",
+                                "setor": setor,
+                                "val_atual": atraso,
+                                "val_rec": recorde,
+                                "msg_extra": "ZONA DE TIRO (Atraso)"
+                            })
+                            
+                        # ALERTA 2: REPETIÇÃO (Oportunidade de Inversão)
+                        # Se a sequência atual já bateu ou está a 1 de bater o recorde, e o recorde é relevante (>2)
+                        if (recorde_seq - seq_atual) <= 0 and recorde_seq >= 3:
+                            alertas_globais.append({
+                                "tipo": "REPETICAO",
+                                "banca": config['display_name'].split("(")[0].strip(),
+                                "premio": f"{idx_pos+1}º Prêmio",
+                                "setor": setor,
+                                "val_atual": seq_atual,
+                                "val_rec": recorde_seq,
+                                "msg_extra": "REPETIÇÃO MÁXIMA (Jogue no Inverso)"
+                            })
         
-    except Exception as e:
-        return [], f"Erro Fatal: {e}"
+        col2.metric("Base de Dados", "Conectada", "Google Sheets")
+        col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
+        
+        st.markdown("---")
+        
+        if alertas_globais:
+            st.warning("🚨 Oportunidades Encontradas")
+            cols = st.columns(2)
+            for i, alerta in enumerate(alertas_globais):
+                
+                if alerta['tipo'] == "ATRASO":
+                    classe = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso"
+                    titulo_val = "Atraso"
+                else: # REPETICAO
+                    classe = "box-inverso"
+                    titulo_val = "Sequência"
+                
+                with cols[i % 2]:
+                    st.markdown(f"""
+                    <div class="{classe}">
+                        <h3>{alerta['banca']}</h3>
+                        <p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p>
+                        <p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p>
+                        <p><b>{alerta['msg_extra']}</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.success("✅ Tudo calmo nas 3 bancas.")
 
 # =============================================================================
-# INTERFACE
+# --- 4. FLUXO PRINCIPAL DO APP ---
 # =============================================================================
-st.title("🏗️ Robô Extrator V3.1 (Anti-Federal)")
-st.caption("Correção: Reconhece '17' como hora e ignora sorteios 'FEDERAL'.")
+aplicar_estilo()
 
-c1, c2 = st.columns(2)
-with c1:
-    banca = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
-with c2:
-    data_sel = st.date_input("Data para Extrair:", date.today())
+menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
+escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
-if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
-    ws = conectar_planilha(CONFIG_BANCAS[banca]['nome_aba'])
-    if not ws:
-        st.error("Erro Conexão Planilha (Verifique Secrets).")
-    else:
-        with st.spinner("Analisando página..."):
-            dados, msg = raspar_dia_completo(banca, data_sel)
-            
-            if dados:
-                st.success(f"📦 Encontrados {len(dados)} sorteios válidos!")
+if escolha_menu == "🏠 RADAR GERAL (Home)":
+    tela_dashboard_global()
+
+else:
+    banca_selecionada = escolha_menu
+    config_banca = CONFIG_BANCAS[banca_selecionada]
+    
+    st.sidebar.markdown("---")
+    url_site = f"https://www.resultadofacil.com.br/resultados-{config_banca['slug']}-de-hoje"
+    st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
+    st.sidebar.markdown("---")
+    
+    with st.sidebar.expander("📥 Importar Resultado", expanded=True):
+        opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+        if opcao_data == "Hoje": data_busca = date.today()
+        elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
+        else: data_busca = st.sidebar.date_input("Escolha:", date.today())
+        
+        horario_busca = st.selectbox("Horário:", config_banca['horarios'])
+        
+        if st.button("🚀 Baixar & Salvar"):
+            ws = conectar_planilha(config_banca['nome_aba'])
+            if ws:
+                with st.spinner(f"Buscando {horario_busca}..."):
+                    try:
+                        existentes = ws.get_all_values()
+                        chaves = [f"{row[0]}|{row[1]}" for row in existentes if len(row)>1]
+                    except: chaves = []
+                    chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
+                    if chave_atual in chaves: st.warning("Resultado já existe!")
+                    else:
+                        top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
+                        if top5:
+                            row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
+                            ws.append_row(row)
+                            st.session_state['tocar_som'] = True
+                            st.toast(f"Sucesso! {top5}", icon="✅")
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error(msg)
+            else: st.error("Erro Planilha")
+
+    st.header(f"🔭 {config_banca['display_name']}")
+    with st.spinner("Carregando dados..."):
+        historico = carregar_dados_top5(config_banca['nome_aba'])
+
+    if len(historico) > 0:
+        ult = historico[-1]
+        st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
+        
+        st.subheader(f"🚨 Radar Local: {config_banca['display_name'].split('(')[0]}")
+        nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
+        col_alerts = st.container()
+        alertas_locais = 0
+        
+        for idx_pos, nome_pos in enumerate(nomes_posicoes):
+            df = calcular_stress_tabela(historico, idx_pos)
+            for index, row in df.iterrows():
+                atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
+                if "VACA" in setor: continue 
                 
-                try:
-                    existentes = ws.get_all_values()
-                    chaves_existentes = [f"{row[0]}|{row[1]}" for row in existentes if len(row) > 1]
-                except: chaves_existentes = []
+                # Alerta Atraso
+                if (recorde - atraso) <= 1 and recorde >= 5:
+                    alertas_locais += 1
+                    classe = "box-alerta" if atraso >= recorde else "box-aviso"
+                    msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
+                    with col_alerts:
+                        st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
                 
-                novos = 0
-                for jogo in dados:
-                    chave = f"{jogo['data']}|{jogo['horario']}"
-                    if chave not in chaves_existentes:
-                        ws.append_row([jogo['data'], jogo['horario']] + jogo['premios'])
-                        novos += 1
+                # Alerta Repetição (INVERSO)
+                if (recorde_seq - seq_atual) <= 0 and recorde_seq >= 3:
+                    alertas_locais += 1
+                    classe = "box-inverso"
+                    msg_extra = "🔁 REPETIÇÃO MÁXIMA (Jogue no Inverso)"
+                    with col_alerts:
+                        st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Sequência Atual: {seq_atual}x (Recorde: {recorde_seq})<br>{msg_extra}</div>", unsafe_allow_html=True)
+
+        if alertas_locais == 0: st.success("Sem alertas críticos nesta banca.")
+        st.markdown("---")
+
+        abas = st.tabs(nomes_posicoes)
+        for idx_aba, aba in enumerate(abas):
+            with aba:
+                st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
+                st.markdown("**Visual Recente (⬅️ Mais Novo):**")
+                st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
                 
-                if novos > 0:
-                    st.toast(f"✅ {novos} Sorteios salvos na nuvem!", icon="☁️")
-                    time.sleep(1)
-                    st.rerun()
+                st.markdown("**📉 Tabela de Stress:**")
+                df_stats = calcular_stress_tabela(historico, idx_aba)
+                # Remove coluna 'SEQ. ATUAL' da visualização da tabela para não poluir, mas usa no cálculo
+                df_visual = df_stats.drop(columns=['SEQ. ATUAL'])
+                st.table(df_visual)
+                
+                st.markdown("---")
+                st.subheader("🔄 Monitor de Ciclos")
+                stats_ciclo = calcular_ciclo(historico, idx_aba)
+                prog_val = stats_ciclo['vistos'] / 25.0
+                st.progress(prog_val)
+                st.caption(f"Status: {stats_ciclo['vistos']}/25 bichos já saíram.")
+                c1, c2 = st.columns(2)
+                with c1: st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']}")
+                with c2: st.metric("Média para Fechar", f"{stats_ciclo['media_historica']:.1f}")
+                if stats_ciclo['faltam']:
+                    st.markdown("**Faltam Sair (Sugestão):**")
+                    st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
+                else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
+
+                st.markdown("---")
+                st.subheader("💎 DIAMANTES (Elite 3x - Últimos 30 Jogos)")
+                df_diamante = calcular_tabela_diamante(historico, idx_aba)
+                if not df_diamante.empty:
+                    st.table(df_diamante)
                 else:
-                    st.warning("Todos os sorteios encontrados JÁ estavam salvos.")
-                
-                st.json(dados)
-            else:
-                st.error(f"Nada encontrado. Msg: {msg}")
+                    st.info("Nenhum grupo de Alta Frequência (3x ou mais) encontrado recentemente.")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                if "VACA (25)" in df_stats['SETOR'].values:
+                    row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
+                    if row_vaca['ATRASO'] > 15:
+                        st.info(f"ℹ️ **Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
+    else:
+        st.warning("⚠️ Base vazia.")
