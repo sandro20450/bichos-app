@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V7 - Ciclos", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V8 - Diamond", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -63,8 +63,8 @@ def aplicar_estilo():
         thead tr th:first-child {display:none}
         tbody th {display:none}
         
-        /* Estilo Ciclos */
-        .ciclo-box { border: 1px solid #444; padding: 15px; border-radius: 10px; background-color: rgba(0,0,0,0.2); margin-top: 10px; }
+        /* Estilos Novos */
+        .diamante-box { border: 1px solid #00d2ff; background-color: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -136,33 +136,51 @@ def calcular_stress_tabela(historico, indice_premio):
         })
     return pd.DataFrame(stats)
 
-# --- NOVO: LÓGICA DE CICLOS ---
 def calcular_ciclo(historico, indice_premio):
     ciclos_fechados = []
     bichos_vistos = set()
     contador_jogos = 0
-    
-    # Percorre toda a história para calcular médias
     for jogo in historico:
         bicho = jogo['premios'][indice_premio]
         contador_jogos += 1
         bichos_vistos.add(bicho)
-        
         if len(bichos_vistos) == 25:
             ciclos_fechados.append(contador_jogos)
             bichos_vistos = set()
             contador_jogos = 0
-            
-    # O estado final do loop é o ciclo atual (aberto)
     faltam = list(set(range(1, 26)) - bichos_vistos)
     media = sum(ciclos_fechados) / len(ciclos_fechados) if ciclos_fechados else 0
+    return { "vistos": len(bichos_vistos), "jogos_atual": contador_jogos, "media_historica": media, "faltam": sorted(faltam) }
+
+# --- NOVO: LÓGICA DE ALTA FREQUÊNCIA (DIAMANTES) ---
+def calcular_diamantes(historico, indice_premio):
+    # Analisa os últimos 30 jogos (Janela de Tendência)
+    janela = 30
+    recorte = historico[-janela:]
+    total_jogos = len(recorte)
     
-    return {
-        "vistos": len(bichos_vistos),
-        "jogos_atual": contador_jogos,
-        "media_historica": media,
-        "faltam": sorted(faltam)
-    }
+    if total_jogos < 10: return [] # Precisa de mínimo de dados
+    
+    contagem = {}
+    for jogo in recorte:
+        bicho = jogo['premios'][indice_premio]
+        contagem[bicho] = contagem.get(bicho, 0) + 1
+        
+    diamantes = []
+    for bicho, qtd in contagem.items():
+        if qtd >= 2: # Mínimo 2 aparições para considerar tendência
+            media_aparicao = total_jogos / qtd
+            # Se a média for menor que 22, é matematicamente lucrativo (pagamento 23x)
+            if media_aparicao < 22:
+                diamantes.append({
+                    "grupo": bicho,
+                    "qtd": qtd,
+                    "media": media_aparicao
+                })
+    
+    # Ordena pelos que saíram mais vezes
+    diamantes.sort(key=lambda x: x['qtd'], reverse=True)
+    return diamantes
 
 # ROBÔ
 def montar_url_correta(slug, data_alvo):
@@ -234,7 +252,6 @@ def tela_dashboard_global():
     
     with st.spinner("Escaneando todas as bancas e prêmios..."):
         alertas_globais = []
-        
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
@@ -365,31 +382,43 @@ else:
                 df_stats = calcular_stress_tabela(historico, idx_aba)
                 st.table(df_stats)
                 
-                # --- MONITOR DE CICLOS (NOVO) ---
+                # MONITOR DE CICLOS
                 st.markdown("---")
-                st.subheader("🔄 Monitor de Ciclos (1-25)")
+                st.subheader("🔄 Monitor de Ciclos")
                 stats_ciclo = calcular_ciclo(historico, idx_aba)
-                
-                # Barra de Progresso Visual
                 prog_val = stats_ciclo['vistos'] / 25.0
                 st.progress(prog_val)
-                st.caption(f"Status Atual: {stats_ciclo['vistos']} de 25 bichos já saíram.")
-                
+                st.caption(f"Status: {stats_ciclo['vistos']}/25 bichos já saíram.")
                 c1, c2 = st.columns(2)
-                with c1:
-                    st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']} Jogos")
-                with c2:
-                    st.metric("Média Histórica para Fechar", f"{stats_ciclo['media_historica']:.1f} Jogos")
-                
+                with c1: st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']}")
+                with c2: st.metric("Média para Fechar", f"{stats_ciclo['media_historica']:.1f}")
                 if stats_ciclo['faltam']:
-                    st.markdown("#### 🎯 Faltam Sair (Sugestão de Jogo):")
+                    st.markdown("**Faltam Sair (Sugestão):**")
                     st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
+                else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
+
+                # DIAMANTES (ALTA FREQUÊNCIA)
+                st.markdown("---")
+                st.subheader("💎 DIAMANTES (Alta Frequência - Últimos 30)")
+                diamantes = calcular_diamantes(historico, idx_aba)
+                
+                if diamantes:
+                    cols_d = st.columns(4)
+                    for i, d in enumerate(diamantes):
+                        lucro_txt = "Lucro Alto" if d['media'] < 15 else "Lucrativo"
+                        with cols_d[i % 4]:
+                            st.markdown(f"""
+                            <div class="diamante-box">
+                                <h3>Grupo {d['grupo']}</h3>
+                                <p>Saiu <b>{d['qtd']}x</b></p>
+                                <p>Média: 1 a cada {d['media']:.1f}</p>
+                                <small style='color:#00ff00'>{lucro_txt}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
                 else:
-                    st.success("🎉 Ciclo acabou de Fechar! O próximo sorteio iniciará um novo ciclo.")
-                # --------------------------------
+                    st.info("Nenhum grupo com alta frequência (>2x) detectado nos últimos 30 jogos.")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-
                 if "VACA (25)" in df_stats['SETOR'].values:
                     row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
                     if row_vaca['ATRASO'] > 15:
