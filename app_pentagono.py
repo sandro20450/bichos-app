@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V10 - Fix Caminho", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V15 - Dashboard Advisor", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -53,6 +53,12 @@ def aplicar_estilo():
         .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
+        .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
+        .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
+        
+        /* Palpite Inteligente */
+        .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
+        .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
         
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -114,10 +120,9 @@ def calcular_stress_tabela(historico, indice_premio):
                 if curr_atraso > max_atraso: max_atraso = curr_atraso
                 curr_atraso = 0
             else:
-                curr_atraso += 1
                 if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
                 curr_seq_v = 0
-        
+                curr_atraso += 1
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         
@@ -127,10 +132,17 @@ def calcular_stress_tabela(historico, indice_premio):
             if bicho in lista_bichos: break
             atraso_real += 1
             
+        seq_atual = 0
+        for jogo in reversed(historico):
+            bicho = jogo['premios'][indice_premio]
+            if bicho in lista_bichos: seq_atual += 1
+            else: break
+
         stats.append({
             "SETOR": nome_setor,
             "ATRASO": atraso_real,
             "REC. ATRASO": max_atraso,
+            "SEQ. ATUAL": seq_atual,
             "REC. SEQ. (V)": max_seq_v
         })
     return pd.DataFrame(stats)
@@ -188,7 +200,54 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# ROBÔ COM CORREÇÃO PARA "17" (SEM H E SEM :)
+# --- GERADOR DE PALPITE 8 GRUPOS (SMART MIX V14) ---
+def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
+    candidatos = [] 
+    
+    # 1. IDENTIFICAR SETOR CRÍTICO
+    setor_critico = None
+    for index, row in df_stress.iterrows():
+        setor = row['SETOR']
+        if "VACA" not in setor and (row['REC. ATRASO'] - row['ATRASO']) <= 1 and row['REC. ATRASO'] >= 5:
+            setor_critico = setor
+            break
+            
+    motivo = "Mix Equilibrado: Ciclos + Tendência."
+    
+    if setor_critico:
+        motivo = f"Foco no {setor_critico} (Crítico) misturado com Diamantes para proteção."
+        grupos_setor = SETORES[setor_critico]
+        for g in grupos_setor:
+            if g in stats_ciclo['faltam']: candidatos.append(g)
+                
+    if not df_diamante.empty:
+        for index, row in df_diamante.iterrows():
+            if "🔥" in row['STATUS / DICA'] or "⏳" in row['STATUS / DICA']: candidatos.append(row['GRUPO'])
+                
+    if setor_critico:
+        grupos_setor = SETORES[setor_critico]
+        for g in grupos_setor: candidatos.append(g)
+            
+    for g in stats_ciclo['faltam']: candidatos.append(g)
+        
+    maior_atraso = df_stress.loc[~df_stress['SETOR'].str.contains("VACA")].sort_values(by='ATRASO', ascending=False).iloc[0]
+    setor_bkp = maior_atraso['SETOR']
+    for g in SETORES[setor_bkp]: candidatos.append(g)
+
+    palpite_final = []
+    seen = set()
+    for item in candidatos:
+        if item not in seen:
+            palpite_final.append(item)
+            seen.add(item)
+        if len(palpite_final) == 8: break
+        
+    palpite_final.sort()
+    destaque = [g for g in palpite_final if g in stats_ciclo['faltam']]
+    
+    return { "tipo": "SMART MIX (Híbrido)", "grupos": palpite_final, "destaque": destaque, "motivo": motivo }
+
+# ROBÔ
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
@@ -206,28 +265,19 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        
-        # --- CORREÇÃO DO REGEX ---
-        # Aceita: 12:45 | 18h | 17 (apenas número solto)
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-        
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
+                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+                if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
                     if m:
                         raw = m.group(1).strip()
-                        
-                        # Normalização Inteligente
-                        if ':' in raw:
-                            h_detect = raw
-                        elif 'h' in raw:
-                            h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
-                        else:
-                            # Caso onde acha só "17" -> Converte para "17:00"
-                            h_detect = raw.zfill(2) + ":00"
-                        
+                        if ':' in raw: h_detect = raw
+                        elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
+                        else: h_detect = raw.strip().zfill(2) + ":00"
                         if h_detect == horario_alvo:
                             bichos = []
                             linhas = tabela.find_all('tr')
@@ -268,47 +318,81 @@ def tela_dashboard_global():
     col1, col2, col3 = st.columns(3)
     col1.metric("Bancas Monitoradas", "3", "LOTEP, CAMINHO, MONTE")
     
-    with st.spinner("Escaneando todas as bancas e prêmios..."):
+    with st.spinner("Escaneando e gerando palpites..."):
         alertas_globais = []
+        palpites_gerados = []
+        
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
-                    df = calcular_stress_tabela(historico, idx_pos)
-                    for _, row in df.iterrows():
+                    # CALCULA TUDO PARA O PALPITE
+                    df_stress = calcular_stress_tabela(historico, idx_pos)
+                    stats_ciclo = calcular_ciclo(historico, idx_pos)
+                    df_diamante = calcular_tabela_diamante(historico, idx_pos)
+                    
+                    # CHECAGEM DE ALERTAS
+                    tem_alerta_critico = False
+                    for _, row in df_stress.iterrows():
                         atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                        seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
                         if "VACA" in setor: continue
+                        
+                        # Alerta Atraso
                         if (recorde - atraso) <= 1 and recorde >= 5:
-                            alertas_globais.append({
-                                "banca": config['display_name'].split("(")[0].strip(),
-                                "premio": f"{idx_pos+1}º Prêmio",
-                                "setor": setor,
-                                "atraso": atraso,
-                                "recorde": recorde
-                            })
-        
+                            alertas_globais.append({"tipo": "ATRASO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": atraso, "val_rec": recorde})
+                            tem_alerta_critico = True
+                            
+                        # Alerta Repetição
+                        margem_seq = recorde_seq - seq_atual
+                        if margem_seq <= 1 and recorde_seq >= 3:
+                            alertas_globais.append({"tipo": "REPETICAO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": seq_atual, "val_rec": recorde_seq, "margem": margem_seq})
+                            tem_alerta_critico = True
+                    
+                    # SE TEM ALERTA CRITICO, GERA O PALPITE NA HOME
+                    if tem_alerta_critico:
+                        palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
+                        palpites_gerados.append({
+                            "banca": config['display_name'].split("(")[0].strip(),
+                            "premio": f"{idx_pos+1}º Prêmio",
+                            "grupos": palpite['grupos'],
+                            "motivo": palpite['motivo'],
+                            "destaque": palpite['destaque']
+                        })
+
         col2.metric("Base de Dados", "Conectada", "Google Sheets")
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
-        
         st.markdown("---")
         
+        # EXIBE ALERTAS
         if alertas_globais:
             st.warning("🚨 Oportunidades Encontradas")
             cols = st.columns(2)
             for i, alerta in enumerate(alertas_globais):
-                classe = "box-alerta" if alerta['atraso'] >= alerta['recorde'] else "box-aviso"
-                status = "ESTOURADO!" if alerta['atraso'] >= alerta['recorde'] else "Zona de Tiro"
+                if alerta['tipo'] == "ATRASO":
+                    classe = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso"
+                    titulo_val, msg = "Atraso", "ZONA DE TIRO (Atraso)"
+                else: 
+                    if alerta['margem'] <= 0: classe, msg = "box-inverso-critico", "ESTOURADO! (Bateu Recorde)"
+                    else: classe, msg = "box-inverso-atencao", "Atenção (Próximo do Recorde)"
+                    titulo_val = "Sequência"
                 with cols[i % 2]:
-                    st.markdown(f"""
-                    <div class="{classe}">
-                        <h3>{alerta['banca']}</h3>
-                        <p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p>
-                        <p>Atraso: {alerta['atraso']} (Recorde: {alerta['recorde']})</p>
-                        <p><b>STATUS: {status}</b></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.success("✅ Tudo calmo nas 3 bancas.")
+                    st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
+        else: st.success("✅ Tudo calmo nas 3 bancas.")
+
+        # EXIBE PALPITES AUTOMÁTICOS
+        if palpites_gerados:
+            st.markdown("### 🎯 PREVISÕES DE ELITE (Smart Mix)")
+            st.info("O Robô gerou estas combinações de 8 Grupos baseadas nos alertas acima.")
+            for p in palpites_gerados:
+                st.markdown(f"""
+                <div class="palpite-box">
+                    <h4>{p['banca']} - {p['premio']}</h4>
+                    <p class="palpite-nums">{', '.join(map(str, p['grupos']))}</p>
+                    <small><b>Motivo:</b> {p['motivo']}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                if p['destaque']: st.write(f"⭐ **Destaque:** {', '.join(map(str, p['destaque']))}")
 
 # =============================================================================
 # --- 4. FLUXO PRINCIPAL DO APP ---
@@ -372,60 +456,67 @@ else:
         nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
         col_alerts = st.container()
         alertas_locais = 0
-        
         for idx_pos, nome_pos in enumerate(nomes_posicoes):
             df = calcular_stress_tabela(historico, idx_pos)
             for index, row in df.iterrows():
                 atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
+                seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
                 if "VACA" in setor: continue 
                 if (recorde - atraso) <= 1 and recorde >= 5:
                     alertas_locais += 1
                     classe = "box-alerta" if atraso >= recorde else "box-aviso"
                     msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
-                    with col_alerts:
-                        st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
-        
+                    with col_alerts: st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
+                margem_seq = recorde_seq - seq_atual
+                if margem_seq <= 1 and recorde_seq >= 3:
+                    alertas_locais += 1
+                    if margem_seq <= 0: classe, msg_extra = "box-inverso-critico", "🔁 REPETIÇÃO MÁXIMA (Inverso Recomendado)"
+                    else: classe, msg_extra = "box-inverso-atencao", "⚠️ Atenção: Sequência Alta (Quase no Recorde)"
+                    with col_alerts: st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Sequência Atual: {seq_atual}x (Recorde: {recorde_seq})<br>{msg_extra}</div>", unsafe_allow_html=True)
         if alertas_locais == 0: st.success("Sem alertas críticos nesta banca.")
         st.markdown("---")
 
         abas = st.tabs(nomes_posicoes)
         for idx_aba, aba in enumerate(abas):
             with aba:
+                df_stress = calcular_stress_tabela(historico, idx_aba)
+                stats_ciclo = calcular_ciclo(historico, idx_aba)
+                df_diamante = calcular_tabela_diamante(historico, idx_aba)
+                palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
+                
+                st.markdown(f"""
+                <div class="palpite-box">
+                    <h4>🎯 PALPITE INTELIGENTE (8 GRUPOS) - {nomes_posicoes[idx_aba]}</h4>
+                    <p class="palpite-nums">{', '.join(map(str, palpite['grupos']))}</p>
+                    <small><b>Estratégia:</b> {palpite['tipo']} | <b>Motivo:</b> {palpite['motivo']}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                if palpite['destaque']: st.info(f"⭐ Destaque (Falta no Ciclo): **{', '.join(map(str, palpite['destaque']))}**")
+                
                 st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
                 st.markdown("**Visual Recente (⬅️ Mais Novo):**")
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
-                
                 st.markdown("**📉 Tabela de Stress:**")
-                df_stats = calcular_stress_tabela(historico, idx_aba)
-                st.table(df_stats)
-                
+                df_visual = df_stress.drop(columns=['SEQ. ATUAL'])
+                st.table(df_visual)
                 st.markdown("---")
                 st.subheader("🔄 Monitor de Ciclos")
-                stats_ciclo = calcular_ciclo(historico, idx_aba)
                 prog_val = stats_ciclo['vistos'] / 25.0
                 st.progress(prog_val)
                 st.caption(f"Status: {stats_ciclo['vistos']}/25 bichos já saíram.")
                 c1, c2 = st.columns(2)
                 with c1: st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']}")
                 with c2: st.metric("Média para Fechar", f"{stats_ciclo['media_historica']:.1f}")
-                if stats_ciclo['faltam']:
-                    st.markdown("**Faltam Sair (Sugestão):**")
-                    st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
+                if stats_ciclo['faltam']: st.markdown("**Faltam Sair (Sugestão):**"); st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
                 else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
-
                 st.markdown("---")
                 st.subheader("💎 DIAMANTES (Elite 3x - Últimos 30 Jogos)")
-                df_diamante = calcular_tabela_diamante(historico, idx_aba)
-                if not df_diamante.empty:
-                    st.table(df_diamante)
-                else:
-                    st.info("Nenhum grupo de Alta Frequência (3x ou mais) encontrado recentemente.")
-
+                if not df_diamante.empty: st.table(df_diamante)
+                else: st.info("Nenhum grupo de Alta Frequência (3x ou mais) encontrado recentemente.")
                 st.markdown("<br>", unsafe_allow_html=True)
-                if "VACA (25)" in df_stats['SETOR'].values:
-                    row_vaca = df_stats[df_stats['SETOR'] == "VACA (25)"].iloc[0]
-                    if row_vaca['ATRASO'] > 15:
-                        st.info(f"ℹ️ **Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
+                if "VACA (25)" in df_stress['SETOR'].values:
+                    row_vaca = df_stress[df_stress['SETOR'] == "VACA (25)"].iloc[0]
+                    if row_vaca['ATRASO'] > 15: st.info(f"ℹ️ **Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
     else:
         st.warning("⚠️ Base vazia.")
