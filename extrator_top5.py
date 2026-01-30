@@ -11,24 +11,29 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator V4.0 (Com Federal)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator V4.1 (Federal Fix)", page_icon="🏗️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
         "slug": "lotep",
-        "nome_aba": "LOTEP_TOP5"
+        "nome_aba": "LOTEP_TOP5",
+        "tipo_url": "dinamica"
     },
     "CAMINHODASORTE": {
         "slug": "caminho-da-sorte",
-        "nome_aba": "CAMINHO_TOP5"
+        "nome_aba": "CAMINHO_TOP5",
+        "tipo_url": "dinamica"
     },
     "MONTECAI": {
         "slug": "nordeste-monte-carlos",
-        "nome_aba": "MONTE_TOP5"
+        "nome_aba": "MONTE_TOP5",
+        "tipo_url": "dinamica"
     },
     "FEDERAL": {
-        "slug": "federal", # Slug oficial do site para a Federal
-        "nome_aba": "FEDERAL_TOP5"
+        "slug": "federal",
+        "nome_aba": "FEDERAL_TOP5",
+        "tipo_url": "estatica",
+        "url_fixa": "https://www.resultadofacil.com.br/ultimos-resultados-da-federal"
     }
 }
 
@@ -48,7 +53,15 @@ def conectar_planilha(nome_aba):
         return ws
     return None
 
-def montar_url_correta(slug, data_alvo):
+def montar_url_correta(banca_key, data_alvo):
+    config = CONFIG_BANCAS[banca_key]
+    
+    # SE FOR FEDERAL, USA O LINK DA LISTA
+    if config.get("tipo_url") == "estatica":
+        return config["url_fixa"]
+        
+    # SE FOR OUTRA BANCA, MONTA O LINK DO DIA
+    slug = config['slug']
     hoje = date.today()
     delta = (hoje - data_alvo).days
     base = "https://www.resultadofacil.com.br"
@@ -62,9 +75,7 @@ def montar_url_correta(slug, data_alvo):
         return f"{base}/resultados-{slug}-do-dia-{data_str}"
 
 def raspar_dia_completo(banca_key, data_alvo):
-    slug = CONFIG_BANCAS[banca_key]['slug']
-    url = montar_url_correta(slug, data_alvo)
-    
+    url = montar_url_correta(banca_key, data_alvo)
     st.info(f"🔎 Robô acessando: {url}")
 
     try:
@@ -76,33 +87,50 @@ def raspar_dia_completo(banca_key, data_alvo):
         
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        if "Não foram encontrados resultados" in soup.get_text():
-            return [], "Site diz: Sem resultados para esta data."
+        # Se for página dinâmica e não achar
+        if CONFIG_BANCAS[banca_key].get("tipo_url") == "dinamica":
+            if "Não foram encontrados resultados" in soup.get_text():
+                return [], "Site diz: Sem resultados para esta data."
 
         tabelas = soup.find_all('table')
         resultados_do_dia = []
         
         # Regex HORA (Inclui fix para "17" e "18h")
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
+        
+        # Formata a data alvo para busca na página da Federal (Ex: 28/01/2026)
+        data_fmt_br = data_alvo.strftime("%d/%m/%Y")
 
         for tabela in tabelas:
             texto_tab = tabela.get_text()
-            if "Prêmio" in texto_tab or "1º" in texto_tab:
+            
+            # --- LÓGICA FEDERAL (NOVA) ---
+            if banca_key == "FEDERAL":
+                # Só processa a tabela se encontrar a DATA ALVO no texto anterior (cabeçalho)
+                # O site escreve algo como: "RESULTADO DA FEDERAL de Quarta-feira dia 28/01/2026"
+                cabecalho = tabela.find_previous(string=re.compile(r"FEDERAL", re.IGNORECASE))
                 
-                # --- 🛡️ FILTRO INTELIGENTE ---
-                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-                if cabecalho and "FEDERAL" in cabecalho.upper():
-                    # SE A BANCA SELECIONADA NÃO FOR FEDERAL, PULA!
-                    # SE FOR FEDERAL, DEIXA PASSAR!
-                    if banca_key != "FEDERAL":
-                        continue 
-                # -------------------------------
+                # Se não achou cabeçalho ou o cabeçalho não contém a data que queremos, PULA.
+                # Isso impede de pegar sorteios de outros dias que estão na mesma página.
+                if not cabecalho: continue
+                
+                # Procura a data exata no bloco do cabeçalho ou parentes próximos
+                bloco_texto = cabecalho.parent.parent.get_text() # Pega um contexto maior
+                if data_fmt_br not in bloco_texto:
+                    continue # Não é a data que o usuário pediu
+                
+                # Se chegou aqui, é a Federal do dia certo!
+                horario = "19:00" # Federal é sempre ~19h
+            
+            # --- LÓGICA OUTRAS BANCAS ---
+            else:
+                if "Prêmio" not in texto_tab and "1º" not in texto_tab: continue
+                
+                # Filtro Anti-Federal (Para não pegar Federal misturada na Lotep)
+                header_check = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+                if header_check and "FEDERAL" in header_check.upper(): continue
 
-                # Definir horário
                 horario = "00:00"
-                
-                # Se for Federal, geralmente o site não põe hora perto da tabela, ou põe 19h.
-                # Vamos tentar achar a hora padrão. Se não achar e for Federal, fixamos 19:00.
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -111,40 +139,36 @@ def raspar_dia_completo(banca_key, data_alvo):
                         if ':' in raw: horario = raw
                         elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: horario = raw.strip().zfill(2) + ":00"
-                
-                # Fallback para Federal se não achar hora (Federal é sempre ~19:00)
-                if banca_key == "FEDERAL" and horario == "00:00":
-                    horario = "19:00"
 
-                bichos = []
-                linhas = tabela.find_all('tr')
-                for linha in linhas:
-                    cols = linha.find_all('td')
-                    if len(cols) >= 3:
-                        premio_txt = cols[0].get_text().strip()
-                        grupo_txt = cols[2].get_text().strip()
-                        
-                        if not grupo_txt.isdigit(): continue
-                        
-                        nums = re.findall(r'\d+', premio_txt)
-                        if nums:
-                            posicao = int(nums[0])
-                            # Federal e outras bancas: pegamos do 1º ao 5º
-                            if 1 <= posicao <= 5:
-                                bichos.append(int(grupo_txt))
-                
-                if len(bichos) >= 5:
-                    top5 = bichos[:5]
-                    ja_tem = False
-                    for x in resultados_do_dia:
-                        if x['horario'] == horario: ja_tem = True
+            # --- EXTRAÇÃO DOS BICHOS ---
+            bichos = []
+            linhas = tabela.find_all('tr')
+            for linha in linhas:
+                cols = linha.find_all('td')
+                if len(cols) >= 3:
+                    premio_txt = cols[0].get_text().strip()
+                    grupo_txt = cols[2].get_text().strip()
                     
-                    if not ja_tem:
-                        resultados_do_dia.append({
-                            "data": data_alvo.strftime("%Y-%m-%d"),
-                            "horario": horario,
-                            "premios": top5
-                        })
+                    if not grupo_txt.isdigit(): continue
+                    
+                    nums = re.findall(r'\d+', premio_txt)
+                    if nums:
+                        posicao = int(nums[0])
+                        if 1 <= posicao <= 5:
+                            bichos.append(int(grupo_txt))
+            
+            if len(bichos) >= 5:
+                top5 = bichos[:5]
+                ja_tem = False
+                for x in resultados_do_dia:
+                    if x['horario'] == horario: ja_tem = True
+                
+                if not ja_tem:
+                    resultados_do_dia.append({
+                        "data": data_alvo.strftime("%Y-%m-%d"),
+                        "horario": horario,
+                        "premios": top5
+                    })
                     
         return resultados_do_dia, "Sucesso"
         
@@ -154,8 +178,8 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V4.0 (Com Federal)")
-st.caption("Suporta: Lotep, Caminho, Monte Carlos e FEDERAL (Quartas e Sábados)")
+st.title("🏗️ Robô Extrator V4.1 (Federal Fix)")
+st.caption("Suporta: Lotep, Caminho, Monte Carlos e FEDERAL (Lista Oficial)")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -195,6 +219,6 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
                 
                 st.json(dados)
             else:
-                st.error(f"Nada encontrado. Msg: {msg}")
+                st.error(f"Nada encontrado para esta data. Msg: {msg}")
                 if banca == "FEDERAL":
-                    st.info("Dica: A Federal geralmente ocorre apenas às Quartas e Sábados. Verifique se a data escolhida tem sorteio.")
+                    st.info(f"O robô buscou na lista oficial pela data {data_sel.strftime('%d/%m/%Y')}. Verifique se o sorteio já ocorreu.")
