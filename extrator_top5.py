@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator V4.1 (Federal Fix)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator V4.2 (Mode Force)", page_icon="🏗️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -55,21 +55,14 @@ def conectar_planilha(nome_aba):
 
 def montar_url_correta(banca_key, data_alvo):
     config = CONFIG_BANCAS[banca_key]
-    
-    # SE FOR FEDERAL, USA O LINK DA LISTA
     if config.get("tipo_url") == "estatica":
         return config["url_fixa"]
-        
-    # SE FOR OUTRA BANCA, MONTA O LINK DO DIA
     slug = config['slug']
     hoje = date.today()
     delta = (hoje - data_alvo).days
     base = "https://www.resultadofacil.com.br"
-    
-    if delta == 0:
-        return f"{base}/resultados-{slug}-de-hoje"
-    elif delta == 1:
-        return f"{base}/resultados-{slug}-de-ontem"
+    if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
+    elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
     else:
         data_str = data_alvo.strftime("%Y-%m-%d")
         return f"{base}/resultados-{slug}-do-dia-{data_str}"
@@ -79,54 +72,38 @@ def raspar_dia_completo(banca_key, data_alvo):
     st.info(f"🔎 Robô acessando: {url}")
 
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=15)
-        
-        if r.status_code != 200: 
-            return [], f"Erro HTTP {r.status_code}"
+        if r.status_code != 200: return [], f"Erro HTTP {r.status_code}"
         
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Se for página dinâmica e não achar
         if CONFIG_BANCAS[banca_key].get("tipo_url") == "dinamica":
             if "Não foram encontrados resultados" in soup.get_text():
                 return [], "Site diz: Sem resultados para esta data."
 
         tabelas = soup.find_all('table')
         resultados_do_dia = []
-        
-        # Regex HORA (Inclui fix para "17" e "18h")
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-        
-        # Formata a data alvo para busca na página da Federal (Ex: 28/01/2026)
         data_fmt_br = data_alvo.strftime("%d/%m/%Y")
 
         for tabela in tabelas:
             texto_tab = tabela.get_text()
             
-            # --- LÓGICA FEDERAL (NOVA) ---
+            # --- LÓGICA FEDERAL ---
             if banca_key == "FEDERAL":
-                # Só processa a tabela se encontrar a DATA ALVO no texto anterior (cabeçalho)
-                # O site escreve algo como: "RESULTADO DA FEDERAL de Quarta-feira dia 28/01/2026"
                 cabecalho = tabela.find_previous(string=re.compile(r"FEDERAL", re.IGNORECASE))
-                
-                # Se não achou cabeçalho ou o cabeçalho não contém a data que queremos, PULA.
-                # Isso impede de pegar sorteios de outros dias que estão na mesma página.
                 if not cabecalho: continue
                 
-                # Procura a data exata no bloco do cabeçalho ou parentes próximos
-                bloco_texto = cabecalho.parent.parent.get_text() # Pega um contexto maior
-                if data_fmt_br not in bloco_texto:
-                    continue # Não é a data que o usuário pediu
+                # Verifica se a data alvo está no bloco do cabeçalho
+                bloco_texto = cabecalho.parent.parent.get_text()
+                if data_fmt_br not in bloco_texto: continue
                 
-                # Se chegou aqui, é a Federal do dia certo!
-                horario = "19:00" # Federal é sempre ~19h
+                horario = "19:00"
             
             # --- LÓGICA OUTRAS BANCAS ---
             else:
                 if "Prêmio" not in texto_tab and "1º" not in texto_tab: continue
-                
-                # Filtro Anti-Federal (Para não pegar Federal misturada na Lotep)
                 header_check = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if header_check and "FEDERAL" in header_check.upper(): continue
 
@@ -140,7 +117,6 @@ def raspar_dia_completo(banca_key, data_alvo):
                         elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: horario = raw.strip().zfill(2) + ":00"
 
-            # --- EXTRAÇÃO DOS BICHOS ---
             bichos = []
             linhas = tabela.find_all('tr')
             for linha in linhas:
@@ -148,14 +124,11 @@ def raspar_dia_completo(banca_key, data_alvo):
                 if len(cols) >= 3:
                     premio_txt = cols[0].get_text().strip()
                     grupo_txt = cols[2].get_text().strip()
-                    
                     if not grupo_txt.isdigit(): continue
-                    
                     nums = re.findall(r'\d+', premio_txt)
                     if nums:
                         posicao = int(nums[0])
-                        if 1 <= posicao <= 5:
-                            bichos.append(int(grupo_txt))
+                        if 1 <= posicao <= 5: bichos.append(int(grupo_txt))
             
             if len(bichos) >= 5:
                 top5 = bichos[:5]
@@ -171,15 +144,13 @@ def raspar_dia_completo(banca_key, data_alvo):
                     })
                     
         return resultados_do_dia, "Sucesso"
-        
-    except Exception as e:
-        return [], f"Erro Fatal: {e}"
+    except Exception as e: return [], f"Erro Fatal: {e}"
 
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V4.1 (Federal Fix)")
-st.caption("Suporta: Lotep, Caminho, Monte Carlos e FEDERAL (Lista Oficial)")
+st.title("🏗️ Robô Extrator V4.2 (Mode Force)")
+st.caption("Suporta: Lotep, Caminho, Monte Carlos e FEDERAL.")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -187,7 +158,12 @@ with c1:
 with c2:
     data_sel = st.date_input("Data para Extrair:", date.today())
 
-if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
+st.markdown("---")
+col_chk, col_btn = st.columns([1, 1])
+with col_chk:
+    forcar = st.checkbox("⚠️ FORÇAR GRAVAÇÃO (Ignorar se já existe)", value=False, help="Marque isso se o robô achou o resultado mas não está salvando.")
+
+if col_btn.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
     ws = conectar_planilha(CONFIG_BANCAS[banca]['nome_aba'])
     if not ws:
         st.error("Erro Conexão Planilha (Verifique Secrets).")
@@ -196,29 +172,35 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
             dados, msg = raspar_dia_completo(banca, data_sel)
             
             if dados:
-                st.success(f"📦 Encontrados {len(dados)} sorteios válidos!")
+                st.success(f"📦 Encontrados {len(dados)} sorteios válidos na memória!")
+                st.write("Dados extraídos:", dados) # Debug Visual
                 
                 try:
                     existentes = ws.get_all_values()
                     chaves_existentes = [f"{row[0]}|{row[1]}" for row in existentes if len(row) > 1]
+                    # st.write("Chaves na Planilha:", chaves_existentes) # Debug (Descomente se precisar)
                 except: chaves_existentes = []
                 
                 novos = 0
                 for jogo in dados:
                     chave = f"{jogo['data']}|{jogo['horario']}"
-                    if chave not in chaves_existentes:
+                    
+                    # LÓGICA DE GRAVAÇÃO (COM FORÇAR)
+                    if (chave not in chaves_existentes) or forcar:
                         ws.append_row([jogo['data'], jogo['horario']] + jogo['premios'])
                         novos += 1
+                        if forcar: st.warning(f"Gravado forçadamente: {chave}")
+                    else:
+                        st.info(f"Ignorado (Já existe): {chave}")
                 
                 if novos > 0:
                     st.toast(f"✅ {novos} Sorteios salvos na nuvem!", icon="☁️")
                     time.sleep(1)
                     st.rerun()
-                else:
-                    st.warning("Todos os sorteios encontrados JÁ estavam salvos.")
+                elif novos == 0 and not forcar:
+                    st.warning("Nenhum dado novo salvo. (Tente marcar 'Forçar Gravação' se achar que é erro).")
                 
-                st.json(dados)
             else:
-                st.error(f"Nada encontrado para esta data. Msg: {msg}")
+                st.error(f"Nada encontrado. Msg: {msg}")
                 if banca == "FEDERAL":
-                    st.info(f"O robô buscou na lista oficial pela data {data_sel.strftime('%d/%m/%Y')}. Verifique se o sorteio já ocorreu.")
+                    st.info(f"O robô buscou pela data exata {data_sel.strftime('%d/%m/%Y')} na página da Federal.")
