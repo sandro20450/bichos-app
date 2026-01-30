@@ -11,62 +11,66 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator V5.0 (Estratégia MC)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator V5.1 (DIAGNÓSTICO)", page_icon="🚨", layout="wide")
 
 CONFIG_BANCAS = {
-    "LOTEP": {
-        "slug": "lotep",
-        "nome_aba": "LOTEP_TOP5"
-    },
-    "CAMINHODASORTE": {
-        "slug": "caminho-da-sorte",
-        "nome_aba": "CAMINHO_TOP5"
-    },
-    "MONTECAI": {
-        "slug": "nordeste-monte-carlos",
-        "nome_aba": "MONTE_TOP5"
-    },
-    "FEDERAL": {
-        # TRUQUE DE MESTRE: Usamos o slug da Monte Carlos para achar a Federal!
-        "slug": "nordeste-monte-carlos", 
-        "nome_aba": "FEDERAL_TOP5"
-    }
+    "LOTEP": { "slug": "lotep", "nome_aba": "LOTEP_TOP5" },
+    "CAMINHODASORTE": { "slug": "caminho-da-sorte", "nome_aba": "CAMINHO_TOP5" },
+    "MONTECAI": { "slug": "nordeste-monte-carlos", "nome_aba": "MONTE_TOP5" },
+    "FEDERAL": { "slug": "nordeste-monte-carlos", "nome_aba": "FEDERAL_TOP5" }
 }
 
 # =============================================================================
-# FUNÇÕES
+# FUNÇÕES DE CONEXÃO (SEM FILTRO DE ERRO)
 # =============================================================================
-def conectar_planilha(nome_aba):
-    if "gcp_service_account" in st.secrets:
+def conectar_planilha_debug(nome_aba):
+    st.write(f"🔌 Tentando conectar na aba: **{nome_aba}**...")
+    
+    if "gcp_service_account" not in st.secrets:
+        st.error("❌ ERRO: Secrets 'gcp_service_account' não encontrado!")
+        return None
+
+    try:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         gc = gspread.authorize(creds)
         sh = gc.open("CentralBichos")
+        st.write("✅ Planilha 'CentralBichos' aberta com sucesso.")
+        
         try:
             ws = sh.worksheet(nome_aba)
-        except:
-            ws = sh.add_worksheet(title=nome_aba, rows=1000, cols=10)
-            ws.append_row(["DATA", "HORARIO", "P1", "P2", "P3", "P4", "P5"])
-        return ws
-    return None
+            st.write(f"✅ Aba '{nome_aba}' encontrada!")
+            return ws
+        except gspread.WorksheetNotFound:
+            st.warning(f"⚠️ Aba '{nome_aba}' não existe. Tentando criar...")
+            try:
+                ws = sh.add_worksheet(title=nome_aba, rows=1000, cols=10)
+                ws.append_row(["DATA", "HORARIO", "P1", "P2", "P3", "P4", "P5"])
+                st.success(f"✅ Aba '{nome_aba}' criada com sucesso!")
+                return ws
+            except Exception as e_create:
+                st.error(f"❌ ERRO CRÍTICO: Não foi possível criar a aba. O robô tem permissão de 'Editor'? Erro: {e_create}")
+                return None
+    except Exception as e:
+        st.error(f"❌ ERRO DE CONEXÃO GERAL: {e}")
+        return None
 
+# =============================================================================
+# FUNÇÃO DE RASPAGEM (ESTRATÉGIA MONTE CARLOS)
+# =============================================================================
 def montar_url_correta(banca_key, data_alvo):
     config = CONFIG_BANCAS[banca_key]
     slug = config['slug']
-    
-    # Montagem padrão de URL (que funciona perfeitamente para Monte Carlos)
     base = "https://www.resultadofacil.com.br"
     hoje = date.today()
     delta = (hoje - data_alvo).days
     
     if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
     elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
-    else:
-        data_str = data_alvo.strftime("%Y-%m-%d")
-        return f"{base}/resultados-{slug}-do-dia-{data_str}"
+    else: return f"{base}/resultados-{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
 
 def raspar_dia_completo(banca_key, data_alvo):
     url = montar_url_correta(banca_key, data_alvo)
-    st.info(f"🔎 Robô acessando: {url}")
+    st.info(f"🔎 Acessando URL: {url}")
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -74,10 +78,6 @@ def raspar_dia_completo(banca_key, data_alvo):
         if r.status_code != 200: return [], f"Erro HTTP {r.status_code}"
         
         soup = BeautifulSoup(r.text, 'html.parser')
-        
-        if "Não foram encontrados resultados" in soup.get_text():
-            return [], "Site diz: Sem resultados para esta data."
-
         tabelas = soup.find_all('table')
         resultados_do_dia = []
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
@@ -85,28 +85,23 @@ def raspar_dia_completo(banca_key, data_alvo):
         for tabela in tabelas:
             texto_tab = tabela.get_text()
             
-            # --- LÓGICA FEDERAL (ESTRATÉGIA MONTE CARLOS) ---
+            # --- FEDERAL VIA MONTE CARLOS ---
             if banca_key == "FEDERAL":
-                # Procura o cabeçalho "Resultado do dia..."
-                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+                # Procura qualquer menção a FEDERAL no cabeçalho ou no título anterior
+                cabecalho = tabela.find_previous(string=re.compile(r"FEDERAL", re.IGNORECASE))
                 
-                eh_federal = False
-                if cabecalho and "FEDERAL" in cabecalho.upper():
-                    eh_federal = True
+                # Se não achou "FEDERAL" escrito perto da tabela, IGNORA.
+                if not cabecalho: continue
                 
-                # Se NÃO tiver a palavra FEDERAL no título, IGNORA (pois é sorteio normal da Monte Carlos)
-                if not eh_federal: continue
-                
-                # Se achou, fixa o horário
+                # Se achou, assume que é o sorteio das 19h
                 horario = "19:00"
             
-            # --- LÓGICA OUTRAS BANCAS ---
+            # --- OUTRAS BANCAS ---
             else:
                 if "Prêmio" not in texto_tab and "1º" not in texto_tab: continue
-                
-                # Filtro Anti-Federal (Se pedir Monte Carlos, ignora a Federal)
-                header_check = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-                if header_check and "FEDERAL" in header_check.upper(): continue
+                # Se pediu outra banca, ignora se tiver FEDERAL no nome
+                header_check = tabela.find_previous(string=re.compile(r"FEDERAL", re.IGNORECASE))
+                if header_check: continue
 
                 horario = "00:00"
                 prev = tabela.find_previous(string=padrao_hora)
@@ -118,7 +113,6 @@ def raspar_dia_completo(banca_key, data_alvo):
                         elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: horario = raw.strip().zfill(2) + ":00"
 
-            # EXTRAÇÃO DOS NÚMEROS
             bichos = []
             linhas = tabela.find_all('tr')
             for linha in linhas:
@@ -151,8 +145,8 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V5.0 (Estratégia MC)")
-st.caption("Suporta: Lotep, Caminho, Monte e FEDERAL (via Monte Carlos)")
+st.title("🚨 Robô V5.1 - MODO DIAGNÓSTICO")
+st.warning("Este modo mostra erros técnicos na tela. Use para descobrir por que não está gravando.")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -161,43 +155,36 @@ with c2:
     data_sel = st.date_input("Data para Extrair:", date.today())
 
 st.markdown("---")
-col_chk, col_btn = st.columns([1, 1])
-with col_chk:
-    forcar = st.checkbox("⚠️ FORÇAR GRAVAÇÃO", value=True, help="Deixe marcado para garantir a gravação.")
-
-if col_btn.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
-    ws = conectar_planilha(CONFIG_BANCAS[banca]['nome_aba'])
-    if not ws:
-        st.error("Erro Conexão Planilha (Verifique Secrets).")
-    else:
-        with st.spinner(f"Varrendo dados..."):
+if st.button("🚀 EXECUTAR DIAGNÓSTICO", type="primary"):
+    
+    # 1. TESTE DE CONEXÃO
+    ws = conectar_planilha_debug(CONFIG_BANCAS[banca]['nome_aba'])
+    
+    if ws:
+        # 2. TESTE DE RASPAGEM
+        with st.spinner(f"Varrendo site..."):
             dados, msg = raspar_dia_completo(banca, data_sel)
             
             if dados:
-                st.success(f"📦 Resultado Encontrado: {len(dados)}")
-                st.json(dados) # Mostra o JSON bonito na tela
+                st.success(f"📦 DADOS ENCONTRADOS NA MEMÓRIA: {len(dados)}")
+                st.write(dados) # MOSTRA O DADO NA TELA
                 
-                try:
-                    existentes = ws.get_all_values()
-                    chaves_existentes = [f"{row[0]}|{row[1]}" for row in existentes if len(row) > 1]
-                except: chaves_existentes = []
-                
+                # 3. TESTE DE GRAVAÇÃO
+                st.write("💾 Tentando gravar na planilha agora...")
                 novos = 0
                 for jogo in dados:
-                    chave = f"{jogo['data']}|{jogo['horario']}"
-                    
-                    if (chave not in chaves_existentes) or forcar:
-                        ws.append_row([jogo['data'], jogo['horario']] + jogo['premios'])
+                    try:
+                        row = [jogo['data'], jogo['horario']] + jogo['premios']
+                        st.write(f"📝 Escrevendo linha: {row}")
+                        ws.append_row(row)
+                        st.success("✅ Linha gravada com sucesso!")
                         novos += 1
+                    except Exception as e_write:
+                        st.error(f"❌ ERRO AO GRAVAR LINHA: {e_write}")
                 
                 if novos > 0:
-                    st.toast(f"✅ Salvo com sucesso!", icon="☁️")
-                    time.sleep(1)
-                    st.rerun()
-                elif novos == 0 and not forcar:
-                    st.warning("Dado já existia na planilha.")
-                
+                    st.balloons()
             else:
-                st.error(f"Nada encontrado. Msg: {msg}")
-                if banca == "FEDERAL":
-                    st.info("O Robô buscou na página da Monte Carlos por uma tabela com nome 'FEDERAL'. Verifique se a data escolhida tem esse sorteio.")
+                st.error(f"❌ Nada encontrado no site. Mensagem: {msg}")
+    else:
+        st.error("❌ O processo parou porque não conseguimos conectar na planilha.")
