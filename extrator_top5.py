@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # CONFIGURAÇÕES
 # =============================================================================
-st.set_page_config(page_title="Robô Extrator TOP 5 (Anti-Federal)", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Robô Extrator V4.0 (Com Federal)", page_icon="🏗️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -25,6 +25,10 @@ CONFIG_BANCAS = {
     "MONTECAI": {
         "slug": "nordeste-monte-carlos",
         "nome_aba": "MONTE_TOP5"
+    },
+    "FEDERAL": {
+        "slug": "federal", # Slug oficial do site para a Federal
+        "nome_aba": "FEDERAL_TOP5"
     }
 }
 
@@ -85,15 +89,20 @@ def raspar_dia_completo(banca_key, data_alvo):
             texto_tab = tabela.get_text()
             if "Prêmio" in texto_tab or "1º" in texto_tab:
                 
-                # --- 🛡️ FILTRO ANTI-FEDERAL ---
-                # Procura o texto "Resultado do dia" que fica logo acima da tabela
+                # --- 🛡️ FILTRO INTELIGENTE ---
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper():
-                    # st.warning("Federal detectada e ignorada.") # (Opcional: Debug)
-                    continue # Pula esta tabela e vai para a próxima
+                    # SE A BANCA SELECIONADA NÃO FOR FEDERAL, PULA!
+                    # SE FOR FEDERAL, DEIXA PASSAR!
+                    if banca_key != "FEDERAL":
+                        continue 
                 # -------------------------------
 
+                # Definir horário
                 horario = "00:00"
+                
+                # Se for Federal, geralmente o site não põe hora perto da tabela, ou põe 19h.
+                # Vamos tentar achar a hora padrão. Se não achar e for Federal, fixamos 19:00.
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -103,6 +112,10 @@ def raspar_dia_completo(banca_key, data_alvo):
                         elif 'h' in raw: horario = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: horario = raw.strip().zfill(2) + ":00"
                 
+                # Fallback para Federal se não achar hora (Federal é sempre ~19:00)
+                if banca_key == "FEDERAL" and horario == "00:00":
+                    horario = "19:00"
+
                 bichos = []
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
@@ -116,6 +129,7 @@ def raspar_dia_completo(banca_key, data_alvo):
                         nums = re.findall(r'\d+', premio_txt)
                         if nums:
                             posicao = int(nums[0])
+                            # Federal e outras bancas: pegamos do 1º ao 5º
                             if 1 <= posicao <= 5:
                                 bichos.append(int(grupo_txt))
                 
@@ -140,8 +154,8 @@ def raspar_dia_completo(banca_key, data_alvo):
 # =============================================================================
 # INTERFACE
 # =============================================================================
-st.title("🏗️ Robô Extrator V3.1 (Anti-Federal)")
-st.caption("Correção: Reconhece '17' como hora e ignora sorteios 'FEDERAL'.")
+st.title("🏗️ Robô Extrator V4.0 (Com Federal)")
+st.caption("Suporta: Lotep, Caminho, Monte Carlos e FEDERAL (Quartas e Sábados)")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -154,7 +168,7 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
     if not ws:
         st.error("Erro Conexão Planilha (Verifique Secrets).")
     else:
-        with st.spinner("Analisando página..."):
+        with st.spinner(f"Buscando dados da {banca}..."):
             dados, msg = raspar_dia_completo(banca, data_sel)
             
             if dados:
@@ -182,3 +196,5 @@ if st.button("🚀 INICIAR EXTRAÇÃO", type="primary"):
                 st.json(dados)
             else:
                 st.error(f"Nada encontrado. Msg: {msg}")
+                if banca == "FEDERAL":
+                    st.info("Dica: A Federal geralmente ocorre apenas às Quartas e Sábados. Verifique se a data escolhida tem sorteio.")
