@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V15 - Dashboard Advisor", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V16 - Law of Large Numbers", page_icon="⚖️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": {
@@ -109,13 +109,20 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
+# --- CÁLCULO DE STRESS + PORCENTAGEM (V16) ---
 def calcular_stress_tabela(historico, indice_premio):
     stats = []
+    total_jogos = len(historico)
+    
     for nome_setor, lista_bichos in SETORES.items():
         max_atraso = 0; curr_atraso = 0; max_seq_v = 0; curr_seq_v = 0
+        total_vitorias = 0 # Contador para porcentagem
+        
+        # 1. Varredura Histórica
         for jogo in historico:
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos:
+                total_vitorias += 1 # Contabiliza vitória
                 curr_seq_v += 1
                 if curr_atraso > max_atraso: max_atraso = curr_atraso
                 curr_atraso = 0
@@ -123,23 +130,30 @@ def calcular_stress_tabela(historico, indice_premio):
                 if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
                 curr_seq_v = 0
                 curr_atraso += 1
+        
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         
+        # 2. Atraso Real
         atraso_real = 0
         for jogo in reversed(historico):
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos: break
             atraso_real += 1
             
+        # 3. Sequência Atual
         seq_atual = 0
         for jogo in reversed(historico):
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos: seq_atual += 1
             else: break
+            
+        # 4. Cálculo da Porcentagem
+        porcentagem = (total_vitorias / total_jogos * 100) if total_jogos > 0 else 0
 
         stats.append({
             "SETOR": nome_setor,
+            "% PRESENÇA": f"{porcentagem:.1f}%", # Nova Coluna
             "ATRASO": atraso_real,
             "REC. ATRASO": max_atraso,
             "SEQ. ATUAL": seq_atual,
@@ -200,7 +214,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- GERADOR DE PALPITE 8 GRUPOS (SMART MIX V14) ---
+# --- GERADOR DE PALPITE 8 GRUPOS (SMART MIX) ---
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     candidatos = [] 
     
