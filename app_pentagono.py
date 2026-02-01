@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V19.1 - Backtest Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V19.2 - Visual Fix", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -58,13 +58,27 @@ def aplicar_estilo():
         .sniper-meta { font-size: 16px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
         /* BACKTEST STYLES */
-        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
-        .bt-card { background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; width: 90px; text-align: center; border: 1px solid #444; }
-        .bt-win { border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 0.1); }
-        .bt-loss { border: 2px solid #ff0000; background-color: rgba(255, 0, 0, 0.1); }
-        .bt-icon { font-size: 20px; }
-        .bt-num { font-size: 14px; font-weight: bold; margin-top: 5px; color: white; }
-        .bt-label { font-size: 10px; color: #ccc; }
+        .backtest-container { 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px; 
+            margin-top: 10px;
+            margin-bottom: 30px; 
+            flex-wrap: wrap; 
+        }
+        .bt-card { 
+            background-color: rgba(30, 30, 30, 0.8); 
+            border-radius: 10px; 
+            padding: 10px; 
+            width: 100px; 
+            text-align: center; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
+        .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
+        .bt-icon { font-size: 24px; margin-bottom: 5px; }
+        .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+        .bt-label { font-size: 11px; opacity: 0.8; }
 
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -253,7 +267,7 @@ def gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
         
     return { "grupos": grupos_finais, "nota": nota, "pct_crise": pct_crise, "setor_crise": setor_crise, "setor_tendencia": setor_tendencia, "setor_meio": setor_meio, "vaca_in": vaca_entrou }
 
-# --- NOVO: FUNÇÃO DE BACKTEST (CORRIGIDA) ---
+# --- FUNÇÃO DE BACKTEST (MÁQUINA DO TEMPO) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     
@@ -563,7 +577,7 @@ else:
                 
                 sniper_local = gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 
-                # --- BACKTEST VISUAL (CORRIGIDO) ---
+                # --- BACKTEST VISUAL ---
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 
                 st.markdown(f"""
@@ -573,20 +587,17 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
+                # Renderiza os Cartões de Backtest CORRIGIDOS
                 if bt_results:
-                    html_bt = '<div class="backtest-container">'
+                    # Construção da String HTML em UMA LINHA para evitar o erro de interpretação
+                    cards_html = ""
                     for res in reversed(bt_results):
                         classe_res = "bt-win" if res['vitoria'] else "bt-loss"
                         icon = "🟢" if res['vitoria'] else "❌"
-                        html_bt += f"""
-                        <div class="bt-card {classe_res}">
-                            <div class="bt-icon">{icon}</div>
-                            <div class="bt-num">G: {res['numero_real']}</div>
-                            <div class="bt-label">-{res['index']} Jogos</div>
-                        </div>
-                        """
-                    html_bt += '</div>'
-                    st.markdown(html_bt, unsafe_allow_html=True)
+                        cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
+                    
+                    final_html = f"<div class='backtest-container'>{cards_html}</div>"
+                    st.markdown(final_html, unsafe_allow_html=True)
 
                 palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
                 st.markdown(f"<div class='palpite-box'><h4>🏹 PROTEÇÃO (8 GRUPOS)</h4><p class='palpite-nums'>{', '.join(map(str, palpite['grupos']))}</p><small><b>Motivo:</b> {palpite['motivo']}</small></div>", unsafe_allow_html=True)
