@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V18 - Sniper Dinâmico", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V19 - Backtest Sniper", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -49,7 +49,7 @@ def aplicar_estilo():
             border: 2px solid #00d2ff; 
             padding: 20px; 
             border-radius: 15px; 
-            margin-bottom: 30px; 
+            margin-bottom: 10px; 
             text-align: center;
             box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2);
         }
@@ -57,6 +57,15 @@ def aplicar_estilo():
         .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0; letter-spacing: 2px; border: 1px dashed #00d2ff; }
         .sniper-meta { font-size: 16px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
+        /* BACKTEST STYLES */
+        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
+        .bt-card { background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; width: 80px; text-align: center; border: 1px solid #444; }
+        .bt-win { border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 0.1); }
+        .bt-loss { border: 2px solid #ff0000; background-color: rgba(255, 0, 0, 0.1); }
+        .bt-icon { font-size: 20px; }
+        .bt-num { font-size: 14px; font-weight: bold; margin-top: 5px; color: white; }
+        .bt-label { font-size: 10px; color: #ccc; }
+
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -183,101 +192,101 @@ def calcular_tabela_diamante(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V18 (DINÂMICO) ---
 def gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    # 1. IDENTIFICAÇÃO DE SETORES
     setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     setores_ordenados = setores_validos.sort_values(by='% PRESENÇA')
     
     setor_crise = setores_ordenados.iloc[0]['SETOR']
     pct_crise = setores_ordenados.iloc[0]['% PRESENÇA']
-    
     setor_tendencia = setores_ordenados.iloc[-1]['SETOR']
-    pct_tendencia = setores_ordenados.iloc[-1]['% PRESENÇA']
     
     todos_setores = [s for s in SETORES.keys() if "VACA" not in s]
     setor_meio = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
     
-    # Listas Base
-    lista_crise = list(SETORES[setor_crise]) # 8 Grupos (Intocável)
-    lista_tendencia = list(SETORES[setor_tendencia]) # 8 Grupos (Pode perder 1 pra Vaca)
-    lista_meio_pool = list(SETORES[setor_meio]) # Pool para completar
+    lista_crise = list(SETORES[setor_crise])
+    lista_tendencia = list(SETORES[setor_tendencia])
+    lista_meio_pool = list(SETORES[setor_meio])
     
-    # 2. LÓGICA DA VACA (25)
     vaca_entrou = False
     grupos_finais = []
     
-    # Verifica se Vaca precisa entrar (Atraso > 12 ou Diamante)
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     precisa_vaca = row_vaca['ATRASO'] > 12 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values)
     
     if precisa_vaca:
         vaca_entrou = True
-        # REMOVE UM DA TENDÊNCIA PARA DAR LUGAR
-        # Critério: Remove o que NÃO é ultimo_bicho e tem menos força
         candidato_remocao = None
-        for g in reversed(lista_tendencia): # Tenta tirar os mais altos primeiro
+        for g in reversed(lista_tendencia):
             if g != ultimo_bicho:
                 candidato_remocao = g
                 break
-        if candidato_remocao:
-            lista_tendencia.remove(candidato_remocao)
+        if candidato_remocao: lista_tendencia.remove(candidato_remocao)
             
-    # Monta a base (16 grupos)
     grupos_finais.extend(lista_crise)
     grupos_finais.extend(lista_tendencia)
     if vaca_entrou: grupos_finais.append(25)
     
-    # 3. PREENCHIMENTO (Faltam 4 do Setor do Meio)
-    # Seleção de Elite no Setor do Meio
     meio_selecionados = []
-    
-    # A. Repetição (Obrigatório se estiver no meio)
-    if ultimo_bicho in lista_meio_pool:
-        meio_selecionados.append(ultimo_bicho)
-        
-    # B. Diamantes do Meio
+    if ultimo_bicho in lista_meio_pool: meio_selecionados.append(ultimo_bicho)
     if not df_diamante.empty:
         for index, row in df_diamante.iterrows():
             g = row['GRUPO']
             if g in lista_meio_pool and g not in meio_selecionados:
                 meio_selecionados.append(g)
                 if len(meio_selecionados) >= 4: break
-                
-    # C. Atrasados do Ciclo (no Meio)
     if len(meio_selecionados) < 4:
         for g in lista_meio_pool:
             if g in stats_ciclo['faltam'] and g not in meio_selecionados:
                 meio_selecionados.append(g)
                 if len(meio_selecionados) >= 4: break
-                
-    # D. Completa com o resto se precisar
     if len(meio_selecionados) < 4:
         for g in lista_meio_pool:
             if g not in meio_selecionados:
                 meio_selecionados.append(g)
                 if len(meio_selecionados) >= 4: break
                 
-    grupos_finais.extend(meio_selecionados[:4]) # Garante apenas 4
+    grupos_finais.extend(meio_selecionados[:4])
     grupos_finais.sort()
     
-    # 4. CÁLCULO DE SCORE (PONTUAÇÃO DINÂMICA)
-    # Base: Quanto menor a % de crise, maior a nota (max 100)
-    # Bonus: Se ultimo bicho é da crise (+15 pts) ou da tendencia (+10 pts)
     nota = 100 - pct_crise
-    
-    if ultimo_bicho in SETORES[setor_crise]:
-        nota += 15 # Reação!
-    elif ultimo_bicho in SETORES[setor_tendencia]:
-        nota += 10 # Inércia!
+    if ultimo_bicho in SETORES[setor_crise]: nota += 15
+    elif ultimo_bicho in SETORES[setor_tendencia]: nota += 10
         
-    return {
-        "grupos": grupos_finais,
-        "nota": nota,
-        "pct_crise": pct_crise,
-        "setor_crise": setor_crise,
-        "setor_tendencia": setor_tendencia,
-        "setor_meio": setor_meio,
-        "vaca_in": vaca_entrou
-    }
+    return { "grupos": grupos_finais, "nota": nota, "pct_crise": pct_crise, "setor_crise": setor_crise, "setor_tendencia": setor_tendencia, "setor_meio": setor_meio, "vaca_in": vaca_entrou }
+
+# --- NOVO: FUNÇÃO DE BACKTEST (MÁQUINA DO TEMPO) ---
+def executar_backtest_sniper(historico, indice_premio):
+    resultados_backtest = []
+    
+    # Testa os últimos 4 jogos (retroativo)
+    # i=1 (jogo anterior), i=2 (dois atrás), etc.
+    for i in range(1, 5):
+        if len(historico) <= i + 20: break # Proteção para histórico curto
+        
+        # O ALVO é o resultado que aconteceu
+        target_game = historico[-i]
+        target_num = target_game['premios'][indice_premio]
+        
+        # O PASSADO é tudo que veio antes desse alvo (sem incluir o alvo)
+        hist_treino = historico[:-i]
+        
+        # Recalcula as métricas baseadas no PASSADO
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        
+        # Gera o palpite que o robô TERIA DADO
+        sniper_past = gerar_sniper_20_v18(df_s, st_c, df_d, u_b)
+        
+        # Confere
+        win = target_num in sniper_past['grupos']
+        resultados_backtest.append({
+            "index": i,
+            "numero_real": target_num,
+            "vitoria": win
+        })
+        
+    return results_backtest
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     candidatos = [] 
@@ -402,7 +411,6 @@ def tela_dashboard_global():
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     
-                    # --- EXECUTA SNIPER V18 ---
                     sniper = gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                     
                     if sniper['nota'] > melhor_nota_sniper:
@@ -434,7 +442,6 @@ def tela_dashboard_global():
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
-        # --- EXIBE O SNIPER DE ELITE (V18) ---
         if melhor_sniper:
             d = melhor_sniper['dados']
             cor_nota = "#00ff00" if d['pct_crise'] < 28 else "#ffcc00"
@@ -562,12 +569,34 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 
                 sniper_local = gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+                
+                # --- BACKTEST VISUAL ---
+                bt_results = executar_backtest_sniper(historico, idx_aba)
+                
                 st.markdown(f"""
                 <div class="sniper-box" style="margin-top:0;">
                     <h4 style="color:white; margin:0;">🎯 SNIPER LOCAL ({nomes_posicoes[idx_aba]})</h4>
                     <div class="sniper-groups" style="font-size:18px;">{', '.join(map(str, sniper_local['grupos']))}</div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Renderiza os Cartões de Backtest
+                if bt_results:
+                    html_bt = '<div class="backtest-container">'
+                    # Inverte para mostrar o mais recente na direita (ou esquerda, dependendo da preferencia, aqui segue ordem cronologica inversa na lista)
+                    # A função retorna [-1, -2, -3, -4]. Vamos mostrar na ordem: 4 atrás -> 1 atrás
+                    for res in reversed(bt_results):
+                        classe_res = "bt-win" if res['vitoria'] else "bt-loss"
+                        icon = "🟢" if res['vitoria'] else "❌"
+                        html_bt += f"""
+                        <div class="bt-card {classe_res}">
+                            <div class="bt-icon">{icon}</div>
+                            <div class="bt-num">G: {res['numero_real']}</div>
+                            <div class="bt-label">-{res['index']} Jogos</div>
+                        </div>
+                        """
+                    html_bt += '</div>'
+                    st.markdown(html_bt, unsafe_allow_html=True)
 
                 palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
                 st.markdown(f"<div class='palpite-box'><h4>🏹 PROTEÇÃO (8 GRUPOS)</h4><p class='palpite-nums'>{', '.join(map(str, palpite['grupos']))}</p><small><b>Motivo:</b> {palpite['motivo']}</small></div>", unsafe_allow_html=True)
