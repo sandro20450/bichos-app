@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V19 - Backtest Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V19.1 - Backtest Sniper", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -58,8 +58,8 @@ def aplicar_estilo():
         .sniper-meta { font-size: 16px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
         /* BACKTEST STYLES */
-        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
-        .bt-card { background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; width: 80px; text-align: center; border: 1px solid #444; }
+        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
+        .bt-card { background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; width: 90px; text-align: center; border: 1px solid #444; }
         .bt-win { border: 2px solid #00ff00; background-color: rgba(0, 255, 0, 0.1); }
         .bt-loss { border: 2px solid #ff0000; background-color: rgba(255, 0, 0, 0.1); }
         .bt-icon { font-size: 20px; }
@@ -253,32 +253,25 @@ def gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
         
     return { "grupos": grupos_finais, "nota": nota, "pct_crise": pct_crise, "setor_crise": setor_crise, "setor_tendencia": setor_tendencia, "setor_meio": setor_meio, "vaca_in": vaca_entrou }
 
-# --- NOVO: FUNÇÃO DE BACKTEST (MÁQUINA DO TEMPO) ---
+# --- NOVO: FUNÇÃO DE BACKTEST (CORRIGIDA) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     
-    # Testa os últimos 4 jogos (retroativo)
-    # i=1 (jogo anterior), i=2 (dois atrás), etc.
     for i in range(1, 5):
-        if len(historico) <= i + 20: break # Proteção para histórico curto
+        if len(historico) <= i + 20: break
         
-        # O ALVO é o resultado que aconteceu
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         
-        # O PASSADO é tudo que veio antes desse alvo (sem incluir o alvo)
         hist_treino = historico[:-i]
         
-        # Recalcula as métricas baseadas no PASSADO
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         
-        # Gera o palpite que o robô TERIA DADO
         sniper_past = gerar_sniper_20_v18(df_s, st_c, df_d, u_b)
         
-        # Confere
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({
             "index": i,
@@ -286,7 +279,7 @@ def executar_backtest_sniper(historico, indice_premio):
             "vitoria": win
         })
         
-    return results_backtest
+    return resultados_backtest
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     candidatos = [] 
@@ -570,7 +563,7 @@ else:
                 
                 sniper_local = gerar_sniper_20_v18(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 
-                # --- BACKTEST VISUAL ---
+                # --- BACKTEST VISUAL (CORRIGIDO) ---
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 
                 st.markdown(f"""
@@ -580,11 +573,8 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Renderiza os Cartões de Backtest
                 if bt_results:
                     html_bt = '<div class="backtest-container">'
-                    # Inverte para mostrar o mais recente na direita (ou esquerda, dependendo da preferencia, aqui segue ordem cronologica inversa na lista)
-                    # A função retorna [-1, -2, -3, -4]. Vamos mostrar na ordem: 4 atrás -> 1 atrás
                     for res in reversed(bt_results):
                         classe_res = "bt-win" if res['vitoria'] else "bt-loss"
                         icon = "🟢" if res['vitoria'] else "❌"
