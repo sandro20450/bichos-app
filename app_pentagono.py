@@ -11,27 +11,12 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V16 - Law of Large Numbers", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V17 - Sniper Elite", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
-    "LOTEP": {
-        "display_name": "LOTEP (1º ao 5º)",
-        "nome_aba": "LOTEP_TOP5",
-        "slug": "lotep",
-        "horarios": ["10:45", "12:45", "15:45", "18:00"]
-    },
-    "CAMINHODASORTE": {
-        "display_name": "CAMINHO (1º ao 5º)",
-        "nome_aba": "CAMINHO_TOP5",
-        "slug": "caminho-da-sorte",
-        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"]
-    },
-    "MONTECAI": {
-        "display_name": "MONTE CARLOS (1º ao 5º)",
-        "nome_aba": "MONTE_TOP5",
-        "slug": "nordeste-monte-carlos",
-        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"]
-    }
+    "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "CAMINHODASORTE": { "display_name": "CAMINHO (1º ao 5º)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
+    "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
 SETORES = {
@@ -56,9 +41,23 @@ def aplicar_estilo():
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
-        /* Palpite Inteligente */
+        /* Palpite Inteligente (8 Grupos) */
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
+        
+        /* SNIPER ELITE (20 Grupos) */
+        .sniper-box { 
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); 
+            border: 2px solid #ffcc00; 
+            padding: 20px; 
+            border-radius: 15px; 
+            margin-bottom: 30px; 
+            text-align: center;
+            box-shadow: 0px 0px 20px rgba(255, 204, 0, 0.3);
+        }
+        .sniper-title { font-size: 28px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+        .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin: 10px 0; letter-spacing: 1px; }
+        .sniper-meta { font-size: 16px; color: #ffeebb; font-style: italic; }
         
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -68,8 +67,6 @@ def aplicar_estilo():
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
-        
-        .diamante-box { border: 1px solid #00d2ff; background-color: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,29 +97,20 @@ def carregar_dados_top5(nome_aba):
                 try:
                     premios = [int(p) for p in row[2:7] if p.isdigit()]
                     if len(premios) == 5:
-                        dados_processados.append({
-                            "data": row[0],
-                            "horario": row[1],
-                            "premios": premios 
-                        })
+                        dados_processados.append({ "data": row[0], "horario": row[1], "premios": premios })
                 except: pass
         return dados_processados
     return []
 
-# --- CÁLCULO DE STRESS + PORCENTAGEM (V16) ---
 def calcular_stress_tabela(historico, indice_premio):
     stats = []
     total_jogos = len(historico)
-    
     for nome_setor, lista_bichos in SETORES.items():
-        max_atraso = 0; curr_atraso = 0; max_seq_v = 0; curr_seq_v = 0
-        total_vitorias = 0 # Contador para porcentagem
-        
-        # 1. Varredura Histórica
+        max_atraso = 0; curr_atraso = 0; max_seq_v = 0; curr_seq_v = 0; total_vitorias = 0
         for jogo in historico:
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos:
-                total_vitorias += 1 # Contabiliza vitória
+                total_vitorias += 1
                 curr_seq_v += 1
                 if curr_atraso > max_atraso: max_atraso = curr_atraso
                 curr_atraso = 0
@@ -130,35 +118,22 @@ def calcular_stress_tabela(historico, indice_premio):
                 if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
                 curr_seq_v = 0
                 curr_atraso += 1
-        
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         
-        # 2. Atraso Real
         atraso_real = 0
         for jogo in reversed(historico):
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos: break
             atraso_real += 1
-            
-        # 3. Sequência Atual
         seq_atual = 0
         for jogo in reversed(historico):
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos: seq_atual += 1
             else: break
-            
-        # 4. Cálculo da Porcentagem
+        
         porcentagem = (total_vitorias / total_jogos * 100) if total_jogos > 0 else 0
-
-        stats.append({
-            "SETOR": nome_setor,
-            "% PRESENÇA": f"{porcentagem:.1f}%", # Nova Coluna
-            "ATRASO": atraso_real,
-            "REC. ATRASO": max_atraso,
-            "SEQ. ATUAL": seq_atual,
-            "REC. SEQ. (V)": max_seq_v
-        })
+        stats.append({ "SETOR": nome_setor, "% PRESENÇA": porcentagem, "ATRASO": atraso_real, "REC. ATRASO": max_atraso, "SEQ. ATUAL": seq_atual, "REC. SEQ. (V)": max_seq_v })
     return pd.DataFrame(stats)
 
 def calcular_ciclo(historico, indice_premio):
@@ -198,13 +173,7 @@ def calcular_tabela_diamante(historico, indice_premio):
             elif atraso_atual >= media: status = "🔥 PONTO DE ENTRADA"
             elif atraso_atual >= (media * 0.6): status = "⏳ Aquece (Quase lá)"
             else: status = "💤 Neutro"
-            tabela_dados.append({
-                "GRUPO": bicho,
-                "SAÍDAS (30 Jogos)": qtd,
-                "MÉDIA": f"1 a cada {media:.1f}",
-                "ÚLTIMA VEZ": f"Há {atraso_atual} jogos",
-                "STATUS / DICA": status
-            })
+            tabela_dados.append({ "GRUPO": bicho, "SAÍDAS (30 Jogos)": qtd, "MÉDIA": f"1 a cada {media:.1f}", "ÚLTIMA VEZ": f"Há {atraso_atual} jogos", "STATUS / DICA": status })
     def sort_key(x):
         s = x['STATUS / DICA']
         if "🔥" in s: return 0
@@ -214,36 +183,107 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- GERADOR DE PALPITE 8 GRUPOS (SMART MIX) ---
+# --- ALGORITMO SNIPER (V17) - 20 GRUPOS ---
+def gerar_sniper_20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
+    # 1. ANALISE DE SETORES (B, M, A) - Ignora Vaca por enquanto
+    setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
+    
+    # Ordena por porcentagem: [0] é o Menor (Crise), [-1] é o Maior (Tendencia)
+    setores_ordenados = setores_validos.sort_values(by='% PRESENÇA')
+    
+    setor_crise = setores_ordenados.iloc[0]['SETOR']
+    pct_crise = setores_ordenados.iloc[0]['% PRESENÇA']
+    
+    setor_tendencia = setores_ordenados.iloc[-1]['SETOR']
+    pct_tendencia = setores_ordenados.iloc[-1]['% PRESENÇA']
+    
+    # Identifica o setor do meio (o que sobrou)
+    todos_setores = [s for s in SETORES.keys() if "VACA" not in s]
+    setor_meio = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
+    
+    # 2. MONTAGEM BASE (16 Grupos)
+    pool = []
+    pool.extend(SETORES[setor_crise]) # 8 Grupos (Crise - Tem que subir)
+    pool.extend(SETORES[setor_tendencia]) # 8 Grupos (Tendência - Inércia)
+    
+    # 3. PREENCHIMENTO CIRÚRGICO (4 Vagas Restantes) - Usando Setor do Meio e Vaca
+    candidatos_extras = []
+    grupos_meio = SETORES[setor_meio]
+    
+    # A. REPETIÇÃO (Prioridade Absoluta)
+    # Se o ultimo bicho sorteado não estiver no pool (estiver no meio ou for vaca)
+    # E não tiver saido 3x seguidas (verificar na logica externa, aqui assumimos que pode)
+    if ultimo_bicho not in pool:
+        candidatos_extras.append(ultimo_bicho)
+        
+    # B. VACA (25) - Analise de Risco
+    # Se a vaca não estiver no pool, e estiver "quente" (diamante) ou "atrasada" (>10), coloca ela.
+    if 25 not in pool and 25 not in candidatos_extras:
+        # Verifica stress da vaca
+        row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
+        if row_vaca['ATRASO'] > 10 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values):
+            candidatos_extras.append(25)
+
+    # C. DIAMANTES DO SETOR DO MEIO
+    if not df_diamante.empty:
+        for index, row in df_diamante.iterrows():
+            grp = row['GRUPO']
+            if grp in grupos_meio and grp not in candidatos_extras:
+                if "🔥" in row['STATUS / DICA'] or "⏳" in row['STATUS / DICA']:
+                    candidatos_extras.append(grp)
+    
+    # D. FALTA NO CICLO (DO SETOR DO MEIO)
+    for g in grupos_meio:
+        if g in stats_ciclo['faltam'] and g not in candidatos_extras:
+            candidatos_extras.append(g)
+            
+    # E. SE AINDA SOBRAR VAGA, COMPLETA COM O RESTO DO SETOR DO MEIO
+    for g in grupos_meio:
+        if g not in candidatos_extras:
+            candidatos_extras.append(g)
+            
+    # Adiciona os extras ao pool até dar 20
+    for c in candidatos_extras:
+        if c not in pool:
+            pool.append(c)
+        if len(pool) >= 20: break
+        
+    pool.sort()
+    
+    # CALCULA "NOTA" DA OPORTUNIDADE (Para saber se é boa)
+    # Quanto menor a % de crise, melhor a oportunidade (<28% é ouro)
+    nota = 100 - pct_crise
+    
+    return {
+        "grupos": pool,
+        "nota": nota,
+        "pct_crise": pct_crise,
+        "setor_crise": setor_crise,
+        "setor_tendencia": setor_tendencia,
+        "setor_meio": setor_meio
+    }
+
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     candidatos = [] 
-    
-    # 1. IDENTIFICAR SETOR CRÍTICO
     setor_critico = None
     for index, row in df_stress.iterrows():
         setor = row['SETOR']
         if "VACA" not in setor and (row['REC. ATRASO'] - row['ATRASO']) <= 1 and row['REC. ATRASO'] >= 5:
             setor_critico = setor
             break
-            
-    motivo = "Mix Equilibrado: Ciclos + Tendência."
-    
+    motivo = "Mix Equilibrado."
     if setor_critico:
-        motivo = f"Foco no {setor_critico} (Crítico) misturado com Diamantes para proteção."
+        motivo = f"Foco no {setor_critico} (Crítico) + Proteção."
         grupos_setor = SETORES[setor_critico]
         for g in grupos_setor:
             if g in stats_ciclo['faltam']: candidatos.append(g)
-                
     if not df_diamante.empty:
         for index, row in df_diamante.iterrows():
             if "🔥" in row['STATUS / DICA'] or "⏳" in row['STATUS / DICA']: candidatos.append(row['GRUPO'])
-                
     if setor_critico:
         grupos_setor = SETORES[setor_critico]
         for g in grupos_setor: candidatos.append(g)
-            
     for g in stats_ciclo['faltam']: candidatos.append(g)
-        
     maior_atraso = df_stress.loc[~df_stress['SETOR'].str.contains("VACA")].sort_values(by='ATRASO', ascending=False).iloc[0]
     setor_bkp = maior_atraso['SETOR']
     for g in SETORES[setor_bkp]: candidatos.append(g)
@@ -255,11 +295,9 @@ def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
             palpite_final.append(item)
             seen.add(item)
         if len(palpite_final) == 8: break
-        
     palpite_final.sort()
     destaque = [g for g in palpite_final if g in stats_ciclo['faltam']]
-    
-    return { "tipo": "SMART MIX (Híbrido)", "grupos": palpite_final, "destaque": destaque, "motivo": motivo }
+    return { "tipo": "SMART MIX", "grupos": palpite_final, "destaque": destaque, "motivo": motivo }
 
 # ROBÔ
 def montar_url_correta(slug, data_alvo):
@@ -332,81 +370,99 @@ def tela_dashboard_global():
     col1, col2, col3 = st.columns(3)
     col1.metric("Bancas Monitoradas", "3", "LOTEP, CAMINHO, MONTE")
     
-    with st.spinner("Escaneando e gerando palpites..."):
+    with st.spinner("O Robô Sniper está caçando a melhor oportunidade..."):
         alertas_globais = []
         palpites_gerados = []
+        
+        # VARIAVEIS PARA O SNIPER
+        melhor_sniper = None
+        melhor_nota_sniper = -1
         
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
-                    # CALCULA TUDO PARA O PALPITE
+                    # CALCULA TUDO
                     df_stress = calcular_stress_tabela(historico, idx_pos)
                     stats_ciclo = calcular_ciclo(historico, idx_pos)
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     
-                    # CHECAGEM DE ALERTAS
+                    # Ultimo bicho (para repetição)
+                    ultimo_bicho = historico[-1]['premios'][idx_pos]
+                    
+                    # --- EXECUTA SNIPER 20 ---
+                    sniper = gerar_sniper_20(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+                    
+                    # Verifica se é o melhor sniper até agora (maior nota = menor % de crise)
+                    if sniper['nota'] > melhor_nota_sniper:
+                        melhor_nota_sniper = sniper['nota']
+                        melhor_sniper = {
+                            "banca": config['display_name'].split("(")[0].strip(),
+                            "premio": f"{idx_pos+1}º Prêmio",
+                            "dados": sniper
+                        }
+                    
+                    # --- ALERTAS NORMAIS ---
                     tem_alerta_critico = False
                     for _, row in df_stress.iterrows():
                         atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
                         seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
                         if "VACA" in setor: continue
                         
-                        # Alerta Atraso
                         if (recorde - atraso) <= 1 and recorde >= 5:
                             alertas_globais.append({"tipo": "ATRASO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": atraso, "val_rec": recorde})
                             tem_alerta_critico = True
-                            
-                        # Alerta Repetição
+                        
                         margem_seq = recorde_seq - seq_atual
                         if margem_seq <= 1 and recorde_seq >= 3:
                             alertas_globais.append({"tipo": "REPETICAO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": seq_atual, "val_rec": recorde_seq, "margem": margem_seq})
                             tem_alerta_critico = True
                     
-                    # SE TEM ALERTA CRITICO, GERA O PALPITE NA HOME
                     if tem_alerta_critico:
                         palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
-                        palpites_gerados.append({
-                            "banca": config['display_name'].split("(")[0].strip(),
-                            "premio": f"{idx_pos+1}º Prêmio",
-                            "grupos": palpite['grupos'],
-                            "motivo": palpite['motivo'],
-                            "destaque": palpite['destaque']
-                        })
+                        palpites_gerados.append({ "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "grupos": palpite['grupos'], "motivo": palpite['motivo'], "destaque": palpite['destaque'] })
 
         col2.metric("Base de Dados", "Conectada", "Google Sheets")
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
+        # --- EXIBE O SNIPER DE ELITE (TOPO) ---
+        if melhor_sniper:
+            d = melhor_sniper['dados']
+            cor_nota = "#00ff00" if d['pct_crise'] < 28 else "#ffcc00"
+            
+            st.markdown(f"""
+            <div class="sniper-box">
+                <div class="sniper-title">🎯 SNIPER DE ELITE (20 GRUPOS)</div>
+                <h3 style="color:white; margin:0;">{melhor_sniper['banca']} - {melhor_sniper['premio']}</h3>
+                <p style="color:{cor_nota}; font-weight:bold;">ALVO DE CRISE: {d['setor_crise']} ({d['pct_crise']:.1f}%)</p>
+                <div class="sniper-groups">{', '.join(map(str, d['grupos']))}</div>
+                <div class="sniper-meta">
+                    ESTRATÉGIA: Crise ({d['setor_crise']}) + Tendência ({d['setor_tendencia']}) + Melhores do {d['setor_meio']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("O Sniper está calibrando... (Sem dados suficientes para cálculo preciso).")
+
         # EXIBE ALERTAS
         if alertas_globais:
-            st.warning("🚨 Oportunidades Encontradas")
+            st.warning("🚨 Outras Oportunidades (Alerta Vermelho)")
             cols = st.columns(2)
             for i, alerta in enumerate(alertas_globais):
                 if alerta['tipo'] == "ATRASO":
-                    classe = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso"
-                    titulo_val, msg = "Atraso", "ZONA DE TIRO (Atraso)"
+                    classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
                 else: 
-                    if alerta['margem'] <= 0: classe, msg = "box-inverso-critico", "ESTOURADO! (Bateu Recorde)"
-                    else: classe, msg = "box-inverso-atencao", "Atenção (Próximo do Recorde)"
+                    classe, msg = ("box-inverso-critico", "ESTOURADO!") if alerta['margem'] <= 0 else ("box-inverso-atencao", "Atenção")
                     titulo_val = "Sequência"
-                with cols[i % 2]:
-                    st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
-        else: st.success("✅ Tudo calmo nas 3 bancas.")
+                with cols[i % 2]: st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
+        else: st.success("✅ Tudo calmo nas 3 bancas (fora o Sniper).")
 
-        # EXIBE PALPITES AUTOMÁTICOS
+        # EXIBE PALPITES AUTOMÁTICOS (8 Grupos)
         if palpites_gerados:
-            st.markdown("### 🎯 PREVISÕES DE ELITE (Smart Mix)")
-            st.info("O Robô gerou estas combinações de 8 Grupos baseadas nos alertas acima.")
+            st.markdown("### 🏹 PREVISÕES DE PROTEÇÃO (8 Grupos)")
             for p in palpites_gerados:
-                st.markdown(f"""
-                <div class="palpite-box">
-                    <h4>{p['banca']} - {p['premio']}</h4>
-                    <p class="palpite-nums">{', '.join(map(str, p['grupos']))}</p>
-                    <small><b>Motivo:</b> {p['motivo']}</small>
-                </div>
-                """, unsafe_allow_html=True)
-                if p['destaque']: st.write(f"⭐ **Destaque:** {', '.join(map(str, p['destaque']))}")
+                st.markdown(f"<div class='palpite-box'><h4>{p['banca']} - {p['premio']}</h4><p class='palpite-nums'>{', '.join(map(str, p['grupos']))}</p><small><b>Motivo:</b> {p['motivo']}</small></div>", unsafe_allow_html=True)
 
 # =============================================================================
 # --- 4. FLUXO PRINCIPAL DO APP ---
@@ -498,14 +554,23 @@ else:
                 df_diamante = calcular_tabela_diamante(historico, idx_aba)
                 palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
                 
+                # SNIPER LOCAL (Exibe apenas o desta aba)
+                ultimo_bicho = historico[-1]['premios'][idx_aba]
+                sniper_local = gerar_sniper_20(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 st.markdown(f"""
-                <div class="palpite-box">
-                    <h4>🎯 PALPITE INTELIGENTE (8 GRUPOS) - {nomes_posicoes[idx_aba]}</h4>
-                    <p class="palpite-nums">{', '.join(map(str, palpite['grupos']))}</p>
-                    <small><b>Estratégia:</b> {palpite['tipo']} | <b>Motivo:</b> {palpite['motivo']}</small>
+                <div class="sniper-box" style="margin-top:0;">
+                    <h4 style="color:white; margin:0;">🎯 SNIPER LOCAL ({nomes_posicoes[idx_aba]})</h4>
+                    <div class="sniper-groups" style="font-size:18px;">{', '.join(map(str, sniper_local['grupos']))}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                if palpite['destaque']: st.info(f"⭐ Destaque (Falta no Ciclo): **{', '.join(map(str, palpite['destaque']))}**")
+
+                st.markdown(f"""
+                <div class="palpite-box">
+                    <h4>🏹 PROTEÇÃO (8 GRUPOS)</h4>
+                    <p class="palpite-nums">{', '.join(map(str, palpite['grupos']))}</p>
+                    <small><b>Motivo:</b> {palpite['motivo']}</small>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
                 st.markdown("**Visual Recente (⬅️ Mais Novo):**")
