@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V20 - Record Breaker", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V21 - Sniper Hunter", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -41,10 +41,21 @@ def aplicar_estilo():
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
+        /* NOVO: BOX DE OPORTUNIDADE SNIPER (VERDE OURO) */
+        .box-sniper-hunter { 
+            background: linear-gradient(135deg, #004d00, #006400); 
+            border: 2px solid #00ff00; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border-left: 8px solid #00ff00; 
+            margin-bottom: 15px; 
+            color: #ccffcc; 
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+        }
+
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
         
-        /* SNIPER BOX - Estilo Atualizado para Alerta de Recorde */
         .sniper-box { 
             background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
             border: 2px solid #00d2ff; 
@@ -59,7 +70,6 @@ def aplicar_estilo():
             box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important;
             background: linear-gradient(135deg, #3a0035, #240b36) !important;
         }
-        
         .sniper-title { font-size: 28px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0px 0px 10px rgba(0,210,255,0.5); }
         .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0; letter-spacing: 2px; border: 1px dashed #00d2ff; }
         .sniper-meta { font-size: 16px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
@@ -196,15 +206,12 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V20 (RECORD BREAKER) ---
+# --- ALGORITMO SNIPER V20 ---
 def gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    
-    # 1. VERIFICAÇÃO DE RECORD (REGRA SUPREMA)
     setor_estourado = None
     for index, row in df_stress.iterrows():
         setor = row['SETOR']
         if "VACA" in setor: continue
-        # Se a sequencia atual for igual ou maior que o recorde, está estourado
         if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)']:
             setor_estourado = setor
             break
@@ -213,69 +220,43 @@ def gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     meta_info = ""
     is_record_break = False
     
-    # --- CENÁRIO A: EXISTE SETOR ESTOURADO (Inversão de Tendência) ---
     if setor_estourado:
         is_record_break = True
         meta_info = f"🚨 ALVO: INVERSÃO DE RECORDE ({setor_estourado} Saturado!)"
-        
-        # Pega os 2 setores opostos (Anti-Saturação)
         setores_inversos = [s for s in SETORES.keys() if s != setor_estourado and "VACA" not in s]
-        
-        # Adiciona os 16 grupos dos setores inversos
-        for s in setores_inversos:
-            grupos_finais.extend(SETORES[s])
-            
-        # Preenchimento (4 vagas) - Do setor estourado ou Vaca
-        # Prioridade 1: Repetição (Vício)
-        if ultimo_bicho not in grupos_finais:
-            grupos_finais.append(ultimo_bicho)
-            
-        # Prioridade 2: Vaca (se precisar)
+        for s in setores_inversos: grupos_finais.extend(SETORES[s])
+        if ultimo_bicho not in grupos_finais: grupos_finais.append(ultimo_bicho)
         row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
         if 25 not in grupos_finais:
             if row_vaca['ATRASO'] > 12 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values):
                 grupos_finais.append(25)
-                
-        # Prioridade 3: Diamantes do setor estourado (Seguro contra falha)
         if len(grupos_finais) < 20 and not df_diamante.empty:
             for index, row in df_diamante.iterrows():
                 g = row['GRUPO']
                 if g not in grupos_finais and g in SETORES[setor_estourado]:
                     grupos_finais.append(g)
                     if len(grupos_finais) >= 20: break
-                    
-        # Prioridade 4: Restante do Ciclo
         if len(grupos_finais) < 20:
             for g in stats_ciclo['faltam']:
                 if g not in grupos_finais:
                     grupos_finais.append(g)
                     if len(grupos_finais) >= 20: break
-                    
-        # Nota máxima pois é oportunidade de ouro
         nota = 100 
-        
-    # --- CENÁRIO B: PADRÃO V18 (Crise + Tendência) ---
     else:
         setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
         setores_ordenados = setores_validos.sort_values(by='% PRESENÇA')
-        
         setor_crise = setores_ordenados.iloc[0]['SETOR']
         pct_crise = setores_ordenados.iloc[0]['% PRESENÇA']
         setor_tendencia = setores_ordenados.iloc[-1]['SETOR']
-        
         todos_setores = [s for s in SETORES.keys() if "VACA" not in s]
         setor_meio = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
-        
         meta_info = f"ESTRATÉGIA: {setor_crise} + {setor_tendencia} + Elite do {setor_meio}"
-        
         lista_crise = list(SETORES[setor_crise])
         lista_tendencia = list(SETORES[setor_tendencia])
         lista_meio_pool = list(SETORES[setor_meio])
-        
         vaca_entrou = False
         row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
         precisa_vaca = row_vaca['ATRASO'] > 12 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values)
-        
         if precisa_vaca:
             vaca_entrou = True
             candidato_remocao = None
@@ -284,11 +265,9 @@ def gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
                     candidato_remocao = g
                     break
             if candidato_remocao: lista_tendencia.remove(candidato_remocao)
-                
         grupos_finais.extend(lista_crise)
         grupos_finais.extend(lista_tendencia)
         if vaca_entrou: grupos_finais.append(25)
-        
         meio_selecionados = []
         if ultimo_bicho in lista_meio_pool: meio_selecionados.append(ultimo_bicho)
         if not df_diamante.empty:
@@ -299,26 +278,23 @@ def gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
                     if len(meio_selecionados) >= 4: break
         if len(meio_selecionados) < 4:
             for g in lista_meio_pool:
+                if g in stats_ciclo['faltam'] and g not in meio_selecionados:
+                    meio_selecionados.append(g)
+                    if len(meio_selecionados) >= 4: break
+        if len(meio_selecionados) < 4:
+            for g in lista_meio_pool:
                 if g not in meio_selecionados:
                     meio_selecionados.append(g)
                     if len(meio_selecionados) >= 4: break
-                    
         grupos_finais.extend(meio_selecionados[:4])
-        
         nota = 100 - pct_crise
         if ultimo_bicho in SETORES[setor_crise]: nota += 15
         elif ultimo_bicho in SETORES[setor_tendencia]: nota += 10
 
-    # Finalização
-    grupos_finais = sorted(list(set(grupos_finais))) # Remove duplicatas e ordena
-    grupos_finais = grupos_finais[:20] # Garante teto de 20
+    grupos_finais = sorted(list(set(grupos_finais)))
+    grupos_finais = grupos_finais[:20]
         
-    return { 
-        "grupos": grupos_finais, 
-        "nota": nota, 
-        "meta_info": meta_info,
-        "is_record": is_record_break
-    }
+    return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
 # --- FUNÇÃO DE BACKTEST ---
 def executar_backtest_sniper(historico, indice_premio):
@@ -326,7 +302,6 @@ def executar_backtest_sniper(historico, indice_premio):
     
     for i in range(1, 5):
         if len(historico) <= i + 20: break
-        
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
@@ -337,7 +312,6 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         
         sniper_past = gerar_sniper_20_v20(df_s, st_c, df_d, u_b)
-        
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
         
@@ -461,21 +435,31 @@ def tela_dashboard_global():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
+                    # CALCULA DADOS
                     df_stress = calcular_stress_tabela(historico, idx_pos)
                     stats_ciclo = calcular_ciclo(historico, idx_pos)
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     
+                    # 1. SNIPER PARA O DESTAQUE
                     sniper = gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
-                    
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
-                        melhor_sniper = {
-                            "banca": config['display_name'].split("(")[0].strip(),
-                            "premio": f"{idx_pos+1}º Prêmio",
-                            "dados": sniper
-                        }
+                        melhor_sniper = { "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "dados": sniper }
                     
+                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER (NOVO)
+                    bt_results = executar_backtest_sniper(historico, idx_pos)
+                    # Verifica os dois últimos (index 0 é o último, index 1 é o penúltimo)
+                    if len(bt_results) >= 2:
+                        if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
+                            alertas_globais.append({
+                                "tipo": "SNIPER_OPPORTUNITY",
+                                "banca": config['display_name'].split("(")[0].strip(),
+                                "premio": f"{idx_pos+1}º Prêmio",
+                                "msg_extra": "🎯 2 Derrotas Consecutivas no Sniper (Hora de entrar!)"
+                            })
+
+                    # 3. ALERTAS PADRÃO (Atraso/Repetição)
                     tem_alerta_critico = False
                     for _, row in df_stress.iterrows():
                         atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
@@ -497,32 +481,39 @@ def tela_dashboard_global():
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
+        # --- EXIBE MELHOR SNIPER ---
         if melhor_sniper:
             d = melhor_sniper['dados']
             cor_nota = "#00ff00" if d['nota'] > 80 else "#ffcc00"
             css_extra = "sniper-record" if d['is_record'] else ""
-            
-            st.markdown(f"""
-            <div class="sniper-box {css_extra}">
-                <div class="sniper-title">🎯 SNIPER DE ELITE (20 GRUPOS)</div>
-                <h3 style="color:white; margin:0;">{melhor_sniper['banca']} - {melhor_sniper['premio']}</h3>
-                <p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
-                <div class="sniper-groups">{', '.join(map(str, d['grupos']))}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("O Sniper está calibrando... (Sem dados suficientes).")
+            st.markdown(f"<div class='sniper-box {css_extra}'><div class='sniper-title'>🎯 SNIPER DE ELITE (20 GRUPOS)</div><h3 style='color:white; margin:0;'>{melhor_sniper['banca']} - {melhor_sniper['premio']}</h3><p style='color:{cor_nota}; font-weight:bold;'>{d['meta_info']}</p><div class='sniper-groups'>{', '.join(map(str, d['grupos']))}</div></div>", unsafe_allow_html=True)
+        else: st.info("O Sniper está calibrando... (Sem dados suficientes).")
 
+        # --- EXIBE ALERTAS (COM O NOVO SNIPER HUNTER) ---
         if alertas_globais:
-            st.warning("🚨 Outras Oportunidades (Alerta Vermelho)")
+            st.warning("🚨 Oportunidades Encontradas")
             cols = st.columns(2)
             for i, alerta in enumerate(alertas_globais):
-                if alerta['tipo'] == "ATRASO":
-                    classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
-                else: 
-                    classe, msg = ("box-inverso-critico", "ESTOURADO!") if alerta['margem'] <= 0 else ("box-inverso-atencao", "Atenção")
-                    titulo_val = "Sequência"
-                with cols[i % 2]: st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
+                
+                # --- VISUAL PARA OPORTUNIDADE SNIPER ---
+                if alerta['tipo'] == "SNIPER_OPPORTUNITY":
+                    with cols[i % 2]:
+                        st.markdown(f"""
+                        <div class='box-sniper-hunter'>
+                            <h3>{alerta['banca']}</h3>
+                            <p>📍 <b>{alerta['premio']}</b></p>
+                            <p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # --- VISUAL PADRÃO ---
+                else:
+                    if alerta['tipo'] == "ATRASO":
+                        classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
+                    else: 
+                        classe, msg = ("box-inverso-critico", "ESTOURADO!") if alerta['margem'] <= 0 else ("box-inverso-atencao", "Atenção")
+                        titulo_val = "Sequência"
+                    with cols[i % 2]: st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
         else: st.success("✅ Tudo calmo nas 3 bancas (fora o Sniper).")
 
         if palpites_gerados:
@@ -636,7 +627,6 @@ else:
                 """, unsafe_allow_html=True)
                 
                 if bt_results:
-                    # Construção da String HTML em UMA LINHA para evitar o erro de interpretação
                     cards_html = ""
                     for res in reversed(bt_results):
                         classe_res = "bt-win" if res['vitoria'] else "bt-loss"
