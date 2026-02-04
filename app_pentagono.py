@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V24 - Card Print", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V25 - Stable", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -127,7 +127,7 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# --- NOVA FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
+# --- FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
     try:
@@ -223,7 +223,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V22 ---
+# --- ALGORITMO SNIPER V22 (SCORE PONDERADO) ---
 def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
@@ -282,7 +282,7 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     nota = 100 
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
-# --- FUNÇÃO DE BACKTEST ---
+# --- FUNÇÃO DE BACKTEST (CORRIGIDA) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
