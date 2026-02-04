@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V21 - Sniper Hunter", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V22 - Sniper Score", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -41,7 +41,6 @@ def aplicar_estilo():
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
-        /* NOVO: BOX DE OPORTUNIDADE SNIPER (VERDE OURO) */
         .box-sniper-hunter { 
             background: linear-gradient(135deg, #004d00, #006400); 
             border: 2px solid #00ff00; 
@@ -206,93 +205,93 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V20 ---
-def gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
+# --- ALGORITMO SNIPER V22 (SCORE PONDERADO) ---
+def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
+    # 1. ANALISE DE SETORES
+    setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
+    
+    # Verifica estouro de recorde (Prioridade Máxima)
     setor_estourado = None
-    for index, row in df_stress.iterrows():
-        setor = row['SETOR']
-        if "VACA" in setor: continue
+    for index, row in setores_validos.iterrows():
         if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)']:
-            setor_estourado = setor
+            setor_estourado = row['SETOR']
             break
-            
+    
     grupos_finais = []
     meta_info = ""
     is_record_break = False
     
+    # Definição dos setores principais
     if setor_estourado:
         is_record_break = True
-        meta_info = f"🚨 ALVO: INVERSÃO DE RECORDE ({setor_estourado} Saturado!)"
-        setores_inversos = [s for s in SETORES.keys() if s != setor_estourado and "VACA" not in s]
-        for s in setores_inversos: grupos_finais.extend(SETORES[s])
-        if ultimo_bicho not in grupos_finais: grupos_finais.append(ultimo_bicho)
-        row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
-        if 25 not in grupos_finais:
-            if row_vaca['ATRASO'] > 12 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values):
-                grupos_finais.append(25)
-        if len(grupos_finais) < 20 and not df_diamante.empty:
-            for index, row in df_diamante.iterrows():
-                g = row['GRUPO']
-                if g not in grupos_finais and g in SETORES[setor_estourado]:
-                    grupos_finais.append(g)
-                    if len(grupos_finais) >= 20: break
-        if len(grupos_finais) < 20:
-            for g in stats_ciclo['faltam']:
-                if g not in grupos_finais:
-                    grupos_finais.append(g)
-                    if len(grupos_finais) >= 20: break
-        nota = 100 
+        meta_info = f"🚨 INVERSÃO: {setor_estourado} (Saturado)"
+        # Pega os 2 setores inversos
+        setores_base = [s for s in SETORES.keys() if s != setor_estourado and "VACA" not in s]
+        setor_complemento = setor_estourado # Vamos pescar os melhores daqui
     else:
-        setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
+        # Lógica Padrão (Crise + Tendência)
         setores_ordenados = setores_validos.sort_values(by='% PRESENÇA')
         setor_crise = setores_ordenados.iloc[0]['SETOR']
-        pct_crise = setores_ordenados.iloc[0]['% PRESENÇA']
         setor_tendencia = setores_ordenados.iloc[-1]['SETOR']
+        
+        meta_info = f"ESTRATÉGIA: {setor_crise} + {setor_tendencia}"
+        
+        setores_base = [setor_crise, setor_tendencia]
+        # Identifica o setor do meio
         todos_setores = [s for s in SETORES.keys() if "VACA" not in s]
-        setor_meio = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
-        meta_info = f"ESTRATÉGIA: {setor_crise} + {setor_tendencia} + Elite do {setor_meio}"
-        lista_crise = list(SETORES[setor_crise])
-        lista_tendencia = list(SETORES[setor_tendencia])
-        lista_meio_pool = list(SETORES[setor_meio])
-        vaca_entrou = False
-        row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
-        precisa_vaca = row_vaca['ATRASO'] > 12 or (not df_diamante.empty and 25 in df_diamante['GRUPO'].values)
-        if precisa_vaca:
-            vaca_entrou = True
-            candidato_remocao = None
-            for g in reversed(lista_tendencia):
-                if g != ultimo_bicho:
-                    candidato_remocao = g
-                    break
-            if candidato_remocao: lista_tendencia.remove(candidato_remocao)
-        grupos_finais.extend(lista_crise)
-        grupos_finais.extend(lista_tendencia)
-        if vaca_entrou: grupos_finais.append(25)
-        meio_selecionados = []
-        if ultimo_bicho in lista_meio_pool: meio_selecionados.append(ultimo_bicho)
-        if not df_diamante.empty:
-            for index, row in df_diamante.iterrows():
-                g = row['GRUPO']
-                if g in lista_meio_pool and g not in meio_selecionados:
-                    meio_selecionados.append(g)
-                    if len(meio_selecionados) >= 4: break
-        if len(meio_selecionados) < 4:
-            for g in lista_meio_pool:
-                if g in stats_ciclo['faltam'] and g not in meio_selecionados:
-                    meio_selecionados.append(g)
-                    if len(meio_selecionados) >= 4: break
-        if len(meio_selecionados) < 4:
-            for g in lista_meio_pool:
-                if g not in meio_selecionados:
-                    meio_selecionados.append(g)
-                    if len(meio_selecionados) >= 4: break
-        grupos_finais.extend(meio_selecionados[:4])
-        nota = 100 - pct_crise
-        if ultimo_bicho in SETORES[setor_crise]: nota += 15
-        elif ultimo_bicho in SETORES[setor_tendencia]: nota += 10
+        setor_complemento = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
 
+    # Adiciona os 16 grupos da BASE
+    for s in setores_base:
+        grupos_finais.extend(SETORES[s])
+        
+    # 2. PREENCHIMENTO INTELIGENTE (SCORE SYSTEM)
+    # Candidatos: Setor Complemento + Vaca
+    candidatos_pool = list(SETORES[setor_complemento])
+    candidatos_pool.append(25) # Vaca sempre candidata
+    
+    # Lista de Diamantes para consulta rápida
+    lista_diamantes = df_diamante['GRUPO'].tolist() if not df_diamante.empty else []
+    
+    # Sistema de Pontuação para o Pool
+    candidatos_pontuados = []
+    for g in candidatos_pool:
+        score = 0
+        
+        # Regra 1: Repetição (Vício) - Peso Alto
+        if g == ultimo_bicho: score += 500
+        
+        # Regra 2: Falta no Ciclo (Convergência) - Peso Médio Alto
+        if g in stats_ciclo['faltam']: score += 100
+        
+        # Regra 3: Diamante (Tendência) - Peso Médio
+        if g in lista_diamantes: score += 50
+        
+        # Regra 4: Atraso da Vaca (Específico)
+        if g == 25:
+            row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
+            if row_vaca['ATRASO'] > 12: score += 80
+            
+        candidatos_pontuados.append({'grupo': g, 'score': score})
+        
+    # Ordena pelo Score (Maior para Menor)
+    candidatos_pontuados.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Pega os melhores para completar 20
+    vagas_restantes = 20 - len(grupos_finais)
+    
+    for item in candidatos_pontuados:
+        if vagas_restantes <= 0: break
+        g = item['grupo']
+        if g not in grupos_finais:
+            grupos_finais.append(g)
+            vagas_restantes -= 1
+            
+    # Ordenação final para exibição
     grupos_finais = sorted(list(set(grupos_finais)))
-    grupos_finais = grupos_finais[:20]
+    
+    # Nota simples para visualização
+    nota = 100 # Simplificado pois a lógica agora é por score interno
         
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
@@ -311,7 +310,7 @@ def executar_backtest_sniper(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         
-        sniper_past = gerar_sniper_20_v20(df_s, st_c, df_d, u_b)
+        sniper_past = gerar_sniper_20_v22(df_s, st_c, df_d, u_b)
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
         
@@ -442,14 +441,13 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     
                     # 1. SNIPER PARA O DESTAQUE
-                    sniper = gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+                    sniper = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
                         melhor_sniper = { "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "dados": sniper }
                     
-                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER (NOVO)
+                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER
                     bt_results = executar_backtest_sniper(historico, idx_pos)
-                    # Verifica os dois últimos (index 0 é o último, index 1 é o penúltimo)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
                             alertas_globais.append({
@@ -489,24 +487,13 @@ def tela_dashboard_global():
             st.markdown(f"<div class='sniper-box {css_extra}'><div class='sniper-title'>🎯 SNIPER DE ELITE (20 GRUPOS)</div><h3 style='color:white; margin:0;'>{melhor_sniper['banca']} - {melhor_sniper['premio']}</h3><p style='color:{cor_nota}; font-weight:bold;'>{d['meta_info']}</p><div class='sniper-groups'>{', '.join(map(str, d['grupos']))}</div></div>", unsafe_allow_html=True)
         else: st.info("O Sniper está calibrando... (Sem dados suficientes).")
 
-        # --- EXIBE ALERTAS (COM O NOVO SNIPER HUNTER) ---
+        # --- EXIBE ALERTAS ---
         if alertas_globais:
             st.warning("🚨 Oportunidades Encontradas")
             cols = st.columns(2)
             for i, alerta in enumerate(alertas_globais):
-                
-                # --- VISUAL PARA OPORTUNIDADE SNIPER ---
                 if alerta['tipo'] == "SNIPER_OPPORTUNITY":
-                    with cols[i % 2]:
-                        st.markdown(f"""
-                        <div class='box-sniper-hunter'>
-                            <h3>{alerta['banca']}</h3>
-                            <p>📍 <b>{alerta['premio']}</b></p>
-                            <p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # --- VISUAL PADRÃO ---
+                    with cols[i % 2]: st.markdown(f"<div class='box-sniper-hunter'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b></p><p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p></div>", unsafe_allow_html=True)
                 else:
                     if alerta['tipo'] == "ATRASO":
                         classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
@@ -611,7 +598,7 @@ else:
                 df_diamante = calcular_tabela_diamante(historico, idx_aba)
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 
-                sniper_local = gerar_sniper_20_v20(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+                sniper_local = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 
                 # --- BACKTEST VISUAL ---
                 bt_results = executar_backtest_sniper(historico, idx_aba)
