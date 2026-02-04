@@ -7,12 +7,12 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
-import plotly.express as px # Biblioteca Gráfica
+import altair as alt # Biblioteca Gráfica Nativa
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V27 - Dashboard", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V27.1 - Dashboard Fix", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -240,13 +240,11 @@ def calcular_tabela_diamante(historico, indice_premio):
 # --- ALGORITMO SNIPER V22 ---
 def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
-    
     setor_estourado = None
     for index, row in setores_validos.iterrows():
         if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)']:
             setor_estourado = row['SETOR']
             break
-    
     grupos_finais = []
     meta_info = ""
     is_record_break = False
@@ -296,7 +294,7 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     nota = 100 
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
-# --- FUNÇÃO DE BACKTEST (CORRIGIDA) ---
+# --- FUNÇÃO DE BACKTEST ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -654,7 +652,6 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # --- EXIBE O RECORDE DE DERROTAS ---
                 st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
                 
                 if bt_results:
@@ -674,17 +671,15 @@ else:
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- GRÁFICO DONUT (NOVO) ---
-                fig = px.pie(df_stress, values='% PRESENÇA', names='SETOR', hole=0.5,
-                             color='SETOR', color_discrete_map={
-                                 "BAIXO (01-08)": "#00d2ff", # Cyan
-                                 "MÉDIO (09-16)": "#ff9900", # Orange
-                                 "ALTO (17-24)": "#ff3333",  # Red
-                                 "VACA (25)":    "#aa00ff"   # Purple
-                             })
-                fig.update_layout(showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                  font=dict(color="white"), margin=dict(t=0, b=0, l=0, r=0), height=250)
-                st.plotly_chart(fig, use_container_width=True)
+                # --- GRÁFICO DONUT (ALTAIR) ---
+                chart = alt.Chart(df_stress).mark_arc(innerRadius=50).encode(
+                    theta=alt.Theta(field="% PRESENÇA", type="quantitative"),
+                    color=alt.Color(field="SETOR", type="nominal",
+                        scale=alt.Scale(domain=['BAIXO (01-08)', 'MÉDIO (09-16)', 'ALTO (17-24)', 'VACA (25)'],
+                                        range=['#00d2ff', '#ff9900', '#ff3333', '#aa00ff'])),
+                    tooltip=["SETOR", "% PRESENÇA"]
+                ).properties(height=250)
+                st.altair_chart(chart, use_container_width=True)
                 
                 st.markdown("**📉 Tabela de Stress:**")
                 df_visual = df_stress.drop(columns=['SEQ. ATUAL'])
