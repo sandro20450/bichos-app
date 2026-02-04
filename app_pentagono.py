@@ -12,7 +12,7 @@ import altair as alt # Biblioteca Gráfica Nativa
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V28 - Labels Fix", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V29 - Chart Fix", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -671,21 +671,29 @@ else:
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- GRÁFICO DONUT (ALTAIR CAMADAS) ---
-                base = alt.Chart(df_stress).encode(theta=alt.Theta(field="% PRESENÇA", stack=True))
+                # --- GRÁFICO DONUT (ALTAIR CAMADAS - CORRIGIDO V29) ---
+                df_chart = df_stress.copy()
+                # Renomeia colunas para evitar conflito com caracteres especiais no motor JS
+                df_chart = df_chart.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
                 
-                pie = base.mark_arc(innerRadius=50).encode(
-                    color=alt.Color(field="SETOR", type="nominal",
-                        scale=alt.Scale(domain=['BAIXO (01-08)', 'MÉDIO (09-16)', 'ALTO (17-24)', 'VACA (25)'],
-                                        range=['#00d2ff', '#ff9900', '#ff3333', '#aa00ff'])),
-                    order=alt.Order(field="% PRESENÇA", sort="descending"),
-                    tooltip=["SETOR", alt.Tooltip("% PRESENÇA", format=".1f")]
+                base = alt.Chart(df_chart).encode(
+                    theta=alt.Theta("PRESENCA", stack=True)
                 )
                 
-                text = base.mark_text(radius=85).encode(
-                    text=alt.Text(field="% PRESENÇA", format=".1f"),
-                    order=alt.Order(field="% PRESENÇA", sort="descending"),
-                    color=alt.value("white")
+                pie = base.mark_arc(outerRadius=120).encode(
+                    color=alt.Color("CATEGORIA",
+                        scale=alt.Scale(domain=['BAIXO (01-08)', 'MÉDIO (09-16)', 'ALTO (17-24)', 'VACA (25)'],
+                                        range=['#00d2ff', '#ff9900', '#ff3333', '#aa00ff']),
+                        legend=None
+                    ),
+                    order=alt.Order("PRESENCA", sort="descending"),
+                    tooltip=["CATEGORIA", "PRESENCA"]
+                )
+                
+                text = base.mark_text(radius=140).encode(
+                    text=alt.Text("PRESENCA", format=".1f"),
+                    order=alt.Order("PRESENCA", sort="descending"),
+                    color=alt.value("white")  
                 )
                 
                 st.altair_chart(pie + text, use_container_width=True)
