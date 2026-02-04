@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V22 - Sniper Score", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V23 - Sniper Commander", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -69,9 +69,11 @@ def aplicar_estilo():
             box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important;
             background: linear-gradient(135deg, #3a0035, #240b36) !important;
         }
-        .sniper-title { font-size: 28px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0px 0px 10px rgba(0,210,255,0.5); }
+        .sniper-title { font-size: 28px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0px 0px 10px rgba(0,210,255,0.5); }
+        .sniper-target { font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 5px; text-transform: uppercase; }
+        .sniper-next { font-size: 18px; color: #00ff00; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; display: inline-block; margin-bottom: 10px; border: 1px solid #00ff00; }
         .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 15px 0; letter-spacing: 2px; border: 1px dashed #00d2ff; }
-        .sniper-meta { font-size: 16px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
+        .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 5px; }
         
         .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 10px; margin-bottom: 30px; flex-wrap: wrap; }
         .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -123,6 +125,33 @@ def carregar_dados_top5(nome_aba):
                 except: pass
         return dados_processados
     return []
+
+# --- NOVA FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
+def obter_proxima_batalha(banca_key, ultimo_horario_str):
+    horarios = CONFIG_BANCAS[banca_key]['horarios']
+    try:
+        # Tenta achar o indice do ultimo horario
+        # Normaliza formato (remove 'h', espacos, etc se tiver)
+        uh_clean = ultimo_horario_str.replace('h', '').strip()
+        if ':' not in uh_clean and len(uh_clean) <= 2: uh_clean += ":00"
+        
+        # Encontra na lista (match exato)
+        idx = -1
+        for i, h in enumerate(horarios):
+            if h == uh_clean or h.replace(':00', '') == uh_clean.replace(':00', ''):
+                idx = i
+                break
+        
+        if idx != -1:
+            # Se for o ultimo da lista, pega o primeiro (dia seguinte)
+            if idx == len(horarios) - 1:
+                return f"PARA AS {horarios[0]} HS (Amanhã)"
+            else:
+                return f"PARA AS {horarios[idx+1]} HS"
+        else:
+            return "PRÓXIMO SORTEIO" # Fallback se nao achar
+    except:
+        return "PRÓXIMO SORTEIO"
 
 def calcular_stress_tabela(historico, indice_premio):
     stats = []
@@ -207,10 +236,8 @@ def calcular_tabela_diamante(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V22 (SCORE PONDERADO) ---
 def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    # 1. ANALISE DE SETORES
     setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
-    # Verifica estouro de recorde (Prioridade Máxima)
     setor_estourado = None
     for index, row in setores_validos.iterrows():
         if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)']:
@@ -221,65 +248,41 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     meta_info = ""
     is_record_break = False
     
-    # Definição dos setores principais
     if setor_estourado:
         is_record_break = True
         meta_info = f"🚨 INVERSÃO: {setor_estourado} (Saturado)"
-        # Pega os 2 setores inversos
         setores_base = [s for s in SETORES.keys() if s != setor_estourado and "VACA" not in s]
-        setor_complemento = setor_estourado # Vamos pescar os melhores daqui
+        setor_complemento = setor_estourado 
     else:
-        # Lógica Padrão (Crise + Tendência)
         setores_ordenados = setores_validos.sort_values(by='% PRESENÇA')
         setor_crise = setores_ordenados.iloc[0]['SETOR']
         setor_tendencia = setores_ordenados.iloc[-1]['SETOR']
-        
         meta_info = f"ESTRATÉGIA: {setor_crise} + {setor_tendencia}"
-        
         setores_base = [setor_crise, setor_tendencia]
-        # Identifica o setor do meio
         todos_setores = [s for s in SETORES.keys() if "VACA" not in s]
         setor_complemento = [s for s in todos_setores if s != setor_crise and s != setor_tendencia][0]
 
-    # Adiciona os 16 grupos da BASE
     for s in setores_base:
         grupos_finais.extend(SETORES[s])
         
-    # 2. PREENCHIMENTO INTELIGENTE (SCORE SYSTEM)
-    # Candidatos: Setor Complemento + Vaca
     candidatos_pool = list(SETORES[setor_complemento])
-    candidatos_pool.append(25) # Vaca sempre candidata
+    candidatos_pool.append(25) 
     
-    # Lista de Diamantes para consulta rápida
     lista_diamantes = df_diamante['GRUPO'].tolist() if not df_diamante.empty else []
     
-    # Sistema de Pontuação para o Pool
     candidatos_pontuados = []
     for g in candidatos_pool:
         score = 0
-        
-        # Regra 1: Repetição (Vício) - Peso Alto
         if g == ultimo_bicho: score += 500
-        
-        # Regra 2: Falta no Ciclo (Convergência) - Peso Médio Alto
         if g in stats_ciclo['faltam']: score += 100
-        
-        # Regra 3: Diamante (Tendência) - Peso Médio
         if g in lista_diamantes: score += 50
-        
-        # Regra 4: Atraso da Vaca (Específico)
         if g == 25:
             row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
             if row_vaca['ATRASO'] > 12: score += 80
-            
         candidatos_pontuados.append({'grupo': g, 'score': score})
         
-    # Ordena pelo Score (Maior para Menor)
     candidatos_pontuados.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Pega os melhores para completar 20
     vagas_restantes = 20 - len(grupos_finais)
-    
     for item in candidatos_pontuados:
         if vagas_restantes <= 0: break
         g = item['grupo']
@@ -287,33 +290,26 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
             grupos_finais.append(g)
             vagas_restantes -= 1
             
-    # Ordenação final para exibição
     grupos_finais = sorted(list(set(grupos_finais)))
-    
-    # Nota simples para visualização
-    nota = 100 # Simplificado pois a lógica agora é por score interno
+    nota = 100 
         
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
 # --- FUNÇÃO DE BACKTEST ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
-    
     for i in range(1, 5):
         if len(historico) <= i + 20: break
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
-        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
-        
         sniper_past = gerar_sniper_20_v22(df_s, st_c, df_d, u_b)
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
-        
     return resultados_backtest
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
@@ -444,17 +440,26 @@ def tela_dashboard_global():
                     sniper = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
-                        melhor_sniper = { "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "dados": sniper }
+                        melhor_sniper = {
+                            "banca": config['display_name'].split("(")[0].strip(),
+                            "premio": f"{idx_pos+1}º Prêmio",
+                            "dados": sniper,
+                            "banca_key": banca_key, # Guarda a chave para buscar horario
+                            "ultimo_horario": historico[-1]['horario'] # Guarda ultimo horario
+                        }
                     
                     # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER
                     bt_results = executar_backtest_sniper(historico, idx_pos)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
+                            # Calcula próximo horário para o Alerta também
+                            prox_hora = obter_proxima_batalha(banca_key, historico[-1]['horario'])
+                            
                             alertas_globais.append({
                                 "tipo": "SNIPER_OPPORTUNITY",
                                 "banca": config['display_name'].split("(")[0].strip(),
                                 "premio": f"{idx_pos+1}º Prêmio",
-                                "msg_extra": "🎯 2 Derrotas Consecutivas no Sniper (Hora de entrar!)"
+                                "msg_extra": f"🎯 2 Derrotas Consecutivas! {prox_hora}"
                             })
 
                     # 3. ALERTAS PADRÃO (Atraso/Repetição)
@@ -479,15 +484,27 @@ def tela_dashboard_global():
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
-        # --- EXIBE MELHOR SNIPER ---
+        # --- EXIBE MELHOR SNIPER (COM ORDEM DE BATALHA) ---
         if melhor_sniper:
             d = melhor_sniper['dados']
             cor_nota = "#00ff00" if d['nota'] > 80 else "#ffcc00"
             css_extra = "sniper-record" if d['is_record'] else ""
-            st.markdown(f"<div class='sniper-box {css_extra}'><div class='sniper-title'>🎯 SNIPER DE ELITE (20 GRUPOS)</div><h3 style='color:white; margin:0;'>{melhor_sniper['banca']} - {melhor_sniper['premio']}</h3><p style='color:{cor_nota}; font-weight:bold;'>{d['meta_info']}</p><div class='sniper-groups'>{', '.join(map(str, d['grupos']))}</div></div>", unsafe_allow_html=True)
-        else: st.info("O Sniper está calibrando... (Sem dados suficientes).")
+            
+            # Calcula o próximo horário
+            prox_tiro = obter_proxima_batalha(melhor_sniper['banca_key'], melhor_sniper['ultimo_horario'])
+            
+            st.markdown(f"""
+            <div class="sniper-box {css_extra}">
+                <div class="sniper-title">🎯 SNIPER DE ELITE (20 GRUPOS)</div>
+                <div class="sniper-target">{melhor_sniper['banca']} - {melhor_sniper['premio']}</div>
+                <div class="sniper-next">{prox_tiro}</div>
+                <p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
+                <div class="sniper-groups">{', '.join(map(str, d['grupos']))}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("O Sniper está calibrando... (Sem dados suficientes).")
 
-        # --- EXIBE ALERTAS ---
         if alertas_globais:
             st.warning("🚨 Oportunidades Encontradas")
             cols = st.columns(2)
@@ -566,6 +583,9 @@ else:
         ult = historico[-1]
         st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
         
+        # SNIPER LOCAL TAMBÉM RECEBE O HORÁRIO
+        prox_tiro_local = obter_proxima_batalha(banca_selecionada, ult['horario'])
+        
         st.subheader(f"🚨 Radar Local: {config_banca['display_name'].split('(')[0]}")
         nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
         col_alerts = st.container()
@@ -608,6 +628,7 @@ else:
                 st.markdown(f"""
                 <div class="sniper-box {css_extra}" style="margin-top:0;">
                     <h4 style="color:white; margin:0;">🎯 SNIPER LOCAL ({nomes_posicoes[idx_aba]})</h4>
+                    <div class="sniper-next">{prox_tiro_local}</div>
                     <p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
                     <div class="sniper-groups" style="font-size:18px;">{', '.join(map(str, sniper_local['grupos']))}</div>
                 </div>
