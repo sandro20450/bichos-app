@@ -7,11 +7,12 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
+import plotly.express as px # Biblioteca Gráfica
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V26 - Max Loss", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V27 - Dashboard", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -140,6 +141,7 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
+# --- FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
     try:
@@ -294,7 +296,7 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     nota = 100 
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
-# --- FUNÇÃO DE BACKTEST (4 JOGOS) ---
+# --- FUNÇÃO DE BACKTEST (CORRIGIDA) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -311,45 +313,28 @@ def executar_backtest_sniper(historico, indice_premio):
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
 
-# --- NOVA FUNÇÃO: CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+# --- FUNÇÃO CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
 def calcular_max_derrotas_50(historico, indice_premio):
     max_derrotas = 0
     derrotas_consecutivas_temp = 0
-    
-    # Analisa os ultimos 50 jogos
     range_analise = min(50, len(historico) - 20)
-    
-    # Loop do mais antigo para o mais recente dentro da janela de 50
-    # Começa em -50 (ou max possivel) e vai até -1
     start_idx = len(historico) - range_analise
     
     for i in range(start_idx, len(historico)):
         target_game = historico[i]
         target_num = target_game['premios'][indice_premio]
-        
-        # Histórico disponível até aquele momento
         hist_treino = historico[:i]
-        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
-        
         sniper_past = gerar_sniper_20_v22(df_s, st_c, df_d, u_b)
-        
         win = target_num in sniper_past['grupos']
-        
-        if not win:
-            derrotas_consecutivas_temp += 1
+        if not win: derrotas_consecutivas_temp += 1
         else:
-            if derrotas_consecutivas_temp > max_derrotas:
-                max_derrotas = derrotas_consecutivas_temp
+            if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
             derrotas_consecutivas_temp = 0
-            
-    # Checa ultima sequencia caso tenha terminado em derrota
-    if derrotas_consecutivas_temp > max_derrotas:
-        max_derrotas = derrotas_consecutivas_temp
-        
+    if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
@@ -654,8 +639,6 @@ else:
                 
                 sniper_local = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
-                
-                # --- CALCULA MAX DE DERROTAS EM 50 JOGOS ---
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-record" if sniper_local['is_record'] else ""
@@ -680,7 +663,6 @@ else:
                         classe_res = "bt-win" if res['vitoria'] else "bt-loss"
                         icon = "🟢" if res['vitoria'] else "❌"
                         cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
-                    
                     final_html = f"<div class='backtest-container'>{cards_html}</div>"
                     st.markdown(final_html, unsafe_allow_html=True)
 
@@ -691,6 +673,19 @@ else:
                 st.markdown("**Visual Recente (⬅️ Mais Novo):**")
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- GRÁFICO DONUT (NOVO) ---
+                fig = px.pie(df_stress, values='% PRESENÇA', names='SETOR', hole=0.5,
+                             color='SETOR', color_discrete_map={
+                                 "BAIXO (01-08)": "#00d2ff", # Cyan
+                                 "MÉDIO (09-16)": "#ff9900", # Orange
+                                 "ALTO (17-24)": "#ff3333",  # Red
+                                 "VACA (25)":    "#aa00ff"   # Purple
+                             })
+                fig.update_layout(showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                  font=dict(color="white"), margin=dict(t=0, b=0, l=0, r=0), height=250)
+                st.plotly_chart(fig, use_container_width=True)
+                
                 st.markdown("**📉 Tabela de Stress:**")
                 df_visual = df_stress.drop(columns=['SEQ. ATUAL'])
                 st.table(df_visual)
