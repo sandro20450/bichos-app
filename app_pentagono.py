@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V25 - Stable", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V26 - Max Loss", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -76,13 +76,26 @@ def aplicar_estilo():
         .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 5px 0; letter-spacing: 2px; border: 1px dashed #00d2ff; }
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
-        .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 10px; margin-bottom: 30px; flex-wrap: wrap; }
+        .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
         .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
         .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
         .bt-icon { font-size: 24px; margin-bottom: 5px; }
         .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
         .bt-label { font-size: 11px; opacity: 0.8; }
+        
+        .max-loss-info {
+            text-align: center;
+            background-color: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ffaaaa;
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: bold;
+        }
 
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -127,7 +140,6 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# --- FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
     try:
@@ -223,7 +235,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V22 (SCORE PONDERADO) ---
+# --- ALGORITMO SNIPER V22 ---
 def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     setores_validos = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
@@ -282,7 +294,7 @@ def gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     nota = 100 
     return { "grupos": grupos_finais, "nota": nota, "meta_info": meta_info, "is_record": is_record_break }
 
-# --- FUNÇÃO DE BACKTEST (CORRIGIDA) ---
+# --- FUNÇÃO DE BACKTEST (4 JOGOS) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -298,6 +310,47 @@ def executar_backtest_sniper(historico, indice_premio):
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
+
+# --- NOVA FUNÇÃO: CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+def calcular_max_derrotas_50(historico, indice_premio):
+    max_derrotas = 0
+    derrotas_consecutivas_temp = 0
+    
+    # Analisa os ultimos 50 jogos
+    range_analise = min(50, len(historico) - 20)
+    
+    # Loop do mais antigo para o mais recente dentro da janela de 50
+    # Começa em -50 (ou max possivel) e vai até -1
+    start_idx = len(historico) - range_analise
+    
+    for i in range(start_idx, len(historico)):
+        target_game = historico[i]
+        target_num = target_game['premios'][indice_premio]
+        
+        # Histórico disponível até aquele momento
+        hist_treino = historico[:i]
+        
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        
+        sniper_past = gerar_sniper_20_v22(df_s, st_c, df_d, u_b)
+        
+        win = target_num in sniper_past['grupos']
+        
+        if not win:
+            derrotas_consecutivas_temp += 1
+        else:
+            if derrotas_consecutivas_temp > max_derrotas:
+                max_derrotas = derrotas_consecutivas_temp
+            derrotas_consecutivas_temp = 0
+            
+    # Checa ultima sequencia caso tenha terminado em derrota
+    if derrotas_consecutivas_temp > max_derrotas:
+        max_derrotas = derrotas_consecutivas_temp
+        
+    return max_derrotas
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     candidatos = [] 
@@ -417,13 +470,14 @@ def tela_dashboard_global():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
+                    # CALCULA DADOS
                     df_stress = calcular_stress_tabela(historico, idx_pos)
                     stats_ciclo = calcular_ciclo(historico, idx_pos)
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     
+                    # 1. SNIPER PARA O DESTAQUE
                     sniper = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
-                    
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
                         melhor_sniper = {
@@ -434,6 +488,7 @@ def tela_dashboard_global():
                             "ultimo_horario": historico[-1]['horario']
                         }
                     
+                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER
                     bt_results = executar_backtest_sniper(historico, idx_pos)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
@@ -562,7 +617,6 @@ else:
         ult = historico[-1]
         st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
         
-        # SNIPER LOCAL TAMBÉM RECEBE O HORÁRIO
         prox_tiro_local = obter_proxima_batalha(banca_selecionada, ult['horario'])
         nome_banca_clean = config_banca['display_name'].split('(')[0].strip().upper()
         
@@ -601,6 +655,9 @@ else:
                 sniper_local = gerar_sniper_20_v22(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 
+                # --- CALCULA MAX DE DERROTAS EM 50 JOGOS ---
+                max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
+                
                 css_extra = "sniper-record" if sniper_local['is_record'] else ""
                 
                 st.markdown(f"""
@@ -613,6 +670,9 @@ else:
                     <div class="sniper-groups" style="font-size:18px;">{', '.join(map(str, sniper_local['grupos']))}</div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # --- EXIBE O RECORDE DE DERROTAS ---
+                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
                 
                 if bt_results:
                     cards_html = ""
