@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V9.0 - Borboleta", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V9.1 - Fine Tuning", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -62,7 +62,7 @@ st.markdown("""
         color: #fff;
     }
 
-    /* BOX EFEITO BORBOLETA (NOVO) */
+    /* BOX EFEITO BORBOLETA */
     .box-borboleta {
         background: linear-gradient(135deg, #001f3f, #003366);
         border: 2px solid #00d2ff;
@@ -135,7 +135,7 @@ if st.session_state['tocar_som_salvar']: reproduzir_som('sucesso'); st.session_s
 if st.session_state['tocar_som_apagar']: reproduzir_som('apagar'); st.session_state['tocar_som_apagar'] = False
 
 # =============================================================================
-# --- 2. CONEXÃO & SCRAPING ---
+# --- 2. CONEXÃO & SCRAPING (ATUALIZADO PARA DATA) ---
 # =============================================================================
 def conectar_planilha():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -155,15 +155,17 @@ def carregar_dados():
         dados = worksheet.get_all_values()
         lista_duques = []
         ultimo_horario = "--:--"
+        ultima_data = "--/--/--"
         try:
             for row in dados:
                 if len(row) >= 2 and row[0].isdigit() and row[1].isdigit():
                     g1, g2 = int(row[0]), int(row[1])
                     lista_duques.append(tuple(sorted((g1, g2))))
                     if len(row) >= 3: ultimo_horario = row[2]
+                    if len(row) >= 4: ultima_data = row[3] # Pega a data da coluna 4
         except: pass
-        return lista_duques, ultimo_horario
-    return [], "--:--"
+        return lista_duques, ultimo_horario, ultima_data
+    return [], "--:--", "--/--/--"
 
 def salvar_duque(b1, b2, horario, data_ref):
     worksheet = conectar_planilha()
@@ -346,50 +348,43 @@ def calcular_max_derrotas_duque(historico):
     return max_derrotas
 
 # =============================================================================
-# --- 4. LÓGICA V9.0 (EFEITO BORBOLETA - ECO HISTÓRICO) ---
+# --- 4. LÓGICA V9.1 (EFEITO BORBOLETA COM LINHAS) ---
 # =============================================================================
 def gerar_palpite_eco_historico(historico_slice, target_size=125):
-    if len(historico_slice) < 5: return [], 0
+    if len(historico_slice) < 5: return [], 0, []
     
     ultimo_duque = tuple(sorted(historico_slice[-1]))
     palpite_set = set()
     ocorrencias_indices = []
     
     # 1. Encontrar todas as vezes que esse duque saiu
-    for i in range(len(historico_slice) - 1): # Vai até penúltimo para ter "amanhã"
+    for i in range(len(historico_slice) - 1): 
         atual = tuple(sorted(historico_slice[i]))
         if atual == ultimo_duque:
             ocorrencias_indices.append(i)
             
     num_ocorrencias = len(ocorrencias_indices)
     
-    # 2. Coletar resultados futuros (Expandir em ondas)
-    # Onda 1: Vizinho +1, Onda 2: Vizinho +2...
-    step = 1
-    max_step = 10 # Limite de segurança para não buscar longe demais
-    
+    # 2. Coletar resultados futuros
+    step = 1; max_step = 10 
     while len(palpite_set) < target_size and step <= max_step:
         for idx in ocorrencias_indices:
             next_idx = idx + step
-            if next_idx < len(historico_slice): # Garante que existe futuro
+            if next_idx < len(historico_slice): 
                 futuro = tuple(sorted(historico_slice[next_idx]))
-                
-                # Filtro Limpeza (Remove Duplos e Sequências para focar no provável)
                 if futuro[0] != futuro[1] and not verificar_sequencia_bichos(futuro):
                     palpite_set.add(futuro)
         step += 1
         
-    # Se ainda faltar muito (gatilho raro), completa com os mais frequentes gerais
     if len(palpite_set) < target_size:
         pool_275 = gerar_universo_limpo_275()
         c_geral = Counter(historico_slice)
         rank_geral = sorted(pool_275, key=lambda x: c_geral[x], reverse=True)
-        
         for d in rank_geral:
             if len(palpite_set) >= target_size: break
             palpite_set.add(d)
             
-    return sorted(list(palpite_set)), num_ocorrencias
+    return sorted(list(palpite_set)), num_ocorrencias, ocorrencias_indices
 
 # --- BACKTEST PARA BORBOLETA ---
 def executar_backtest_borboleta(historico):
@@ -398,10 +393,7 @@ def executar_backtest_borboleta(historico):
         if len(historico) <= i + 50: break 
         target_duque = tuple(sorted(historico[-i]))
         hist_treino = historico[:-i]
-        
-        # Gera o palpite Borboleta do passado
-        sniper_past, _ = gerar_palpite_eco_historico(hist_treino, 125)
-        
+        sniper_past, _, _ = gerar_palpite_eco_historico(hist_treino, 125)
         win = target_duque in sniper_past
         resultados_backtest.append({ "index": i, "duque_real": target_duque, "vitoria": win })
     return resultados_backtest
@@ -413,7 +405,7 @@ def calcular_max_derrotas_borboleta(historico):
     for i in range(start_idx, len(historico)):
         target_duque = tuple(sorted(historico[i]))
         hist_treino = historico[:i]
-        sniper_past, _ = gerar_palpite_eco_historico(hist_treino, 125)
+        sniper_past, _, _ = gerar_palpite_eco_historico(hist_treino, 125)
         win = target_duque in sniper_past
         if not win: derrotas_consecutivas_temp += 1
         else:
@@ -507,17 +499,16 @@ with st.sidebar:
             st.session_state['tocar_som_apagar'] = True
             st.toast("Apagado!", icon="🗑️"); time.sleep(0.5); st.rerun()
 
-historico, ultimo_horario_salvo = carregar_dados()
+historico, ultimo_horario_salvo, ultima_data_salva = carregar_dados()
 st.title(f"👑 {CONFIG_BANCA['display_name']}")
 
 if len(historico) > 50:
     ult = historico[-1]
-    st.caption(f"📅 Último Registro: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo}) | Total Jogos: {len(historico)}")
+    st.caption(f"📅 Último Registro: {ultima_data_salva} ({ultimo_horario_salvo}) -> {ult[0]:02}-{ult[1]:02} | Total Jogos: {len(historico)}")
     
-    # ABAS DO SISTEMA
     aba_radar, aba_borboleta = st.tabs(["📡 RADAR & SNIPER", "🔮 EFEITO BORBOLETA"])
     
-    # --- ABA 1: RADAR & SNIPER (O CÓDIGO V8 ESTÁ AQUI) ---
+    # --- ABA 1: RADAR & SNIPER ---
     with aba_radar:
         is_sequencia = verificar_sequencia_bichos(ult)
         if is_sequencia:
@@ -580,7 +571,7 @@ if len(historico) > 50:
         st.altair_chart(pie + text, use_container_width=True)
         st.markdown("**📉 Tabela de Stress:**"); st.table(df_stress_real.set_index("SETOR"))
 
-    # --- ABA 2: EFEITO BORBOLETA (V9.0 NOVO) ---
+    # --- ABA 2: EFEITO BORBOLETA (V9.1) ---
     with aba_borboleta:
         st.markdown(f"""
         <div class="box-borboleta">
@@ -589,16 +580,17 @@ if len(historico) > 50:
         </div>
         """, unsafe_allow_html=True)
         
-        # 1. GERA PALPITE ECO
         with st.spinner("Viajando no tempo..."):
-            palpite_borboleta, num_ocorrencias = gerar_palpite_eco_historico(historico, 125)
+            palpite_borboleta, num_ocorrencias, indices_encontrados = gerar_palpite_eco_historico(historico, 125)
             bt_borboleta = executar_backtest_borboleta(historico)
             max_loss_borboleta = calcular_max_derrotas_borboleta(historico)
             
-        st.info(f"🔎 O Duque {ult[0]:02}-{ult[1]:02} apareceu **{num_ocorrencias} vezes** no histórico.")
+        # Formata a lista de linhas para exibição (Adiciona +2 para bater com a planilha real)
+        linhas_formatadas = ", ".join([str(i + 2) for i in indices_encontrados])
+        
+        st.info(f"🔎 O Duque {ult[0]:02}-{ult[1]:02} apareceu **{num_ocorrencias} vezes** no histórico.\n\n📍 **Linhas da Planilha:** {linhas_formatadas}")
         st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_borboleta} Derrotas</span></div>", unsafe_allow_html=True)
         
-        # Backtest Borboleta
         if bt_borboleta:
             cards_html = ""
             for res in reversed(bt_borboleta):
