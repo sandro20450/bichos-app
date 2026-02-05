@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V7.0 - Radar", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V7.1 - Sequência", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -36,7 +36,7 @@ def reproduzir_som(tipo):
     else: return
     st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
 
-# --- CSS ESTILO PENTÁGONO V29 (COM BOX DE ALERTAS) ---
+# --- CSS ESTILO PENTÁGONO V29 ---
 st.markdown("""
 <style>
     [data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #1a002e 0%, #2E004F 100%); color: #ffffff; }
@@ -44,11 +44,23 @@ st.markdown("""
     .stNumberInput input { color: white !important; background-color: rgba(255,255,255,0.1) !important; }
     [data-testid="stTable"] { color: white !important; background-color: transparent !important; }
     
-    /* CAIXAS DE ALERTA (IGUAL PENTÁGONO) */
+    /* CAIXAS DE ALERTA */
     .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
     .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
     .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
     .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
+
+    /* NOVO: BOX DE PADRÃO RARO (SEQUÊNCIA) */
+    .box-padrao-raro {
+        background: linear-gradient(90deg, #4b0082, #800080);
+        border: 2px solid #da70d6;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 20px;
+        box-shadow: 0 0 20px rgba(218, 112, 214, 0.4);
+        color: #fff;
+    }
 
     /* Bolinhas dos Setores */
     .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
@@ -219,16 +231,13 @@ def formatar_palpite_texto(lista_tuplas):
         if (i + 1) % 10 == 0: texto += "\n" 
     return texto.strip()
 
-# --- NOVO ALGORITMO CAMALEÃO V6 (PESO DINÂMICO PARA QUEBRAR SEQUÊNCIA) ---
+# --- ALGORITMO CAMALEÃO V6 ---
 def gerar_sniper_top200_v6(historico_slice):
     hist_rev = historico_slice[::-1]
     todos_duques, _ = gerar_universo_duques()
+    c_curto = Counter(hist_rev[:15])
+    c_longo = Counter(hist_rev[:100])
     
-    # Pesos Base
-    c_curto = Counter(hist_rev[:15]) # Curtíssimo prazo
-    c_longo = Counter(hist_rev[:100]) # Consistência
-    
-    # Vício Imediato (O segredo para não perder em repetição)
     if len(historico_slice) > 0:
         ultimo = historico_slice[-1]
         bichos_vicio = set([ultimo[0], ultimo[1]])
@@ -241,30 +250,25 @@ def gerar_sniper_top200_v6(historico_slice):
     scores = {}
     for d in todos_duques:
         score = 0
-        score += c_curto[d] * 5.0 # Peso 1: Recente
-        score += c_longo[d] * 1.0 # Peso 2: Longo
-        
+        score += c_curto[d] * 5.0
+        score += c_longo[d] * 1.0
         if d[0] in bichos_vicio or d[1] in bichos_vicio:
-            score += 500.0 # Peso 3: Vício
-            
+            score += 500.0
         scores[d] = score
         
     rank_final = sorted(scores.items(), key=lambda x: -x[1])
     top_200 = [d for d, s in rank_final][:200]
     return sorted(top_200)
 
-# --- FUNÇÃO DE BACKTEST DUQUE ---
+# --- FUNÇÃO DE BACKTEST ---
 def executar_backtest_duque(historico):
     resultados_backtest = []
     for i in range(1, 5):
         if len(historico) <= i + 50: break 
-        
         target_duque = tuple(sorted(historico[-i]))
         hist_treino = historico[:-i] 
-        
         sniper_past = gerar_sniper_top200_v6(hist_treino)
         win = target_duque in sniper_past
-        
         resultados_backtest.append({
             "index": i,
             "duque_real": target_duque,
@@ -272,7 +276,7 @@ def executar_backtest_duque(historico):
         })
     return resultados_backtest
 
-# --- CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+# --- CALCULAR RECORDE DE DERROTAS ---
 def calcular_max_derrotas_duque(historico):
     max_derrotas = 0
     derrotas_consecutivas_temp = 0
@@ -282,35 +286,40 @@ def calcular_max_derrotas_duque(historico):
     for i in range(start_idx, len(historico)):
         target_duque = tuple(sorted(historico[i]))
         hist_treino = historico[:i]
-        
         sniper_past = gerar_sniper_top200_v6(hist_treino)
         win = target_duque in sniper_past
-        
         if not win:
             derrotas_consecutivas_temp += 1
         else:
             if derrotas_consecutivas_temp > max_derrotas:
                 max_derrotas = derrotas_consecutivas_temp
             derrotas_consecutivas_temp = 0
-            
     if derrotas_consecutivas_temp > max_derrotas:
         max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
-# --- NOVA TABELA DE STRESS PARA DUQUES (S1/S2/S3) + SEQUENCIA ATUAL ---
+# --- NOVA FUNÇÃO: VERIFICAR SEQUÊNCIA (V7.1) ---
+def verificar_sequencia_bichos(duque):
+    b1, b2 = sorted(duque)
+    # Caso padrão (Ex: 1-2, 2-3... 24-25)
+    if b2 - b1 == 1:
+        return True
+    # Caso Circular (25-1)
+    if b1 == 1 and b2 == 25:
+        return True
+    return False
+
+# --- TABELA DE STRESS ---
 def calcular_tabela_stress_duque(historico):
     _, mapa = gerar_universo_duques()
     tabela = []
     total_jogos = len(historico)
-    
     for nome_setor, lista_duques in mapa.items():
-        # Atraso Atual
         atraso = 0
         for jogo in reversed(historico):
             if tuple(sorted(jogo)) in lista_duques: break
             atraso += 1
-            
-        # Sequência Atual (Quantas vezes seguidas esse setor saiu recentemente)
+        
         seq_atual_real = 0
         last_duque = tuple(sorted(historico[-1]))
         if last_duque in lista_duques:
@@ -318,11 +327,7 @@ def calcular_tabela_stress_duque(historico):
                 if tuple(sorted(jogo)) in lista_duques: seq_atual_real += 1
                 else: break
         
-        # Frequencia e Recordes
-        vitorias_total = 0
-        max_atraso = 0; curr_atraso = 0
-        max_seq = 0; curr_seq = 0
-        
+        vitorias_total = 0; max_atraso = 0; curr_atraso = 0; max_seq = 0; curr_seq = 0
         for jogo in historico:
             duque = tuple(sorted(jogo))
             if duque in lista_duques:
@@ -334,12 +339,9 @@ def calcular_tabela_stress_duque(historico):
                 if curr_seq > max_seq: max_seq = curr_seq
                 curr_seq = 0
                 curr_atraso += 1
-        
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq > max_seq: max_seq = curr_seq
-        
         porcentagem = (vitorias_total / total_jogos * 100) if total_jogos > 0 else 0
-        
         tabela.append({
             "SETOR": nome_setor, 
             "% PRESENÇA": porcentagem, 
@@ -348,7 +350,6 @@ def calcular_tabela_stress_duque(historico):
             "SEQ. ATUAL": seq_atual_real,
             "REC. SEQ. (V)": max_seq
         })
-        
     return pd.DataFrame(tabela)
 
 # --- VISUAL BOLINHAS ---
@@ -359,14 +360,10 @@ def gerar_bolinhas_recentes_duque(historico):
         duque_sorted = tuple(sorted(duque))
         classe = ""
         letra = ""
-        if duque_sorted in mapa["SETOR 1 (S1)"]:
-            classe = "bola-s1"; letra = "S1"
-        elif duque_sorted in mapa["SETOR 2 (S2)"]:
-            classe = "bola-s2"; letra = "S2"
-        elif duque_sorted in mapa["SETOR 3 (S3)"]:
-            classe = "bola-s3"; letra = "S3"
-        else:
-            classe = "bola-s1"; letra = "?"
+        if duque_sorted in mapa["SETOR 1 (S1)"]: classe = "bola-s1"; letra = "S1"
+        elif duque_sorted in mapa["SETOR 2 (S2)"]: classe = "bola-s2"; letra = "S2"
+        elif duque_sorted in mapa["SETOR 3 (S3)"]: classe = "bola-s3"; letra = "S3"
+        else: classe = "bola-s1"; letra = "?"
         html += f"<div class='{classe}'>{letra}</div>"
     html += "</div>"
     return html
@@ -425,6 +422,16 @@ if len(historico) > 50:
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
+    # --- VERIFICAÇÃO DE PADRÃO RARO (SEQUÊNCIA) ---
+    if verificar_sequencia_bichos(ult):
+        st.markdown(f"""
+        <div class="box-padrao-raro">
+            <h2>⚠️ PADRÃO DE SEQUÊNCIA DETECTADO ({ult[0]}-{ult[1]})</h2>
+            <p>Estatisticamente, é muito raro o próximo sorteio ser outra sequência (Ex: 1-2, 2-3...).</p>
+            <p style="font-weight:bold; color:#ffff00;">DICA DO ROBÔ: Aposte em pares espalhados!</p>
+        </div>
+        """, unsafe_allow_html=True)
+
     # --- BOX DO SNIPER TOP 200 (CAMALEÃO V6) ---
     st.markdown("""
     <div class="sniper-box">
@@ -450,13 +457,10 @@ if len(historico) > 50:
 
     st.markdown("---")
     
-    # --- CENTRAL DE AVISOS / RADAR DE OPORTUNIDADES (NOVO V7.0) ---
+    # --- CENTRAL DE AVISOS (RADAR) ---
     st.subheader("🚨 Radar de Oportunidades (Setores)")
-    
     col_alerts = st.container()
     alertas_totais = 0
-    
-    # Colunas para exibir os avisos
     cols_warnings = st.columns(2)
     warning_buffer = []
 
@@ -467,49 +471,27 @@ if len(historico) > 50:
         rec_seq = row['REC. SEQ. (V)']
         setor = row['SETOR']
         
-        # 1. Alerta de Atraso (Falta 1 ou Estourou)
-        if (rec_atraso - atraso) <= 1 and rec_atraso >= 5: # Filtro de relevância
+        if (rec_atraso - atraso) <= 1 and rec_atraso >= 5:
             alertas_totais += 1
             if atraso >= rec_atraso:
-                classe = "box-alerta"
-                msg = "**ESTOURADO!** (Quebra Iminente)"
+                classe = "box-alerta"; msg = "**ESTOURADO!** (Quebra Iminente)"
             else:
-                classe = "box-aviso"
-                msg = "⚠️ Atenção: Quase no Recorde"
-            
-            html_alert = f"""
-            <div class='{classe}'>
-                <h3>{setor}</h3>
-                <p>🕰️ Atraso Atual: {atraso} (Recorde: {rec_atraso})</p>
-                <p>{msg}</p>
-            </div>
-            """
+                classe = "box-aviso"; msg = "⚠️ Atenção: Quase no Recorde"
+            html_alert = f"<div class='{classe}'><h3>{setor}</h3><p>🕰️ Atraso Atual: {atraso} (Recorde: {rec_atraso})</p><p>{msg}</p></div>"
             warning_buffer.append(html_alert)
 
-        # 2. Alerta de Sequência (Inversão)
-        if (rec_seq - seq_atual) <= 1 and rec_seq >= 2: # Filtro de relevância
+        if (rec_seq - seq_atual) <= 1 and rec_seq >= 2:
             alertas_totais += 1
             if seq_atual >= rec_seq:
-                classe = "box-inverso-critico"
-                msg = "**ESTOURADO!** (Repetição Máxima - Jogue Inverso)"
+                classe = "box-inverso-critico"; msg = "**ESTOURADO!** (Repetição Máxima)"
             else:
-                classe = "box-inverso-atencao"
-                msg = "⚠️ Atenção: Sequência Alta"
-                
-            html_alert = f"""
-            <div class='{classe}'>
-                <h3>{setor}</h3>
-                <p>🔥 Sequência Atual: {seq_atual} (Recorde: {rec_seq})</p>
-                <p>{msg}</p>
-            </div>
-            """
+                classe = "box-inverso-atencao"; msg = "⚠️ Atenção: Sequência Alta"
+            html_alert = f"<div class='{classe}'><h3>{setor}</h3><p>🔥 Sequência Atual: {seq_atual} (Recorde: {rec_seq})</p><p>{msg}</p></div>"
             warning_buffer.append(html_alert)
 
-    # Renderiza os avisos
     if alertas_totais > 0:
         for i, w in enumerate(warning_buffer):
-            with cols_warnings[i % 2]:
-                st.markdown(w, unsafe_allow_html=True)
+            with cols_warnings[i % 2]: st.markdown(w, unsafe_allow_html=True)
     else:
         st.success("✅ Nenhum setor em estado crítico no momento.")
 
@@ -522,9 +504,7 @@ if len(historico) > 50:
     st.markdown(gerar_bolinhas_recentes_duque(historico), unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Gráfico de Rosca
     df_chart = df_stress_real.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
-    
     base = alt.Chart(df_chart).encode(theta=alt.Theta("PRESENCA", stack=True))
     pie = base.mark_arc(outerRadius=120, innerRadius=60).encode(
         color=alt.Color("CATEGORIA",
