@@ -8,12 +8,12 @@ from datetime import datetime, date, timedelta
 import time
 import re
 from bs4 import BeautifulSoup
-import altair as alt # Importante para o gráfico
+import altair as alt
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E ESTILO V29 ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V3.0 - Sniper 200", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V4.0 - Backtest", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -62,6 +62,28 @@ st.markdown("""
     }
     .sniper-title { font-size: 24px; font-weight: 900; color: #ff00de; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,0,222,0.5); }
     .sniper-desc { font-size: 14px; color: #e0b0ff; font-style: italic; margin-bottom: 15px; }
+    
+    /* BACKTEST STYLES (IGUAL PENTÁGONO) */
+    .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
+    .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
+    .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
+    .bt-icon { font-size: 24px; margin-bottom: 5px; }
+    .bt-num { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
+    .bt-label { font-size: 11px; opacity: 0.8; }
+    
+    .max-loss-info {
+        text-align: center;
+        background-color: rgba(255, 0, 0, 0.1);
+        border: 1px solid rgba(255, 0, 0, 0.3);
+        color: #ffaaaa;
+        padding: 5px 15px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 10px;
+        font-size: 14px;
+        font-weight: bold;
+    }
     
     /* Ajustes de Tabela e Containers */
     div[data-testid="stTable"] table { color: white; }
@@ -187,46 +209,85 @@ def gerar_universo_duques():
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite_texto(lista_tuplas):
-    # Formata para exibição compacta no st.code
     lista_ordenada = sorted(lista_tuplas)
     texto = ""
     for i, p in enumerate(lista_ordenada):
         texto += f"[{p[0]:02}-{p[1]:02}] "
-        if (i + 1) % 10 == 0: texto += "\n" # Quebra linha a cada 10 duques
+        if (i + 1) % 10 == 0: texto += "\n" 
     return texto.strip()
 
-# --- LÓGICA CENTRAL DO SNIPER 200 (BASEADA EM FREQUÊNCIA PONDERADA) ---
+# --- LÓGICA CENTRAL DO SNIPER 200 ---
 def gerar_sniper_top200(historico_slice):
-    # Analisa os 300 duques e pontua baseado em frequência recente (peso 3) e média (peso 1)
     hist_rev = historico_slice[::-1]
     todos_duques, _ = gerar_universo_duques()
     scores = {d: 0 for d in todos_duques}
-    
-    c_curto = Counter(hist_rev[:25]) # Últimos 25 jogos (Curto prazo)
-    c_medio = Counter(hist_rev[:75]) # Últimos 75 jogos (Médio prazo)
-    
+    c_curto = Counter(hist_rev[:25])
+    c_medio = Counter(hist_rev[:75])
     for d in todos_duques:
-        scores[d] += (c_curto[d] * 3.0) # Peso maior para o recente
-        scores[d] += (c_medio[d] * 1.0) # Peso menor para o histórico médio
-        
-    # Ordena do maior score para o menor e pega os 200 primeiros
+        scores[d] += (c_curto[d] * 3.0) 
+        scores[d] += (c_medio[d] * 1.0) 
     rank_final = sorted(scores.items(), key=lambda x: -x[1])
     top_200 = [d for d, s in rank_final][:200]
     return top_200
 
+# --- NOVO: BACKTEST DO SNIPER DUQUE (4 JOGOS) ---
+def executar_backtest_duque(historico):
+    resultados_backtest = []
+    for i in range(1, 5):
+        if len(historico) <= i + 50: break # Precisa de histórico para treinar
+        
+        target_duque = historico[-i] # O par que saiu (tupla)
+        target_duque_sorted = tuple(sorted(target_duque))
+        
+        hist_treino = historico[:-i] # Histórico até aquele momento
+        
+        # Gera o palpite que teria sido dado
+        sniper_past = gerar_sniper_top200(hist_treino)
+        
+        # Confere se o duque que saiu estava na lista de 200
+        win = target_duque_sorted in sniper_past
+        
+        resultados_backtest.append({
+            "index": i,
+            "duque_real": target_duque_sorted,
+            "vitoria": win
+        })
+    return resultados_backtest
+
+# --- NOVO: CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+def calcular_max_derrotas_duque(historico):
+    max_derrotas = 0
+    derrotas_consecutivas_temp = 0
+    range_analise = min(50, len(historico) - 50)
+    start_idx = len(historico) - range_analise
+    
+    for i in range(start_idx, len(historico)):
+        target_duque = tuple(sorted(historico[i]))
+        hist_treino = historico[:i]
+        
+        sniper_past = gerar_sniper_top200(hist_treino)
+        win = target_duque in sniper_past
+        
+        if not win:
+            derrotas_consecutivas_temp += 1
+        else:
+            if derrotas_consecutivas_temp > max_derrotas:
+                max_derrotas = derrotas_consecutivas_temp
+            derrotas_consecutivas_temp = 0
+            
+    if derrotas_consecutivas_temp > max_derrotas:
+        max_derrotas = derrotas_consecutivas_temp
+    return max_derrotas
+
 def calcular_tabela_stress_visual(historico):
     _, mapa = gerar_universo_duques()
-    recorte = historico[-20:] # Analisa os últimos 20 para o gráfico
+    recorte = historico[-20:] 
     total_recorte = len(recorte)
     stats = []
-    
     for nome_setor, lista_duques in mapa.items():
-        # Conta quantas vezes um duque deste setor saiu nos últimos 20 jogos
         count = sum(1 for x in recorte if x in lista_duques)
-        # Calcula porcentagem de presença
         porcentagem = (count / total_recorte * 100) if total_recorte > 0 else 0
         stats.append({ "SETOR": nome_setor, "PRESENCA": porcentagem })
-        
     return pd.DataFrame(stats)
 
 # =============================================================================
@@ -273,13 +334,15 @@ with st.sidebar:
 historico, ultimo_horario_salvo = carregar_dados()
 st.title(f"👑 {CONFIG_BANCA['display_name']}")
 
-if len(historico) > 20:
+if len(historico) > 50: # Aumentei para 50 para garantir backtest preciso
     ult = historico[-1]
     st.caption(f"📅 Último Registro: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo}) | Total Jogos: {len(historico)}")
     
     # --- GERAR DADOS ---
     sniper_200 = gerar_sniper_top200(historico)
     df_stress_vis = calcular_tabela_stress_visual(historico)
+    bt_results = executar_backtest_duque(historico)
+    max_loss_rec = calcular_max_derrotas_duque(historico)
 
     # --- BOX DO SNIPER TOP 200 ---
     st.markdown("""
@@ -288,15 +351,30 @@ if len(historico) > 20:
         <div class="sniper-desc">Cobertura de Elite baseada em Fluxo Recente e Médio. Copie a lista abaixo.</div>
     </div>
     """, unsafe_allow_html=True)
-    # Exibe o palpite formatado em um bloco de código rolável
-    st.code(formatar_palpite_texto(sniper_200), language="text")
+    
+    # Exibe o indicador de Pior Sequência
+    st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_rec} Derrotas</span></div>", unsafe_allow_html=True)
+    
+    # Exibe Cartões de Backtest
+    if bt_results:
+        cards_html = ""
+        for res in reversed(bt_results):
+            classe_res = "bt-win" if res['vitoria'] else "bt-loss"
+            icon = "🟢" if res['vitoria'] else "❌"
+            duque_str = f"{res['duque_real'][0]:02}-{res['duque_real'][1]:02}"
+            cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>D: {duque_str}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
+        final_html = f"<div class='backtest-container'>{cards_html}</div>"
+        st.markdown(final_html, unsafe_allow_html=True)
+
+    # Exibe o palpite formatado
+    with st.expander("📋 Ver Lista de Jogos (200 Pares)", expanded=False):
+        st.code(formatar_palpite_texto(sniper_200), language="text")
 
     st.markdown("---")
     
     # --- ÁREA DO RADAR DE SETORES E GRÁFICO ---
     st.subheader("📡 Radar de Setores (S1 / S2 / S3)")
     
-    # 1. Bolinhas Visuais (Últimos 12 jogos)
     st.markdown("**Visual Recente (⬅️ Mais Novo):**")
     _, mapa_vis = gerar_universo_duques()
     html_b = "<div>"
@@ -309,12 +387,12 @@ if len(historico) > 20:
     st.markdown(html_b, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. Gráfico de Rosca (Donut Chart - Estilo Pentágono)
+    # Gráfico de Rosca
     base = alt.Chart(df_stress_vis).encode(theta=alt.Theta("PRESENCA", stack=True))
     pie = base.mark_arc(outerRadius=120, innerRadius=60).encode(
         color=alt.Color("SETOR",
             scale=alt.Scale(domain=['S1', 'S2', 'S3'], range=['#17a2b8', '#fd7e14', '#dc3545']),
-            legend=None # Remove a legenda padrão para usar as cores diretas
+            legend=None 
         ),
         order=alt.Order("PRESENCA", sort="descending"),
         tooltip=["SETOR", alt.Tooltip("PRESENCA", format=".1f", title="% Presença (20 Jogos)")]
@@ -326,7 +404,6 @@ if len(historico) > 20:
     )
     st.altair_chart(pie + text, use_container_width=True)
     
-    # 3. Tabela Simples de Porcentagem
     st.markdown("**Tabela de Domínio Recente (20 Jogos):**")
     st.table(df_stress_vis.set_index("SETOR"))
 
@@ -342,4 +419,4 @@ if len(historico) > 20:
         st.code(formatar_palpite_texto(mapa_copy["S3"]), language="text")
 
 else:
-    st.warning("⚠️ Base de dados insuficiente. Adicione pelo menos 25 resultados para ativar o Sniper e o Radar.")
+    st.warning("⚠️ Base de dados insuficiente para o Sniper e Backtest. Adicione pelo menos 50 resultados na barra lateral.")
