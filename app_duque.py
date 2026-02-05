@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E ESTILO V29 ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V4.0 - Backtest", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V5.0 - Híbrido", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -50,20 +50,20 @@ st.markdown("""
     .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(253, 126, 20, 0.5); }
     .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
     
-    /* Box do SNIPER DUQUE */
+    /* Box do SNIPER DUQUE - CORRIGIDO PARA ALTA PERFORMANCE */
     .sniper-box { 
-        background: linear-gradient(135deg, #3a0035, #240b36); 
-        border: 2px solid #ff00de; 
+        background: linear-gradient(135deg, #004d00, #002b00); 
+        border: 2px solid #00ff00; 
         padding: 20px; 
         border-radius: 15px; 
         margin-bottom: 20px; 
         text-align: center;
-        box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4);
+        box-shadow: 0px 0px 25px rgba(0, 255, 0, 0.3);
     }
-    .sniper-title { font-size: 24px; font-weight: 900; color: #ff00de; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,0,222,0.5); }
-    .sniper-desc { font-size: 14px; color: #e0b0ff; font-style: italic; margin-bottom: 15px; }
+    .sniper-title { font-size: 24px; font-weight: 900; color: #00ff00; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(0,255,0,0.5); }
+    .sniper-desc { font-size: 14px; color: #ccffcc; font-style: italic; margin-bottom: 15px; }
     
-    /* BACKTEST STYLES (IGUAL PENTÁGONO) */
+    /* BACKTEST STYLES */
     .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -85,7 +85,6 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* Ajustes de Tabela e Containers */
     div[data-testid="stTable"] table { color: white; }
     thead tr th:first-child {display:none}
     tbody th {display:none}
@@ -197,7 +196,7 @@ def raspar_duque_avancado(data_alvo, horario_alvo):
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA S1/S2/S3 E NOVO SNIPER TOP 200 ---
+# --- 3. LÓGICA V5.0 (ALGORITMO HÍBRIDO DE CERCAMENTO) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -209,52 +208,114 @@ def gerar_universo_duques():
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite_texto(lista_tuplas):
-    lista_ordenada = sorted(lista_tuplas)
+    lista_ordenada = sorted(list(set(lista_tuplas))) # Garante unicidade e ordem
     texto = ""
     for i, p in enumerate(lista_ordenada):
         texto += f"[{p[0]:02}-{p[1]:02}] "
         if (i + 1) % 10 == 0: texto += "\n" 
     return texto.strip()
 
-# --- LÓGICA CENTRAL DO SNIPER 200 ---
-def gerar_sniper_top200(historico_slice):
+# --- NOVO ALGORITMO HÍBRIDO (V5.0) ---
+def gerar_sniper_top200_hibrido(historico_slice):
     hist_rev = historico_slice[::-1]
     todos_duques, _ = gerar_universo_duques()
-    scores = {d: 0 for d in todos_duques}
-    c_curto = Counter(hist_rev[:25])
-    c_medio = Counter(hist_rev[:75])
+    
+    # 1. ESTRATÉGIA TENDÊNCIA (TOP 100)
+    # Pega os duques que mais saíram recentemente
+    c_curto = Counter(hist_rev[:20])
+    rank_trend = sorted(todos_duques, key=lambda x: c_curto[x], reverse=True)
+    pool_trend = rank_trend[:100]
+    
+    # 2. ESTRATÉGIA ATRASO (TOP 40)
+    # Pega duques que estão sumidos, mas que historicamente saem bem
+    c_longo = Counter(hist_rev) # Frequencia total
+    atrasos = {}
     for d in todos_duques:
-        scores[d] += (c_curto[d] * 3.0) 
-        scores[d] += (c_medio[d] * 1.0) 
-    rank_final = sorted(scores.items(), key=lambda x: -x[1])
-    top_200 = [d for d, s in rank_final][:200]
-    return top_200
+        atraso = 0
+        for jogo in hist_rev:
+            if jogo == d: break
+            atraso += 1
+        # Score = Atraso * Frequencia Global (Prioriza atrasados que são bons)
+        atrasos[d] = atraso * (c_longo[d] + 1) 
+    rank_atraso = sorted(todos_duques, key=lambda x: atrasos[x], reverse=True)
+    pool_atraso = rank_atraso[:40]
+    
+    # 3. ESTRATÉGIA REPETIÇÃO/VÍCIO (TOP 30)
+    # Gera duques combinando os bichos que acabaram de sair
+    ultimo_jogo = historico_slice[-1]
+    bichos_quentes = list(ultimo_jogo) # Os 2 que sairam
+    # Pega os vizinhos deles (+1 e -1)
+    for b in ultimo_jogo:
+        viz_cima = b + 1 if b < 25 else 1
+        viz_baixo = b - 1 if b > 1 else 25
+        bichos_quentes.extend([viz_cima, viz_baixo])
+    
+    pool_vicio = []
+    for d in todos_duques:
+        # Se o duque contém pelo menos um bicho quente
+        if d[0] in bichos_quentes or d[1] in bichos_quentes:
+            pool_vicio.append(d)
+    # Ordena pelo que mais sai
+    pool_vicio = sorted(pool_vicio, key=lambda x: c_curto[x], reverse=True)[:30]
+    
+    # 4. ESTRATÉGIA CICLO (TOP 30)
+    # Duques formados por bichos que NÃO saíram nos ultimos 10 jogos
+    bichos_vistos = set()
+    for jogo in hist_rev[:10]:
+        bichos_vistos.add(jogo[0])
+        bichos_vistos.add(jogo[1])
+    bichos_ausentes = [b for b in range(1, 26) if b not in bichos_vistos]
+    
+    pool_ciclo = []
+    for d in todos_duques:
+        if d[0] in bichos_ausentes and d[1] in bichos_ausentes:
+            pool_ciclo.append(d)
+    pool_ciclo = sorted(pool_ciclo, key=lambda x: c_longo[x], reverse=True)[:30]
+    
+    # --- FUSÃO DOS PELOTÕES ---
+    final_list = []
+    final_list.extend(pool_trend)
+    final_list.extend(pool_atraso)
+    final_list.extend(pool_vicio)
+    final_list.extend(pool_ciclo)
+    
+    # Remove duplicatas e garante tamanho 200
+    final_list = list(set(final_list))
+    
+    # Se sobrar vaga (pq removeu duplicatas), completa com o ranking geral
+    if len(final_list) < 200:
+        c_medio = Counter(hist_rev[:60])
+        rank_geral = sorted(todos_duques, key=lambda x: c_medio[x], reverse=True)
+        for d in rank_geral:
+            if d not in final_list:
+                final_list.append(d)
+                if len(final_list) >= 200: break
+                
+    # Se passar de 200 (improvavel, mas seguro), corta
+    return final_list[:200]
 
-# --- NOVO: BACKTEST DO SNIPER DUQUE (4 JOGOS) ---
+# --- FUNÇÃO DE BACKTEST DUQUE ---
 def executar_backtest_duque(historico):
     resultados_backtest = []
     for i in range(1, 5):
-        if len(historico) <= i + 50: break # Precisa de histórico para treinar
+        if len(historico) <= i + 50: break 
         
-        target_duque = historico[-i] # O par que saiu (tupla)
-        target_duque_sorted = tuple(sorted(target_duque))
+        target_duque = tuple(sorted(historico[-i]))
+        hist_treino = historico[:-i] 
         
-        hist_treino = historico[:-i] # Histórico até aquele momento
+        # Usa o novo algoritmo Híbrido V5.0
+        sniper_past = gerar_sniper_top200_hibrido(hist_treino)
         
-        # Gera o palpite que teria sido dado
-        sniper_past = gerar_sniper_top200(hist_treino)
-        
-        # Confere se o duque que saiu estava na lista de 200
-        win = target_duque_sorted in sniper_past
+        win = target_duque in sniper_past
         
         resultados_backtest.append({
             "index": i,
-            "duque_real": target_duque_sorted,
+            "duque_real": target_duque,
             "vitoria": win
         })
     return resultados_backtest
 
-# --- NOVO: CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+# --- FUNÇÃO CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
 def calcular_max_derrotas_duque(historico):
     max_derrotas = 0
     derrotas_consecutivas_temp = 0
@@ -265,7 +326,7 @@ def calcular_max_derrotas_duque(historico):
         target_duque = tuple(sorted(historico[i]))
         hist_treino = historico[:i]
         
-        sniper_past = gerar_sniper_top200(hist_treino)
+        sniper_past = gerar_sniper_top200_hibrido(hist_treino)
         win = target_duque in sniper_past
         
         if not win:
@@ -334,25 +395,25 @@ with st.sidebar:
 historico, ultimo_horario_salvo = carregar_dados()
 st.title(f"👑 {CONFIG_BANCA['display_name']}")
 
-if len(historico) > 50: # Aumentei para 50 para garantir backtest preciso
+if len(historico) > 50:
     ult = historico[-1]
     st.caption(f"📅 Último Registro: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo}) | Total Jogos: {len(historico)}")
     
-    # --- GERAR DADOS ---
-    sniper_200 = gerar_sniper_top200(historico)
+    # --- GERAR DADOS COM NOVA ESTRATÉGIA HÍBRIDA ---
+    sniper_200 = gerar_sniper_top200_hibrido(historico)
     df_stress_vis = calcular_tabela_stress_visual(historico)
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
-    # --- BOX DO SNIPER TOP 200 ---
+    # --- BOX DO SNIPER TOP 200 (VERDE V5.0) ---
     st.markdown("""
     <div class="sniper-box">
-        <div class="sniper-title">🎯 SNIPER DUQUE (TOP 200)</div>
-        <div class="sniper-desc">Cobertura de Elite baseada em Fluxo Recente e Médio. Copie a lista abaixo.</div>
+        <div class="sniper-title">🎯 SNIPER DUQUE (TOP 200 HÍBRIDO)</div>
+        <div class="sniper-desc">Estratégia Blindada: Tendência + Atraso + Repetição + Ciclo.</div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Exibe o indicador de Pior Sequência
+    # Exibe o indicador de Pior Sequência (Esperamos que caia para 1 ou 2)
     st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_rec} Derrotas</span></div>", unsafe_allow_html=True)
     
     # Exibe Cartões de Backtest
