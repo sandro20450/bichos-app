@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V6.1 - Tabela Fix", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V7.0 - Radar", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -36,7 +36,7 @@ def reproduzir_som(tipo):
     else: return
     st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
 
-# --- CSS ESTILO PENTÁGONO V29 ---
+# --- CSS ESTILO PENTÁGONO V29 (COM BOX DE ALERTAS) ---
 st.markdown("""
 <style>
     [data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #1a002e 0%, #2E004F 100%); color: #ffffff; }
@@ -44,6 +44,12 @@ st.markdown("""
     .stNumberInput input { color: white !important; background-color: rgba(255,255,255,0.1) !important; }
     [data-testid="stTable"] { color: white !important; background-color: transparent !important; }
     
+    /* CAIXAS DE ALERTA (IGUAL PENTÁGONO) */
+    .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
+    .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
+    .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
+    .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
+
     /* Bolinhas dos Setores */
     .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
     .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
@@ -291,7 +297,7 @@ def calcular_max_derrotas_duque(historico):
         max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
-# --- NOVA TABELA DE STRESS PARA DUQUES (S1/S2/S3) ---
+# --- NOVA TABELA DE STRESS PARA DUQUES (S1/S2/S3) + SEQUENCIA ATUAL ---
 def calcular_tabela_stress_duque(historico):
     _, mapa = gerar_universo_duques()
     tabela = []
@@ -304,7 +310,15 @@ def calcular_tabela_stress_duque(historico):
             if tuple(sorted(jogo)) in lista_duques: break
             atraso += 1
             
-        # Frequencia (Presença) Total
+        # Sequência Atual (Quantas vezes seguidas esse setor saiu recentemente)
+        seq_atual_real = 0
+        last_duque = tuple(sorted(historico[-1]))
+        if last_duque in lista_duques:
+            for jogo in reversed(historico):
+                if tuple(sorted(jogo)) in lista_duques: seq_atual_real += 1
+                else: break
+        
+        # Frequencia e Recordes
         vitorias_total = 0
         max_atraso = 0; curr_atraso = 0
         max_seq = 0; curr_seq = 0
@@ -321,7 +335,6 @@ def calcular_tabela_stress_duque(historico):
                 curr_seq = 0
                 curr_atraso += 1
         
-        # Check finais
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq > max_seq: max_seq = curr_seq
         
@@ -332,6 +345,7 @@ def calcular_tabela_stress_duque(historico):
             "% PRESENÇA": porcentagem, 
             "ATRASO": atraso, 
             "REC. ATRASO": max_atraso, 
+            "SEQ. ATUAL": seq_atual_real,
             "REC. SEQ. (V)": max_seq
         })
         
@@ -407,7 +421,7 @@ if len(historico) > 50:
     
     # --- GERAR DADOS ---
     sniper_200 = gerar_sniper_top200_v6(historico)
-    df_stress_real = calcular_tabela_stress_duque(historico) # Agora calcula S1, S2, S3 corretamente
+    df_stress_real = calcular_tabela_stress_duque(historico)
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
@@ -436,15 +450,79 @@ if len(historico) > 50:
 
     st.markdown("---")
     
+    # --- CENTRAL DE AVISOS / RADAR DE OPORTUNIDADES (NOVO V7.0) ---
+    st.subheader("🚨 Radar de Oportunidades (Setores)")
+    
+    col_alerts = st.container()
+    alertas_totais = 0
+    
+    # Colunas para exibir os avisos
+    cols_warnings = st.columns(2)
+    warning_buffer = []
+
+    for index, row in df_stress_real.iterrows():
+        atraso = row['ATRASO']
+        rec_atraso = row['REC. ATRASO']
+        seq_atual = row['SEQ. ATUAL']
+        rec_seq = row['REC. SEQ. (V)']
+        setor = row['SETOR']
+        
+        # 1. Alerta de Atraso (Falta 1 ou Estourou)
+        if (rec_atraso - atraso) <= 1 and rec_atraso >= 5: # Filtro de relevância
+            alertas_totais += 1
+            if atraso >= rec_atraso:
+                classe = "box-alerta"
+                msg = "**ESTOURADO!** (Quebra Iminente)"
+            else:
+                classe = "box-aviso"
+                msg = "⚠️ Atenção: Quase no Recorde"
+            
+            html_alert = f"""
+            <div class='{classe}'>
+                <h3>{setor}</h3>
+                <p>🕰️ Atraso Atual: {atraso} (Recorde: {rec_atraso})</p>
+                <p>{msg}</p>
+            </div>
+            """
+            warning_buffer.append(html_alert)
+
+        # 2. Alerta de Sequência (Inversão)
+        if (rec_seq - seq_atual) <= 1 and rec_seq >= 2: # Filtro de relevância
+            alertas_totais += 1
+            if seq_atual >= rec_seq:
+                classe = "box-inverso-critico"
+                msg = "**ESTOURADO!** (Repetição Máxima - Jogue Inverso)"
+            else:
+                classe = "box-inverso-atencao"
+                msg = "⚠️ Atenção: Sequência Alta"
+                
+            html_alert = f"""
+            <div class='{classe}'>
+                <h3>{setor}</h3>
+                <p>🔥 Sequência Atual: {seq_atual} (Recorde: {rec_seq})</p>
+                <p>{msg}</p>
+            </div>
+            """
+            warning_buffer.append(html_alert)
+
+    # Renderiza os avisos
+    if alertas_totais > 0:
+        for i, w in enumerate(warning_buffer):
+            with cols_warnings[i % 2]:
+                st.markdown(w, unsafe_allow_html=True)
+    else:
+        st.success("✅ Nenhum setor em estado crítico no momento.")
+
+    st.markdown("---")
+    
     # --- ÁREA DO RADAR DE SETORES E GRÁFICO ---
-    st.subheader("📡 Radar de Setores (S1 / S2 / S3)")
+    st.subheader("📡 Gráfico de Setores")
     
     st.markdown("**Visual Recente (⬅️ Mais Novo):**")
     st.markdown(gerar_bolinhas_recentes_duque(historico), unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Gráfico de Rosca
-    # Renomear para o gráfico entender
     df_chart = df_stress_real.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
     
     base = alt.Chart(df_chart).encode(theta=alt.Theta("PRESENCA", stack=True))
@@ -464,7 +542,6 @@ if len(historico) > 50:
     st.altair_chart(pie + text, use_container_width=True)
     
     st.markdown("**📉 Tabela de Stress:**")
-    # Mostra a tabela REAL (S1, S2, S3)
     st.table(df_stress_real.set_index("SETOR"))
 
     st.markdown("---")
