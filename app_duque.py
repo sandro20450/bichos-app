@@ -4,7 +4,7 @@ from collections import Counter
 import gspread
 from google.oauth2.service_account import Credentials
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import pytz
 import time
 import re
@@ -13,16 +13,15 @@ from bs4 import BeautifulSoup
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E SOM ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE (Tradicional)", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V2.0", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
+    "slug": "loteria-tradicional", # Slug para montar a URL
     "logo_url": "https://cdn-icons-png.flaticon.com/512/1063/1063233.png", 
     "cor_fundo": "#2E004F", 
     "cor_texto": "#ffffff",
-    "card_bg": "rgba(255, 255, 255, 0.1)",
-    "url_site": "https://www.resultadofacil.com.br/resultados-loteria-tradicional-de-hoje",
-    "horarios": "11:20 🔹 12:20 🔹 13:20 🔹 14:20 🔹 18:20 🔹 19:20 🔹 20:20 🔹 21:20 🔹 22:20 🔹 23:20"
+    "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"]
 }
 
 # Inicialização de Estados
@@ -30,7 +29,6 @@ if 'tocar_som_salvar' not in st.session_state: st.session_state['tocar_som_salva
 if 'tocar_som_apagar' not in st.session_state: st.session_state['tocar_som_apagar'] = False
 if 'auto_g1' not in st.session_state: st.session_state['auto_g1'] = 1
 if 'auto_g2' not in st.session_state: st.session_state['auto_g2'] = 2
-if 'auto_idx_h' not in st.session_state: st.session_state['auto_idx_h'] = 0
 
 def reproduzir_som(tipo):
     if tipo == 'sucesso':
@@ -59,7 +57,7 @@ if st.session_state['tocar_som_salvar']: reproduzir_som('sucesso'); st.session_s
 if st.session_state['tocar_som_apagar']: reproduzir_som('apagar'); st.session_state['tocar_som_apagar'] = False
 
 # =============================================================================
-# --- 2. CONEXÃO & SCRAPING ---
+# --- 2. CONEXÃO & SCRAPING (ATUALIZADO IGUAL PENTÁGONO) ---
 # =============================================================================
 def conectar_planilha():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -89,12 +87,12 @@ def carregar_dados():
         return lista_duques, ultimo_horario
     return [], "--:--"
 
-def salvar_duque(b1, b2, horario):
+def salvar_duque(b1, b2, horario, data_ref):
     worksheet = conectar_planilha()
     if worksheet:
         try:
-            data = datetime.now().strftime("%Y-%m-%d")
-            worksheet.append_row([int(b1), int(b2), str(horario), data])
+            data_str = data_ref.strftime("%Y-%m-%d")
+            worksheet.append_row([int(b1), int(b2), str(horario), data_str])
             return True
         except: return False
     return False
@@ -108,46 +106,80 @@ def deletar_ultimo():
         except: return False
     return False
 
-# --- FUNÇÃO NOVA: SCRAPING POR HORÁRIO ESPECÍFICO (V110) ---
-def raspar_dupla_por_horario(url, horario_alvo):
+# --- FUNÇÃO NOVA: SCRAPING COM FILTRO ANTI-FEDERAL E DATA ---
+def montar_url_correta(slug, data_alvo):
+    hoje = date.today()
+    delta = (hoje - data_alvo).days
+    base = "https://www.resultadofacil.com.br"
+    if delta == 0: return f"{base}/resultados-{slug}-de-hoje"
+    elif delta == 1: return f"{base}/resultados-{slug}-de-ontem"
+    else: return f"{base}/resultados-{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+
+def raspar_duque_avancado(data_alvo, horario_alvo):
+    url = montar_url_correta(CONFIG_BANCA['slug'], data_alvo)
+    
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code != 200: return None, None, "Erro Site"
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code != 200: return None, None, f"Erro HTTP {r.status_code}"
         
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
+        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
+        
         for tabela in tabelas:
-            if "1º" in tabela.get_text() or "Pri" in tabela.get_text():
-                horario_encontrado = None
-                prev = tabela.find_previous(string=re.compile(r'\d{2}:\d{2}'))
-                if prev: 
-                    m = re.search(r'(\d{2}:\d{2})', prev)
-                    if m: horario_encontrado = m.group(1)
+            # 1. FILTRO ANTI-FEDERAL (Ignora se for federal)
+            cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+            if cabecalho and "FEDERAL" in cabecalho.upper(): 
+                continue 
+            
+            # 2. DETECTA HORÁRIO
+            horario_encontrado = None
+            prev = tabela.find_previous(string=padrao_hora)
+            if prev:
+                m = re.search(padrao_hora, prev)
+                if m:
+                    raw = m.group(1).strip()
+                    if ':' in raw: horario_encontrado = raw
+                    elif 'h' in raw: horario_encontrado = raw.replace('h', '').strip().zfill(2) + ":00"
+                    else: horario_encontrado = raw.strip().zfill(2) + ":00"
+            
+            # Normaliza horário alvo para comparação (garante formato HH:MM)
+            h_alvo_clean = horario_alvo.replace('h','').strip()
+            
+            if horario_encontrado == h_alvo_clean:
+                bicho1 = None
+                bicho2 = None
+                linhas = tabela.find_all('tr')
                 
-                if horario_encontrado == horario_alvo:
-                    bicho1 = None
-                    bicho2 = None
-                    linhas = tabela.find_all('tr')
-                    for linha in linhas:
-                        colunas = linha.find_all('td')
-                        if len(colunas) >= 3:
-                            premio = colunas[0].get_text().strip()
-                            grp_txt = colunas[2].get_text().strip()
-                            if grp_txt.isdigit():
-                                grp = int(grp_txt)
-                                if (any(x in premio for x in ['1º', '1', 'Pri']) and "10" not in premio):
-                                    bicho1 = grp
-                                elif any(x in premio for x in ['2º', '2', 'Seg']):
-                                    bicho2 = grp
-                    if bicho1 and bicho2: return bicho1, bicho2, "Sucesso"
-                    else: return None, None, "Horário encontrado, mas falta 1º ou 2º prêmio"
-        return None, None, "Horário ainda não saiu"
+                # Busca 1º e 2º Prêmio
+                for linha in linhas:
+                    colunas = linha.find_all('td')
+                    if len(colunas) >= 3:
+                        premio_txt = colunas[0].get_text().strip()
+                        grp_txt = colunas[2].get_text().strip()
+                        
+                        if grp_txt.isdigit():
+                            grp = int(grp_txt)
+                            # Pega 1º (Evita "10º")
+                            nums = re.findall(r'\d+', premio_txt)
+                            if nums:
+                                pos = int(nums[0])
+                                if pos == 1: bicho1 = grp
+                                elif pos == 2: bicho2 = grp
+                
+                if bicho1 and bicho2:
+                    return bicho1, bicho2, "Sucesso"
+                else:
+                    return None, None, "Horário encontrado, mas incompleto."
+                    
+        return None, None, "Horário não encontrado nesta data."
+        
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA DE SIMULAÇÃO (V112) ---
+# --- 3. LÓGICA DE SIMULAÇÃO ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -293,30 +325,49 @@ with st.sidebar:
     st.image(CONFIG_BANCA['logo_url'], width=100)
     st.title("MENU DUQUE")
     
-    st.link_button("🔗 Ver Site Oficial", CONFIG_BANCA['url_site'])
+    st.link_button("🔗 Ver Site Oficial", "https://www.resultadofacil.com.br")
     st.markdown("---")
 
-    horarios_list = [h.strip() for h in CONFIG_BANCA['horarios'].split('🔹')]
-    h_sel = st.selectbox("Horário:", horarios_list, index=st.session_state['auto_idx_h'])
-    
-    if st.button(f"🔍 Checar {h_sel}"):
-        with st.spinner(f"Buscando 1º e 2º prêmios das {h_sel}..."):
-            b1, b2, msg = raspar_dupla_por_horario(CONFIG_BANCA['url_site'], h_sel)
-            if b1 and b2:
-                st.session_state['auto_g1'] = b1
-                st.session_state['auto_g2'] = b2
-                st.success(f"Encontrado: {b1}-{b2}")
-            else:
-                st.error(f"Erro: {msg}")
+    # --- NOVO MENU DE IMPORTAÇÃO (IGUAL PENTÁGONO) ---
+    with st.expander("📥 Importar Resultado", expanded=True):
+        opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+        
+        if opcao_data == "Hoje": data_busca = date.today()
+        elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
+        else: data_busca = st.sidebar.date_input("Escolha:", date.today())
+        
+        horario_busca = st.selectbox("Horário:", CONFIG_BANCA['horarios'])
+        
+        if st.button("🚀 Baixar & Salvar"):
+            with st.spinner(f"Buscando 1º e 2º prêmios das {horario_busca}..."):
+                # CHAMA A NOVA FUNÇÃO DE RASPAGEM
+                b1, b2, msg = raspar_duque_avancado(data_busca, horario_busca)
+                
+                if b1 and b2:
+                    st.session_state['auto_g1'] = b1
+                    st.session_state['auto_g2'] = b2
+                    # Salva passando a data correta
+                    if salvar_duque(b1, b2, horario_busca, data_busca):
+                        st.session_state['tocar_som_salvar'] = True
+                        st.success(f"Salvo: {b1}-{b2}")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.error(f"Erro: {msg}")
 
+    st.markdown("---")
+    st.write("🔧 **Ajuste Manual**")
     c1, c2 = st.columns(2)
     with c1: b1_in = st.number_input("1º Bicho", 1, 25, st.session_state['auto_g1'])
     with c2: b2_in = st.number_input("2º Bicho", 1, 25, st.session_state['auto_g2'])
     
-    if st.button("💾 SALVAR DUQUE", type="primary"):
-        if salvar_duque(b1_in, b2_in, h_sel):
+    # Botão de salvar manual (caso o automático falhe)
+    if st.button("💾 GRAVAR MANUAL"):
+        if salvar_duque(b1_in, b2_in, horario_busca, data_busca):
             st.session_state['tocar_som_salvar'] = True
-            st.toast("Salvo!", icon="✅"); time.sleep(0.5); st.rerun()
+            st.toast("Salvo Manualmente!", icon="✅")
+            time.sleep(0.5)
+            st.rerun()
             
     if st.button("🗑️ APAGAR ÚLTIMO"):
         if deletar_ultimo():
