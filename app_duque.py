@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V7.1 - Sequência", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V8.0 - Sniper Sequência", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -50,24 +50,12 @@ st.markdown("""
     .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
     .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
 
-    /* NOVO: BOX DE PADRÃO RARO (SEQUÊNCIA) */
-    .box-padrao-raro {
-        background: linear-gradient(90deg, #4b0082, #800080);
-        border: 2px solid #da70d6;
-        padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        margin-bottom: 20px;
-        box-shadow: 0 0 20px rgba(218, 112, 214, 0.4);
-        color: #fff;
-    }
-
     /* Bolinhas dos Setores */
     .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
     .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
     .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
     
-    /* Box do SNIPER DUQUE */
+    /* Box do SNIPER DUQUE (VERDE) */
     .sniper-box { 
         background: linear-gradient(135deg, #004d00, #002b00); 
         border: 2px solid #00ff00; 
@@ -77,8 +65,20 @@ st.markdown("""
         text-align: center;
         box-shadow: 0px 0px 25px rgba(0, 255, 0, 0.3);
     }
-    .sniper-title { font-size: 24px; font-weight: 900; color: #00ff00; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(0,255,0,0.5); }
-    .sniper-desc { font-size: 14px; color: #ccffcc; font-style: italic; margin-bottom: 15px; }
+    
+    /* Box do SNIPER SEQUÊNCIA (ROXO - MODO ESPECIAL) */
+    .sniper-box-seq { 
+        background: linear-gradient(135deg, #4b0082, #240b36); 
+        border: 2px solid #da70d6; 
+        padding: 20px; 
+        border-radius: 15px; 
+        margin-bottom: 20px; 
+        text-align: center;
+        box-shadow: 0px 0px 25px rgba(218, 112, 214, 0.5);
+    }
+    
+    .sniper-title { font-size: 24px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+    .sniper-desc { font-size: 14px; color: #ddd; font-style: italic; margin-bottom: 15px; }
     
     /* BACKTEST STYLES */
     .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
@@ -212,7 +212,7 @@ def raspar_duque_avancado(data_alvo, horario_alvo):
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA V6.0 (ALGORITMO CAMALEÃO - ANTI LOSS) ---
+# --- 3. LÓGICA V8.0 (SNIPER SEQUÊNCIA - 275 PARES) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -231,7 +231,43 @@ def formatar_palpite_texto(lista_tuplas):
         if (i + 1) % 10 == 0: texto += "\n" 
     return texto.strip()
 
-# --- ALGORITMO CAMALEÃO V6 ---
+# --- VERIFICA SE É UMA SEQUÊNCIA ---
+def verificar_sequencia_bichos(duque):
+    b1, b2 = sorted(duque)
+    if b2 - b1 == 1: return True # Ex: 1-2, 2-3
+    if b1 == 1 and b2 == 25: return True # Ex: 25-1
+    return False
+
+# --- GERA UNIVERSO LIMPO (SEM SEQUÊNCIAS E SEM DUPLOS) ---
+def gerar_universo_limpo_275():
+    todos, _ = gerar_universo_duques()
+    universo_limpo = []
+    for d in todos:
+        # Remove duplos (bichos iguais)
+        if d[0] == d[1]: continue
+        # Remove sequências
+        if verificar_sequencia_bichos(d): continue
+        universo_limpo.append(d)
+    return universo_limpo
+
+# --- ALGORITMO SNIPER SEQUÊNCIA V8 (MODO ESPECIAL) ---
+def gerar_sniper_sequencia_v8(historico_slice):
+    hist_rev = historico_slice[::-1]
+    pool_275 = gerar_universo_limpo_275() # Começa com os 275 limpos
+    
+    # Critério de corte: Eliminar os 75 piores (Frios)
+    # Pontua com base em frequência média (últimos 50 jogos)
+    c_medio = Counter(hist_rev[:50])
+    
+    # Ordena do mais frequente para o menos frequente
+    # Queremos manter os 200 melhores (Top 200)
+    rank_final = sorted(pool_275, key=lambda x: c_medio[x], reverse=True)
+    
+    # Pega os 200 primeiros (elimina os 75 últimos)
+    top_200 = rank_final[:200]
+    return sorted(top_200)
+
+# --- ALGORITMO CAMALEÃO V6 (MODO NORMAL) ---
 def gerar_sniper_top200_v6(historico_slice):
     hist_rev = historico_slice[::-1]
     todos_duques, _ = gerar_universo_duques()
@@ -260,19 +296,33 @@ def gerar_sniper_top200_v6(historico_slice):
     top_200 = [d for d, s in rank_final][:200]
     return sorted(top_200)
 
-# --- FUNÇÃO DE BACKTEST ---
+# --- FUNÇÃO DE BACKTEST DINÂMICA (DETECTA QUAL SNIPER USAR) ---
 def executar_backtest_duque(historico):
     resultados_backtest = []
     for i in range(1, 5):
         if len(historico) <= i + 50: break 
+        
         target_duque = tuple(sorted(historico[-i]))
         hist_treino = historico[:-i] 
-        sniper_past = gerar_sniper_top200_v6(hist_treino)
+        ultimo_jogo_treino = hist_treino[-1]
+        
+        # Decide qual Sniper usar no passado
+        if verificar_sequencia_bichos(ultimo_jogo_treino):
+            # Se no passado deu sequência, o robô teria ativado o V8
+            sniper_past = gerar_sniper_sequencia_v8(hist_treino)
+            tipo = "SEQUÊNCIA"
+        else:
+            # Senão, teria usado o V6 Normal
+            sniper_past = gerar_sniper_top200_v6(hist_treino)
+            tipo = "NORMAL"
+        
         win = target_duque in sniper_past
+        
         resultados_backtest.append({
             "index": i,
             "duque_real": target_duque,
-            "vitoria": win
+            "vitoria": win,
+            "tipo": tipo
         })
     return resultados_backtest
 
@@ -286,7 +336,13 @@ def calcular_max_derrotas_duque(historico):
     for i in range(start_idx, len(historico)):
         target_duque = tuple(sorted(historico[i]))
         hist_treino = historico[:i]
-        sniper_past = gerar_sniper_top200_v6(hist_treino)
+        ultimo_jogo_treino = hist_treino[-1]
+        
+        if verificar_sequencia_bichos(ultimo_jogo_treino):
+            sniper_past = gerar_sniper_sequencia_v8(hist_treino)
+        else:
+            sniper_past = gerar_sniper_top200_v6(hist_treino)
+            
         win = target_duque in sniper_past
         if not win:
             derrotas_consecutivas_temp += 1
@@ -298,17 +354,6 @@ def calcular_max_derrotas_duque(historico):
         max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
-# --- NOVA FUNÇÃO: VERIFICAR SEQUÊNCIA (V7.1) ---
-def verificar_sequencia_bichos(duque):
-    b1, b2 = sorted(duque)
-    # Caso padrão (Ex: 1-2, 2-3... 24-25)
-    if b2 - b1 == 1:
-        return True
-    # Caso Circular (25-1)
-    if b1 == 1 and b2 == 25:
-        return True
-    return False
-
 # --- TABELA DE STRESS ---
 def calcular_tabela_stress_duque(historico):
     _, mapa = gerar_universo_duques()
@@ -319,14 +364,12 @@ def calcular_tabela_stress_duque(historico):
         for jogo in reversed(historico):
             if tuple(sorted(jogo)) in lista_duques: break
             atraso += 1
-        
         seq_atual_real = 0
         last_duque = tuple(sorted(historico[-1]))
         if last_duque in lista_duques:
             for jogo in reversed(historico):
                 if tuple(sorted(jogo)) in lista_duques: seq_atual_real += 1
                 else: break
-        
         vitorias_total = 0; max_atraso = 0; curr_atraso = 0; max_seq = 0; curr_seq = 0
         for jogo in historico:
             duque = tuple(sorted(jogo))
@@ -417,26 +460,31 @@ if len(historico) > 50:
     st.caption(f"📅 Último Registro: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo}) | Total Jogos: {len(historico)}")
     
     # --- GERAR DADOS ---
-    sniper_200 = gerar_sniper_top200_v6(historico)
+    # Verifica se o último jogo foi sequência
+    is_sequencia = verificar_sequencia_bichos(ult)
+    
+    if is_sequencia:
+        # ATIVA MODO SNIPER SEQUÊNCIA V8
+        sniper_200 = gerar_sniper_sequencia_v8(historico)
+        modo_sniper = "SEQUÊNCIA (V8)"
+        css_sniper = "sniper-box-seq" # Roxo
+        desc_sniper = "⚠️ Padrão Raro Detectado! Eliminando 75 duques improváveis."
+    else:
+        # ATIVA MODO NORMAL V6
+        sniper_200 = gerar_sniper_top200_v6(historico)
+        modo_sniper = "NORMAL (V6)"
+        css_sniper = "sniper-box" # Verde
+        desc_sniper = "Estratégia Camaleão: Adaptação ao último resultado."
+
     df_stress_real = calcular_tabela_stress_duque(historico)
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
-    # --- VERIFICAÇÃO DE PADRÃO RARO (SEQUÊNCIA) ---
-    if verificar_sequencia_bichos(ult):
-        st.markdown(f"""
-        <div class="box-padrao-raro">
-            <h2>⚠️ PADRÃO DE SEQUÊNCIA DETECTADO ({ult[0]}-{ult[1]})</h2>
-            <p>Estatisticamente, é muito raro o próximo sorteio ser outra sequência (Ex: 1-2, 2-3...).</p>
-            <p style="font-weight:bold; color:#ffff00;">DICA DO ROBÔ: Aposte em pares espalhados!</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # --- BOX DO SNIPER TOP 200 (CAMALEÃO V6) ---
-    st.markdown("""
-    <div class="sniper-box">
-        <div class="sniper-title">🎯 SNIPER DUQUE (V6 CAMALEÃO)</div>
-        <div class="sniper-desc">Algoritmo Reativo: Adaptação Imediata ao Último Resultado.</div>
+    # --- BOX DO SNIPER (DINÂMICO) ---
+    st.markdown(f"""
+    <div class="{css_sniper}">
+        <div class="sniper-title">🎯 SNIPER DUQUE ({modo_sniper})</div>
+        <div class="sniper-desc">{desc_sniper}</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -448,7 +496,9 @@ if len(historico) > 50:
             classe_res = "bt-win" if res['vitoria'] else "bt-loss"
             icon = "🟢" if res['vitoria'] else "❌"
             duque_str = f"{res['duque_real'][0]:02}-{res['duque_real'][1]:02}"
-            cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>D: {duque_str}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
+            # Adiciona ícone especial se foi um jogo de sequência
+            extra_icon = "🔁" if res['tipo'] == "SEQUÊNCIA" else ""
+            cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon} {extra_icon}</div><div class='bt-num'>D: {duque_str}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
         final_html = f"<div class='backtest-container'>{cards_html}</div>"
         st.markdown(final_html, unsafe_allow_html=True)
 
@@ -459,47 +509,30 @@ if len(historico) > 50:
     
     # --- CENTRAL DE AVISOS (RADAR) ---
     st.subheader("🚨 Radar de Oportunidades (Setores)")
-    col_alerts = st.container()
-    alertas_totais = 0
     cols_warnings = st.columns(2)
     warning_buffer = []
 
     for index, row in df_stress_real.iterrows():
-        atraso = row['ATRASO']
-        rec_atraso = row['REC. ATRASO']
-        seq_atual = row['SEQ. ATUAL']
-        rec_seq = row['REC. SEQ. (V)']
-        setor = row['SETOR']
+        atraso = row['ATRASO']; rec_atraso = row['REC. ATRASO']; seq_atual = row['SEQ. ATUAL']; rec_seq = row['REC. SEQ. (V)']; setor = row['SETOR']
         
         if (rec_atraso - atraso) <= 1 and rec_atraso >= 5:
-            alertas_totais += 1
-            if atraso >= rec_atraso:
-                classe = "box-alerta"; msg = "**ESTOURADO!** (Quebra Iminente)"
-            else:
-                classe = "box-aviso"; msg = "⚠️ Atenção: Quase no Recorde"
-            html_alert = f"<div class='{classe}'><h3>{setor}</h3><p>🕰️ Atraso Atual: {atraso} (Recorde: {rec_atraso})</p><p>{msg}</p></div>"
-            warning_buffer.append(html_alert)
+            msg = "**ESTOURADO!**" if atraso >= rec_atraso else "⚠️ Quase no Recorde"
+            classe = "box-alerta" if atraso >= rec_atraso else "box-aviso"
+            warning_buffer.append(f"<div class='{classe}'><h3>{setor}</h3><p>🕰️ Atraso: {atraso} (Rec: {rec_atraso}) - {msg}</p></div>")
 
         if (rec_seq - seq_atual) <= 1 and rec_seq >= 2:
-            alertas_totais += 1
-            if seq_atual >= rec_seq:
-                classe = "box-inverso-critico"; msg = "**ESTOURADO!** (Repetição Máxima)"
-            else:
-                classe = "box-inverso-atencao"; msg = "⚠️ Atenção: Sequência Alta"
-            html_alert = f"<div class='{classe}'><h3>{setor}</h3><p>🔥 Sequência Atual: {seq_atual} (Recorde: {rec_seq})</p><p>{msg}</p></div>"
-            warning_buffer.append(html_alert)
+            msg = "**ESTOURADO!**" if seq_atual >= rec_seq else "⚠️ Sequência Alta"
+            classe = "box-inverso-critico" if seq_atual >= rec_seq else "box-inverso-atencao"
+            warning_buffer.append(f"<div class='{classe}'><h3>{setor}</h3><p>🔥 Sequência: {seq_atual} (Rec: {rec_seq}) - {msg}</p></div>")
 
-    if alertas_totais > 0:
+    if warning_buffer:
         for i, w in enumerate(warning_buffer):
             with cols_warnings[i % 2]: st.markdown(w, unsafe_allow_html=True)
-    else:
-        st.success("✅ Nenhum setor em estado crítico no momento.")
+    else: st.success("✅ Nenhum setor em estado crítico no momento.")
 
     st.markdown("---")
     
-    # --- ÁREA DO RADAR DE SETORES E GRÁFICO ---
     st.subheader("📡 Gráfico de Setores")
-    
     st.markdown("**Visual Recente (⬅️ Mais Novo):**")
     st.markdown(gerar_bolinhas_recentes_duque(historico), unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -523,17 +556,6 @@ if len(historico) > 50:
     
     st.markdown("**📉 Tabela de Stress:**")
     st.table(df_stress_real.set_index("SETOR"))
-
-    st.markdown("---")
-    with st.expander("🔍 Ver Composição dos Setores (Base Fixa)"):
-        _, mapa_copy = gerar_universo_duques()
-        st.caption("Estes são os duques fixos que compõem cada setor:")
-        st.text("🔵 Setor 1 (S1):")
-        st.code(formatar_palpite_texto(mapa_copy["SETOR 1 (S1)"]), language="text")
-        st.text("🟠 Setor 2 (S2):")
-        st.code(formatar_palpite_texto(mapa_copy["SETOR 2 (S2)"]), language="text")
-        st.text("🔴 Setor 3 (S3):")
-        st.code(formatar_palpite_texto(mapa_copy["SETOR 3 (S3)"]), language="text")
 
 else:
     st.warning("⚠️ Base de dados insuficiente para o Sniper e Backtest. Adicione pelo menos 50 resultados na barra lateral.")
