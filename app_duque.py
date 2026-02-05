@@ -11,9 +11,9 @@ from bs4 import BeautifulSoup
 import altair as alt
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES VISUAIS E ESTILO V29 ---
+# --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V6.0 - Anti-Loss", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V6.1 - Tabela Fix", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -44,10 +44,10 @@ st.markdown("""
     .stNumberInput input { color: white !important; background-color: rgba(255,255,255,0.1) !important; }
     [data-testid="stTable"] { color: white !important; background-color: transparent !important; }
     
-    /* Bolinhas dos Setores (IGUAL PENTÁGONO) */
-    .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(23, 162, 184, 0.5); }
-    .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(253, 126, 20, 0.5); }
-    .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+    /* Bolinhas dos Setores */
+    .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
+    .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
+    .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); }
     
     /* Box do SNIPER DUQUE */
     .sniper-box { 
@@ -203,7 +203,7 @@ def gerar_universo_duques():
     setor1 = [d for k, d in enumerate(todos) if k % 3 == 0]
     setor2 = [d for k, d in enumerate(todos) if k % 3 == 1]
     setor3 = [d for k, d in enumerate(todos) if k % 3 == 2]
-    return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
+    return todos, {"SETOR 1 (S1)": setor1, "SETOR 2 (S2)": setor2, "SETOR 3 (S3)": setor3}
 
 def formatar_palpite_texto(lista_tuplas):
     lista_ordenada = sorted(list(set(lista_tuplas)))
@@ -219,14 +219,13 @@ def gerar_sniper_top200_v6(historico_slice):
     todos_duques, _ = gerar_universo_duques()
     
     # Pesos Base
-    c_curto = Counter(hist_rev[:15]) # Curtíssimo prazo (muito quente)
+    c_curto = Counter(hist_rev[:15]) # Curtíssimo prazo
     c_longo = Counter(hist_rev[:100]) # Consistência
     
     # Vício Imediato (O segredo para não perder em repetição)
     if len(historico_slice) > 0:
         ultimo = historico_slice[-1]
         bichos_vicio = set([ultimo[0], ultimo[1]])
-        # Adiciona vizinhos também (ex: saiu 5, vicia o 4 e o 6)
         for b in list(bichos_vicio):
             bichos_vicio.add(b + 1 if b < 25 else 1)
             bichos_vicio.add(b - 1 if b > 1 else 25)
@@ -236,39 +235,28 @@ def gerar_sniper_top200_v6(historico_slice):
     scores = {}
     for d in todos_duques:
         score = 0
-        # Peso 1: Frequência Recente (Explosão)
-        score += c_curto[d] * 5.0
+        score += c_curto[d] * 5.0 # Peso 1: Recente
+        score += c_longo[d] * 1.0 # Peso 2: Longo
         
-        # Peso 2: Frequência Longa (Segurança)
-        score += c_longo[d] * 1.0
-        
-        # Peso 3: Vício Imediato (Proteção contra repetição)
-        # Se o duque contém um bicho que acabou de sair, ganha MUITO ponto
         if d[0] in bichos_vicio or d[1] in bichos_vicio:
-            score += 500.0 
+            score += 500.0 # Peso 3: Vício
             
         scores[d] = score
         
-    # Ordena e pega os 200 melhores
     rank_final = sorted(scores.items(), key=lambda x: -x[1])
     top_200 = [d for d, s in rank_final][:200]
-    
-    # Ordena a lista final para ficar bonita visualmente
     return sorted(top_200)
 
 # --- FUNÇÃO DE BACKTEST DUQUE ---
 def executar_backtest_duque(historico):
     resultados_backtest = []
-    # Analisa 4 jogos para trás
     for i in range(1, 5):
         if len(historico) <= i + 50: break 
         
         target_duque = tuple(sorted(historico[-i]))
         hist_treino = historico[:-i] 
         
-        # Usa o V6 Camaleão
         sniper_past = gerar_sniper_top200_v6(hist_treino)
-        
         win = target_duque in sniper_past
         
         resultados_backtest.append({
@@ -303,42 +291,68 @@ def calcular_max_derrotas_duque(historico):
         max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
-def calcular_tabela_stress_visual(historico):
+# --- NOVA TABELA DE STRESS PARA DUQUES (S1/S2/S3) ---
+def calcular_tabela_stress_duque(historico):
     _, mapa = gerar_universo_duques()
-    recorte = historico[-20:] 
-    total_recorte = len(recorte)
-    stats = []
+    tabela = []
+    total_jogos = len(historico)
+    
     for nome_setor, lista_duques in mapa.items():
-        count = sum(1 for x in recorte if x in lista_duques)
-        porcentagem = (count / total_recorte * 100) if total_recorte > 0 else 0
-        stats.append({ "SETOR": nome_setor, "PRESENCA": porcentagem })
-    return pd.DataFrame(stats)
+        # Atraso Atual
+        atraso = 0
+        for jogo in reversed(historico):
+            if tuple(sorted(jogo)) in lista_duques: break
+            atraso += 1
+            
+        # Frequencia (Presença) Total
+        vitorias_total = 0
+        max_atraso = 0; curr_atraso = 0
+        max_seq = 0; curr_seq = 0
+        
+        for jogo in historico:
+            duque = tuple(sorted(jogo))
+            if duque in lista_duques:
+                vitorias_total += 1
+                curr_seq += 1
+                if curr_atraso > max_atraso: max_atraso = curr_atraso
+                curr_atraso = 0
+            else:
+                if curr_seq > max_seq: max_seq = curr_seq
+                curr_seq = 0
+                curr_atraso += 1
+        
+        # Check finais
+        if curr_atraso > max_atraso: max_atraso = curr_atraso
+        if curr_seq > max_seq: max_seq = curr_seq
+        
+        porcentagem = (vitorias_total / total_jogos * 100) if total_jogos > 0 else 0
+        
+        tabela.append({
+            "SETOR": nome_setor, 
+            "% PRESENÇA": porcentagem, 
+            "ATRASO": atraso, 
+            "REC. ATRASO": max_atraso, 
+            "REC. SEQ. (V)": max_seq
+        })
+        
+    return pd.DataFrame(tabela)
 
-# --- NOVA FUNÇÃO: GERAR BOLINHAS VISUAIS (IGUAL PENTÁGONO) ---
+# --- VISUAL BOLINHAS ---
 def gerar_bolinhas_recentes_duque(historico):
     _, mapa = gerar_universo_duques()
     html = "<div>"
-    # Pega os últimos 12 resultados
     for duque in reversed(historico[-12:]):
         duque_sorted = tuple(sorted(duque))
         classe = ""
         letra = ""
-        
-        # Identifica a qual setor o duque pertence
-        if duque_sorted in mapa["S1"]:
-            classe = "bola-s1"
-            letra = "S1"
-        elif duque_sorted in mapa["S2"]:
-            classe = "bola-s2"
-            letra = "S2"
-        elif duque_sorted in mapa["S3"]:
-            classe = "bola-s3"
-            letra = "S3"
+        if duque_sorted in mapa["SETOR 1 (S1)"]:
+            classe = "bola-s1"; letra = "S1"
+        elif duque_sorted in mapa["SETOR 2 (S2)"]:
+            classe = "bola-s2"; letra = "S2"
+        elif duque_sorted in mapa["SETOR 3 (S3)"]:
+            classe = "bola-s3"; letra = "S3"
         else:
-            # Fallback raro
-            classe = "bola-s1"
-            letra = "?"
-            
+            classe = "bola-s1"; letra = "?"
         html += f"<div class='{classe}'>{letra}</div>"
     html += "</div>"
     return html
@@ -393,7 +407,7 @@ if len(historico) > 50:
     
     # --- GERAR DADOS ---
     sniper_200 = gerar_sniper_top200_v6(historico)
-    df_stress_vis = calcular_tabela_stress_visual(historico)
+    df_stress_real = calcular_tabela_stress_duque(historico) # Agora calcula S1, S2, S3 corretamente
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
@@ -405,10 +419,8 @@ if len(historico) > 50:
     </div>
     """, unsafe_allow_html=True)
     
-    # Exibe o indicador de Pior Sequência (Esperamos que caia para 1 ou 2)
     st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_rec} Derrotas</span></div>", unsafe_allow_html=True)
     
-    # Exibe Cartões de Backtest
     if bt_results:
         cards_html = ""
         for res in reversed(bt_results):
@@ -419,7 +431,6 @@ if len(historico) > 50:
         final_html = f"<div class='backtest-container'>{cards_html}</div>"
         st.markdown(final_html, unsafe_allow_html=True)
 
-    # Exibe o palpite formatado
     with st.expander("📋 Ver Lista de Jogos (200 Pares)", expanded=False):
         st.code(formatar_palpite_texto(sniper_200), language="text")
 
@@ -428,20 +439,22 @@ if len(historico) > 50:
     # --- ÁREA DO RADAR DE SETORES E GRÁFICO ---
     st.subheader("📡 Radar de Setores (S1 / S2 / S3)")
     
-    # 1. Bolinhas Visuais (NOVA FUNCIONALIDADE - IGUAL PENTÁGONO)
     st.markdown("**Visual Recente (⬅️ Mais Novo):**")
     st.markdown(gerar_bolinhas_recentes_duque(historico), unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Gráfico de Rosca
-    base = alt.Chart(df_stress_vis).encode(theta=alt.Theta("PRESENCA", stack=True))
+    # Renomear para o gráfico entender
+    df_chart = df_stress_real.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
+    
+    base = alt.Chart(df_chart).encode(theta=alt.Theta("PRESENCA", stack=True))
     pie = base.mark_arc(outerRadius=120, innerRadius=60).encode(
-        color=alt.Color("SETOR",
-            scale=alt.Scale(domain=['S1', 'S2', 'S3'], range=['#17a2b8', '#fd7e14', '#dc3545']),
+        color=alt.Color("CATEGORIA",
+            scale=alt.Scale(domain=['SETOR 1 (S1)', 'SETOR 2 (S2)', 'SETOR 3 (S3)'], range=['#17a2b8', '#fd7e14', '#dc3545']),
             legend=None 
         ),
         order=alt.Order("PRESENCA", sort="descending"),
-        tooltip=["SETOR", alt.Tooltip("PRESENCA", format=".1f", title="% Presença (20 Jogos)")]
+        tooltip=["CATEGORIA", alt.Tooltip("PRESENCA", format=".1f", title="% Presença")]
     )
     text = base.mark_text(radius=140).encode(
         text=alt.Text("PRESENCA", format=".1f"),
@@ -450,19 +463,20 @@ if len(historico) > 50:
     )
     st.altair_chart(pie + text, use_container_width=True)
     
-    st.markdown("**Tabela de Domínio Recente (20 Jogos):**")
-    st.table(df_stress_vis.set_index("SETOR"))
+    st.markdown("**📉 Tabela de Stress:**")
+    # Mostra a tabela REAL (S1, S2, S3)
+    st.table(df_stress_real.set_index("SETOR"))
 
     st.markdown("---")
     with st.expander("🔍 Ver Composição dos Setores (Base Fixa)"):
         _, mapa_copy = gerar_universo_duques()
         st.caption("Estes são os duques fixos que compõem cada setor:")
         st.text("🔵 Setor 1 (S1):")
-        st.code(formatar_palpite_texto(mapa_copy["S1"]), language="text")
+        st.code(formatar_palpite_texto(mapa_copy["SETOR 1 (S1)"]), language="text")
         st.text("🟠 Setor 2 (S2):")
-        st.code(formatar_palpite_texto(mapa_copy["S2"]), language="text")
+        st.code(formatar_palpite_texto(mapa_copy["SETOR 2 (S2)"]), language="text")
         st.text("🔴 Setor 3 (S3):")
-        st.code(formatar_palpite_texto(mapa_copy["S3"]), language="text")
+        st.code(formatar_palpite_texto(mapa_copy["SETOR 3 (S3)"]), language="text")
 
 else:
     st.warning("⚠️ Base de dados insuficiente para o Sniper e Backtest. Adicione pelo menos 50 resultados na barra lateral.")
