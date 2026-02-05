@@ -13,7 +13,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E ESTILO V29 ---
 # =============================================================================
-st.set_page_config(page_title="Central DUQUE V5.0 - Híbrido", page_icon="👑", layout="wide")
+st.set_page_config(page_title="Central DUQUE V6.0 - Anti-Loss", page_icon="👑", layout="wide")
 
 CONFIG_BANCA = {
     "display_name": "TRADICIONAL (Duque)",
@@ -39,18 +39,17 @@ def reproduzir_som(tipo):
 # --- CSS ESTILO PENTÁGONO V29 ---
 st.markdown("""
 <style>
-    /* Fundo Geral e Textos */
     [data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #1a002e 0%, #2E004F 100%); color: #ffffff; }
     h1, h2, h3, h4, h5, h6, p, span, div, label, .stMarkdown { color: #ffffff !important; }
     .stNumberInput input { color: white !important; background-color: rgba(255,255,255,0.1) !important; }
     [data-testid="stTable"] { color: white !important; background-color: transparent !important; }
     
-    /* Bolinhas dos Setores */
-    .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(23, 162, 184, 0.5); }
-    .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(253, 126, 20, 0.5); }
-    .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+    /* Bolinhas dos Setores (IGUAL PENTÁGONO) */
+    .bola-s1 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(23, 162, 184, 0.5); }
+    .bola-s2 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(253, 126, 20, 0.5); }
+    .bola-s3 { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white !important; text-align: center; font-weight: bold; margin: 2px; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
     
-    /* Box do SNIPER DUQUE - CORRIGIDO PARA ALTA PERFORMANCE */
+    /* Box do SNIPER DUQUE */
     .sniper-box { 
         background: linear-gradient(135deg, #004d00, #002b00); 
         border: 2px solid #00ff00; 
@@ -88,7 +87,6 @@ st.markdown("""
     div[data-testid="stTable"] table { color: white; }
     thead tr th:first-child {display:none}
     tbody th {display:none}
-    .stProgress > div > div > div > div { background-color: #ff00de; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -196,7 +194,7 @@ def raspar_duque_avancado(data_alvo, horario_alvo):
     except Exception as e: return None, None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. LÓGICA V5.0 (ALGORITMO HÍBRIDO DE CERCAMENTO) ---
+# --- 3. LÓGICA V6.0 (ALGORITMO CAMALEÃO - ANTI LOSS) ---
 # =============================================================================
 def gerar_universo_duques():
     todos = []
@@ -208,103 +206,68 @@ def gerar_universo_duques():
     return todos, {"S1": setor1, "S2": setor2, "S3": setor3}
 
 def formatar_palpite_texto(lista_tuplas):
-    lista_ordenada = sorted(list(set(lista_tuplas))) # Garante unicidade e ordem
+    lista_ordenada = sorted(list(set(lista_tuplas)))
     texto = ""
     for i, p in enumerate(lista_ordenada):
         texto += f"[{p[0]:02}-{p[1]:02}] "
         if (i + 1) % 10 == 0: texto += "\n" 
     return texto.strip()
 
-# --- NOVO ALGORITMO HÍBRIDO (V5.0) ---
-def gerar_sniper_top200_hibrido(historico_slice):
+# --- NOVO ALGORITMO CAMALEÃO V6 (PESO DINÂMICO PARA QUEBRAR SEQUÊNCIA) ---
+def gerar_sniper_top200_v6(historico_slice):
     hist_rev = historico_slice[::-1]
     todos_duques, _ = gerar_universo_duques()
     
-    # 1. ESTRATÉGIA TENDÊNCIA (TOP 100)
-    # Pega os duques que mais saíram recentemente
-    c_curto = Counter(hist_rev[:20])
-    rank_trend = sorted(todos_duques, key=lambda x: c_curto[x], reverse=True)
-    pool_trend = rank_trend[:100]
+    # Pesos Base
+    c_curto = Counter(hist_rev[:15]) # Curtíssimo prazo (muito quente)
+    c_longo = Counter(hist_rev[:100]) # Consistência
     
-    # 2. ESTRATÉGIA ATRASO (TOP 40)
-    # Pega duques que estão sumidos, mas que historicamente saem bem
-    c_longo = Counter(hist_rev) # Frequencia total
-    atrasos = {}
+    # Vício Imediato (O segredo para não perder em repetição)
+    if len(historico_slice) > 0:
+        ultimo = historico_slice[-1]
+        bichos_vicio = set([ultimo[0], ultimo[1]])
+        # Adiciona vizinhos também (ex: saiu 5, vicia o 4 e o 6)
+        for b in list(bichos_vicio):
+            bichos_vicio.add(b + 1 if b < 25 else 1)
+            bichos_vicio.add(b - 1 if b > 1 else 25)
+    else:
+        bichos_vicio = set()
+
+    scores = {}
     for d in todos_duques:
-        atraso = 0
-        for jogo in hist_rev:
-            if jogo == d: break
-            atraso += 1
-        # Score = Atraso * Frequencia Global (Prioriza atrasados que são bons)
-        atrasos[d] = atraso * (c_longo[d] + 1) 
-    rank_atraso = sorted(todos_duques, key=lambda x: atrasos[x], reverse=True)
-    pool_atraso = rank_atraso[:40]
+        score = 0
+        # Peso 1: Frequência Recente (Explosão)
+        score += c_curto[d] * 5.0
+        
+        # Peso 2: Frequência Longa (Segurança)
+        score += c_longo[d] * 1.0
+        
+        # Peso 3: Vício Imediato (Proteção contra repetição)
+        # Se o duque contém um bicho que acabou de sair, ganha MUITO ponto
+        if d[0] in bichos_vicio or d[1] in bichos_vicio:
+            score += 500.0 
+            
+        scores[d] = score
+        
+    # Ordena e pega os 200 melhores
+    rank_final = sorted(scores.items(), key=lambda x: -x[1])
+    top_200 = [d for d, s in rank_final][:200]
     
-    # 3. ESTRATÉGIA REPETIÇÃO/VÍCIO (TOP 30)
-    # Gera duques combinando os bichos que acabaram de sair
-    ultimo_jogo = historico_slice[-1]
-    bichos_quentes = list(ultimo_jogo) # Os 2 que sairam
-    # Pega os vizinhos deles (+1 e -1)
-    for b in ultimo_jogo:
-        viz_cima = b + 1 if b < 25 else 1
-        viz_baixo = b - 1 if b > 1 else 25
-        bichos_quentes.extend([viz_cima, viz_baixo])
-    
-    pool_vicio = []
-    for d in todos_duques:
-        # Se o duque contém pelo menos um bicho quente
-        if d[0] in bichos_quentes or d[1] in bichos_quentes:
-            pool_vicio.append(d)
-    # Ordena pelo que mais sai
-    pool_vicio = sorted(pool_vicio, key=lambda x: c_curto[x], reverse=True)[:30]
-    
-    # 4. ESTRATÉGIA CICLO (TOP 30)
-    # Duques formados por bichos que NÃO saíram nos ultimos 10 jogos
-    bichos_vistos = set()
-    for jogo in hist_rev[:10]:
-        bichos_vistos.add(jogo[0])
-        bichos_vistos.add(jogo[1])
-    bichos_ausentes = [b for b in range(1, 26) if b not in bichos_vistos]
-    
-    pool_ciclo = []
-    for d in todos_duques:
-        if d[0] in bichos_ausentes and d[1] in bichos_ausentes:
-            pool_ciclo.append(d)
-    pool_ciclo = sorted(pool_ciclo, key=lambda x: c_longo[x], reverse=True)[:30]
-    
-    # --- FUSÃO DOS PELOTÕES ---
-    final_list = []
-    final_list.extend(pool_trend)
-    final_list.extend(pool_atraso)
-    final_list.extend(pool_vicio)
-    final_list.extend(pool_ciclo)
-    
-    # Remove duplicatas e garante tamanho 200
-    final_list = list(set(final_list))
-    
-    # Se sobrar vaga (pq removeu duplicatas), completa com o ranking geral
-    if len(final_list) < 200:
-        c_medio = Counter(hist_rev[:60])
-        rank_geral = sorted(todos_duques, key=lambda x: c_medio[x], reverse=True)
-        for d in rank_geral:
-            if d not in final_list:
-                final_list.append(d)
-                if len(final_list) >= 200: break
-                
-    # Se passar de 200 (improvavel, mas seguro), corta
-    return final_list[:200]
+    # Ordena a lista final para ficar bonita visualmente
+    return sorted(top_200)
 
 # --- FUNÇÃO DE BACKTEST DUQUE ---
 def executar_backtest_duque(historico):
     resultados_backtest = []
+    # Analisa 4 jogos para trás
     for i in range(1, 5):
         if len(historico) <= i + 50: break 
         
         target_duque = tuple(sorted(historico[-i]))
         hist_treino = historico[:-i] 
         
-        # Usa o novo algoritmo Híbrido V5.0
-        sniper_past = gerar_sniper_top200_hibrido(hist_treino)
+        # Usa o V6 Camaleão
+        sniper_past = gerar_sniper_top200_v6(hist_treino)
         
         win = target_duque in sniper_past
         
@@ -315,7 +278,7 @@ def executar_backtest_duque(historico):
         })
     return resultados_backtest
 
-# --- FUNÇÃO CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
+# --- CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
 def calcular_max_derrotas_duque(historico):
     max_derrotas = 0
     derrotas_consecutivas_temp = 0
@@ -326,7 +289,7 @@ def calcular_max_derrotas_duque(historico):
         target_duque = tuple(sorted(historico[i]))
         hist_treino = historico[:i]
         
-        sniper_past = gerar_sniper_top200_hibrido(hist_treino)
+        sniper_past = gerar_sniper_top200_v6(hist_treino)
         win = target_duque in sniper_past
         
         if not win:
@@ -350,6 +313,35 @@ def calcular_tabela_stress_visual(historico):
         porcentagem = (count / total_recorte * 100) if total_recorte > 0 else 0
         stats.append({ "SETOR": nome_setor, "PRESENCA": porcentagem })
     return pd.DataFrame(stats)
+
+# --- NOVA FUNÇÃO: GERAR BOLINHAS VISUAIS (IGUAL PENTÁGONO) ---
+def gerar_bolinhas_recentes_duque(historico):
+    _, mapa = gerar_universo_duques()
+    html = "<div>"
+    # Pega os últimos 12 resultados
+    for duque in reversed(historico[-12:]):
+        duque_sorted = tuple(sorted(duque))
+        classe = ""
+        letra = ""
+        
+        # Identifica a qual setor o duque pertence
+        if duque_sorted in mapa["S1"]:
+            classe = "bola-s1"
+            letra = "S1"
+        elif duque_sorted in mapa["S2"]:
+            classe = "bola-s2"
+            letra = "S2"
+        elif duque_sorted in mapa["S3"]:
+            classe = "bola-s3"
+            letra = "S3"
+        else:
+            # Fallback raro
+            classe = "bola-s1"
+            letra = "?"
+            
+        html += f"<div class='{classe}'>{letra}</div>"
+    html += "</div>"
+    return html
 
 # =============================================================================
 # --- 4. INTERFACE PRINCIPAL ---
@@ -399,17 +391,17 @@ if len(historico) > 50:
     ult = historico[-1]
     st.caption(f"📅 Último Registro: {ult[0]:02}-{ult[1]:02} ({ultimo_horario_salvo}) | Total Jogos: {len(historico)}")
     
-    # --- GERAR DADOS COM NOVA ESTRATÉGIA HÍBRIDA ---
-    sniper_200 = gerar_sniper_top200_hibrido(historico)
+    # --- GERAR DADOS ---
+    sniper_200 = gerar_sniper_top200_v6(historico)
     df_stress_vis = calcular_tabela_stress_visual(historico)
     bt_results = executar_backtest_duque(historico)
     max_loss_rec = calcular_max_derrotas_duque(historico)
 
-    # --- BOX DO SNIPER TOP 200 (VERDE V5.0) ---
+    # --- BOX DO SNIPER TOP 200 (CAMALEÃO V6) ---
     st.markdown("""
     <div class="sniper-box">
-        <div class="sniper-title">🎯 SNIPER DUQUE (TOP 200 HÍBRIDO)</div>
-        <div class="sniper-desc">Estratégia Blindada: Tendência + Atraso + Repetição + Ciclo.</div>
+        <div class="sniper-title">🎯 SNIPER DUQUE (V6 CAMALEÃO)</div>
+        <div class="sniper-desc">Algoritmo Reativo: Adaptação Imediata ao Último Resultado.</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -436,16 +428,9 @@ if len(historico) > 50:
     # --- ÁREA DO RADAR DE SETORES E GRÁFICO ---
     st.subheader("📡 Radar de Setores (S1 / S2 / S3)")
     
+    # 1. Bolinhas Visuais (NOVA FUNCIONALIDADE - IGUAL PENTÁGONO)
     st.markdown("**Visual Recente (⬅️ Mais Novo):**")
-    _, mapa_vis = gerar_universo_duques()
-    html_b = "<div>"
-    for d in reversed(historico[-12:]):
-        if d in mapa_vis["S1"]: c, s = "bola-s1", "S1"
-        elif d in mapa_vis["S2"]: c, s = "bola-s2", "S2"
-        else: c, s = "bola-s3", "S3"
-        html_b += f"<div class='{c}'>{s}</div>"
-    html_b += "</div>"
-    st.markdown(html_b, unsafe_allow_html=True)
+    st.markdown(gerar_bolinhas_recentes_duque(historico), unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Gráfico de Rosca
