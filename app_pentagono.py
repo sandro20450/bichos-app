@@ -12,7 +12,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V31 - High Stakes", page_icon="💎", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V31.1 - Detalhado", page_icon="💎", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -67,7 +67,7 @@ def aplicar_estilo():
             box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2);
         }
         
-        /* SNIPER BOX HIGH STAKES (DOURADO) */
+        /* SNIPER BOX HIGH STAKES (DOURADO DETALHADO) */
         .sniper-box-gold { 
             background: linear-gradient(135deg, #3d2b00, #664d00); 
             border: 2px solid #ffd700; 
@@ -84,6 +84,10 @@ def aplicar_estilo():
         .sniper-next { font-size: 18px; color: #00ff00; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; display: inline-block; margin-bottom: 15px; border: 1px solid #00ff00; }
         .sniper-groups { font-size: 26px; font-weight: bold; color: #fff; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 5px 0; letter-spacing: 2px; border: 1px dashed #00d2ff; }
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
+        
+        /* ESTILOS PARA SEPARAÇÃO NO BOX DOURADO */
+        .gold-strong { color: #ffd700; font-size: 22px; font-weight: bold; margin-bottom: 5px; }
+        .gold-protect { color: #ffffff; font-size: 18px; font-weight: bold; background-color: rgba(255, 215, 0, 0.2); padding: 5px; border-radius: 5px; display: inline-block; margin-top: 10px; }
         
         .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
         .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -298,7 +302,7 @@ def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     
     return { "grupos": grupos_finais, "nota": 100, "meta_info": meta_info, "is_record": False }
 
-# --- ALGORITMO HIGH STAKES (SNIPER 23) V31 ---
+# --- ALGORITMO HIGH STAKES (SNIPER 23) V31.1 (DETALHADO) ---
 def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     # 1. Gera os 20 do Sniper V30
     sniper_20_data = gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
@@ -324,12 +328,12 @@ def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bich
     protecao = [x['grupo'] for x in candidatos_extra[:3]] # Pega 3
     excluidos = [x['grupo'] for x in candidatos_extra[3:]] # Sobram 2 (Zona da Morte)
     
-    final_23 = sorted(grupos_20 + protecao)
-    
+    # NÃO COMBINA AINDA, RETORNA SEPARADO PARA O FRONTEND
     return { 
-        "grupos": final_23, 
-        "excluidos": excluidos,
-        "meta_info": f"23 GRUPOS | Excluídos: {excluidos}" 
+        "grupos_fortes": sorted(grupos_20), 
+        "grupos_protecao": sorted(protecao),
+        "excluidos": sorted(excluidos),
+        "meta_info": "Estratégia 20+3" 
     }
 
 # --- BACKTEST V30 (20 Grupos) ---
@@ -366,7 +370,10 @@ def executar_backtest_sniper_23(historico, indice_premio):
         # Gera estratégia 23 para o passado
         sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
         
-        win = target_num in sniper_23_past['grupos']
+        # Combina para verificar vitória
+        total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
+        
+        win = target_num in total_jogaveis
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
 
@@ -387,7 +394,9 @@ def calcular_max_derrotas_23(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         
         sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
-        win = target_num in sniper_23_past['grupos']
+        total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
+        
+        win = target_num in total_jogaveis
         
         if not win:
             derrotas_consecutivas_temp += 1
@@ -757,13 +766,18 @@ else:
 
                 st.markdown("<hr style='border: 1px dashed #555;'>", unsafe_allow_html=True)
 
-                # Exibição Sniper 23 (Dourado/High Stakes)
+                # Exibição Sniper 23 (Dourado/High Stakes) DETALHADO V31.1
                 st.markdown(f"""
                 <div class="sniper-box-gold">
                     <div class="sniper-title" style="color: #ffd700;">💎 ESTRATÉGIA HIGH STAKES (23)</div>
                     <div class="sniper-desc">Cobertura Estendida (92% de Chance) - Use após ❌</div>
-                    <div class="sniper-groups" style="color: #ffd700; border-color: #ffd700;">{', '.join(map(str, sniper_23['grupos']))}</div>
-                    <p style="color:#aaa; font-size:12px;">Excluídos (Zona da Morte): {', '.join(map(str, sniper_23['excluidos']))}</p>
+                    
+                    <div class="gold-strong">🔥 20 FORTES:</div>
+                    <div class="sniper-groups" style="color: #ffd700; border-color: #ffd700; font-size: 20px;">{', '.join(map(str, sniper_23['grupos_fortes']))}</div>
+                    
+                    <div class="gold-protect">🛡️ 3 PROTEÇÃO: {', '.join(map(str, sniper_23['grupos_protecao']))}</div>
+                    <br><br>
+                    <p style="color:#aaa; font-size:12px;">🚫 Excluídos (Zona da Morte): {', '.join(map(str, sniper_23['excluidos']))}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
