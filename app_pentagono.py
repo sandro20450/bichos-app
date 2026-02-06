@@ -12,7 +12,7 @@ import altair as alt # Biblioteca Gráfica Nativa
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V30 - Tática 7-7-6", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V30.1 - Stable", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -239,66 +239,60 @@ def calcular_tabela_diamante(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V30 (TÁTICA 7-7-6) ---
 def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    # 1. Identificar Setores (Remove Vaca da análise de força)
+    # 1. Identificar Setores
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
 
-    # Identifica Fortes (Top 2) e Fraco (Último)
     setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
     setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
     setor_fraco = setores_ordenados.iloc[-1]['SETOR']
 
-    # 2. Função de Pontuação (Score Individual)
+    # --- CORREÇÃO DO ERRO KEYERROR ---
+    # Extrai a lista de diamantes com segurança antes da função interna
+    lista_diamantes_segura = []
+    if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
+        lista_diamantes_segura = df_diamante['GRUPO'].tolist()
+
+    # 2. Função de Pontuação
     def calcular_score(grupo):
         score = 0
         if grupo == ultimo_bicho: score += 500
         if grupo in stats_ciclo['faltam']: score += 100
-        if grupo in df_diamante['GRUPO'].tolist(): score += 50
+        if grupo in lista_diamantes_segura: score += 50 # Usa a lista segura
         return score
 
     grupos_finais = []
 
-    # 3. Processar Fortes (7 Melhores de cada = 14)
-    # Tática: Remove o "Pior" de cada setor forte
+    # 3. Processar Fortes (7 Melhores de cada)
     for s in [setor_forte_1, setor_forte_2]:
         grupos_setor = SETORES[s]
-        # Rankeia os 8 do setor
         rank = sorted(grupos_setor, key=lambda x: calcular_score(x), reverse=True)
-        # Pega os 7 melhores
         grupos_finais.extend(rank[:7])
 
-    # 4. Processar Fraco (6 Melhores = 6)
-    # Tática: Aumenta a cobertura do backup
+    # 4. Processar Fraco (6 Melhores)
     grupos_fraco_lista = SETORES[setor_fraco]
     rank_fraco = sorted(grupos_fraco_lista, key=lambda x: calcular_score(x), reverse=True)
     selecionados_fraco = rank_fraco[:6]
 
-    # 5. Processar a Vaca (25) - Regra de Substituição no Backup
+    # 5. Processar a Vaca (25)
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     
-    # Critérios para Vaca entrar
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
     if 25 == ultimo_bicho: score_vaca += 500
     if 25 in stats_ciclo['faltam']: score_vaca += 100
-    if 25 in df_diamante['GRUPO'].tolist(): score_vaca += 50
+    if 25 in lista_diamantes_segura: score_vaca += 50
 
-    # Se a vaca tem pontuação relevante
     if score_vaca > 0:
-        # Compara com o pior dos 6 selecionados do setor fraco
         pior_do_fraco = selecionados_fraco[-1]
         score_pior = calcular_score(pior_do_fraco)
-
         if score_vaca > score_pior:
-            selecionados_fraco.pop() # Remove o pior do backup
-            selecionados_fraco.append(25) # Adiciona Vaca
+            selecionados_fraco.pop()
+            selecionados_fraco.append(25)
 
     grupos_finais.extend(selecionados_fraco)
-    
-    # Garante ordenação e unicidade
     grupos_finais = sorted(list(set(grupos_finais)))
     
-    # Meta Info para exibição
     sf1_name = setor_forte_1.split(' ')[0]
     sf2_name = setor_forte_2.split(' ')[0]
     sf_fraco_name = setor_fraco.split(' ')[0]
@@ -320,7 +314,6 @@ def executar_backtest_sniper(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         
-        # Usa V30
         sniper_past = gerar_sniper_20_v30(df_s, st_c, df_d, u_b)
         
         win = target_num in sniper_past['grupos']
