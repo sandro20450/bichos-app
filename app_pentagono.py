@@ -7,12 +7,12 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
-import altair as alt # Biblioteca Gráfica Nativa
+import altair as alt
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V30.1 - Stable", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V31 - High Stakes", page_icon="💎", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -56,6 +56,7 @@ def aplicar_estilo():
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
         
+        /* SNIPER BOX PADRÃO (AZUL/VERDE) */
         .sniper-box { 
             background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
             border: 2px solid #00d2ff; 
@@ -65,11 +66,18 @@ def aplicar_estilo():
             text-align: center;
             box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2);
         }
-        .sniper-record {
-            border: 2px solid #ff00de !important;
-            box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important;
-            background: linear-gradient(135deg, #3a0035, #240b36) !important;
+        
+        /* SNIPER BOX HIGH STAKES (DOURADO) */
+        .sniper-box-gold { 
+            background: linear-gradient(135deg, #3d2b00, #664d00); 
+            border: 2px solid #ffd700; 
+            padding: 20px; 
+            border-radius: 15px; 
+            margin-bottom: 10px; 
+            text-align: center;
+            box-shadow: 0px 0px 25px rgba(255, 215, 0, 0.4);
         }
+        
         .sniper-title { font-size: 20px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
         .sniper-bank { font-size: 32px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0px 0px 15px rgba(0,210,255,0.6); }
         .sniper-target { font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 10px; text-transform: uppercase; }
@@ -141,7 +149,6 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# --- FUNÇÃO: CALCULAR PRÓXIMO HORÁRIO ---
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
     try:
@@ -239,45 +246,35 @@ def calcular_tabela_diamante(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V30 (TÁTICA 7-7-6) ---
 def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    # 1. Identificar Setores
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
-
     setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
     setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
     setor_fraco = setores_ordenados.iloc[-1]['SETOR']
 
-    # --- CORREÇÃO DO ERRO KEYERROR ---
-    # Extrai a lista de diamantes com segurança antes da função interna
     lista_diamantes_segura = []
     if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
         lista_diamantes_segura = df_diamante['GRUPO'].tolist()
 
-    # 2. Função de Pontuação
     def calcular_score(grupo):
         score = 0
         if grupo == ultimo_bicho: score += 500
         if grupo in stats_ciclo['faltam']: score += 100
-        if grupo in lista_diamantes_segura: score += 50 # Usa a lista segura
+        if grupo in lista_diamantes_segura: score += 50
         return score
 
     grupos_finais = []
-
-    # 3. Processar Fortes (7 Melhores de cada)
     for s in [setor_forte_1, setor_forte_2]:
         grupos_setor = SETORES[s]
         rank = sorted(grupos_setor, key=lambda x: calcular_score(x), reverse=True)
         grupos_finais.extend(rank[:7])
 
-    # 4. Processar Fraco (6 Melhores)
     grupos_fraco_lista = SETORES[setor_fraco]
     rank_fraco = sorted(grupos_fraco_lista, key=lambda x: calcular_score(x), reverse=True)
     selecionados_fraco = rank_fraco[:6]
 
-    # 5. Processar a Vaca (25)
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
-    
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
     if 25 == ultimo_bicho: score_vaca += 500
     if 25 in stats_ciclo['faltam']: score_vaca += 100
@@ -301,7 +298,41 @@ def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     
     return { "grupos": grupos_finais, "nota": 100, "meta_info": meta_info, "is_record": False }
 
-# --- FUNÇÃO DE BACKTEST V30 ---
+# --- ALGORITMO HIGH STAKES (SNIPER 23) V31 ---
+def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
+    # 1. Gera os 20 do Sniper V30
+    sniper_20_data = gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+    grupos_20 = sniper_20_data['grupos']
+    
+    # 2. Identifica os 5 que sobraram
+    todos = set(range(1, 26))
+    restantes = list(todos - set(grupos_20))
+    
+    # 3. Escolhe os 3 melhores dentre os 5 para completar 23
+    lista_diamantes_segura = []
+    if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
+        lista_diamantes_segura = df_diamante['GRUPO'].tolist()
+        
+    candidatos_extra = []
+    for g in restantes:
+        score = 0
+        if g in stats_ciclo['faltam']: score += 100
+        if g in lista_diamantes_segura: score += 50
+        candidatos_extra.append({'grupo': g, 'score': score})
+        
+    candidatos_extra.sort(key=lambda x: x['score'], reverse=True)
+    protecao = [x['grupo'] for x in candidatos_extra[:3]] # Pega 3
+    excluidos = [x['grupo'] for x in candidatos_extra[3:]] # Sobram 2 (Zona da Morte)
+    
+    final_23 = sorted(grupos_20 + protecao)
+    
+    return { 
+        "grupos": final_23, 
+        "excluidos": excluidos,
+        "meta_info": f"23 GRUPOS | Excluídos: {excluidos}" 
+    }
+
+# --- BACKTEST V30 (20 Grupos) ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -315,13 +346,32 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         
         sniper_past = gerar_sniper_20_v30(df_s, st_c, df_d, u_b)
-        
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
 
-# --- FUNÇÃO CALCULAR RECORDE DE DERROTAS (50 JOGOS) ---
-def calcular_max_derrotas_50(historico, indice_premio):
+# --- BACKTEST HIGH STAKES (23 Grupos) ---
+def executar_backtest_sniper_23(historico, indice_premio):
+    resultados_backtest = []
+    for i in range(1, 5):
+        if len(historico) <= i + 20: break
+        target_game = historico[-i]
+        target_num = target_game['premios'][indice_premio]
+        hist_treino = historico[:-i]
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        
+        # Gera estratégia 23 para o passado
+        sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
+        
+        win = target_num in sniper_23_past['grupos']
+        resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
+    return resultados_backtest
+
+# --- RECORDE DERROTAS 23 GRUPOS (50 JOGOS) ---
+def calcular_max_derrotas_23(historico, indice_premio):
     max_derrotas = 0
     derrotas_consecutivas_temp = 0
     range_analise = min(50, len(historico) - 20)
@@ -336,8 +386,32 @@ def calcular_max_derrotas_50(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         
-        sniper_past = gerar_sniper_20_v30(df_s, st_c, df_d, u_b)
+        sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
+        win = target_num in sniper_23_past['grupos']
         
+        if not win:
+            derrotas_consecutivas_temp += 1
+        else:
+            if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+            derrotas_consecutivas_temp = 0
+    
+    if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+    return max_derrotas
+
+def calcular_max_derrotas_50(historico, indice_premio):
+    max_derrotas = 0
+    derrotas_consecutivas_temp = 0
+    range_analise = min(50, len(historico) - 20)
+    start_idx = len(historico) - range_analise
+    for i in range(start_idx, len(historico)):
+        target_game = historico[i]
+        target_num = target_game['premios'][indice_premio]
+        hist_treino = historico[:i]
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        sniper_past = gerar_sniper_20_v30(df_s, st_c, df_d, u_b)
         win = target_num in sniper_past['grupos']
         if not win: derrotas_consecutivas_temp += 1
         else:
@@ -482,7 +556,7 @@ def tela_dashboard_global():
                             "ultimo_horario": historico[-1]['horario']
                         }
                     
-                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER
+                    # 2. VERIFICAÇÃO DE FALHAS CONSECUTIVAS NO SNIPER 20
                     bt_results = executar_backtest_sniper(historico, idx_pos)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
@@ -646,15 +720,22 @@ else:
                 df_diamante = calcular_tabela_diamante(historico, idx_aba)
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 
+                # --- SNIPER PADRÃO (20) ---
                 sniper_local = gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
+                # --- SNIPER HIGH STAKES (23) ---
+                sniper_23 = gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
+                bt_results_23 = executar_backtest_sniper_23(historico, idx_aba)
+                max_loss_23 = calcular_max_derrotas_23(historico, idx_aba)
+                
                 css_extra = "sniper-record" if sniper_local['is_record'] else ""
                 
+                # Exibição Sniper 20 (Verde)
                 st.markdown(f"""
                 <div class="sniper-box {css_extra}" style="margin-top:0;">
-                    <div class="sniper-title">🎯 SNIPER LOCAL V30</div>
+                    <div class="sniper-title">🎯 SNIPER LOCAL V30 (20)</div>
                     <div class="sniper-bank">{nome_banca_clean}</div>
                     <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
                     <div class="sniper-next">{prox_tiro_local}</div>
@@ -673,6 +754,28 @@ else:
                         cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
                     final_html = f"<div class='backtest-container'>{cards_html}</div>"
                     st.markdown(final_html, unsafe_allow_html=True)
+
+                st.markdown("<hr style='border: 1px dashed #555;'>", unsafe_allow_html=True)
+
+                # Exibição Sniper 23 (Dourado/High Stakes)
+                st.markdown(f"""
+                <div class="sniper-box-gold">
+                    <div class="sniper-title" style="color: #ffd700;">💎 ESTRATÉGIA HIGH STAKES (23)</div>
+                    <div class="sniper-desc">Cobertura Estendida (92% de Chance) - Use após ❌</div>
+                    <div class="sniper-groups" style="color: #ffd700; border-color: #ffd700;">{', '.join(map(str, sniper_23['grupos']))}</div>
+                    <p style="color:#aaa; font-size:12px;">Excluídos (Zona da Morte): {', '.join(map(str, sniper_23['excluidos']))}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência 23 (50 Jogos): {max_loss_23} Derrotas</span></div>", unsafe_allow_html=True)
+
+                if bt_results_23:
+                    cards_html_23 = ""
+                    for res in reversed(bt_results_23):
+                        classe_res = "bt-win" if res['vitoria'] else "bt-loss"
+                        icon = "🟢" if res['vitoria'] else "❌"
+                        cards_html_23 += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']}</div></div>"
+                    st.markdown(f"<div class='backtest-container'>{cards_html_23}</div>", unsafe_allow_html=True)
 
                 palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
                 st.markdown(f"<div class='palpite-box'><h4>🏹 PROTEÇÃO (8 GRUPOS)</h4><p class='palpite-nums'>{', '.join(map(str, palpite['grupos']))}</p><small><b>Motivo:</b> {palpite['motivo']}</small></div>", unsafe_allow_html=True)
