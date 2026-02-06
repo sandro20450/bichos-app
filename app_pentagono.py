@@ -12,7 +12,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V31.1 - Detalhado", page_icon="💎", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V31.2 - High Stakes Fix", page_icon="💎", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -86,8 +86,9 @@ def aplicar_estilo():
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
         /* ESTILOS PARA SEPARAÇÃO NO BOX DOURADO */
-        .gold-strong { color: #ffd700; font-size: 22px; font-weight: bold; margin-bottom: 5px; }
-        .gold-protect { color: #ffffff; font-size: 18px; font-weight: bold; background-color: rgba(255, 215, 0, 0.2); padding: 5px; border-radius: 5px; display: inline-block; margin-top: 10px; }
+        .gold-strong { color: #ffd700; font-size: 18px; font-weight: bold; margin-bottom: 5px; text-align: left; }
+        .gold-protect { color: #ffffff; font-size: 16px; font-weight: bold; background-color: rgba(255, 215, 0, 0.1); padding: 8px; border-radius: 5px; margin-top: 10px; border: 1px solid rgba(255, 215, 0, 0.3); }
+        .gold-nums { font-size: 24px; color: #fff; font-weight: bold; letter-spacing: 2px; }
         
         .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
         .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -248,7 +249,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V30 (TÁTICA 7-7-6) ---
+# --- ALGORITMO SNIPER V30 ---
 def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
@@ -302,17 +303,14 @@ def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     
     return { "grupos": grupos_finais, "nota": 100, "meta_info": meta_info, "is_record": False }
 
-# --- ALGORITMO HIGH STAKES (SNIPER 23) V31.1 (DETALHADO) ---
+# --- ALGORITMO HIGH STAKES V31.1 ---
 def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
-    # 1. Gera os 20 do Sniper V30
     sniper_20_data = gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
     grupos_20 = sniper_20_data['grupos']
     
-    # 2. Identifica os 5 que sobraram
     todos = set(range(1, 26))
     restantes = list(todos - set(grupos_20))
     
-    # 3. Escolhe os 3 melhores dentre os 5 para completar 23
     lista_diamantes_segura = []
     if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
         lista_diamantes_segura = df_diamante['GRUPO'].tolist()
@@ -325,10 +323,9 @@ def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bich
         candidatos_extra.append({'grupo': g, 'score': score})
         
     candidatos_extra.sort(key=lambda x: x['score'], reverse=True)
-    protecao = [x['grupo'] for x in candidatos_extra[:3]] # Pega 3
-    excluidos = [x['grupo'] for x in candidatos_extra[3:]] # Sobram 2 (Zona da Morte)
+    protecao = [x['grupo'] for x in candidatos_extra[:3]] 
+    excluidos = [x['grupo'] for x in candidatos_extra[3:]] 
     
-    # NÃO COMBINA AINDA, RETORNA SEPARADO PARA O FRONTEND
     return { 
         "grupos_fortes": sorted(grupos_20), 
         "grupos_protecao": sorted(protecao),
@@ -336,7 +333,7 @@ def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bich
         "meta_info": "Estratégia 20+3" 
     }
 
-# --- BACKTEST V30 (20 Grupos) ---
+# --- BACKTEST E RECORDES ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -348,13 +345,11 @@ def executar_backtest_sniper(historico, indice_premio):
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
-        
         sniper_past = gerar_sniper_20_v30(df_s, st_c, df_d, u_b)
         win = target_num in sniper_past['grupos']
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
 
-# --- BACKTEST HIGH STAKES (23 Grupos) ---
 def executar_backtest_sniper_23(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -366,24 +361,16 @@ def executar_backtest_sniper_23(historico, indice_premio):
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
-        
-        # Gera estratégia 23 para o passado
         sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
-        
-        # Combina para verificar vitória
         total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
-        
         win = target_num in total_jogaveis
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
     return resultados_backtest
 
-# --- RECORDE DERROTAS 23 GRUPOS (50 JOGOS) ---
 def calcular_max_derrotas_23(historico, indice_premio):
-    max_derrotas = 0
-    derrotas_consecutivas_temp = 0
+    max_derrotas = 0; derrotas_consecutivas_temp = 0
     range_analise = min(50, len(historico) - 20)
     start_idx = len(historico) - range_analise
-    
     for i in range(start_idx, len(historico)):
         target_game = historico[i]
         target_num = target_game['premios'][indice_premio]
@@ -392,24 +379,18 @@ def calcular_max_derrotas_23(historico, indice_premio):
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
-        
         sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b)
         total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
-        
         win = target_num in total_jogaveis
-        
-        if not win:
-            derrotas_consecutivas_temp += 1
+        if not win: derrotas_consecutivas_temp += 1
         else:
             if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
             derrotas_consecutivas_temp = 0
-    
     if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
 def calcular_max_derrotas_50(historico, indice_premio):
-    max_derrotas = 0
-    derrotas_consecutivas_temp = 0
+    max_derrotas = 0; derrotas_consecutivas_temp = 0
     range_analise = min(50, len(historico) - 20)
     start_idx = len(historico) - range_analise
     for i in range(start_idx, len(historico)):
@@ -766,7 +747,7 @@ else:
 
                 st.markdown("<hr style='border: 1px dashed #555;'>", unsafe_allow_html=True)
 
-                # Exibição Sniper 23 (Dourado/High Stakes) DETALHADO V31.1
+                # Exibição Sniper 23 (Dourado/High Stakes) DETALHADO V31.2
                 st.markdown(f"""
                 <div class="sniper-box-gold">
                     <div class="sniper-title" style="color: #ffd700;">💎 ESTRATÉGIA HIGH STAKES (23)</div>
@@ -775,9 +756,10 @@ else:
                     <div class="gold-strong">🔥 20 FORTES:</div>
                     <div class="sniper-groups" style="color: #ffd700; border-color: #ffd700; font-size: 20px;">{', '.join(map(str, sniper_23['grupos_fortes']))}</div>
                     
-                    <div class="gold-protect">🛡️ 3 PROTEÇÃO: {', '.join(map(str, sniper_23['grupos_protecao']))}</div>
-                    <br><br>
-                    <p style="color:#aaa; font-size:12px;">🚫 Excluídos (Zona da Morte): {', '.join(map(str, sniper_23['excluidos']))}</p>
+                    <div class="gold-protect">🛡️ 3 PROTEÇÃO: <span class="gold-nums">{', '.join(map(str, sniper_23['grupos_protecao']))}</span></div>
+                    
+                    <br>
+                    <p style="color:#ff4b4b; font-size:14px; font-weight:bold;">🚫 ZONA DA MORTE (Excluídos): {', '.join(map(str, sniper_23['excluidos']))}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
