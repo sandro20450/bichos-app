@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V2.0", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V2.1", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -98,7 +98,6 @@ st.markdown("""
         font-size: 16px;
     }
     
-    /* Ajuste para tabelas */
     div[data-testid="stTable"] table { color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -123,7 +122,6 @@ def carregar_historico_dezenas(nome_aba):
         dados = []
         for row in raw[1:]:
             if len(row) >= 7:
-                # Extrai as dezenas e garante formato "00"
                 dezenas = [str(d).strip().zfill(2) for d in row[2:7] if d.strip().isdigit()]
                 if len(dezenas) == 5:
                     dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
@@ -151,7 +149,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
 
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # Valida Data no cabeçalho
+                # --- FILTRO ANTI-FEDERAL ---
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
 
@@ -174,10 +172,8 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                     premio_txt = cols[0].get_text().strip()
                                     numero_txt = cols[1].get_text().strip()
                                     
-                                    # Valida se é 1º ao 5º
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio and 1 <= int(nums_premio[0]) <= 5:
-                                        # Extrai Dezena (2 últimos dígitos)
                                         if numero_txt.isdigit() and len(numero_txt) >= 2:
                                             dezena = numero_txt[-2:]
                                             dezenas_encontradas.append(dezena)
@@ -192,7 +188,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
 # --- 3. CÉREBRO: LÓGICA DE ELIMINAÇÃO ---
 # =============================================================================
 def gerar_matriz_75(historico, indice_premio):
-    # Se não tiver histórico, retorna padrão (3 primeiras de cada grupo)
     if not historico:
         padrao = []
         cortadas = []
@@ -202,7 +197,6 @@ def gerar_matriz_75(historico, indice_premio):
             cortadas.append(f"G{g}:{dzs[3]}")
         return padrao, cortadas
 
-    # 1. Analisa frequência das dezenas (Últimos 30 jogos)
     dezenas_historico = []
     recorte = historico[-30:] 
     for jogo in recorte:
@@ -214,21 +208,16 @@ def gerar_matriz_75(historico, indice_premio):
     palpite_final = []
     dezenas_cortadas = []
     
-    # 2. Para cada Grupo, elimina a "Ovelha Negra"
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        # Rankeia as 4 dezenas do grupo por frequência
         rank = []
         for d in lista_dezenas:
             freq = contagem.get(d, 0)
             rank.append((d, freq))
         
-        # Ordena: Menor frequência (Frias) -> Maior (Quentes)
-        # O objetivo é eliminar a MENOS provável (a mais fria/atrasada)
         rank.sort(key=lambda x: x[1])
         
-        # Elimina a primeira da lista (a mais fraca)
         dezena_removida = rank[0][0] 
-        dezenas_selecionadas = [x[0] for x in rank[1:]] # Pega as outras 3
+        dezenas_selecionadas = [x[0] for x in rank[1:]] 
         
         palpite_final.extend(dezenas_selecionadas)
         dezenas_cortadas.append(f"G{grupo}:{dezena_removida} ({rank[0][1]}x)")
@@ -241,7 +230,7 @@ def gerar_matriz_75(historico, indice_premio):
 st.title("🛡️ CENTURION 75")
 st.markdown("**Estratégia de Cobertura de Dezenas (Lucro: 22%)**")
 
-# --- SIDEBAR: IMPORTAÇÃO ---
+# --- SIDEBAR: IMPORTAÇÃO INTELIGENTE ---
 with st.sidebar:
     st.header("📥 Importar Dezenas")
     banca_sel = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
@@ -260,13 +249,19 @@ with st.sidebar:
             with st.spinner(f"Extraindo dezenas..."):
                 try:
                     existentes = ws.get_all_values()
-                    chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes]
+                    # Cria chave para evitar duplicidade
+                    chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
                 except: chaves = []
                 
                 chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
                 
+                # --- DETECTOR DE DUPLICIDADE IGUAL AO PENTÁGONO ---
                 if chave_atual in chaves:
-                    st.warning("Resultado já existe na planilha!")
+                    try:
+                        idx = chaves.index(chave_atual) + 2 # +2 pelo cabeçalho e indice 0
+                        st.warning(f"⚠️ Resultado já existe na Linha {idx} da planilha!")
+                    except:
+                        st.warning("⚠️ Resultado já existe!")
                 else:
                     dezenas, msg = raspar_dezenas_site(banca_sel, data_busca, hora_busca)
                     if dezenas:
@@ -295,7 +290,6 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_75, cortadas = gerar_matriz_75(historico, i)
         
-        # HTML Renderizado sem indentação interna para evitar bugs
         html_content = f"""
 <div class="box-centurion">
 <div class="titulo-gold">LEGIÃO 75 - {i+1}º PRÊMIO</div>
