@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V3.1 Híbrido", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V4.0 Backtest", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -47,7 +47,7 @@ for g in range(1, 26):
         else: dezenas.append(f"{n:02}")
     GRUPOS_BICHOS[g] = dezenas 
 
-# Estilo Visual (CSS - Tema Centurião)
+# Estilo Visual (CSS - Tema Centurião + Backtest)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
@@ -98,6 +98,15 @@ st.markdown("""
         font-size: 16px;
     }
     
+    /* ESTILO DO BACKTEST (Igual Pentágono) */
+    .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
+    .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
+    .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
+    .bt-icon { font-size: 24px; margin-bottom: 5px; }
+    .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+    .bt-label { font-size: 11px; opacity: 0.8; }
+
     div[data-testid="stTable"] table { color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -183,7 +192,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA DE ELIMINAÇÃO ---
+# --- 3. CÉREBRO: LÓGICA E BACKTEST ---
 # =============================================================================
 def gerar_matriz_75(historico, indice_premio):
     if not historico:
@@ -196,6 +205,7 @@ def gerar_matriz_75(historico, indice_premio):
         return padrao, cortadas
 
     dezenas_historico = []
+    # Analisa últimos 30 jogos daquele momento
     recorte = historico[-30:] 
     for jogo in recorte:
         try: dezenas_historico.append(jogo['dezenas'][indice_premio])
@@ -212,8 +222,8 @@ def gerar_matriz_75(historico, indice_premio):
             freq = contagem.get(d, 0)
             rank.append((d, freq))
         
+        # Elimina a menos frequente
         rank.sort(key=lambda x: x[1])
-        
         dezena_removida = rank[0][0] 
         dezenas_selecionadas = [x[0] for x in rank[1:]] 
         
@@ -222,24 +232,51 @@ def gerar_matriz_75(historico, indice_premio):
         
     return sorted(palpite_final), dezenas_cortadas
 
+def executar_backtest_centurion(historico, indice_premio):
+    # Precisamos de pelo menos 35 jogos (30 para análise + 5 para testar)
+    if len(historico) < 35: return []
+    
+    resultados = []
+    # Testar os últimos 4 jogos (1 = ultimo, 4 = quatro jogos atras)
+    for i in range(1, 5):
+        # O jogo alvo (que queremos saber se ganhamos)
+        target_idx = -i
+        target_game = historico[target_idx]
+        target_dezena = target_game['dezenas'][indice_premio]
+        
+        # O histórico disponível ANTES desse jogo acontecer
+        # Ex: Se i=1 (último), treino vai até -1 (penúltimo)
+        hist_treino = historico[:target_idx]
+        
+        # Gera o palpite que o robô teria dado naquele dia
+        palpite_ia, _ = gerar_matriz_75(hist_treino, indice_premio)
+        
+        vitoria = target_dezena in palpite_ia
+        resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
+        
+    return resultados
+
 # =============================================================================
 # --- 4. INTERFACE ---
 # =============================================================================
 st.title("🛡️ CENTURION 75")
 st.markdown("**Estratégia de Cobertura de Dezenas (Lucro: 22%)**")
 
-# --- SIDEBAR HÍBRIDA ---
+# --- SIDEBAR HÍBRIDA + BOTÃO SITE ---
 with st.sidebar:
     st.header("⚙️ Configuração")
     banca_sel = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
     conf = CONFIG_BANCAS[banca_sel]
     
+    # === BOTÃO VER SITE (NOVO) ===
+    url_site_base = f"https://www.resultadofacil.com.br/resultados-{conf['slug']}-de-hoje"
+    st.link_button("🔗 Ver Site Oficial", url_site_base)
     st.markdown("---")
-    # SELETOR DE MODO (O Segredo do Híbrido)
+
     modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.markdown("---")
 
-    # === MODO 1: UNITÁRIO (IGUAL V2.1) ===
+    # MODO 1: UNITÁRIO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.subheader("Extração Unitária")
         opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -265,8 +302,7 @@ with st.sidebar:
                         try:
                             idx = chaves.index(chave_atual) + 2
                             st.warning(f"⚠️ Resultado já existe na Linha {idx} da planilha!")
-                        except:
-                            st.warning("⚠️ Resultado já existe!")
+                        except: st.warning("⚠️ Resultado já existe!")
                     else:
                         dezenas, msg = raspar_dezenas_site(banca_sel, data_busca, hora_busca)
                         if dezenas:
@@ -278,23 +314,19 @@ with st.sidebar:
                         else: st.error(f"❌ {msg}")
             else: st.error("Erro Conexão Planilha")
 
-    # === MODO 2: EM MASSA (IGUAL V3.0) ===
+    # MODO 2: EM MASSA
     else:
         st.subheader("Extração em Massa")
-        st.info("⚠️ Baixa todos os horários do período selecionado.")
-        
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
-        with col_d2:
-            data_fim = st.date_input("Fim:", date.today())
+        st.info("⚠️ Baixa todos os horários do período.")
+        col1, col2 = st.columns(2)
+        with col1: data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
+        with col2: data_fim = st.date_input("Fim:", date.today())
         
         if st.button("🚀 INICIAR TURBO"):
             ws = conectar_planilha(conf['aba'])
             if ws:
-                status_placeholder = st.empty()
-                bar_placeholder = st.progress(0)
-                
+                status = st.empty()
+                bar = st.progress(0)
                 try:
                     existentes = ws.get_all_values()
                     chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
@@ -302,44 +334,34 @@ with st.sidebar:
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                
                 total_ops = len(lista_datas) * len(conf['horarios'])
-                op_atual = 0
-                sucessos = 0
+                op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
                     for hora in conf['horarios']:
                         op_atual += 1
-                        progresso = op_atual / total_ops
-                        bar_placeholder.progress(progresso)
-                        
-                        status_placeholder.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                        bar.progress(op_atual / total_ops)
+                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        
-                        # Pula futuro e repetidos
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
-                        if dia == date.today():
-                            if hora > datetime.now().strftime("%H:%M"): continue
+                        if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
 
                         dezenas, msg = raspar_dezenas_site(banca_sel, dia, hora)
-                        
                         if dezenas:
-                            row = [dia.strftime('%Y-%m-%d'), hora] + dezenas
-                            ws.append_row(row)
+                            ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
                             sucessos += 1
                             chaves.append(chave_atual)
-                        
-                        time.sleep(1.0) # Pausa de segurança
+                        time.sleep(1.0)
                 
-                bar_placeholder.progress(100)
-                status_placeholder.success(f"🏁 Concluído! {sucessos} novos sorteios salvos.")
+                bar.progress(100)
+                status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2)
                 st.rerun()
             else: st.error("Erro Conexão Planilha")
 
-# --- TELA PRINCIPAL (IGUAL PARA OS DOIS MODOS) ---
+# --- TELA PRINCIPAL ---
 conf_atual = CONFIG_BANCAS[banca_sel]
 st.subheader(f"Analise: {conf_atual['display']}")
 
@@ -356,6 +378,7 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_75, cortadas = gerar_matriz_75(historico, i)
         
+        # Renderiza o Card Principal
         html_content = f"""
 <div class="box-centurion">
 <div class="titulo-gold">LEGIÃO 75 - {i+1}º PRÊMIO</div>
@@ -366,9 +389,33 @@ for i, tab in enumerate(tabs):
 """
         st.markdown(html_content, unsafe_allow_html=True)
         
-        with st.expander("✂️ Ver Dezenas Eliminadas (Ovelhas Negras)"):
-            st.write(", ".join(cortadas))
-            st.caption("Estas foram as dezenas removidas por serem as menos frequentes do grupo nos últimos 30 jogos.")
+        # --- ÁREA DO BACKTEST (NOVO) ---
+        bt_results = executar_backtest_centurion(historico, i)
+        
+        if bt_results:
+            st.markdown("### ⏪ Performance Recente (Backtest)")
+            cards_html = ""
+            for res in reversed(bt_results): # Mostra do mais recente para o mais antigo
+                classe_res = "bt-win" if res['win'] else "bt-loss"
+                icon = "🟢" if res['win'] else "🔴"
+                label_res = "WIN" if res['win'] else "LOSS"
+                
+                cards_html += f"""
+                <div class='bt-card {classe_res}'>
+                    <div class='bt-icon'>{icon}</div>
+                    <div class='bt-num'>{res['dezena']}</div>
+                    <div class='bt-label'>{label_res}</div>
+                </div>
+                """
+            
+            st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
+        else:
+            st.caption("ℹ️ Baixe mais resultados para visualizar o Backtest (Mínimo 35 jogos).")
 
         st.markdown("---")
+        
+        with st.expander("✂️ Ver Dezenas Eliminadas (Ovelhas Negras)"):
+            st.write(", ".join(cortadas))
+            st.caption("Estas foram as dezenas removidas por serem as menos frequentes.")
+
         st.write(f"📊 **Base de Análise:** {len(historico)} sorteios.")
