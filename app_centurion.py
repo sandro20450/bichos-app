@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V4.1", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V4.2", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -265,14 +265,10 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 def calcular_pior_sequencia_50(historico, indice_premio):
-    # Precisa de histórico mínimo para simular
     if len(historico) < 40: return 0
     
-    # Pega os últimos 50 jogos (ou o que tiver disponível)
-    # Mas precisamos de 30 jogos ANTES do primeiro jogo da simulação para treinar
     offset_treino = 30
     total_disponivel = len(historico)
-    
     if total_disponivel <= offset_treino: return 0
     
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
@@ -280,16 +276,11 @@ def calcular_pior_sequencia_50(historico, indice_premio):
     max_derrotas = 0
     derrotas_consecutivas = 0
     
-    # Loop de simulação
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
-        
-        # Treina com tudo que veio antes de 'i'
         hist_treino = historico[:i]
-        
         palpite, _ = gerar_matriz_75(hist_treino, indice_premio)
-        
         win = target_dezena in palpite
         
         if not win:
@@ -299,7 +290,6 @@ def calcular_pior_sequencia_50(historico, indice_premio):
                 max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
             
-    # Checa se a sequência final foi a maior
     if derrotas_consecutivas > max_derrotas:
         max_derrotas = derrotas_consecutivas
         
@@ -416,49 +406,30 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_75, cortadas = gerar_matriz_75(historico, i)
         
-        # --- HTML CORRIGIDO (Para não aparecer escrito na tela) ---
-        html_content = f"""
-<div class="box-centurion">
-<div class="titulo-gold">LEGIÃO 75 - {i+1}º PRÊMIO</div>
-<div class="subtitulo">Estratégia: Eliminação da Dezena mais fraca de cada Grupo</div>
-<div class="nums-destaque">{', '.join(lista_75)}</div>
-<div class="lucro-info">💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div>
-</div>
-"""
+        # --- HTML PRINCIPAL (SEM INDENTAÇÃO INTERNA) ---
+        # Isso corrige o bug de aparecer código escrito na tela
+        html_content = f"<div class='box-centurion'><div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminação da Dezena mais fraca de cada Grupo</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
+        
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # --- CÁLCULO DE RISCO (PIOR SEQUÊNCIA) ---
+        # --- CÁLCULO DE RISCO ---
         max_loss = calcular_pior_sequencia_50(historico, i)
-        
-        # Exibe o Alerta de Risco
-        st.markdown(f"""
-        <div style="text-align: center;">
-            <span class="max-loss-pill">📉 Pior Sequência (50 Jogos): {max_loss} Derrotas</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center;'><span class='max-loss-pill'>📉 Pior Sequência (50 Jogos): {max_loss} Derrotas</span></div>", unsafe_allow_html=True)
 
         # --- BACKTEST VISUAL CORRIGIDO ---
         bt_results = executar_backtest_centurion(historico, i)
         
         if bt_results:
             st.markdown("### ⏪ Performance Recente")
-            # Monta o HTML dos cartões em Python puro para evitar erro de f-string
+            # Constrói o HTML em uma linha só para garantir que o Markdown não quebre
             cards_html = ""
             for res in reversed(bt_results):
-                classe = "bt-win" if res['win'] else "bt-loss"
-                icon = "🟢" if res['win'] else "🔴"
-                label = "WIN" if res['win'] else "LOSS"
+                c_res = "bt-win" if res['win'] else "bt-loss"
+                ico = "🟢" if res['win'] else "🔴"
+                lbl = "WIN" if res['win'] else "LOSS"
                 num = res['dezena']
-                
-                cards_html += f"""
-                <div class='bt-card {classe}'>
-                    <div class='bt-icon'>{icon}</div>
-                    <div class='bt-num'>{num}</div>
-                    <div class='bt-label'>{label}</div>
-                </div>
-                """
+                cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
             
-            # Renderiza o container final
             st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
         
         else:
