@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V5.1 Saturation", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V5.2", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -47,13 +47,7 @@ for g in range(1, 26):
         else: dezenas.append(f"{n:02}")
     GRUPOS_BICHOS[g] = dezenas 
 
-# Mapeamento Inverso: Dezena -> Grupo
-DEZENA_PARA_GRUPO = {}
-for g, dzs in GRUPOS_BICHOS.items():
-    for d in dzs:
-        DEZENA_PARA_GRUPO[d] = g
-
-# Estilo Visual (CSS - Tema Centurião + Backtest)
+# Estilo Visual
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
@@ -77,71 +71,38 @@ st.markdown("""
         margin-bottom: 5px;
     }
     
-    .subtitulo { 
-        color: #cccccc; 
-        font-size: 14px; 
-        margin-bottom: 20px; 
-        font-style: italic;
-    }
+    .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     
     .nums-destaque { 
-        font-size: 20px; 
-        color: #ffffff; 
-        font-weight: bold; 
-        word-wrap: break-word; 
-        line-height: 1.8;
-        letter-spacing: 1px;
+        font-size: 20px; color: #ffffff; font-weight: bold; 
+        word-wrap: break-word; line-height: 1.8; letter-spacing: 1px;
     }
     
     .lucro-info { 
-        background-color: rgba(0, 255, 0, 0.05); 
-        border: 1px solid #00ff00; 
-        padding: 10px; 
-        border-radius: 8px; 
-        color: #00ff00; 
-        font-weight: bold; 
-        margin-top: 20px;
-        font-size: 16px;
+        background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; 
+        padding: 10px; border-radius: 8px; color: #00ff00; 
+        font-weight: bold; margin-top: 20px; font-size: 16px;
     }
     
     .info-pill {
-        padding: 5px 15px;
-        border-radius: 5px;
-        font-weight: bold;
-        font-size: 13px;
-        display: inline-block;
-        margin: 5px;
+        padding: 5px 15px; border-radius: 5px; font-weight: bold; 
+        font-size: 13px; display: inline-block; margin: 5px;
     }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pill-reforco { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
     
-    /* BACKTEST ESTILO */
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-    .bt-card { 
-        background-color: rgba(30, 30, 30, 0.9); 
-        border-radius: 8px; 
-        padding: 10px; 
-        width: 90px; 
-        text-align: center; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
-    }
+    .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
     .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
     .bt-icon { font-size: 20px; margin-bottom: 2px; }
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
 
-    /* MAX LOSS PILL */
     .max-loss-pill {
-        background-color: rgba(255, 0, 0, 0.15);
-        border: 1px solid #ff4b4b;
-        color: #ffcccc;
-        padding: 8px 20px;
-        border-radius: 25px;
-        font-weight: bold;
-        font-size: 14px;
-        display: inline-block;
-        margin-bottom: 15px;
+        background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b;
+        color: #ffcccc; padding: 8px 20px; border-radius: 25px;
+        font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px;
     }
 
     div[data-testid="stTable"] table { color: white; }
@@ -261,51 +222,49 @@ def gerar_matriz_75_saturation(historico, indice_premio):
     # Rankeia Grupos: Mais frequentes (Saturados) -> Menos (Atrasados)
     rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
     
-    # IDENTIFICA O VILÃO (Saturado #1)
-    grupo_saturado = rank_grupos[0][0] # O mais frequente
+    # IDENTIFICA O VILÃO (Saturado #1) E SUA CONTAGEM
+    grupo_saturado = rank_grupos[0][0] 
+    freq_saturado = rank_grupos[0][1] # Quantas vezes saiu
     
     # IDENTIFICA OS HERÓIS (3 Atrasados) - Os últimos da lista
-    # Pegamos os 3 últimos
     grupos_reforco = [x[0] for x in rank_grupos[-3:]]
     
     palpite_final = []
     dezenas_cortadas = []
     
-    # 3. Processamento Grupo a Grupo
+    # 3. Processamento
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
         
         # CASO 1: É O GRUPO SATURADO?
         if grupo == grupo_saturado:
-            # Elimina TODAS as dezenas
-            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO): {', '.join(lista_dezenas)}")
-            continue # Pula para o próximo, não adiciona nada
+            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO - Saiu {freq_saturado}x): {', '.join(lista_dezenas)}")
+            continue 
             
         # CASO 2: É UM GRUPO DE REFORÇO?
         elif grupo in grupos_reforco:
-            # Adiciona TODAS as 4 dezenas
             palpite_final.extend(lista_dezenas)
-            # Não corta nenhuma
             continue
             
-        # CASO 3: GRUPO NORMAL (21 Grupos)
+        # CASO 3: GRUPO NORMAL
         else:
-            # Regra Padrão: Elimina a pior dezena
             rank_dz = []
             for d in lista_dezenas:
                 freq = contagem_dezenas.get(d, 0)
                 rank_dz.append((d, freq))
             
-            rank_dz.sort(key=lambda x: x[1]) # Menor freq primeiro
+            rank_dz.sort(key=lambda x: x[1])
             dezena_removida = rank_dz[0][0]
-            dezenas_selecionadas = [x[0] for x in rank_dz[1:]] # Pega 3
+            dezenas_selecionadas = [x[0] for x in rank_dz[1:]] 
             
             palpite_final.extend(dezenas_selecionadas)
             dezenas_cortadas.append(f"G{grupo}: {dezena_removida}")
             
-    # Ordena para ficar bonito
-    palpite_final = sorted(list(set(palpite_final))) # Set remove duplicidade por segurança
+    palpite_final = sorted(list(set(palpite_final)))
     
-    return palpite_final, dezenas_cortadas, grupo_saturado, grupos_reforco
+    # Retorna tupla (Grupo, Frequencia) para o display
+    dados_saturado = (grupo_saturado, freq_saturado)
+    
+    return palpite_final, dezenas_cortadas, dados_saturado, grupos_reforco
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 35: return []
@@ -453,7 +412,11 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_75, cortadas, sat, reforcos = gerar_matriz_75_saturation(historico, i)
         
-        info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat} (Removido)</span>" if sat else ""
+        info_sat = ""
+        if sat:
+            # sat[0] é o grupo, sat[1] é a frequência
+            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} (Removido - Saiu {sat[1]}x)</span>"
+            
         info_ref = f"<span class='info-pill pill-reforco'>✅ GRUPOS REFORÇADOS: {', '.join(map(str, reforcos))} (Completos)</span>" if reforcos else ""
         
         html_content = f"<div class='box-centurion'>{info_sat} {info_ref}<div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminar Grupo Saturado + Reforçar Atrasados</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
