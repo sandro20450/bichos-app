@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V2.1", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V3.0 Turbo", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -230,48 +230,83 @@ def gerar_matriz_75(historico, indice_premio):
 st.title("🛡️ CENTURION 75")
 st.markdown("**Estratégia de Cobertura de Dezenas (Lucro: 22%)**")
 
-# --- SIDEBAR: IMPORTAÇÃO INTELIGENTE ---
+# --- SIDEBAR: IMPORTAÇÃO TURBO ---
 with st.sidebar:
-    st.header("📥 Importar Dezenas")
+    st.header("📥 Extração em Massa")
     banca_sel = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
     conf = CONFIG_BANCAS[banca_sel]
     
-    opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
-    if opt_data == "Hoje": data_busca = date.today()
-    elif opt_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-    else: data_busca = st.date_input("Data:", date.today())
+    st.info("⚠️ Selecione o período para baixar TUDO de uma vez.")
     
-    hora_busca = st.selectbox("Horário:", conf['horarios'])
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
+    with col_d2:
+        data_fim = st.date_input("Fim:", date.today())
     
-    if st.button("🚀 Baixar Dezenas"):
+    if st.button("🚀 INICIAR EXTRAÇÃO TOTAL"):
         ws = conectar_planilha(conf['aba'])
         if ws:
-            with st.spinner(f"Extraindo dezenas..."):
-                try:
-                    existentes = ws.get_all_values()
-                    # Cria chave para evitar duplicidade
-                    chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
-                except: chaves = []
-                
-                chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
-                
-                # --- DETECTOR DE DUPLICIDADE IGUAL AO PENTÁGONO ---
-                if chave_atual in chaves:
-                    try:
-                        idx = chaves.index(chave_atual) + 2 # +2 pelo cabeçalho e indice 0
-                        st.warning(f"⚠️ Resultado já existe na Linha {idx} da planilha!")
-                    except:
-                        st.warning("⚠️ Resultado já existe!")
-                else:
-                    dezenas, msg = raspar_dezenas_site(banca_sel, data_busca, hora_busca)
+            status_placeholder = st.empty()
+            bar_placeholder = st.progress(0)
+            
+            # Carrega chaves existentes para não duplicar
+            try:
+                existentes = ws.get_all_values()
+                chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
+            except: chaves = []
+            
+            # Gera lista de datas
+            delta = data_fim - data_ini
+            lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
+            
+            total_ops = len(lista_datas) * len(conf['horarios'])
+            op_atual = 0
+            sucessos = 0
+            
+            st.toast("Iniciando motor de extração...", icon="🔥")
+            
+            for dia in lista_datas:
+                for hora in conf['horarios']:
+                    op_atual += 1
+                    progresso = op_atual / total_ops
+                    bar_placeholder.progress(progresso)
+                    
+                    status_placeholder.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                    
+                    chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                    
+                    if chave_atual in chaves:
+                        # Já existe, pula
+                        continue
+                    
+                    # Se data for futura, para
+                    if dia > date.today():
+                        continue
+                    if dia == date.today():
+                        # Se for hoje, verifica se o horário já passou (aprox)
+                        hora_limite = datetime.now().strftime("%H:%M")
+                        if hora > hora_limite:
+                            continue
+
+                    # Tenta baixar
+                    dezenas, msg = raspar_dezenas_site(banca_sel, dia, hora)
+                    
                     if dezenas:
-                        row = [data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas
+                        row = [dia.strftime('%Y-%m-%d'), hora] + dezenas
                         ws.append_row(row)
-                        st.success(f"✅ Salvo: {dezenas}")
-                        time.sleep(1)
-                        st.rerun()
-                    else: st.error(f"❌ {msg}")
-        else: st.error("Erro Planilha: Verifique se criou a aba correta!")
+                        sucessos += 1
+                        chaves.append(chave_atual) # Adiciona na lista local para não duplicar no mesmo loop
+                    
+                    # Pausa de segurança (Anti-Bloqueio)
+                    time.sleep(1.0)
+            
+            bar_placeholder.progress(100)
+            status_placeholder.success(f"🏁 Concluído! {sucessos} novos sorteios salvos.")
+            time.sleep(2)
+            st.rerun()
+            
+        else: st.error("Erro ao conectar na Planilha.")
 
 # --- TELA PRINCIPAL ---
 conf_atual = CONFIG_BANCAS[banca_sel]
