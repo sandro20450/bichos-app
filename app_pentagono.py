@@ -13,7 +13,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V34 - Híbrido", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V35 - Reversão Auto", page_icon="🔄", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -28,12 +28,9 @@ SETORES = {
     "VACA (25)": [25]
 }
 
-# Mapeamento Matemático das Dezenas (Padrão Jogo do Bicho)
 GRUPOS_DEZENAS = {}
 for g in range(1, 26):
-    fim = g * 4
-    inicio = fim - 3
-    # Formata como string "01", "02"... "99", "00"
+    fim = g * 4; inicio = fim - 3
     dezenas = []
     for n in range(inicio, fim + 1):
         if n == 100: dezenas.append("00")
@@ -55,42 +52,24 @@ def aplicar_estilo():
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
-        .box-sniper-hunter { 
-            background: linear-gradient(135deg, #004d00, #006400); 
-            border: 2px solid #00ff00; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border-left: 8px solid #00ff00; 
-            margin-bottom: 15px; 
-            color: #ccffcc; 
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
-        }
-
+        .box-sniper-hunter { background: linear-gradient(135deg, #004d00, #006400); border: 2px solid #00ff00; padding: 15px; border-radius: 8px; border-left: 8px solid #00ff00; margin-bottom: 15px; color: #ccffcc; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2); }
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
         
-        /* SNIPER BOX HÍBRIDO (V34) */
-        .sniper-box { 
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
-            border: 2px solid #00d2ff; 
-            padding: 20px; 
-            border-radius: 15px; 
-            margin-bottom: 10px; 
-            text-align: center;
-            box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2);
-        }
-        .sniper-record {
-            border: 2px solid #ff00de !important;
-            box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important;
-            background: linear-gradient(135deg, #3a0035, #240b36) !important;
-        }
+        .sniper-box { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); border: 2px solid #00d2ff; padding: 20px; border-radius: 15px; margin-bottom: 10px; text-align: center; box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2); }
+        .sniper-record { border: 2px solid #ff00de !important; box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important; background: linear-gradient(135deg, #3a0035, #240b36) !important; }
+        
+        /* ESTILO PARA MODO REVERSÃO */
+        .sniper-reversao { border: 2px solid #ff4b4b !important; box-shadow: 0px 0px 25px rgba(255, 75, 75, 0.4) !important; background: linear-gradient(135deg, #4a0000, #2c0000) !important; }
+        .reversao-badge { background-color: #ff4b4b; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px; margin-bottom: 10px; display: inline-block; }
+
+        .sniper-box-gold { background: linear-gradient(135deg, #3d2b00, #664d00); border: 2px solid #ffd700; padding: 20px; border-radius: 15px; margin-bottom: 10px; text-align: center; box-shadow: 0px 0px 25px rgba(255, 215, 0, 0.4); }
         
         .sniper-title { font-size: 20px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
         .sniper-bank { font-size: 32px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0px 0px 15px rgba(0,210,255,0.6); }
         .sniper-target { font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 10px; text-transform: uppercase; }
         .sniper-next { font-size: 18px; color: #00ff00; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; display: inline-block; margin-bottom: 15px; border: 1px solid #00ff00; }
         
-        /* SEÇÕES DO SNIPER HÍBRIDO */
         .section-strong { margin: 10px 0; border: 1px dashed #00ff00; padding: 10px; border-radius: 8px; background: rgba(0, 255, 0, 0.05); }
         .strong-label { color: #00ff00; font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: left; }
         .strong-nums { color: #fff; font-size: 24px; font-weight: bold; letter-spacing: 2px; }
@@ -101,6 +80,11 @@ def aplicar_estilo():
         
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
+        .gold-strong { color: #ffd700; font-size: 18px; font-weight: bold; margin-bottom: 5px; text-align: center; display: block; }
+        .gold-protect { color: #ffffff; font-size: 16px; font-weight: bold; background-color: rgba(255, 215, 0, 0.1); padding: 8px; border-radius: 5px; margin-top: 10px; border: 1px solid rgba(255, 215, 0, 0.3); display: inline-block; }
+        .gold-nums { font-size: 24px; color: #fff; font-weight: bold; letter-spacing: 2px; }
+        .gold-death { color: #ff4b4b; font-size: 14px; font-weight: bold; margin-top: 10px; display: block; }
+        
         .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
         .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -109,24 +93,11 @@ def aplicar_estilo():
         .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
         .bt-label { font-size: 11px; opacity: 0.8; }
         
-        .max-loss-info {
-            text-align: center;
-            background-color: rgba(255, 0, 0, 0.1);
-            border: 1px solid rgba(255, 0, 0, 0.3);
-            color: #ffaaaa;
-            padding: 5px 15px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-top: 10px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
+        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; font-size: 14px; font-weight: bold; }
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
@@ -189,14 +160,12 @@ def calcular_stress_tabela(historico, indice_premio):
         for jogo in historico:
             bicho = jogo['premios'][indice_premio]
             if bicho in lista_bichos:
-                total_vitorias += 1
-                curr_seq_v += 1
+                total_vitorias += 1; curr_seq_v += 1
                 if curr_atraso > max_atraso: max_atraso = curr_atraso
                 curr_atraso = 0
             else:
                 if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
-                curr_seq_v = 0
-                curr_atraso += 1
+                curr_seq_v = 0; curr_atraso += 1
         if curr_atraso > max_atraso: max_atraso = curr_atraso
         if curr_seq_v > max_seq_v: max_seq_v = curr_seq_v
         atraso_real = 0
@@ -260,7 +229,6 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- DETECTOR DE SATURAÇÃO ---
 def identificar_saturados(historico, indice_premio):
     recorte = historico[-50:]
     if len(recorte) < 20: return []
@@ -270,15 +238,39 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V34 (HÍBRIDO: GRUPOS + DEZENAS) ---
-def gerar_sniper_v34_hibrido(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
-    # 1. Identificar Setores
-    setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
-    setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
+# --- ALGORITMO SNIPER V35 (HÍBRIDO + REVERSÃO AUTOMÁTICA) ---
+def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
+    # 1. DETECÇÃO DE REVERSÃO (O NOVO CÉREBRO)
+    setor_estourado = None
+    for index, row in df_stress.iterrows():
+        if "VACA" not in row['SETOR']: # Ignora Vaca para reversão de setores
+            # Se a sequência atual já bateu o recorde E o recorde é relevante (>=3)
+            if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)'] and row['REC. SEQ. (V)'] >= 3:
+                setor_estourado = row['SETOR']
+                break
     
-    setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
-    setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
-    setor_fraco = setores_ordenados.iloc[-1]['SETOR']
+    modo_reversao = False
+    
+    # 2. SELEÇÃO DE SETORES (ATAQUE vs DEFESA)
+    setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
+    
+    if setor_estourado:
+        # MODO REVERSÃO ATIVADO
+        modo_reversao = True
+        setor_fraco = setor_estourado # O estourado vai pra defesa obrigatoriamente
+        # Os outros 2 vão pro ataque
+        setores_ataque_df = setores_reais[setores_reais['SETOR'] != setor_estourado]
+        # Ordena os de ataque por presença, só pra organizar
+        setores_ataque_ordenados = setores_ataque_df.sort_values(by='% PRESENÇA', ascending=False)
+        setor_forte_1 = setores_ataque_ordenados.iloc[0]['SETOR']
+        setor_forte_2 = setores_ataque_ordenados.iloc[1]['SETOR']
+        
+    else:
+        # MODO NORMAL (V34)
+        setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
+        setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
+        setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
+        setor_fraco = setores_ordenados.iloc[-1]['SETOR']
 
     lista_diamantes_segura = []
     if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
@@ -292,25 +284,20 @@ def gerar_sniper_v34_hibrido(df_stress, stats_ciclo, df_diamante, ultimo_bicho, 
         if grupo in saturados: score -= 5000
         return score
 
-    # 2. SELEÇÃO DE GRUPOS FORTES (ATAQUE)
+    # 3. PROCESSAMENTO DOS GRUPOS (Igual V34)
     grupos_ataque = []
     for s in [setor_forte_1, setor_forte_2]:
         grupos_setor = SETORES[s]
         rank = sorted(grupos_setor, key=lambda x: calcular_score(x), reverse=True)
-        grupos_ataque.extend(rank[:7]) # Pega 7, remove 1
+        grupos_ataque.extend(rank[:7])
 
-    # 3. SELEÇÃO DE DEZENAS DE PROTEÇÃO (DEFESA - Setor Fraco)
-    grupos_defesa_full = SETORES[setor_fraco] # Pega TODOS os 8
+    grupos_defesa_full = SETORES[setor_fraco]
     dezenas_defesa = []
-    
     for g in grupos_defesa_full:
-        # Pega as 3 primeiras dezenas do grupo (Corta a 4ª)
-        # Ex: G1 (01, 02, 03, 04) -> Joga 01, 02, 03
         dzs = GRUPOS_DEZENAS[g]
         dezenas_defesa.extend(dzs[:3])
 
-    # 4. VACA (Híbrida)
-    # Se Vaca for forte, ela entra como GRUPO (Ataque Adicional)
+    # 4. VACA
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
@@ -318,26 +305,75 @@ def gerar_sniper_v34_hibrido(df_stress, stats_ciclo, df_diamante, ultimo_bicho, 
     if 25 in stats_ciclo['faltam']: score_vaca += 100
     if 25 in saturados: score_vaca -= 5000
 
-    if score_vaca > 50: # Se Vaca tem motivo pra jogar
-        grupos_ataque.append(25) # Adiciona aos grupos de ataque
+    if score_vaca > 50:
+        grupos_ataque.append(25)
 
     grupos_ataque = sorted(list(set(grupos_ataque)))
     
+    # Meta Info
     sf1_name = setor_forte_1.split(' ')[0]
     sf2_name = setor_forte_2.split(' ')[0]
     sf_fraco_name = setor_fraco.split(' ')[0]
     
-    meta_info = f"ATAQUE: {sf1_name}(7)+{sf2_name}(7) | DEFESA: {sf_fraco_name} (Dezenas)"
+    if modo_reversao:
+        meta_info = f"🔄 REVERSÃO: {sf_fraco_name} Bloqueado! Ataque com {sf1_name}+{sf2_name}"
+    else:
+        meta_info = f"TENDÊNCIA: {sf1_name}+{sf2_name} Fortes | {sf_fraco_name} Backup"
     
     return { 
         "grupos_ataque": grupos_ataque, 
         "dezenas_defesa": sorted(dezenas_defesa),
         "nota": 100, 
         "meta_info": meta_info, 
+        "modo_reversao": modo_reversao, # Flag para visual
         "is_record": False 
     }
 
-# --- BACKTEST V34 (LÓGICA ADAPTADA) ---
+# --- ALGORITMO HIGH STAKES V31.1 (Reaproveitado) ---
+def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
+    # Usa a V35 para base (já com reversão se precisar)
+    sniper_base = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+    grupos_20 = sniper_base['grupos_ataque']
+    
+    # Se por acaso a lista tiver menos de 20 (ex: vaca não entrou), completa com lógica padrão
+    # Mas aqui vamos focar na lógica de completar para 23
+    
+    todos = set(range(1, 26))
+    restantes = list(todos - set(grupos_20))
+    
+    lista_diamantes_segura = []
+    if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
+        lista_diamantes_segura = df_diamante['GRUPO'].tolist()
+        
+    candidatos_extra = []
+    for g in restantes:
+        score = 0
+        if g in stats_ciclo['faltam']: score += 100
+        if g in lista_diamantes_segura: score += 50
+        if g in saturados: score -= 5000
+        candidatos_extra.append({'grupo': g, 'score': score})
+        
+    candidatos_extra.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Pega quantos faltam para chegar em 23
+    qtd_atual = len(grupos_20)
+    qtd_necessaria = 23 - qtd_atual
+    
+    if qtd_necessaria > 0:
+        protecao = [x['grupo'] for x in candidatos_extra[:qtd_necessaria]]
+        excluidos = [x['grupo'] for x in candidatos_extra[qtd_necessaria:]]
+    else:
+        protecao = []
+        excluidos = [x['grupo'] for x in candidatos_extra]
+    
+    return { 
+        "grupos_fortes": sorted(grupos_20), 
+        "grupos_protecao": sorted(protecao),
+        "excluidos": sorted(excluidos),
+        "meta_info": "Estratégia 20+3" 
+    }
+
+# --- BACKTEST V35 ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -352,30 +388,82 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         
-        # Gera palpite do passado
-        sniper_past = gerar_sniper_v34_hibrido(df_s, st_c, df_d, u_b, sat)
+        # Gera palpite do passado com V35
+        sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
         
-        # Verificação de Vitória
-        # 1. Ganhou no Ataque (Grupo Cheio)?
         win_ataque = target_num in sniper_past['grupos_ataque']
         
-        # 2. Ganhou na Defesa (Setor Fraco)?
-        # Obs: Como não temos a dezena histórica, assumimos acerto se caiu no setor fraco
-        # (Teoria de Cobertura 75% - Consideramos Green para estatística de setor)
-        # Para ser rigoroso: Se caiu no setor fraco, é "Parcial". Aqui contaremos como WIN de setor.
+        # Lógica de vitória no setor fraco (para o backtest do V34/35)
+        # Recalcula quem era o fraco naquela época
+        # Precisa saber se estava em reversão lá trás
+        # A função gerar_sniper_v35 já fez isso internamente e jogou o fraco para 'dezenas_defesa'
+        # Mas 'dezenas_defesa' são dezenas, e 'target_num' é grupo.
+        # Precisamos ver se o target_num pertence a algum grupo cujas dezenas foram jogadas.
         
-        # Identifica qual setor era o fraco no passado
-        setores_reais = df_s[~df_s['SETOR'].str.contains("VACA")]
-        setores_ord = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
-        setor_fraco_past = setores_ord.iloc[-1]['SETOR']
-        grupos_fraco_past = SETORES[setor_fraco_past]
-        
-        win_defesa = target_num in grupos_fraco_past
+        # Simplificação para Backtest: Se caiu no setor que foi escolhido para defesa, é vitória
+        # Precisamos saber qual setor foi escolhido para defesa
+        meta = sniper_past['meta_info']
+        if "REVERSÃO" in meta:
+            # Extrai nome do setor bloqueado
+            match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
+            nome_fraco = match.group(1) if match else ""
+        else:
+            match = re.search(r"(\w+) Backup", meta)
+            nome_fraco = match.group(1) if match else ""
+            
+        win_defesa = False
+        if nome_fraco:
+            # Encontra a chave completa do setor
+            chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
+            if chave_setor:
+                win_defesa = target_num in SETORES[chave_setor]
         
         win_total = win_ataque or win_defesa
-        
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
     return resultados_backtest
+
+def executar_backtest_sniper_23(historico, indice_premio):
+    resultados_backtest = []
+    for i in range(1, 5):
+        if len(historico) <= i + 20: break
+        target_game = historico[-i]
+        target_num = target_game['premios'][indice_premio]
+        hist_treino = historico[:-i]
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        sat = identificar_saturados(hist_treino, indice_premio)
+        
+        sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b, sat)
+        total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
+        win = target_num in total_jogaveis
+        resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win })
+    return resultados_backtest
+
+def calcular_max_derrotas_23(historico, indice_premio):
+    max_derrotas = 0; derrotas_consecutivas_temp = 0
+    range_analise = min(50, len(historico) - 20)
+    start_idx = len(historico) - range_analise
+    for i in range(start_idx, len(historico)):
+        target_game = historico[i]
+        target_num = target_game['premios'][indice_premio]
+        hist_treino = historico[:i]
+        df_s = calcular_stress_tabela(hist_treino, indice_premio)
+        st_c = calcular_ciclo(hist_treino, indice_premio)
+        df_d = calcular_tabela_diamante(hist_treino, indice_premio)
+        u_b = hist_treino[-1]['premios'][indice_premio]
+        sat = identificar_saturados(hist_treino, indice_premio)
+        
+        sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b, sat)
+        total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
+        win = target_num in total_jogaveis
+        if not win: derrotas_consecutivas_temp += 1
+        else:
+            if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+            derrotas_consecutivas_temp = 0
+    if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+    return max_derrotas
 
 def calcular_max_derrotas_50(historico, indice_premio):
     max_derrotas = 0; derrotas_consecutivas_temp = 0
@@ -391,18 +479,23 @@ def calcular_max_derrotas_50(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         
-        sniper_past = gerar_sniper_v34_hibrido(df_s, st_c, df_d, u_b, sat)
+        sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
         
         win_ataque = target_num in sniper_past['grupos_ataque']
-        
-        setores_reais = df_s[~df_s['SETOR'].str.contains("VACA")]
-        setores_ord = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
-        setor_fraco_past = setores_ord.iloc[-1]['SETOR']
-        grupos_fraco_past = SETORES[setor_fraco_past]
-        win_defesa = target_num in grupos_fraco_past
+        # Simplificação backtest (mesma logica acima)
+        meta = sniper_past['meta_info']
+        if "REVERSÃO" in meta:
+            match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
+            nome_fraco = match.group(1) if match else ""
+        else:
+            match = re.search(r"(\w+) Backup", meta)
+            nome_fraco = match.group(1) if match else ""
+        win_defesa = False
+        if nome_fraco:
+            chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
+            if chave_setor: win_defesa = target_num in SETORES[chave_setor]
         
         win = win_ataque or win_defesa
-        
         if not win: derrotas_consecutivas_temp += 1
         else:
             if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
@@ -535,8 +628,8 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V34 HÍBRIDO
-                    sniper = gerar_sniper_v34_hibrido(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
+                    # 1. SNIPER V35
+                    sniper = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
                         melhor_sniper = {
@@ -583,12 +676,14 @@ def tela_dashboard_global():
         if melhor_sniper:
             d = melhor_sniper['dados']
             cor_nota = "#00ff00" if d['nota'] > 80 else "#ffcc00"
-            css_extra = "sniper-record" if d['is_record'] else ""
+            css_extra = "sniper-reversao" if d['modo_reversao'] else "sniper-record" if d['is_record'] else ""
             prox_tiro = obter_proxima_batalha(melhor_sniper['banca_key'], melhor_sniper['ultimo_horario'])
+            badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if d['modo_reversao'] else ""
             
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
-<div class="sniper-title">🎯 SNIPER V34 (HÍBRIDO)</div>
+{badge_rev}
+<div class="sniper-title">🎯 SNIPER V35 (HÍBRIDO AUTO)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -723,32 +818,39 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V34 (HÍBRIDO) ---
-                sniper_local = gerar_sniper_v34_hibrido(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+                # --- SNIPER V35 (AUTO) ---
+                sniper_local = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
-                css_extra = "sniper-record" if sniper_local['is_record'] else ""
+                # --- SNIPER HIGH STAKES (23) ---
+                sniper_23 = gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+                bt_results_23 = executar_backtest_sniper_23(historico, idx_aba)
+                max_loss_23 = calcular_max_derrotas_23(historico, idx_aba)
                 
-                # VISUAL SNIPER V34 HÍBRIDO
+                css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
+                
+                # VISUAL SNIPER V35
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
+                badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
 
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
-<div class="sniper-title">🎯 SNIPER LOCAL V34 (HÍBRIDO)</div>
+{badge_rev}
+<div class="sniper-title">🎯 SNIPER LOCAL V35 (AUTO)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
 <p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
 
 <div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (14 GRUPOS):</div>
+<div class="strong-label">🟢 ATAQUE (GRUPOS):</div>
 <div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
 </div>
 
 <div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (24 DEZENAS):</div>
+<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
 <div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
 </div>
 {msg_sat}
@@ -765,6 +867,31 @@ else:
                         cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
                     final_html = f"<div class='backtest-container'>{cards_html}</div>"
                     st.markdown(final_html, unsafe_allow_html=True)
+
+                st.markdown("<hr style='border: 1px dashed #555;'>", unsafe_allow_html=True)
+
+                # VISUAL SNIPER 23 (V35)
+                st.markdown(f"""
+<div class="sniper-box-gold">
+<div class="sniper-title" style="color: #ffd700;">💎 ESTRATÉGIA HIGH STAKES (23)</div>
+<div class="sniper-desc">Cobertura Estendida (92% de Chance) - Use após ❌</div>
+<div class="gold-strong">🔥 20 FORTES:</div>
+<div class="sniper-groups" style="color: #ffd700; border-color: #ffd700; font-size: 20px;">{', '.join(map(str, sniper_23['grupos_fortes']))}</div>
+<div class="gold-protect">🛡️ 3 PROTEÇÃO: <span class="gold-nums">{', '.join(map(str, sniper_23['grupos_protecao']))}</span></div>
+<br>
+<p class="gold-death">🚫 ZONA DA MORTE (Excluídos): {', '.join(map(str, sniper_23['excluidos']))}</p>
+</div>
+""", unsafe_allow_html=True)
+                
+                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência 23 (50 Jogos): {max_loss_23} Derrotas</span></div>", unsafe_allow_html=True)
+
+                if bt_results_23:
+                    cards_html_23 = ""
+                    for res in reversed(bt_results_23):
+                        classe_res = "bt-win" if res['vitoria'] else "bt-loss"
+                        icon = "🟢" if res['vitoria'] else "❌"
+                        cards_html_23 += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']}</div></div>"
+                    st.markdown(f"<div class='backtest-container'>{cards_html_23}</div>", unsafe_allow_html=True)
 
                 palpite = gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante)
                 st.markdown(f"<div class='palpite-box'><h4>🏹 PROTEÇÃO GRUPOS (8 GRUPOS)</h4><p class='palpite-nums'>{', '.join(map(str, palpite['grupos']))}</p><small><b>Motivo:</b> {palpite['motivo']}</small></div>", unsafe_allow_html=True)
