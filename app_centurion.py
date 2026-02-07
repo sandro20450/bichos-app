@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V5.0 Killer", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V5.1 Saturation", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -46,6 +46,12 @@ for g in range(1, 26):
         if n == 100: dezenas.append("00")
         else: dezenas.append(f"{n:02}")
     GRUPOS_BICHOS[g] = dezenas 
+
+# Mapeamento Inverso: Dezena -> Grupo
+DEZENA_PARA_GRUPO = {}
+for g, dzs in GRUPOS_BICHOS.items():
+    for d in dzs:
+        DEZENA_PARA_GRUPO[d] = g
 
 # Estilo Visual (CSS - Tema Centurião + Backtest)
 st.markdown("""
@@ -98,17 +104,16 @@ st.markdown("""
         font-size: 16px;
     }
     
-    .final-bloqueado {
-        background-color: #330000;
-        color: #ff4b4b;
+    .info-pill {
         padding: 5px 15px;
         border-radius: 5px;
-        border: 1px solid #ff4b4b;
         font-weight: bold;
-        font-size: 14px;
+        font-size: 13px;
         display: inline-block;
-        margin-bottom: 10px;
+        margin: 5px;
     }
+    .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
+    .pill-reforco { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
     
     /* BACKTEST ESTILO */
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
@@ -224,10 +229,9 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA DE ELIMINAÇÃO (FINAL KILLER) ---
+# --- 3. CÉREBRO: LÓGICA DE SATURAÇÃO E TROCA ---
 # =============================================================================
-def gerar_matriz_75_killer(historico, indice_premio):
-    # Se não tiver histórico suficiente, retorna padrão
+def gerar_matriz_75_saturation(historico, indice_premio):
     if not historico:
         padrao = []
         cortadas = []
@@ -235,56 +239,73 @@ def gerar_matriz_75_killer(historico, indice_premio):
             dzs = GRUPOS_BICHOS[g]
             padrao.extend(dzs[:3])
             cortadas.append(f"G{g}:{dzs[3]}")
-        return padrao, cortadas, None
+        return padrao, cortadas, None, []
 
-    # 1. Identificar o Final para Bloquear (Do jogo anterior)
-    ultimo_jogo = historico[-1]
-    ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
-    final_bloqueado = ultima_dezena[-1] # Pega o último dígito (Ex: '95' -> '5')
-
-    # 2. Analisa frequência das dezenas (Últimos 30 jogos)
+    # 1. Analisa frequência das dezenas (Últimos 30 jogos)
     dezenas_historico = []
     recorte = historico[-30:] 
     for jogo in recorte:
         try: dezenas_historico.append(jogo['dezenas'][indice_premio])
         except: pass
     
-    contagem = Counter(dezenas_historico)
+    contagem_dezenas = Counter(dezenas_historico)
+    
+    # 2. Analisa frequência dos GRUPOS (Soma das dezenas)
+    contagem_grupos = {}
+    for g, dzs in GRUPOS_BICHOS.items():
+        soma = 0
+        for d in dzs:
+            soma += contagem_dezenas.get(d, 0)
+        contagem_grupos[g] = soma
+        
+    # Rankeia Grupos: Mais frequentes (Saturados) -> Menos (Atrasados)
+    rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
+    
+    # IDENTIFICA O VILÃO (Saturado #1)
+    grupo_saturado = rank_grupos[0][0] # O mais frequente
+    
+    # IDENTIFICA OS HERÓIS (3 Atrasados) - Os últimos da lista
+    # Pegamos os 3 últimos
+    grupos_reforco = [x[0] for x in rank_grupos[-3:]]
     
     palpite_final = []
     dezenas_cortadas = []
     
     # 3. Processamento Grupo a Grupo
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        # Verifica se alguma dezena deste grupo tem o final bloqueado
-        dezena_toxica = None
-        for d in lista_dezenas:
-            if d.endswith(final_bloqueado):
-                dezena_toxica = d
-                break
         
-        if dezena_toxica:
-            # REGRA 1 (NOVA): Prioridade Máxima é eliminar o final repetido
-            dezena_removida = dezena_toxica
-            motivo = "Final Repetido"
-        else:
-            # REGRA 2 (ANTIGA): Se não tem final repetido no grupo, elimina a mais fria
-            rank = []
-            for d in lista_dezenas:
-                freq = contagem.get(d, 0)
-                rank.append((d, freq))
+        # CASO 1: É O GRUPO SATURADO?
+        if grupo == grupo_saturado:
+            # Elimina TODAS as dezenas
+            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO): {', '.join(lista_dezenas)}")
+            continue # Pula para o próximo, não adiciona nada
             
-            rank.sort(key=lambda x: x[1]) # Menor freq primeiro
-            dezena_removida = rank[0][0]
-            motivo = "Estatística (Fria)"
-        
-        # Seleciona as outras 3
-        dezenas_selecionadas = [d for d in lista_dezenas if d != dezena_removida]
-        
-        palpite_final.extend(dezenas_selecionadas)
-        dezenas_cortadas.append(f"G{grupo}: {dezena_removida} ({motivo})")
-        
-    return sorted(palpite_final), dezenas_cortadas, final_bloqueado
+        # CASO 2: É UM GRUPO DE REFORÇO?
+        elif grupo in grupos_reforco:
+            # Adiciona TODAS as 4 dezenas
+            palpite_final.extend(lista_dezenas)
+            # Não corta nenhuma
+            continue
+            
+        # CASO 3: GRUPO NORMAL (21 Grupos)
+        else:
+            # Regra Padrão: Elimina a pior dezena
+            rank_dz = []
+            for d in lista_dezenas:
+                freq = contagem_dezenas.get(d, 0)
+                rank_dz.append((d, freq))
+            
+            rank_dz.sort(key=lambda x: x[1]) # Menor freq primeiro
+            dezena_removida = rank_dz[0][0]
+            dezenas_selecionadas = [x[0] for x in rank_dz[1:]] # Pega 3
+            
+            palpite_final.extend(dezenas_selecionadas)
+            dezenas_cortadas.append(f"G{grupo}: {dezena_removida}")
+            
+    # Ordena para ficar bonito
+    palpite_final = sorted(list(set(palpite_final))) # Set remove duplicidade por segurança
+    
+    return palpite_final, dezenas_cortadas, grupo_saturado, grupos_reforco
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 35: return []
@@ -295,47 +316,37 @@ def executar_backtest_centurion(historico, indice_premio):
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:target_idx]
         
-        palpite_ia, _, _ = gerar_matriz_75_killer(hist_treino, indice_premio)
+        palpite_ia, _, _, _ = gerar_matriz_75_saturation(hist_treino, indice_premio)
         vitoria = target_dezena in palpite_ia
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 def calcular_pior_sequencia_50(historico, indice_premio):
     if len(historico) < 40: return 0
-    
     offset_treino = 30
     total_disponivel = len(historico)
     if total_disponivel <= offset_treino: return 0
-    
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
-    
     max_derrotas = 0
     derrotas_consecutivas = 0
-    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:i]
-        palpite, _, _ = gerar_matriz_75_killer(hist_treino, indice_premio)
+        palpite, _, _, _ = gerar_matriz_75_saturation(hist_treino, indice_premio)
         win = target_dezena in palpite
-        
-        if not win:
-            derrotas_consecutivas += 1
+        if not win: derrotas_consecutivas += 1
         else:
-            if derrotas_consecutivas > max_derrotas:
-                max_derrotas = derrotas_consecutivas
+            if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
-            
-    if derrotas_consecutivas > max_derrotas:
-        max_derrotas = derrotas_consecutivas
-        
+    if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
     return max_derrotas
 
 # =============================================================================
 # --- 4. INTERFACE ---
 # =============================================================================
 st.title("🛡️ CENTURION 75")
-st.markdown("**Estratégia de Cobertura de Dezenas (Lucro: 22%)**")
+st.markdown("**Estratégia: Rotação de Saturação (75 Dezenas)**")
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -440,27 +451,22 @@ tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º
 
 for i, tab in enumerate(tabs):
     with tab:
-        lista_75, cortadas, final_bloq = gerar_matriz_75_killer(historico, i)
+        lista_75, cortadas, sat, reforcos = gerar_matriz_75_saturation(historico, i)
         
-        aviso_final = ""
-        if final_bloq:
-            aviso_final = f"<div class='final-bloqueado'>🚫 FINAL BLOQUEADO: {final_bloq} (Repetição)</div>"
-
-        # --- HTML PRINCIPAL (SEM INDENTAÇÃO INTERNA) ---
-        html_content = f"<div class='box-centurion'>{aviso_final}<div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminar Final Repetido ou Dezena Fria</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
+        info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat} (Removido)</span>" if sat else ""
+        info_ref = f"<span class='info-pill pill-reforco'>✅ GRUPOS REFORÇADOS: {', '.join(map(str, reforcos))} (Completos)</span>" if reforcos else ""
+        
+        html_content = f"<div class='box-centurion'>{info_sat} {info_ref}<div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminar Grupo Saturado + Reforçar Atrasados</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
         
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # --- CÁLCULO DE RISCO ---
         max_loss = calcular_pior_sequencia_50(historico, i)
         st.markdown(f"<div style='text-align: center;'><span class='max-loss-pill'>📉 Pior Sequência (50 Jogos): {max_loss} Derrotas</span></div>", unsafe_allow_html=True)
 
-        # --- BACKTEST VISUAL CORRIGIDO ---
         bt_results = executar_backtest_centurion(historico, i)
         
         if bt_results:
             st.markdown("### ⏪ Performance Recente")
-            # Constrói o HTML em uma linha só para garantir que o Markdown não quebre
             cards_html = ""
             for res in reversed(bt_results):
                 c_res = "bt-win" if res['win'] else "bt-loss"
@@ -475,5 +481,5 @@ for i, tab in enumerate(tabs):
             st.caption("ℹ️ Baixe mais resultados (mínimo 40) para ver o Backtest e Risco.")
 
         st.markdown("---")
-        with st.expander("✂️ Ver Dezenas Eliminadas (Ovelhas Negras)"):
+        with st.expander("✂️ Ver Dezenas Eliminadas (Detalhes)"):
             st.write(", ".join(cortadas))
