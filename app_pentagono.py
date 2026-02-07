@@ -13,7 +13,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V39 - Smart Cycle", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V39.1 - Fix", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -292,10 +292,12 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
     
     dezenas_defesa = []
     for g in grupos_defesa_finais:
-        dzs = GRUPOS_DEZENAS[g]
-        pre_selecao = dzs[:3]
-        filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
-        dezenas_defesa.extend(filtradas)
+        # SÓ ADICIONA NA DEFESA SE NÃO ESTIVER NO ATAQUE (SEGURANÇA EXTRA)
+        if g not in grupos_ataque:
+            dzs = GRUPOS_DEZENAS[g]
+            pre_selecao = dzs[:3]
+            filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
+            dezenas_defesa.extend(filtradas)
 
     # 5. VACA
     score_vaca = 0
@@ -309,7 +311,7 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         dezenas_defesa.append('97')
         dezenas_defesa.append('98')
 
-    # 6. CICLO (COM TRAVA DE DUPLICIDADE) - V39 FIX
+    # 6. CICLO (COM TRAVA DE DUPLICIDADE)
     for g_falta in stats_ciclo['faltam']:
         # SÓ ADICIONA NA DEFESA SE NÃO ESTIVER NO ATAQUE
         if g_falta not in grupos_ataque:
@@ -537,7 +539,7 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V39
+                    # 1. SNIPER V39.1
                     sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
@@ -582,6 +584,9 @@ def tela_dashboard_global():
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
+        # DEFINE COR_NOTA ANTES DE USAR
+        cor_nota = "#ffffff" # Default safety
+        
         if melhor_sniper:
             d = melhor_sniper['dados']
             cor_nota = "#00ff00" if d['nota'] > 80 else "#ffcc00"
@@ -592,7 +597,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V39 (SMART CYCLE)</div>
+<div class="sniper-title">🎯 SNIPER V39.1 (FIX)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -727,35 +732,38 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V39 (AUTO) ---
+                # --- SNIPER V39.1 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
                 
-                # VISUAL SNIPER V39
+                # VISUAL SNIPER V39.1
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
                 badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
+                
+                # Define cor_nota localmente também para evitar erro
+                cor_nota = "#00ff00" 
 
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V39 (SMART CYCLE)</div>
+<div class="sniper-title">🎯 SNIPER LOCAL V39.1 (FIX)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
-<p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
+<p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
 
 <div class="section-strong">
 <div class="strong-label">🟢 ATAQUE (GRUPOS):</div>
-<div class="strong-nums">{', '.join(map(str, d['grupos_ataque']))}</div>
+<div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
 </div>
 
 <div class="section-weak">
 <div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
-<div class="weak-nums">{', '.join(map(str, d['dezenas_defesa']))}</div>
+<div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
 </div>
 {msg_sat}
 </div>
