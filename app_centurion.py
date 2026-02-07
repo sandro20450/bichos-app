@@ -12,39 +12,20 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V6.0 Híbrido", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.0 Radar", page_icon="🛡️", layout="wide")
 
-# Configuração das Bancas e Abas (Dezenas)
+# Configuração das Bancas
 CONFIG_BANCAS = {
-    "LOTEP": { 
-        "display": "LOTEP (Dezenas)", 
-        "aba": "BASE_LOTEP_DEZ", 
-        "slug": "lotep", 
-        "horarios": ["10:45", "12:45", "15:45", "18:00"] 
-    },
-    "CAMINHO": { 
-        "display": "CAMINHO (Dezenas)", 
-        "aba": "BASE_CAMINHO_DEZ", 
-        "slug": "caminho-da-sorte", 
-        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] 
-    },
-    "MONTE": { 
-        "display": "MONTE CARLOS (Dezenas)", 
-        "aba": "BASE_MONTE_DEZ", 
-        "slug": "nordeste-monte-carlos", 
-        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] 
-    }
+    "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
+    "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
-# Mapeamento: Quais dezenas pertencem a qual grupo?
+# Mapeamento Grupos
 GRUPOS_BICHOS = {}
 for g in range(1, 26):
-    fim = g * 4
-    inicio = fim - 3
-    dezenas = []
-    for n in range(inicio, fim + 1):
-        if n == 100: dezenas.append("00")
-        else: dezenas.append(f"{n:02}")
+    fim = g * 4; inicio = fim - 3
+    dezenas = [("00" if n == 100 else f"{n:02}") for n in range(inicio, fim + 1)]
     GRUPOS_BICHOS[g] = dezenas 
 
 # Estilo Visual
@@ -54,36 +35,29 @@ st.markdown("""
     
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
-        border: 2px solid #ffd700;
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
-        margin-bottom: 10px;
-        box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
+        border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
+        text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
     }
     
-    .titulo-gold { 
-        color: #ffd700; font-weight: 900; font-size: 26px; 
-        text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;
+    .box-alert {
+        background-color: #4a0000; border: 2px solid #ff0000;
+        padding: 15px; border-radius: 10px; text-align: center;
+        margin: 15px 0; animation: pulse 2s infinite;
     }
     
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+    }
+    
+    .titulo-gold { color: #ffd700; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
+    .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
     
-    .nums-destaque { 
-        font-size: 20px; color: #ffffff; font-weight: bold; 
-        word-wrap: break-word; line-height: 1.8; letter-spacing: 1px;
-    }
+    .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
     
-    .lucro-info { 
-        background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; 
-        padding: 10px; border-radius: 8px; color: #00ff00; 
-        font-weight: bold; margin-top: 20px; font-size: 16px;
-    }
-    
-    .info-pill {
-        padding: 5px 15px; border-radius: 5px; font-weight: bold; 
-        font-size: 13px; display: inline-block; margin: 5px;
-    }
+    .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pill-ref { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
@@ -96,12 +70,8 @@ st.markdown("""
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
 
-    .max-loss-pill {
-        background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b;
-        color: #ffcccc; padding: 8px 20px; border-radius: 25px;
-        font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px;
-    }
-
+    .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
+    
     div[data-testid="stTable"] table { color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -127,8 +97,7 @@ def carregar_historico_dezenas(nome_aba):
         for row in raw[1:]:
             if len(row) >= 7:
                 dezenas = [str(d).strip().zfill(2) for d in row[2:7] if d.strip().isdigit()]
-                if len(dezenas) == 5:
-                    dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
+                if len(dezenas) == 5: dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
         return dados
     return []
 
@@ -167,8 +136,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                             for linha in linhas:
                                 cols = linha.find_all('td')
                                 if len(cols) >= 2:
-                                    premio_txt = cols[0].get_text().strip()
-                                    numero_txt = cols[1].get_text().strip()
+                                    premio_txt = cols[0].get_text().strip(); numero_txt = cols[1].get_text().strip()
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                         if numero_txt.isdigit() and len(numero_txt) >= 2:
@@ -180,22 +148,18 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: SATURAÇÃO + FINAL KILLER + REPOSIÇÃO ---
+# --- 3. CÉREBRO: LÓGICA V6.0 + STRESS CALCULATOR ---
 # =============================================================================
 def gerar_matriz_hibrida(historico, indice_premio):
     if not historico:
         padrao = []
-        for g in range(1, 26):
-            padrao.extend(GRUPOS_BICHOS[g][:3])
+        for g in range(1, 26): padrao.extend(GRUPOS_BICHOS[g][:3])
         return padrao, [], None, [], None
 
-    # --- 1. DADOS DE ENTRADA ---
-    # Final a bloquear (do jogo anterior ao atual)
     ultimo_jogo = historico[-1]
     ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
     final_bloqueado = ultima_dezena[-1] 
 
-    # Histórico de 50 jogos
     tamanho_analise = 50
     if len(historico) < 50: tamanho_analise = len(historico)
     recorte = historico[-tamanho_analise:]
@@ -205,7 +169,6 @@ def gerar_matriz_hibrida(historico, indice_premio):
         except: pass
     contagem_dezenas = Counter(dezenas_historico)
 
-    # --- 2. LÓGICA DE GRUPOS (SATURAÇÃO) ---
     contagem_grupos = {}
     for g, dzs in GRUPOS_BICHOS.items():
         soma = 0
@@ -213,103 +176,59 @@ def gerar_matriz_hibrida(historico, indice_premio):
         contagem_grupos[g] = soma
         
     rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
-    
-    # Vilão e Heróis
-    grupo_saturado = rank_grupos[0][0]
-    freq_saturado = rank_grupos[0][1]
+    grupo_saturado = rank_grupos[0][0]; freq_saturado = rank_grupos[0][1]
     grupos_reforco = [x[0] for x in rank_grupos[-3:]]
 
-    # --- 3. SELEÇÃO INICIAL (STRATEGY BASE) ---
     palpite_inicial = []
-    reservas_disponiveis = [] # Aqui guardamos as dezenas que foram cortadas
+    reservas_disponiveis = []
     dezenas_cortadas_log = []
 
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        # A) Grupo Saturado -> Tudo para Reserva
         if grupo == grupo_saturado:
             for d in lista_dezenas: reservas_disponiveis.append(d)
             dezenas_cortadas_log.append(f"G{grupo} (Saturado)")
             continue 
-            
-        # B) Grupos de Reforço -> Tudo para o Jogo
         elif grupo in grupos_reforco:
             palpite_inicial.extend(lista_dezenas)
             continue
-            
-        # C) Grupos Normais -> 3 pro Jogo, 1 pra Reserva
         else:
             rank_dz = []
             for d in lista_dezenas:
                 freq = contagem_dezenas.get(d, 0)
                 rank_dz.append((d, freq))
-            
-            rank_dz.sort(key=lambda x: x[1]) # Menor freq primeiro
-            dezena_removida = rank_dz[0][0] # A mais fraca vai pra reserva
+            rank_dz.sort(key=lambda x: x[1])
+            dezena_removida = rank_dz[0][0]
             dezenas_vencedoras = [x[0] for x in rank_dz[1:]]
-            
             palpite_inicial.extend(dezenas_vencedoras)
             reservas_disponiveis.append(dezena_removida)
 
-    # --- 4. APLICAÇÃO DO FINAL KILLER + REPOSIÇÃO ---
     palpite_filtrado = []
-    
-    # Remove as que tem final bloqueado do time titular
     for d in palpite_inicial:
-        if d.endswith(final_bloqueado):
-            # Se foi cortada pelo final, ela NÃO serve de reserva (é tóxica)
-            pass 
-        else:
-            palpite_filtrado.append(d)
+        if not d.endswith(final_bloqueado): palpite_filtrado.append(d)
     
-    # Calcula quantos buracos abriram
     vagas_abertas = 75 - len(palpite_filtrado)
-    
-    # Prepara as Reservas (filtra tóxicas e ordena por força)
     reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
-    
-    # Ordena reservas: Preferimos as mais "quentes" (frequentes) entre as excluídas?
-    # Ou as mais frias? Geralmente em reposição queremos as "menos piores".
-    # Vamos pegar as mais frequentes do banco de reserva.
     reservas_rank = []
-    for d in reservas_validas:
-        reservas_rank.append((d, contagem_dezenas.get(d, 0)))
-    
-    # Ordena Maior Freq -> Menor Freq
+    for d in reservas_validas: reservas_rank.append((d, contagem_dezenas.get(d, 0)))
     reservas_rank.sort(key=lambda x: x[1], reverse=True)
     
-    # Preenche as vagas
     for i in range(min(vagas_abertas, len(reservas_rank))):
         palpite_filtrado.append(reservas_rank[i][0])
         
     palpite_final = sorted(list(set(palpite_filtrado)))
-    
-    # Garante 75 (se faltar reserva, o que é raro, paciência, mas a lógica cobre 99%)
-    
     dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
-    
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_reforco, final_bloqueado
 
-def executar_backtest_centurion(historico, indice_premio):
-    if len(historico) < 60: return []
-    resultados = []
-    for i in range(1, 5):
-        target_idx = -i
-        target_game = historico[target_idx]
-        target_dezena = target_game['dezenas'][indice_premio]
-        hist_treino = historico[:target_idx]
-        
-        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
-        vitoria = target_dezena in palpite
-        resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
-    return resultados
-
-def calcular_pior_sequencia_50(historico, indice_premio):
-    if len(historico) < 60: return 0
+def calcular_stress_atual(historico, indice_premio):
+    # Calcula quantas derrotas consecutivas estamos TENDO AGORA (Stress Atual)
+    if len(historico) < 10: return 0, 0
+    
+    # 1. Pior Sequência Histórica (Recorde)
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
-    max_derrotas = 0
-    derrotas_consecutivas = 0
+    max_derrotas = 0; derrotas_consecutivas = 0
+    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
@@ -321,7 +240,34 @@ def calcular_pior_sequencia_50(historico, indice_premio):
             if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
-    return max_derrotas
+    
+    # 2. Stress Atual (Derrotas seguidas vindo do presente para o passado)
+    stress_atual = 0
+    for i in range(1, 20): # Verifica até 20 jogos para trás
+        idx = -i
+        target_game = historico[idx]
+        target_dezena = target_game['dezenas'][indice_premio]
+        hist_treino = historico[:idx] # Tudo antes deste jogo
+        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        win = target_dezena in palpite
+        
+        if not win: stress_atual += 1
+        else: break # Parou de perder, achamos a última vitória
+        
+    return stress_atual, max_derrotas
+
+def executar_backtest_centurion(historico, indice_premio):
+    if len(historico) < 60: return []
+    resultados = []
+    for i in range(1, 5):
+        target_idx = -i
+        target_game = historico[target_idx]
+        target_dezena = target_game['dezenas'][indice_premio]
+        hist_treino = historico[:target_idx]
+        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        vitoria = target_dezena in palpite
+        resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
+    return resultados
 
 # =============================================================================
 # --- 4. INTERFACE ---
@@ -434,13 +380,22 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
         
+        # --- CALCULA STRESS E ALERTA ---
+        stress_atual, max_loss = calcular_stress_atual(historico, i)
+        
+        aviso_alerta = ""
+        if stress_atual >= max_loss and max_loss > 0:
+            aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
+        
+        # --- INFO PILLS ---
         info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
         info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
         info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
         
-        qtd_final = len(lista_final) # Deve ser sempre 75 ou muito próximo
+        qtd_final = len(lista_final) 
         
         html_content = f"""
+        {aviso_alerta}
         <div class='box-centurion'>
             {info_sat} {info_ref} {info_final}
             <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
@@ -451,8 +406,9 @@ for i, tab in enumerate(tabs):
         """
         st.markdown(html_content, unsafe_allow_html=True)
         
-        max_loss = calcular_pior_sequencia_50(historico, i)
-        st.markdown(f"<div style='text-align: center;'><span class='max-loss-pill'>📉 Pior Sequência (50 Jogos): {max_loss} Derrotas</span></div>", unsafe_allow_html=True)
+        # Mostra o status do stress
+        cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
+        st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico: {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
 
         bt_results = executar_backtest_centurion(historico, i)
         
