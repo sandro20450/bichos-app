@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V4.2", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V5.0 Killer", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -96,6 +96,18 @@ st.markdown("""
         font-weight: bold; 
         margin-top: 20px;
         font-size: 16px;
+    }
+    
+    .final-bloqueado {
+        background-color: #330000;
+        color: #ff4b4b;
+        padding: 5px 15px;
+        border-radius: 5px;
+        border: 1px solid #ff4b4b;
+        font-weight: bold;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 10px;
     }
     
     /* BACKTEST ESTILO */
@@ -212,9 +224,10 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA DE ELIMINAÇÃO E MÉTRICAS ---
+# --- 3. CÉREBRO: LÓGICA DE ELIMINAÇÃO (FINAL KILLER) ---
 # =============================================================================
-def gerar_matriz_75(historico, indice_premio):
+def gerar_matriz_75_killer(historico, indice_premio):
+    # Se não tiver histórico suficiente, retorna padrão
     if not historico:
         padrao = []
         cortadas = []
@@ -222,8 +235,14 @@ def gerar_matriz_75(historico, indice_premio):
             dzs = GRUPOS_BICHOS[g]
             padrao.extend(dzs[:3])
             cortadas.append(f"G{g}:{dzs[3]}")
-        return padrao, cortadas
+        return padrao, cortadas, None
 
+    # 1. Identificar o Final para Bloquear (Do jogo anterior)
+    ultimo_jogo = historico[-1]
+    ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
+    final_bloqueado = ultima_dezena[-1] # Pega o último dígito (Ex: '95' -> '5')
+
+    # 2. Analisa frequência das dezenas (Últimos 30 jogos)
     dezenas_historico = []
     recorte = historico[-30:] 
     for jogo in recorte:
@@ -235,20 +254,37 @@ def gerar_matriz_75(historico, indice_premio):
     palpite_final = []
     dezenas_cortadas = []
     
+    # 3. Processamento Grupo a Grupo
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        rank = []
+        # Verifica se alguma dezena deste grupo tem o final bloqueado
+        dezena_toxica = None
         for d in lista_dezenas:
-            freq = contagem.get(d, 0)
-            rank.append((d, freq))
+            if d.endswith(final_bloqueado):
+                dezena_toxica = d
+                break
         
-        rank.sort(key=lambda x: x[1])
-        dezena_removida = rank[0][0] 
-        dezenas_selecionadas = [x[0] for x in rank[1:]] 
+        if dezena_toxica:
+            # REGRA 1 (NOVA): Prioridade Máxima é eliminar o final repetido
+            dezena_removida = dezena_toxica
+            motivo = "Final Repetido"
+        else:
+            # REGRA 2 (ANTIGA): Se não tem final repetido no grupo, elimina a mais fria
+            rank = []
+            for d in lista_dezenas:
+                freq = contagem.get(d, 0)
+                rank.append((d, freq))
+            
+            rank.sort(key=lambda x: x[1]) # Menor freq primeiro
+            dezena_removida = rank[0][0]
+            motivo = "Estatística (Fria)"
+        
+        # Seleciona as outras 3
+        dezenas_selecionadas = [d for d in lista_dezenas if d != dezena_removida]
         
         palpite_final.extend(dezenas_selecionadas)
-        dezenas_cortadas.append(f"G{grupo}:{dezena_removida} ({rank[0][1]}x)")
+        dezenas_cortadas.append(f"G{grupo}: {dezena_removida} ({motivo})")
         
-    return sorted(palpite_final), dezenas_cortadas
+    return sorted(palpite_final), dezenas_cortadas, final_bloqueado
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 35: return []
@@ -259,7 +295,7 @@ def executar_backtest_centurion(historico, indice_premio):
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:target_idx]
         
-        palpite_ia, _ = gerar_matriz_75(hist_treino, indice_premio)
+        palpite_ia, _, _ = gerar_matriz_75_killer(hist_treino, indice_premio)
         vitoria = target_dezena in palpite_ia
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
@@ -280,7 +316,7 @@ def calcular_pior_sequencia_50(historico, indice_premio):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:i]
-        palpite, _ = gerar_matriz_75(hist_treino, indice_premio)
+        palpite, _, _ = gerar_matriz_75_killer(hist_treino, indice_premio)
         win = target_dezena in palpite
         
         if not win:
@@ -404,11 +440,14 @@ tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º
 
 for i, tab in enumerate(tabs):
     with tab:
-        lista_75, cortadas = gerar_matriz_75(historico, i)
+        lista_75, cortadas, final_bloq = gerar_matriz_75_killer(historico, i)
         
+        aviso_final = ""
+        if final_bloq:
+            aviso_final = f"<div class='final-bloqueado'>🚫 FINAL BLOQUEADO: {final_bloq} (Repetição)</div>"
+
         # --- HTML PRINCIPAL (SEM INDENTAÇÃO INTERNA) ---
-        # Isso corrige o bug de aparecer código escrito na tela
-        html_content = f"<div class='box-centurion'><div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminação da Dezena mais fraca de cada Grupo</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
+        html_content = f"<div class='box-centurion'>{aviso_final}<div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminar Final Repetido ou Dezena Fria</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
         
         st.markdown(html_content, unsafe_allow_html=True)
         
