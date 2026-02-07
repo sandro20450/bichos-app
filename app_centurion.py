@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V3.0 Turbo", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V3.1 Híbrido", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -149,11 +149,9 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
 
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # --- FILTRO ANTI-FEDERAL ---
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
 
-                # Valida Horário
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -230,85 +228,118 @@ def gerar_matriz_75(historico, indice_premio):
 st.title("🛡️ CENTURION 75")
 st.markdown("**Estratégia de Cobertura de Dezenas (Lucro: 22%)**")
 
-# --- SIDEBAR: IMPORTAÇÃO TURBO ---
+# --- SIDEBAR HÍBRIDA ---
 with st.sidebar:
-    st.header("📥 Extração em Massa")
+    st.header("⚙️ Configuração")
     banca_sel = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
     conf = CONFIG_BANCAS[banca_sel]
     
-    st.info("⚠️ Selecione o período para baixar TUDO de uma vez.")
-    
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
-    with col_d2:
-        data_fim = st.date_input("Fim:", date.today())
-    
-    if st.button("🚀 INICIAR EXTRAÇÃO TOTAL"):
-        ws = conectar_planilha(conf['aba'])
-        if ws:
-            status_placeholder = st.empty()
-            bar_placeholder = st.progress(0)
-            
-            # Carrega chaves existentes para não duplicar
-            try:
-                existentes = ws.get_all_values()
-                chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
-            except: chaves = []
-            
-            # Gera lista de datas
-            delta = data_fim - data_ini
-            lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-            
-            total_ops = len(lista_datas) * len(conf['horarios'])
-            op_atual = 0
-            sucessos = 0
-            
-            st.toast("Iniciando motor de extração...", icon="🔥")
-            
-            for dia in lista_datas:
-                for hora in conf['horarios']:
-                    op_atual += 1
-                    progresso = op_atual / total_ops
-                    bar_placeholder.progress(progresso)
+    st.markdown("---")
+    # SELETOR DE MODO (O Segredo do Híbrido)
+    modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
+    st.markdown("---")
+
+    # === MODO 1: UNITÁRIO (IGUAL V2.1) ===
+    if modo_extracao == "🎯 Unitária (1 Sorteio)":
+        st.subheader("Extração Unitária")
+        opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+        
+        if opt_data == "Hoje": data_busca = date.today()
+        elif opt_data == "Ontem": data_busca = date.today() - timedelta(days=1)
+        else: data_busca = st.date_input("Escolha a Data:", date.today())
+        
+        hora_busca = st.selectbox("Horário:", conf['horarios'])
+        
+        if st.button("🚀 Baixar Sorteio"):
+            ws = conectar_planilha(conf['aba'])
+            if ws:
+                with st.spinner(f"Buscando {hora_busca}..."):
+                    try:
+                        existentes = ws.get_all_values()
+                        chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
+                    except: chaves = []
                     
-                    status_placeholder.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                    
-                    chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                    chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
                     
                     if chave_atual in chaves:
-                        # Já existe, pula
-                        continue
-                    
-                    # Se data for futura, para
-                    if dia > date.today():
-                        continue
-                    if dia == date.today():
-                        # Se for hoje, verifica se o horário já passou (aprox)
-                        hora_limite = datetime.now().strftime("%H:%M")
-                        if hora > hora_limite:
-                            continue
+                        try:
+                            idx = chaves.index(chave_atual) + 2
+                            st.warning(f"⚠️ Resultado já existe na Linha {idx} da planilha!")
+                        except:
+                            st.warning("⚠️ Resultado já existe!")
+                    else:
+                        dezenas, msg = raspar_dezenas_site(banca_sel, data_busca, hora_busca)
+                        if dezenas:
+                            row = [data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas
+                            ws.append_row(row)
+                            st.success(f"✅ Salvo! Dezenas: {dezenas}")
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error(f"❌ {msg}")
+            else: st.error("Erro Conexão Planilha")
 
-                    # Tenta baixar
-                    dezenas, msg = raspar_dezenas_site(banca_sel, dia, hora)
-                    
-                    if dezenas:
-                        row = [dia.strftime('%Y-%m-%d'), hora] + dezenas
-                        ws.append_row(row)
-                        sucessos += 1
-                        chaves.append(chave_atual) # Adiciona na lista local para não duplicar no mesmo loop
-                    
-                    # Pausa de segurança (Anti-Bloqueio)
-                    time.sleep(1.0)
-            
-            bar_placeholder.progress(100)
-            status_placeholder.success(f"🏁 Concluído! {sucessos} novos sorteios salvos.")
-            time.sleep(2)
-            st.rerun()
-            
-        else: st.error("Erro ao conectar na Planilha.")
+    # === MODO 2: EM MASSA (IGUAL V3.0) ===
+    else:
+        st.subheader("Extração em Massa")
+        st.info("⚠️ Baixa todos os horários do período selecionado.")
+        
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
+        with col_d2:
+            data_fim = st.date_input("Fim:", date.today())
+        
+        if st.button("🚀 INICIAR TURBO"):
+            ws = conectar_planilha(conf['aba'])
+            if ws:
+                status_placeholder = st.empty()
+                bar_placeholder = st.progress(0)
+                
+                try:
+                    existentes = ws.get_all_values()
+                    chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
+                except: chaves = []
+                
+                delta = data_fim - data_ini
+                lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
+                
+                total_ops = len(lista_datas) * len(conf['horarios'])
+                op_atual = 0
+                sucessos = 0
+                
+                for dia in lista_datas:
+                    for hora in conf['horarios']:
+                        op_atual += 1
+                        progresso = op_atual / total_ops
+                        bar_placeholder.progress(progresso)
+                        
+                        status_placeholder.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                        
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                        
+                        # Pula futuro e repetidos
+                        if chave_atual in chaves: continue
+                        if dia > date.today(): continue
+                        if dia == date.today():
+                            if hora > datetime.now().strftime("%H:%M"): continue
 
-# --- TELA PRINCIPAL ---
+                        dezenas, msg = raspar_dezenas_site(banca_sel, dia, hora)
+                        
+                        if dezenas:
+                            row = [dia.strftime('%Y-%m-%d'), hora] + dezenas
+                            ws.append_row(row)
+                            sucessos += 1
+                            chaves.append(chave_atual)
+                        
+                        time.sleep(1.0) # Pausa de segurança
+                
+                bar_placeholder.progress(100)
+                status_placeholder.success(f"🏁 Concluído! {sucessos} novos sorteios salvos.")
+                time.sleep(2)
+                st.rerun()
+            else: st.error("Erro Conexão Planilha")
+
+# --- TELA PRINCIPAL (IGUAL PARA OS DOIS MODOS) ---
 conf_atual = CONFIG_BANCAS[banca_sel]
 st.subheader(f"Analise: {conf_atual['display']}")
 
