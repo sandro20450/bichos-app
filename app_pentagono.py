@@ -13,7 +13,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V35.1 - Clean", page_icon="🔄", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V36 - Anti-Gêmeas", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -59,7 +59,6 @@ def aplicar_estilo():
         .sniper-box { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); border: 2px solid #00d2ff; padding: 20px; border-radius: 15px; margin-bottom: 10px; text-align: center; box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2); }
         .sniper-record { border: 2px solid #ff00de !important; box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important; background: linear-gradient(135deg, #3a0035, #240b36) !important; }
         
-        /* ESTILO PARA MODO REVERSÃO */
         .sniper-reversao { border: 2px solid #ff4b4b !important; box-shadow: 0px 0px 25px rgba(255, 75, 75, 0.4) !important; background: linear-gradient(135deg, #4a0000, #2c0000) !important; }
         .reversao-badge { background-color: #ff4b4b; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px; margin-bottom: 10px; display: inline-block; }
 
@@ -231,8 +230,8 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V35 (HÍBRIDO + REVERSÃO AUTOMÁTICA) ---
-def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
+# --- ALGORITMO SNIPER V36 (HÍBRIDO + REVERSÃO + ANTI-GÊMEAS) ---
+def gerar_sniper_v36_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
     # 1. DETECÇÃO DE REVERSÃO
     setor_estourado = None
     for index, row in df_stress.iterrows():
@@ -242,8 +241,6 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
                 break
     
     modo_reversao = False
-    
-    # 2. SELEÇÃO DE SETORES
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
     if setor_estourado:
@@ -253,7 +250,6 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
         setores_ataque_ordenados = setores_ataque_df.sort_values(by='% PRESENÇA', ascending=False)
         setor_forte_1 = setores_ataque_ordenados.iloc[0]['SETOR']
         setor_forte_2 = setores_ataque_ordenados.iloc[1]['SETOR']
-        
     else:
         setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
         setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
@@ -272,20 +268,27 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
         if grupo in saturados: score -= 5000
         return score
 
-    # 3. PROCESSAMENTO DOS GRUPOS
+    # 3. PROCESSAMENTO DOS GRUPOS (ATAQUE)
     grupos_ataque = []
     for s in [setor_forte_1, setor_forte_2]:
         grupos_setor = SETORES[s]
         rank = sorted(grupos_setor, key=lambda x: calcular_score(x), reverse=True)
         grupos_ataque.extend(rank[:7])
 
+    # 4. PROCESSAMENTO DAS DEZENAS (DEFESA) - COM FILTRO ANTI-GÊMEAS
+    dezenas_proibidas = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
     grupos_defesa_full = SETORES[setor_fraco]
     dezenas_defesa = []
+    
     for g in grupos_defesa_full:
         dzs = GRUPOS_DEZENAS[g]
-        dezenas_defesa.extend(dzs[:3])
+        # Pega as 3 primeiras (Padrão)
+        pre_selecao = dzs[:3]
+        # Filtra as gêmeas (V36)
+        filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
+        dezenas_defesa.extend(filtradas)
 
-    # 4. VACA
+    # 5. VACA
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
@@ -316,7 +319,7 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
         "is_record": False 
     }
 
-# --- BACKTEST V35 ---
+# --- BACKTEST V36 ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -331,7 +334,7 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         
-        sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
+        sniper_past = gerar_sniper_v36_final(df_s, st_c, df_d, u_b, sat)
         
         win_ataque = target_num in sniper_past['grupos_ataque']
         
@@ -366,7 +369,7 @@ def calcular_max_derrotas_50(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
+        sniper_past = gerar_sniper_v36_final(df_s, st_c, df_d, u_b, sat)
         win_ataque = target_num in sniper_past['grupos_ataque']
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
@@ -512,8 +515,8 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V35
-                    sniper = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
+                    # 1. SNIPER V36
+                    sniper = gerar_sniper_v36_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
                         melhor_sniper = {
@@ -567,7 +570,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V35 (HÍBRIDO AUTO)</div>
+<div class="sniper-title">🎯 SNIPER V36 (CLEAN)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -702,14 +705,14 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V35 (AUTO) ---
-                sniper_local = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+                # --- SNIPER V36 (CLEAN + ANTI-GÊMEAS) ---
+                sniper_local = gerar_sniper_v36_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
                 
-                # VISUAL SNIPER V35 (CLEAN)
+                # VISUAL SNIPER V36
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
                 badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
@@ -717,7 +720,7 @@ else:
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V35 (AUTO)</div>
+<div class="sniper-title">🎯 SNIPER LOCAL V36 (CLEAN)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
