@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V5.2", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V5.3 Padrão Ouro", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -63,12 +63,8 @@ st.markdown("""
     }
     
     .titulo-gold { 
-        color: #ffd700; 
-        font-weight: 900; 
-        font-size: 26px; 
-        text-transform: uppercase; 
-        letter-spacing: 2px; 
-        margin-bottom: 5px;
+        color: #ffd700; font-weight: 900; font-size: 26px; 
+        text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;
     }
     
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
@@ -190,7 +186,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA DE SATURAÇÃO E TROCA ---
+# --- 3. CÉREBRO: LÓGICA DE SATURAÇÃO (50 JOGOS) ---
 # =============================================================================
 def gerar_matriz_75_saturation(historico, indice_premio):
     if not historico:
@@ -202,16 +198,21 @@ def gerar_matriz_75_saturation(historico, indice_premio):
             cortadas.append(f"G{g}:{dzs[3]}")
         return padrao, cortadas, None, []
 
-    # 1. Analisa frequência das dezenas (Últimos 30 jogos)
+    # 1. Analisa frequência das dezenas (Últimos 50 jogos - PADRÃO OURO)
+    # Se não tiver 50, usa o que tem (Inteligência Adaptativa)
+    tamanho_analise = 50
+    if len(historico) < 50:
+        tamanho_analise = len(historico)
+    
     dezenas_historico = []
-    recorte = historico[-30:] 
+    recorte = historico[-tamanho_analise:] 
     for jogo in recorte:
         try: dezenas_historico.append(jogo['dezenas'][indice_premio])
         except: pass
     
     contagem_dezenas = Counter(dezenas_historico)
     
-    # 2. Analisa frequência dos GRUPOS (Soma das dezenas)
+    # 2. Analisa frequência dos GRUPOS
     contagem_grupos = {}
     for g, dzs in GRUPOS_BICHOS.items():
         soma = 0
@@ -219,14 +220,11 @@ def gerar_matriz_75_saturation(historico, indice_premio):
             soma += contagem_dezenas.get(d, 0)
         contagem_grupos[g] = soma
         
-    # Rankeia Grupos: Mais frequentes (Saturados) -> Menos (Atrasados)
     rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
     
-    # IDENTIFICA O VILÃO (Saturado #1) E SUA CONTAGEM
     grupo_saturado = rank_grupos[0][0] 
-    freq_saturado = rank_grupos[0][1] # Quantas vezes saiu
+    freq_saturado = rank_grupos[0][1] 
     
-    # IDENTIFICA OS HERÓIS (3 Atrasados) - Os últimos da lista
     grupos_reforco = [x[0] for x in rank_grupos[-3:]]
     
     palpite_final = []
@@ -235,17 +233,17 @@ def gerar_matriz_75_saturation(historico, indice_premio):
     # 3. Processamento
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
         
-        # CASO 1: É O GRUPO SATURADO?
+        # SATURADO
         if grupo == grupo_saturado:
-            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO - Saiu {freq_saturado}x): {', '.join(lista_dezenas)}")
+            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO - Saiu {freq_saturado}x em {tamanho_analise} jogos): {', '.join(lista_dezenas)}")
             continue 
             
-        # CASO 2: É UM GRUPO DE REFORÇO?
+        # REFORÇO
         elif grupo in grupos_reforco:
             palpite_final.extend(lista_dezenas)
             continue
             
-        # CASO 3: GRUPO NORMAL
+        # NORMAL
         else:
             rank_dz = []
             for d in lista_dezenas:
@@ -261,13 +259,14 @@ def gerar_matriz_75_saturation(historico, indice_premio):
             
     palpite_final = sorted(list(set(palpite_final)))
     
-    # Retorna tupla (Grupo, Frequencia) para o display
-    dados_saturado = (grupo_saturado, freq_saturado)
+    dados_saturado = (grupo_saturado, freq_saturado, tamanho_analise)
     
     return palpite_final, dezenas_cortadas, dados_saturado, grupos_reforco
 
 def executar_backtest_centurion(historico, indice_premio):
-    if len(historico) < 35: return []
+    # Precisa de histórico mínimo para análise + teste
+    # Se analisar 50, precisa de pelo menos 55 jogos
+    if len(historico) < 55: return []
     resultados = []
     for i in range(1, 5):
         target_idx = -i
@@ -281,11 +280,16 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 def calcular_pior_sequencia_50(historico, indice_premio):
-    if len(historico) < 40: return 0
-    offset_treino = 30
+    # Simulação precisa de offset de treino (50) + offset de simulação (50) = 100 jogos idealmente
+    # Mas vamos ser flexíveis
+    if len(historico) < 60: return 0
+    
+    offset_treino = 50
     total_disponivel = len(historico)
-    if total_disponivel <= offset_treino: return 0
+    
+    # Simula no máximo os últimos 50 jogos
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
+    
     max_derrotas = 0
     derrotas_consecutivas = 0
     for i in range(inicio_simulacao, total_disponivel):
@@ -412,10 +416,10 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_75, cortadas, sat, reforcos = gerar_matriz_75_saturation(historico, i)
         
+        # sat[0] = nome grupo, sat[1] = frequencia, sat[2] = janela de analise
         info_sat = ""
         if sat:
-            # sat[0] é o grupo, sat[1] é a frequência
-            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} (Removido - Saiu {sat[1]}x)</span>"
+            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} (Removido - Saiu {sat[1]}x em {sat[2]} jogos)</span>"
             
         info_ref = f"<span class='info-pill pill-reforco'>✅ GRUPOS REFORÇADOS: {', '.join(map(str, reforcos))} (Completos)</span>" if reforcos else ""
         
@@ -441,7 +445,7 @@ for i, tab in enumerate(tabs):
             st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
         
         else:
-            st.caption("ℹ️ Baixe mais resultados (mínimo 40) para ver o Backtest e Risco.")
+            st.caption("ℹ️ Baixe mais resultados (mínimo 55) para ver o Backtest e Risco.")
 
         st.markdown("---")
         with st.expander("✂️ Ver Dezenas Eliminadas (Detalhes)"):
