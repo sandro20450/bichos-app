@@ -13,7 +13,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V38 - Regras Especiais", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V39 - Smart Cycle", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -230,8 +230,8 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V38 (VACA DEFESA + CICLO DEFESA TOTAL) ---
-def gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
+# --- ALGORITMO SNIPER V39 (HÍBRIDO + REVERSÃO + ANTI-GÊMEAS + TRAVA DUPLICIDADE) ---
+def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
     # 1. DETECÇÃO DE REVERSÃO
     setor_estourado = None
     for index, row in df_stress.iterrows():
@@ -293,11 +293,11 @@ def gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bich
     dezenas_defesa = []
     for g in grupos_defesa_finais:
         dzs = GRUPOS_DEZENAS[g]
-        pre_selecao = dzs[:3] # Pega as 3 primeiras
+        pre_selecao = dzs[:3]
         filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
         dezenas_defesa.extend(filtradas)
 
-    # 5. REGRA NOVA: VACA (25) - APENAS DEFESA (97, 98)
+    # 5. VACA
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
@@ -306,24 +306,22 @@ def gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bich
     if 25 in saturados: score_vaca -= 5000
 
     if score_vaca > 50:
-        # NÃO ADICIONA NO ATAQUE!
-        # Adiciona na Defesa as dezenas 97 e 98
         dezenas_defesa.append('97')
         dezenas_defesa.append('98')
 
-    # 6. REGRA NOVA: GRUPO DO CICLO (FALTANTE) - APENAS DEFESA (TODAS AS 4)
-    # Se um grupo falta no ciclo, ele é sagrado. Joga as 4 dezenas na defesa.
+    # 6. CICLO (COM TRAVA DE DUPLICIDADE) - V39 FIX
     for g_falta in stats_ciclo['faltam']:
-        dzs_falta = GRUPOS_DEZENAS[g_falta] # Pega as 4 dezenas (ex: 73, 74, 75, 76)
-        for d in dzs_falta:
-            dezenas_defesa.append(d)
+        # SÓ ADICIONA NA DEFESA SE NÃO ESTIVER NO ATAQUE
+        if g_falta not in grupos_ataque:
+            dzs_falta = GRUPOS_DEZENAS[g_falta]
+            for d in dzs_falta:
+                dezenas_defesa.append(d)
 
     # Limpeza Final
     grupos_ataque = sorted(list(set(grupos_ataque)))
-    # Garante que 25 não está no ataque (double check)
     if 25 in grupos_ataque: grupos_ataque.remove(25)
     
-    dezenas_defesa = sorted(list(set(dezenas_defesa))) # Remove duplicatas
+    dezenas_defesa = sorted(list(set(dezenas_defesa))) 
     
     sf1_name = setor_forte_1.split(' ')[0]
     sf2_name = setor_forte_2.split(' ')[0]
@@ -343,7 +341,7 @@ def gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bich
         "is_record": False 
     }
 
-# --- BACKTEST V38 ---
+# --- BACKTEST V39 ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -358,7 +356,7 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         
-        sniper_past = gerar_sniper_v38_especifico(df_s, st_c, df_d, u_b, sat)
+        sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
         
         win_ataque = target_num in sniper_past['grupos_ataque']
         
@@ -373,7 +371,8 @@ def executar_backtest_sniper(historico, indice_premio):
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
-            if chave_setor: win_defesa = target_num in SETORES[chave_setor]
+            if chave_setor:
+                win_defesa = target_num in SETORES[chave_setor]
         
         win_total = win_ataque or win_defesa
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
@@ -392,7 +391,7 @@ def calcular_max_derrotas_50(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        sniper_past = gerar_sniper_v38_especifico(df_s, st_c, df_d, u_b, sat)
+        sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
         win_ataque = target_num in sniper_past['grupos_ataque']
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
@@ -538,8 +537,8 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V38
-                    sniper = gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
+                    # 1. SNIPER V39
+                    sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
                         melhor_sniper = {
@@ -593,7 +592,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V38 (VACA DEFESA)</div>
+<div class="sniper-title">🎯 SNIPER V39 (SMART CYCLE)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -728,14 +727,14 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V38 (VACA DEFESA) ---
-                sniper_local = gerar_sniper_v38_especifico(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+                # --- SNIPER V39 (AUTO) ---
+                sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
                 
-                # VISUAL SNIPER V38
+                # VISUAL SNIPER V39
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
                 badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
@@ -743,20 +742,20 @@ else:
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V38 (VACA/CICLO)</div>
+<div class="sniper-title">🎯 SNIPER LOCAL V39 (SMART CYCLE)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
-<p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
+<p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
 
 <div class="section-strong">
 <div class="strong-label">🟢 ATAQUE (GRUPOS):</div>
-<div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
+<div class="strong-nums">{', '.join(map(str, d['grupos_ataque']))}</div>
 </div>
 
 <div class="section-weak">
 <div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
-<div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
+<div class="weak-nums">{', '.join(map(str, d['dezenas_defesa']))}</div>
 </div>
 {msg_sat}
 </div>
