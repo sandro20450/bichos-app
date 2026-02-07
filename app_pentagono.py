@@ -240,33 +240,28 @@ def identificar_saturados(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V35 (HÍBRIDO + REVERSÃO AUTOMÁTICA) ---
 def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
-    # 1. DETECÇÃO DE REVERSÃO (O NOVO CÉREBRO)
+    # 1. DETECÇÃO DE REVERSÃO
     setor_estourado = None
     for index, row in df_stress.iterrows():
-        if "VACA" not in row['SETOR']: # Ignora Vaca para reversão de setores
-            # Se a sequência atual já bateu o recorde E o recorde é relevante (>=3)
+        if "VACA" not in row['SETOR']:
             if row['SEQ. ATUAL'] >= row['REC. SEQ. (V)'] and row['REC. SEQ. (V)'] >= 3:
                 setor_estourado = row['SETOR']
                 break
     
     modo_reversao = False
     
-    # 2. SELEÇÃO DE SETORES (ATAQUE vs DEFESA)
+    # 2. SELEÇÃO DE SETORES
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
     if setor_estourado:
-        # MODO REVERSÃO ATIVADO
         modo_reversao = True
-        setor_fraco = setor_estourado # O estourado vai pra defesa obrigatoriamente
-        # Os outros 2 vão pro ataque
+        setor_fraco = setor_estourado
         setores_ataque_df = setores_reais[setores_reais['SETOR'] != setor_estourado]
-        # Ordena os de ataque por presença, só pra organizar
         setores_ataque_ordenados = setores_ataque_df.sort_values(by='% PRESENÇA', ascending=False)
         setor_forte_1 = setores_ataque_ordenados.iloc[0]['SETOR']
         setor_forte_2 = setores_ataque_ordenados.iloc[1]['SETOR']
         
     else:
-        # MODO NORMAL (V34)
         setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
         setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
         setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
@@ -284,7 +279,7 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
         if grupo in saturados: score -= 5000
         return score
 
-    # 3. PROCESSAMENTO DOS GRUPOS (Igual V34)
+    # 3. PROCESSAMENTO DOS GRUPOS
     grupos_ataque = []
     for s in [setor_forte_1, setor_forte_2]:
         grupos_setor = SETORES[s]
@@ -310,7 +305,6 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
 
     grupos_ataque = sorted(list(set(grupos_ataque)))
     
-    # Meta Info
     sf1_name = setor_forte_1.split(' ')[0]
     sf2_name = setor_forte_2.split(' ')[0]
     sf_fraco_name = setor_fraco.split(' ')[0]
@@ -325,18 +319,14 @@ def gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho,
         "dezenas_defesa": sorted(dezenas_defesa),
         "nota": 100, 
         "meta_info": meta_info, 
-        "modo_reversao": modo_reversao, # Flag para visual
+        "modo_reversao": modo_reversao,
         "is_record": False 
     }
 
-# --- ALGORITMO HIGH STAKES V31.1 (Reaproveitado) ---
+# --- ALGORITMO HIGH STAKES V23 ---
 def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
-    # Usa a V35 para base (já com reversão se precisar)
     sniper_base = gerar_sniper_v35_reversao(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
     grupos_20 = sniper_base['grupos_ataque']
-    
-    # Se por acaso a lista tiver menos de 20 (ex: vaca não entrou), completa com lógica padrão
-    # Mas aqui vamos focar na lógica de completar para 23
     
     todos = set(range(1, 26))
     restantes = list(todos - set(grupos_20))
@@ -355,7 +345,6 @@ def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bich
         
     candidatos_extra.sort(key=lambda x: x['score'], reverse=True)
     
-    # Pega quantos faltam para chegar em 23
     qtd_atual = len(grupos_20)
     qtd_necessaria = 23 - qtd_atual
     
@@ -388,23 +377,12 @@ def executar_backtest_sniper(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         
-        # Gera palpite do passado com V35
         sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
         
         win_ataque = target_num in sniper_past['grupos_ataque']
         
-        # Lógica de vitória no setor fraco (para o backtest do V34/35)
-        # Recalcula quem era o fraco naquela época
-        # Precisa saber se estava em reversão lá trás
-        # A função gerar_sniper_v35 já fez isso internamente e jogou o fraco para 'dezenas_defesa'
-        # Mas 'dezenas_defesa' são dezenas, e 'target_num' é grupo.
-        # Precisamos ver se o target_num pertence a algum grupo cujas dezenas foram jogadas.
-        
-        # Simplificação para Backtest: Se caiu no setor que foi escolhido para defesa, é vitória
-        # Precisamos saber qual setor foi escolhido para defesa
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
-            # Extrai nome do setor bloqueado
             match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
             nome_fraco = match.group(1) if match else ""
         else:
@@ -413,7 +391,6 @@ def executar_backtest_sniper(historico, indice_premio):
             
         win_defesa = False
         if nome_fraco:
-            # Encontra a chave completa do setor
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
                 win_defesa = target_num in SETORES[chave_setor]
@@ -454,7 +431,6 @@ def calcular_max_derrotas_23(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        
         sniper_23_past = gerar_sniper_23_high_stakes(df_s, st_c, df_d, u_b, sat)
         total_jogaveis = sniper_23_past['grupos_fortes'] + sniper_23_past['grupos_protecao']
         win = target_num in total_jogaveis
@@ -478,11 +454,8 @@ def calcular_max_derrotas_50(historico, indice_premio):
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        
         sniper_past = gerar_sniper_v35_reversao(df_s, st_c, df_d, u_b, sat)
-        
         win_ataque = target_num in sniper_past['grupos_ataque']
-        # Simplificação backtest (mesma logica acima)
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
             match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
@@ -494,7 +467,6 @@ def calcular_max_derrotas_50(historico, indice_premio):
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor: win_defesa = target_num in SETORES[chave_setor]
-        
         win = win_ataque or win_defesa
         if not win: derrotas_consecutivas_temp += 1
         else:
