@@ -12,7 +12,7 @@ import altair as alt
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V31.3 - Visual Fix", page_icon="💎", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V32 - Smart Detect", page_icon="💎", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -255,7 +255,7 @@ def calcular_tabela_diamante(historico, indice_premio):
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
 
-# --- ALGORITMO SNIPER V30 (TÁTICA 7-7-6) ---
+# --- ALGORITMO SNIPER V30 ---
 def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
@@ -309,7 +309,7 @@ def gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     
     return { "grupos": grupos_finais, "nota": 100, "meta_info": meta_info, "is_record": False }
 
-# --- ALGORITMO HIGH STAKES (SNIPER 23) V31.1 (DETALHADO) ---
+# --- ALGORITMO HIGH STAKES V31.1 ---
 def gerar_sniper_23_high_stakes(df_stress, stats_ciclo, df_diamante, ultimo_bicho):
     sniper_20_data = gerar_sniper_20_v30(df_stress, stats_ciclo, df_diamante, ultimo_bicho)
     grupos_20 = sniper_20_data['grupos']
@@ -657,10 +657,14 @@ else:
                 with st.spinner(f"Buscando {horario_busca}..."):
                     try:
                         existentes = ws.get_all_values()
-                        chaves = [f"{row[0]}|{row[1]}" for row in existentes if len(row)>1]
+                        chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
                     except: chaves = []
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
-                    if chave_atual in chaves: st.warning("Resultado já existe!")
+                    if chave_atual in chaves:
+                        try:
+                            idx = chaves.index(chave_atual) + 2
+                            st.warning(f"Resultado já existe na Linha {idx} da planilha!")
+                        except: st.warning("Resultado já existe!")
                     else:
                         top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
                         if top5:
@@ -753,7 +757,7 @@ else:
 
                 st.markdown("<hr style='border: 1px dashed #555;'>", unsafe_allow_html=True)
 
-                # Exibição Sniper 23 (Dourado/High Stakes)
+                # Exibição Sniper 23 (Dourado/High Stakes) DETALHADO V31.3
                 st.markdown(f"""
 <div class="sniper-box-gold">
 <div class="sniper-title" style="color: #ffd700;">💎 ESTRATÉGIA HIGH STAKES (23)</div>
