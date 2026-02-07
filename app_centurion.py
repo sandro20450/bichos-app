@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V5.3 Padrão Ouro", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V6.0 Híbrido", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas e Abas (Dezenas)
 CONFIG_BANCAS = {
@@ -85,7 +85,8 @@ st.markdown("""
         font-size: 13px; display: inline-block; margin: 5px;
     }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .pill-reforco { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
+    .pill-ref { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
+    .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
     
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -106,7 +107,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (EXTRAÇÃO) ---
+# --- 2. CONEXÃO E RASPAGEM ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -136,7 +137,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
     base = "https://www.resultadofacil.com.br"
-    
     if delta == 0: url = f"{base}/resultados-{config['slug']}-de-hoje"
     elif delta == 1: url = f"{base}/resultados-{config['slug']}-de-ontem"
     else: url = f"{base}/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
@@ -145,7 +145,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200: return None, "Erro Site"
-        
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
@@ -154,7 +153,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
-
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -163,7 +161,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
-
                         if h_detect == horario_alvo:
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
@@ -172,101 +169,128 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                 if len(cols) >= 2:
                                     premio_txt = cols[0].get_text().strip()
                                     numero_txt = cols[1].get_text().strip()
-                                    
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                         if numero_txt.isdigit() and len(numero_txt) >= 2:
                                             dezena = numero_txt[-2:]
                                             dezenas_encontradas.append(dezena)
-                            
-                            if len(dezenas_encontradas) >= 5:
-                                return dezenas_encontradas[:5], "Sucesso"
+                            if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
                             else: return None, "Incompleto"
         return None, "Horário não encontrado"
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA DE SATURAÇÃO (50 JOGOS) ---
+# --- 3. CÉREBRO: SATURAÇÃO + FINAL KILLER + REPOSIÇÃO ---
 # =============================================================================
-def gerar_matriz_75_saturation(historico, indice_premio):
+def gerar_matriz_hibrida(historico, indice_premio):
     if not historico:
         padrao = []
-        cortadas = []
         for g in range(1, 26):
-            dzs = GRUPOS_BICHOS[g]
-            padrao.extend(dzs[:3])
-            cortadas.append(f"G{g}:{dzs[3]}")
-        return padrao, cortadas, None, []
+            padrao.extend(GRUPOS_BICHOS[g][:3])
+        return padrao, [], None, [], None
 
-    # 1. Analisa frequência das dezenas (Últimos 50 jogos - PADRÃO OURO)
-    # Se não tiver 50, usa o que tem (Inteligência Adaptativa)
+    # --- 1. DADOS DE ENTRADA ---
+    # Final a bloquear (do jogo anterior ao atual)
+    ultimo_jogo = historico[-1]
+    ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
+    final_bloqueado = ultima_dezena[-1] 
+
+    # Histórico de 50 jogos
     tamanho_analise = 50
-    if len(historico) < 50:
-        tamanho_analise = len(historico)
-    
+    if len(historico) < 50: tamanho_analise = len(historico)
+    recorte = historico[-tamanho_analise:]
     dezenas_historico = []
-    recorte = historico[-tamanho_analise:] 
     for jogo in recorte:
         try: dezenas_historico.append(jogo['dezenas'][indice_premio])
         except: pass
-    
     contagem_dezenas = Counter(dezenas_historico)
-    
-    # 2. Analisa frequência dos GRUPOS
+
+    # --- 2. LÓGICA DE GRUPOS (SATURAÇÃO) ---
     contagem_grupos = {}
     for g, dzs in GRUPOS_BICHOS.items():
         soma = 0
-        for d in dzs:
-            soma += contagem_dezenas.get(d, 0)
+        for d in dzs: soma += contagem_dezenas.get(d, 0)
         contagem_grupos[g] = soma
         
     rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
     
-    grupo_saturado = rank_grupos[0][0] 
-    freq_saturado = rank_grupos[0][1] 
-    
+    # Vilão e Heróis
+    grupo_saturado = rank_grupos[0][0]
+    freq_saturado = rank_grupos[0][1]
     grupos_reforco = [x[0] for x in rank_grupos[-3:]]
-    
-    palpite_final = []
-    dezenas_cortadas = []
-    
-    # 3. Processamento
+
+    # --- 3. SELEÇÃO INICIAL (STRATEGY BASE) ---
+    palpite_inicial = []
+    reservas_disponiveis = [] # Aqui guardamos as dezenas que foram cortadas
+    dezenas_cortadas_log = []
+
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        
-        # SATURADO
+        # A) Grupo Saturado -> Tudo para Reserva
         if grupo == grupo_saturado:
-            dezenas_cortadas.append(f"🔴 G{grupo} (SATURADO - Saiu {freq_saturado}x em {tamanho_analise} jogos): {', '.join(lista_dezenas)}")
+            for d in lista_dezenas: reservas_disponiveis.append(d)
+            dezenas_cortadas_log.append(f"G{grupo} (Saturado)")
             continue 
             
-        # REFORÇO
+        # B) Grupos de Reforço -> Tudo para o Jogo
         elif grupo in grupos_reforco:
-            palpite_final.extend(lista_dezenas)
+            palpite_inicial.extend(lista_dezenas)
             continue
             
-        # NORMAL
+        # C) Grupos Normais -> 3 pro Jogo, 1 pra Reserva
         else:
             rank_dz = []
             for d in lista_dezenas:
                 freq = contagem_dezenas.get(d, 0)
                 rank_dz.append((d, freq))
             
-            rank_dz.sort(key=lambda x: x[1])
-            dezena_removida = rank_dz[0][0]
-            dezenas_selecionadas = [x[0] for x in rank_dz[1:]] 
+            rank_dz.sort(key=lambda x: x[1]) # Menor freq primeiro
+            dezena_removida = rank_dz[0][0] # A mais fraca vai pra reserva
+            dezenas_vencedoras = [x[0] for x in rank_dz[1:]]
             
-            palpite_final.extend(dezenas_selecionadas)
-            dezenas_cortadas.append(f"G{grupo}: {dezena_removida}")
-            
-    palpite_final = sorted(list(set(palpite_final)))
+            palpite_inicial.extend(dezenas_vencedoras)
+            reservas_disponiveis.append(dezena_removida)
+
+    # --- 4. APLICAÇÃO DO FINAL KILLER + REPOSIÇÃO ---
+    palpite_filtrado = []
     
-    dados_saturado = (grupo_saturado, freq_saturado, tamanho_analise)
+    # Remove as que tem final bloqueado do time titular
+    for d in palpite_inicial:
+        if d.endswith(final_bloqueado):
+            # Se foi cortada pelo final, ela NÃO serve de reserva (é tóxica)
+            pass 
+        else:
+            palpite_filtrado.append(d)
     
-    return palpite_final, dezenas_cortadas, dados_saturado, grupos_reforco
+    # Calcula quantos buracos abriram
+    vagas_abertas = 75 - len(palpite_filtrado)
+    
+    # Prepara as Reservas (filtra tóxicas e ordena por força)
+    reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
+    
+    # Ordena reservas: Preferimos as mais "quentes" (frequentes) entre as excluídas?
+    # Ou as mais frias? Geralmente em reposição queremos as "menos piores".
+    # Vamos pegar as mais frequentes do banco de reserva.
+    reservas_rank = []
+    for d in reservas_validas:
+        reservas_rank.append((d, contagem_dezenas.get(d, 0)))
+    
+    # Ordena Maior Freq -> Menor Freq
+    reservas_rank.sort(key=lambda x: x[1], reverse=True)
+    
+    # Preenche as vagas
+    for i in range(min(vagas_abertas, len(reservas_rank))):
+        palpite_filtrado.append(reservas_rank[i][0])
+        
+    palpite_final = sorted(list(set(palpite_filtrado)))
+    
+    # Garante 75 (se faltar reserva, o que é raro, paciência, mas a lógica cobre 99%)
+    
+    dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
+    
+    return palpite_final, dezenas_cortadas_log, dados_sat, grupos_reforco, final_bloqueado
 
 def executar_backtest_centurion(historico, indice_premio):
-    # Precisa de histórico mínimo para análise + teste
-    # Se analisar 50, precisa de pelo menos 55 jogos
-    if len(historico) < 55: return []
+    if len(historico) < 60: return []
     resultados = []
     for i in range(1, 5):
         target_idx = -i
@@ -274,29 +298,23 @@ def executar_backtest_centurion(historico, indice_premio):
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:target_idx]
         
-        palpite_ia, _, _, _ = gerar_matriz_75_saturation(hist_treino, indice_premio)
-        vitoria = target_dezena in palpite_ia
+        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 def calcular_pior_sequencia_50(historico, indice_premio):
-    # Simulação precisa de offset de treino (50) + offset de simulação (50) = 100 jogos idealmente
-    # Mas vamos ser flexíveis
     if len(historico) < 60: return 0
-    
     offset_treino = 50
     total_disponivel = len(historico)
-    
-    # Simula no máximo os últimos 50 jogos
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
-    
     max_derrotas = 0
     derrotas_consecutivas = 0
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:i]
-        palpite, _, _, _ = gerar_matriz_75_saturation(hist_treino, indice_premio)
+        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
         win = target_dezena in palpite
         if not win: derrotas_consecutivas += 1
         else:
@@ -309,7 +327,7 @@ def calcular_pior_sequencia_50(historico, indice_premio):
 # --- 4. INTERFACE ---
 # =============================================================================
 st.title("🛡️ CENTURION 75")
-st.markdown("**Estratégia: Rotação de Saturação (75 Dezenas)**")
+st.markdown("**Estratégia Híbrida: Saturação + Final Killer + Reposição (75 Dezenas)**")
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -414,17 +432,23 @@ tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º
 
 for i, tab in enumerate(tabs):
     with tab:
-        lista_75, cortadas, sat, reforcos = gerar_matriz_75_saturation(historico, i)
+        lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
         
-        # sat[0] = nome grupo, sat[1] = frequencia, sat[2] = janela de analise
-        info_sat = ""
-        if sat:
-            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} (Removido - Saiu {sat[1]}x em {sat[2]} jogos)</span>"
-            
-        info_ref = f"<span class='info-pill pill-reforco'>✅ GRUPOS REFORÇADOS: {', '.join(map(str, reforcos))} (Completos)</span>" if reforcos else ""
+        info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
+        info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
+        info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
         
-        html_content = f"<div class='box-centurion'>{info_sat} {info_ref}<div class='titulo-gold'>LEGIÃO 75 - {i+1}º PRÊMIO</div><div class='subtitulo'>Estratégia: Eliminar Grupo Saturado + Reforçar Atrasados</div><div class='nums-destaque'>{', '.join(lista_75)}</div><div class='lucro-info'>💰 Custo: R$ 75,00 | Retorno: R$ 92,00 | Lucro: R$ 17,00 (22%)</div></div>"
+        qtd_final = len(lista_final) # Deve ser sempre 75 ou muito próximo
         
+        html_content = f"""
+        <div class='box-centurion'>
+            {info_sat} {info_ref} {info_final}
+            <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
+            <div class='subtitulo'>Estratégia Completa: Saturação + Final Killer + Reposição</div>
+            <div class='nums-destaque'>{', '.join(lista_final)}</div>
+            <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
+        </div>
+        """
         st.markdown(html_content, unsafe_allow_html=True)
         
         max_loss = calcular_pior_sequencia_50(historico, i)
@@ -445,8 +469,8 @@ for i, tab in enumerate(tabs):
             st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
         
         else:
-            st.caption("ℹ️ Baixe mais resultados (mínimo 55) para ver o Backtest e Risco.")
+            st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
 
         st.markdown("---")
-        with st.expander("✂️ Ver Dezenas Eliminadas (Detalhes)"):
-            st.write(", ".join(cortadas))
+        with st.expander("✂️ Ver Detalhes (Grupos e Cortes)"):
+            st.write(f"Grupos Cortados na Saturação: {', '.join(cortadas)}")
