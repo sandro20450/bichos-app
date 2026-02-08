@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V8.0 Adaptável", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V9.0 Dashboard", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -32,6 +32,20 @@ for g in range(1, 26):
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
+    
+    /* DASHBOARD CARDS */
+    .dash-card {
+        padding: 20px; border-radius: 10px; margin-bottom: 15px;
+        text-align: center; border-left: 5px solid #fff;
+    }
+    .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
+    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
+    .dash-safe { background-color: #002b00; border-color: #00ff00; }
+    
+    .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
+    .dash-subtitle { font-size: 16px; opacity: 0.9; margin-bottom: 10px; }
+    .dash-metric { font-size: 28px; font-weight: bold; margin: 10px 0; }
+    
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
@@ -68,7 +82,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (AGORA INTELIGENTE) ---
+# --- 2. CONEXÃO E RASPAGEM ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -108,16 +122,12 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
-        # --- CRIAÇÃO DE VARIAÇÕES DE HORÁRIO (V8.0) ---
-        # O site pode escrever "21:00", "21h", "21H", etc.
-        alvos_possiveis = [horario_alvo] # Adiciona o padrão "21:00"
-        
+        alvos_possiveis = [horario_alvo]
         if ":00" in horario_alvo:
-            hora_simples = horario_alvo.split(':')[0] # Pega só o "21"
-            alvos_possiveis.append(f"{hora_simples}h") # Adiciona "21h"
-            alvos_possiveis.append(f"{hora_simples}H") # Adiciona "21H"
-            alvos_possiveis.append(f"{hora_simples} h") # Adiciona "21 h"
-        # ---------------------------------------------
+            hora_simples = horario_alvo.split(':')[0]
+            alvos_possiveis.append(f"{hora_simples}h")
+            alvos_possiveis.append(f"{hora_simples}H")
+            alvos_possiveis.append(f"{hora_simples} h")
 
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
@@ -133,7 +143,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                 text_header_upper = text_header.upper()
                 if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper: continue 
 
-                # VERIFICA SE ALGUMA DAS VARIAÇÕES ESTÁ NO TEXTO
                 encontrou_horario = False
                 for alvo in alvos_possiveis:
                     if alvo in text_header:
@@ -158,7 +167,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA V7.3 + STRESS CALCULATOR ---
+# --- 3. CÉREBRO: LÓGICA V8.0 (Completa) ---
 # =============================================================================
 def gerar_matriz_hibrida(historico, indice_premio):
     if not historico:
@@ -276,41 +285,107 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 # =============================================================================
-# --- 4. INTERFACE ---
+# --- 4. DASHBOARD GERAL (NOVO) ---
 # =============================================================================
-st.title("🛡️ CENTURION 75")
-st.markdown("**Estratégia Híbrida: Saturação + Final Killer + Reposição (75 Dezenas)**")
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("⚙️ Configuração")
-    banca_sel = st.selectbox("Escolha a Banca:", list(CONFIG_BANCAS.keys()))
-    conf = CONFIG_BANCAS[banca_sel]
+def tela_dashboard_global():
+    st.title("🛡️ CENTURION COMMAND CENTER")
+    st.markdown("### 📡 Radar Global de Oportunidades")
     
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Bancas", "3", "Lotep, Caminho, Monte")
+    
+    alertas_criticos = []
+    
+    with st.spinner("Varrendo todas as bancas em busca de sinais..."):
+        for banca_key, config in CONFIG_BANCAS.items():
+            historico = carregar_historico_dezenas(config['aba'])
+            if len(historico) > 50:
+                for i in range(5): # 5 prêmios
+                    stress, recorde = calcular_stress_atual(historico, i)
+                    
+                    if recorde > 0:
+                        percentual_stress = stress / recorde
+                        if percentual_stress >= 1.0: # Recorde batido ou empatado
+                            alertas_criticos.append({
+                                "banca": config['display'],
+                                "premio": f"{i+1}º Prêmio",
+                                "stress": stress,
+                                "recorde": recorde,
+                                "nivel": "CRITICO"
+                            })
+                        elif percentual_stress >= 0.7: # Quase lá
+                            alertas_criticos.append({
+                                "banca": config['display'],
+                                "premio": f"{i+1}º Prêmio",
+                                "stress": stress,
+                                "recorde": recorde,
+                                "nivel": "ATENCAO"
+                            })
+
+    col2.metric("Alertas Ativos", f"{len(alertas_criticos)}", "Críticos/Atenção")
+    col3.metric("Status Base", "Online", "Google Sheets")
+    st.markdown("---")
+    
+    if alertas_criticos:
+        st.subheader("🚨 Zonas de Tiro Identificadas")
+        cols = st.columns(2)
+        for idx, alerta in enumerate(alertas_criticos):
+            classe = "dash-critico" if alerta['nivel'] == "CRITICO" else "dash-atencao"
+            titulo_card = "🚨 RECORD E AMEAÇADO!" if alerta['nivel'] == "CRITICO" else "⚠️ ZONA DE PRESSÃO"
+            
+            with cols[idx % 2]:
+                st.markdown(f"""
+                <div class='dash-card {classe}'>
+                    <div class='dash-title'>{alerta['banca']}</div>
+                    <div class='dash-subtitle'>{alerta['premio']}</div>
+                    <div class='dash-metric'>{alerta['stress']} Derrotas Seguidas</div>
+                    <p>Recorde Histórico: {alerta['recorde']}</p>
+                    <p><b>{titulo_card}</b></p>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.success("✅ O Radar não detectou anomalias críticas no momento. As bancas estão estáveis.")
+        st.info("💡 Dica: Navegue pelo menu lateral para ver os palpites de cada banca individualmente.")
+
+# =============================================================================
+# --- 5. APP PRINCIPAL ---
+# =============================================================================
+menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
+escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
+
+st.sidebar.markdown("---")
+
+if escolha_menu == "🏠 RADAR GERAL (Home)":
+    tela_dashboard_global()
+
+else:
+    banca_selecionada = escolha_menu
+    conf = CONFIG_BANCAS[banca_selecionada]
+    
+    # --- LÓGICA ESPECÍFICA DA BANCA (O CÓDIGO ANTIGO VEM PRA CÁ) ---
+    
+    # SIDEBAR ESPECÍFICA
     url_site_base = f"https://www.resultadofacil.com.br/resultados-{conf['slug']}-de-hoje"
-    st.link_button("🔗 Ver Site Oficial", url_site_base)
-    st.markdown("---")
+    st.sidebar.link_button("🔗 Ver Site Oficial", url_site_base)
+    
+    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
+    st.sidebar.markdown("---")
 
-    modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
-    st.markdown("---")
-
-    # === MODO 1: UNITÁRIO ===
+    # MODO 1: UNITÁRIO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
-        st.subheader("Extração Unitária")
-        opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+        st.sidebar.subheader("Extração Unitária")
+        opt_data = st.sidebar.radio("Data:", ["Hoje", "Ontem", "Outra"])
         if opt_data == "Hoje": data_busca = date.today()
         elif opt_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-        else: data_busca = st.date_input("Escolha a Data:", date.today())
+        else: data_busca = st.sidebar.date_input("Escolha a Data:", date.today())
         
-        # --- AJUSTE DE HORÁRIO CAMINHO (QUA e SAB) ---
         lista_horarios = conf['horarios'].copy()
-        if banca_sel == "CAMINHO" and (data_busca.weekday() == 2 or data_busca.weekday() == 5):
+        if banca_selecionada == "CAMINHO" and (data_busca.weekday() == 2 or data_busca.weekday() == 5):
             lista_horarios = [h.replace("20:00", "19:30") for h in lista_horarios]
-        # -----------------------------------------------
 
-        hora_busca = st.selectbox("Horário:", lista_horarios)
+        hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
         
-        if st.button("🚀 Baixar Sorteio"):
+        if st.sidebar.button("🚀 Baixar Sorteio"):
             ws = conectar_planilha(conf['aba'])
             if ws:
                 with st.spinner(f"Buscando {hora_busca}..."):
@@ -322,29 +397,29 @@ with st.sidebar:
                     if chave_atual in chaves:
                         try: idx = chaves.index(chave_atual) + 2
                         except: idx = "?"
-                        st.warning(f"⚠️ Resultado já existe na Linha {idx}!")
+                        st.sidebar.warning(f"⚠️ Resultado já existe na Linha {idx}!")
                     else:
-                        dezenas, msg = raspar_dezenas_site(banca_sel, data_busca, hora_busca)
+                        dezenas, msg = raspar_dezenas_site(banca_selecionada, data_busca, hora_busca)
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
-                            st.success(f"✅ Salvo! Dezenas: {dezenas}")
+                            st.sidebar.success(f"✅ Salvo! {dezenas}")
                             time.sleep(1)
                             st.rerun()
-                        else: st.error(f"❌ {msg}")
-            else: st.error("Erro Conexão Planilha")
+                        else: st.sidebar.error(f"❌ {msg}")
+            else: st.sidebar.error("Erro Conexão Planilha")
 
     # MODO 2: EM MASSA
     else:
-        st.subheader("Extração em Massa")
-        col1, col2 = st.columns(2)
-        with col1: data_ini = st.date_input("Início:", date.today() - timedelta(days=1))
-        with col2: data_fim = st.date_input("Fim:", date.today())
+        st.sidebar.subheader("Extração em Massa")
+        col1, col2 = st.sidebar.columns(2)
+        with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
+        with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
         
-        if st.button("🚀 INICIAR TURBO"):
+        if st.sidebar.button("🚀 INICIAR TURBO"):
             ws = conectar_planilha(conf['aba'])
             if ws:
-                status = st.empty()
-                bar = st.progress(0)
+                status = st.sidebar.empty()
+                bar = st.sidebar.progress(0)
                 try:
                     existentes = ws.get_all_values()
                     chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
@@ -357,55 +432,46 @@ with st.sidebar:
                 
                 for dia in lista_datas:
                     horarios_do_dia = conf['horarios'].copy()
-                    if banca_sel == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
+                    if banca_selecionada == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
                         horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
 
                     for hora in horarios_do_dia:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
-                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                        status.text(f"🔍 {dia.strftime('%d/%m')} - {hora}")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
 
-                        dezenas, msg = raspar_dezenas_site(banca_sel, dia, hora)
+                        dezenas, msg = raspar_dezenas_site(banca_selecionada, dia, hora)
                         if dezenas:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
                             sucessos += 1
                             chaves.append(chave_atual)
                         time.sleep(1.0)
                 bar.progress(100)
-                status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
+                status.success(f"🏁 {sucessos} novos.")
                 time.sleep(2)
                 st.rerun()
-            else: st.error("Erro Conexão Planilha")
+            else: st.sidebar.error("Erro Conexão")
 
-    # === MODO 3: INSERÇÃO MANUAL (EMERGÊNCIA) ===
-    st.markdown("---")
-    with st.expander("✍️ Inserção Manual (Emergência)"):
-        st.caption("Use esta opção se o robô não encontrar o sorteio.")
-        man_data = st.date_input("Data Manual", date.today())
-        
-        # Carrega horários (com ajuste de 19:30 se necessário)
+    # MODO 3: MANUAL
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("✍️ Inserção Manual"):
+        man_data = st.date_input("Data", date.today())
         h_manual_list = conf['horarios'].copy()
-        if banca_sel == "CAMINHO":
-            # Garante que 19:30 esteja na lista
-            if "19:30" not in h_manual_list: h_manual_list.append("19:30")
-            h_manual_list.sort()
-            
-        man_hora = st.selectbox("Horário Manual", h_manual_list, index=0)
+        if banca_selecionada == "CAMINHO" and "19:30" not in h_manual_list: h_manual_list.append("19:30"); h_manual_list.sort()
+        man_hora = st.selectbox("Horário", h_manual_list)
         
-        st.markdown("**Digite as 5 Dezenas (00-99):**")
         c1, c2, c3, c4, c5 = st.columns(5)
-        p1 = c1.text_input("1º", max_chars=2, key="mp1")
-        p2 = c2.text_input("2º", max_chars=2, key="mp2")
-        p3 = c3.text_input("3º", max_chars=2, key="mp3")
-        p4 = c4.text_input("4º", max_chars=2, key="mp4")
-        p5 = c5.text_input("5º", max_chars=2, key="mp5")
+        p1 = c1.text_input("1", max_chars=2, key="mp1")
+        p2 = c2.text_input("2", max_chars=2, key="mp2")
+        p3 = c3.text_input("3", max_chars=2, key="mp3")
+        p4 = c4.text_input("4", max_chars=2, key="mp4")
+        p5 = c5.text_input("5", max_chars=2, key="mp5")
         
-        if st.button("💾 Salvar Manualmente"):
-            # Validação
+        if st.button("💾 Salvar"):
             man_dezenas = [p1, p2, p3, p4, p5]
             if all(d.isdigit() and len(d) == 2 for d in man_dezenas):
                 ws = conectar_planilha(conf['aba'])
@@ -414,84 +480,73 @@ with st.sidebar:
                         existentes = ws.get_all_values()
                         chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
                     except: chaves = []
-                    
                     chave_atual = f"{man_data.strftime('%Y-%m-%d')}|{man_hora}"
-                    
-                    if chave_atual in chaves:
-                        st.warning("⚠️ Este horário já existe na planilha!")
+                    if chave_atual in chaves: st.warning("Já existe!")
                     else:
-                        row = [man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas
-                        ws.append_row(row)
-                        st.success("✅ Salvo com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-                else: st.error("Erro Conexão Planilha")
-            else:
-                st.error("❌ Preencha todas as 5 dezenas com 2 dígitos (Ex: 05, 99).")
+                        ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
+                        st.success("Salvo!")
+                        time.sleep(1); st.rerun()
+                else: st.error("Erro")
+            else: st.error("Preencha 2 dígitos")
 
-# --- TELA PRINCIPAL ---
-conf_atual = CONFIG_BANCAS[banca_sel]
-st.subheader(f"Analise: {conf_atual['display']}")
+    # DISPLAY PRINCIPAL DA BANCA
+    st.subheader(f"Analise: {conf['display']}")
+    historico = carregar_historico_dezenas(conf['aba'])
 
-historico = carregar_historico_dezenas(conf_atual['aba'])
+    if len(historico) == 0:
+        st.warning("⚠️ Base vazia.")
+    else:
+        ult = historico[-1]
+        st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
 
-if len(historico) == 0:
-    st.warning("⚠️ Base de dados vazia para esta banca.")
-    st.info("👉 Use o menu lateral para baixar os primeiros resultados.")
-    st.stop()
-else:
-    # --- MONITOR DE ÚLTIMA ATUALIZAÇÃO ---
-    ult = historico[-1]
-    st.info(f"📅 **STATUS ATUAL:** O último sorteio registrado nesta banca foi em **{ult['data']}** às **{ult['hora']}**.")
+    tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
 
-tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
-
-for i, tab in enumerate(tabs):
-    with tab:
-        lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
-        stress_atual, max_loss = calcular_stress_atual(historico, i)
-        
-        aviso_alerta = ""
-        if stress_atual >= max_loss and max_loss > 0:
-            aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
-        
-        info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
-        info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
-        info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
-        
-        qtd_final = len(lista_final) 
-        
-        html_content = f"""
-        {aviso_alerta}
-        <div class='box-centurion'>
-            {info_sat} {info_ref} {info_final}
-            <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-            <div class='subtitulo'>Estratégia Completa: Saturação + Final Killer + Reposição</div>
-            <div class='nums-destaque'>{', '.join(lista_final)}</div>
-            <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
-        </div>
-        """
-        st.markdown(html_content, unsafe_allow_html=True)
-        
-        cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
-        st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
-
-        bt_results = executar_backtest_centurion(historico, i)
-        
-        if bt_results:
-            st.markdown("### ⏪ Performance Recente")
-            cards_html = ""
-            for res in reversed(bt_results):
-                c_res = "bt-win" if res['win'] else "bt-loss"
-                ico = "🟢" if res['win'] else "🔴"
-                lbl = "WIN" if res['win'] else "LOSS"
-                num = res['dezena']
-                cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
+    for i, tab in enumerate(tabs):
+        with tab:
+            lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
+            stress_atual, max_loss = calcular_stress_atual(historico, i)
             
-            st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
-        else:
-            st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
+            aviso_alerta = ""
+            if stress_atual >= max_loss and max_loss > 0:
+                aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
+            
+            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
+            info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
+            info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
+            
+            qtd_final = len(lista_final) 
+            
+            html_content = f"""
+            {aviso_alerta}
+            <div class='box-centurion'>
+                {info_sat} {info_ref} {info_final}
+                <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
+                <div class='subtitulo'>Estratégia Completa: Saturação + Final Killer + Reposição</div>
+                <div class='nums-destaque'>{', '.join(lista_final)}</div>
+                <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
+            </div>
+            """
+            st.markdown(html_content, unsafe_allow_html=True)
+            
+            cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
+            st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
 
-        st.markdown("---")
-        with st.expander("✂️ Ver Detalhes (Grupos e Cortes)"):
-            st.write(f"Grupos Cortados na Saturação: {', '.join(cortadas)}")
+            bt_results = executar_backtest_centurion(historico, i)
+            
+            if bt_results:
+                st.markdown("### ⏪ Performance Recente")
+                cards_html = ""
+                for res in reversed(bt_results):
+                    c_res = "bt-win" if res['win'] else "bt-loss"
+                    ico = "🟢" if res['win'] else "🔴"
+                    lbl = "WIN" if res['win'] else "LOSS"
+                    num = res['dezena']
+                    cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
+                
+                st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
+
+            st.markdown("---")
+            with st.expander("✂️ Ver Detalhes (Grupos e Cortes)"):
+                st.write(f"Grupos Cortados na Saturação: {', '.join(cortadas)}")
