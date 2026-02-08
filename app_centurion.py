@@ -20,13 +20,34 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V13.2 Mobile", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V14.2 Tradicional", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
-    "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
-    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] },
-    "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
+    "LOTEP": { 
+        "display": "LOTEP (Dezenas)", 
+        "aba": "BASE_LOTEP_DEZ", 
+        "slug": "lotep", 
+        "horarios": ["10:45", "12:45", "15:45", "18:00"] 
+    },
+    "CAMINHO": { 
+        "display": "CAMINHO (Dezenas)", 
+        "aba": "BASE_CAMINHO_DEZ", 
+        "slug": "caminho-da-sorte", 
+        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] 
+    },
+    "MONTE": { 
+        "display": "MONTE CARLOS (Dezenas)", 
+        "aba": "BASE_MONTE_DEZ", 
+        "slug": "nordeste-monte-carlos", 
+        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] 
+    },
+    "TRADICIONAL": { 
+        "display": "TRADICIONAL (1º Prêmio)", 
+        "aba": "BASE_TRADICIONAL_DEZ", 
+        "slug": "loteria-tradicional", 
+        "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
+    }
 }
 
 # Mapeamento Grupos
@@ -41,32 +62,10 @@ DEZENA_TO_GRUPO = {}
 for g, nums in GRUPOS_BICHOS.items():
     for n in nums: DEZENA_TO_GRUPO[n] = g
 
-# Estilo Visual (COMPACTO PARA MOBILE)
+# Estilo Visual
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
-    
-    /* DASHBOARD CARDS - VERSÃO COMPACTA */
-    .dash-card { 
-        padding: 10px 5px; 
-        border-radius: 8px; 
-        margin-bottom: 8px; 
-        text-align: center; 
-        border-left: 4px solid #fff;
-    }
-    .dash-critico { background-color: #4a0000; border-color: #ff0000; }
-    .dash-perigo { background-color: #662200; border-color: #ff5500; }
-    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
-    .dash-vitoria { background-color: #003300; border-color: #00ff00; }
-    
-    /* Fontes menores para caber no celular */
-    .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
-    .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
-    .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
-    .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
-
-    /* Outros estilos do App */
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
@@ -78,6 +77,16 @@ st.markdown("""
         margin-bottom: 15px; text-align: left;
     }
     .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
+    
+    /* BOX UNIDADE ESPECIAL (AZUL) */
+    .box-unidade {
+        background: linear-gradient(135deg, #003366, #004080);
+        border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
+        margin-bottom: 15px; text-align: center;
+        box-shadow: 0 0 15px rgba(0, 153, 255, 0.2);
+    }
+    .uni-title { color: #0099ff; font-weight: 900; font-size: 18px; text-transform: uppercase; margin-bottom: 5px; }
+    .uni-nums { font-size: 22px; color: #fff; font-weight: bold; letter-spacing: 3px; }
     
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
@@ -108,6 +117,19 @@ st.markdown("""
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
     .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
+    
+    /* DASHBOARD CARDS */
+    .dash-card { padding: 10px 5px; border-radius: 8px; margin-bottom: 8px; text-align: center; border-left: 4px solid #fff; }
+    .dash-critico { background-color: #4a0000; border-color: #ff0000; }
+    .dash-perigo { background-color: #662200; border-color: #ff5500; }
+    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
+    .dash-vitoria { background-color: #003300; border-color: #00ff00; }
+    
+    .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
+    .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
+    .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
+    .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
 
     div[data-testid="stTable"] table { color: white; }
 </style>
@@ -128,14 +150,28 @@ def conectar_planilha(nome_aba):
 def carregar_historico_dezenas(nome_aba):
     ws = conectar_planilha(nome_aba)
     if ws:
-        raw = ws.get_all_values()
-        if len(raw) < 2: return []
-        dados = []
-        for row in raw[1:]:
-            if len(row) >= 7:
-                dezenas = [str(d).strip().zfill(2) for d in row[2:7] if d.strip().isdigit()]
-                if len(dezenas) == 5: dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
-        return dados
+        try:
+            raw = ws.get_all_values()
+            if len(raw) < 2: return []
+            dados = []
+            for row in raw[1:]:
+                # Tenta ler pelo menos 3 colunas (Data, Hora, P1). Se tiver mais, melhor.
+                if len(row) >= 3:
+                    # Se for Tradicional, pode ter menos de 7 colunas, a gente completa
+                    # Pega as dezenas disponíveis na linha
+                    raw_dezenas = [str(d).strip().zfill(2) for d in row[2:] if str(d).strip().isdigit()]
+                    
+                    # Se for TRADICIONAL e tiver pelo menos 1 dezena
+                    if "TRADICIONAL" in nome_aba and len(raw_dezenas) >= 1:
+                        # Completa com zeros para não quebrar a lógica de 5 posições
+                        while len(raw_dezenas) < 5: raw_dezenas.append("00")
+                        dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas})
+                    
+                    # Para as outras bancas, exige 5 dezenas
+                    elif len(raw_dezenas) >= 5:
+                        dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
+            return dados
+        except Exception as e: return []
     return []
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
@@ -160,6 +196,11 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
             alvos_possiveis.append(f"{hora_simples}h")
             alvos_possiveis.append(f"{hora_simples}H")
             alvos_possiveis.append(f"{hora_simples} h")
+        
+        # Ajuste para horários da Tradicional que tem minutos
+        if ":20" in horario_alvo:
+             hora_simples = horario_alvo
+             alvos_possiveis.append(f"{hora_simples}h") # Ex: 11:20h
 
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
@@ -189,17 +230,36 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                         if len(cols) >= 2:
                             premio_txt = cols[0].get_text().strip(); numero_txt = cols[1].get_text().strip()
                             nums_premio = re.findall(r'\d+', premio_txt)
-                            if nums_premio and 1 <= int(nums_premio[0]) <= 5:
+                            
+                            # Se for TRADICIONAL, só pega o 1º prêmio
+                            if banca_key == "TRADICIONAL":
+                                if nums_premio and int(nums_premio[0]) == 1:
+                                    if numero_txt.isdigit() and len(numero_txt) >= 2:
+                                        dezena = numero_txt[-2:]
+                                        dezenas_encontradas.append(dezena)
+                                        break # Já achou o 1º, pode parar
+                            
+                            # Outras bancas pegam até o 5º
+                            elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
                                     dezena = numero_txt[-2:]
                                     dezenas_encontradas.append(dezena)
-                    if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
+                    
+                    # Validação de sucesso
+                    min_req = 1 if banca_key == "TRADICIONAL" else 5
+                    
+                    if len(dezenas_encontradas) >= min_req:
+                        # Se for tradicional, completa com zeros para a planilha ficar bonita
+                        if banca_key == "TRADICIONAL":
+                            while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
+                        
+                        return dezenas_encontradas[:5], "Sucesso"
                     
         return None, f"Horário {horario_alvo} (ou variantes) não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (OTIMIZADO) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V14.2) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -302,7 +362,6 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     grupo_saturado = rank_grupos_sat[0][0]
     freq_saturado = rank_grupos_sat[0][1]
 
-    # --- INTEGRAÇÃO OTIMIZADA ---
     grupos_atrasados = calcular_radar_pentagono(historico, indice_premio)
     
     if usar_ia:
@@ -359,7 +418,6 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
 
-# --- FUNÇÃO NOVA: CALCULA STRESS (Derrotas) E GLORY (Vitórias) ---
 def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=False):
     if len(historico) < 10: return 0, 0, 0, 0
     offset_treino = 50
@@ -369,7 +427,6 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
     max_derrotas = 0; seq_derrotas = 0
     max_vitorias = 0; seq_vitorias = 0
     
-    # 1. Analisa Histórico (Recordes)
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
@@ -385,11 +442,9 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
             seq_derrotas += 1
             if seq_derrotas > max_derrotas: max_derrotas = seq_derrotas
 
-    # 2. Analisa Momento Atual (Recente)
     atual_derrotas = 0
     atual_vitorias = 0
     
-    # Verifica o último jogo para saber se estamos em WIN ou LOSS
     for i in range(1, 20): 
         idx = -i
         target_game = historico[idx]
@@ -397,19 +452,17 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
         win = target_dezena in palpite
         
-        # Se começou contando derrotas
         if i == 1 and not win:
             atual_derrotas = 1
         elif i == 1 and win:
             atual_vitorias = 1
         
-        # Continua contando...
         elif atual_derrotas > 0:
             if not win: atual_derrotas += 1
-            else: break # Interrompe pois mudou para vitória
+            else: break 
         elif atual_vitorias > 0:
             if win: atual_vitorias += 1
-            else: break # Interrompe pois mudou para derrota
+            else: break 
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
@@ -420,21 +473,20 @@ def executar_backtest_centurion(historico, indice_premio):
         target_idx = -i
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        # No backtest visual, usamos IA para ser preciso
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio, usar_ia=True)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (COMPACTO) ---
+# --- 4. DASHBOARD GERAL ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
     st.markdown("### 📡 Radar Global de Oportunidades")
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("Bancas", "3", "Lotep, Caminho, Monte")
+    col1.metric("Bancas", "4", "Lotep, Caminho, Monte, Trad")
     
     alertas_criticos = []
     
@@ -442,8 +494,9 @@ def tela_dashboard_global():
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
-                for i in range(5):
-                    # IA DESLIGADA NO DASHBOARD PARA EVITAR TRAVAMENTO (usar_ia_no_backtest=False)
+                limit_range = 1 if banca_key == "TRADICIONAL" else 5
+                
+                for i in range(limit_range):
                     stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=False)
                     
                     if max_stress > 0:
@@ -465,7 +518,6 @@ def tela_dashboard_global():
     
     if alertas_criticos:
         st.subheader("🚨 Zonas de Interesse Identificadas")
-        # AGORA SÃO 4 COLUNAS NO DESKTOP PARA FICAR MENOR
         cols = st.columns(4) 
         for idx, alerta in enumerate(alertas_criticos):
             if alerta['tipo'] == "CRITICO":
@@ -477,7 +529,7 @@ def tela_dashboard_global():
             else: # VITORIA
                 classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "Wins"
 
-            with cols[idx % 4]: # Distribui em 4 colunas
+            with cols[idx % 4]: 
                 st.markdown(f"""
                 <div class='dash-card {classe}'>
                     <div class='dash-title'>{alerta['banca'].split('(')[0]}</div>
@@ -561,7 +613,7 @@ else:
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                total_ops = len(lista_datas) * 8
+                total_ops = len(lista_datas) * len(conf['horarios'])
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
@@ -624,7 +676,7 @@ else:
     historico = carregar_historico_dezenas(conf['aba'])
 
     if len(historico) == 0:
-        st.warning("⚠️ Base vazia.")
+        st.warning("⚠️ Base vazia (Crie a aba na planilha!).")
     else:
         ult = historico[-1]
         st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
@@ -633,10 +685,30 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
-            # SÓ AQUI USA IA (porque é um único processo)
+            
+            # SE FOR TRADICIONAL, ESCONDE OS OUTROS PRÊMIOS
+            if banca_selecionada == "TRADICIONAL" and i > 0:
+                st.warning("⚠️ Esta banca foca exclusivamente no 1º Prêmio (Cabeça).")
+                st.caption("A análise foi desativada para os outros prêmios.")
+                continue
+
             lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
             stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=True)
             
+            # --- BOX UNIDADE SNIPER (EXCLUSIVO TRADICIONAL) ---
+            if banca_selecionada == "TRADICIONAL":
+                finais = [d[-1] for d in lista_final]
+                top_finais = [x[0] for x in Counter(finais).most_common(3)]
+                
+                st.markdown(f"""
+                <div class='box-unidade'>
+                    <div class='uni-title'>🎯 UNIDADE SNIPER (9.20x)</div>
+                    <div class='uni-nums'>Finais Fortes: {', '.join(top_finais)}</div>
+                    <div style='font-size:12px; opacity:0.8;'>Baseado nas dezenas geradas</div>
+                </div>
+                """, unsafe_allow_html=True)
+            # ----------------------------------------------------
+
             if HAS_AI and gps_ia:
                 st.markdown(f"""
                 <div class='box-ai'>
@@ -666,7 +738,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V12: IA + Pentágono + Saturação</div>
+                <div class='subtitulo'>Estratégia V14.2: Tradicional + Unidade Sniper</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
