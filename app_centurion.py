@@ -12,12 +12,12 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.5 Manual", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V8.0 Adaptável", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
     "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
-    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] }, # 19:30 Adicionado fixo
+    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] },
     "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
@@ -68,7 +68,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (AGORA INTELIGENTE) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -108,6 +108,17 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
+        # --- CRIAÇÃO DE VARIAÇÕES DE HORÁRIO (V8.0) ---
+        # O site pode escrever "21:00", "21h", "21H", etc.
+        alvos_possiveis = [horario_alvo] # Adiciona o padrão "21:00"
+        
+        if ":00" in horario_alvo:
+            hora_simples = horario_alvo.split(':')[0] # Pega só o "21"
+            alvos_possiveis.append(f"{hora_simples}h") # Adiciona "21h"
+            alvos_possiveis.append(f"{hora_simples}H") # Adiciona "21H"
+            alvos_possiveis.append(f"{hora_simples} h") # Adiciona "21 h"
+        # ---------------------------------------------
+
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 prev_element = tabela.find_previous(string=True)
@@ -122,7 +133,14 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                 text_header_upper = text_header.upper()
                 if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper: continue 
 
-                if horario_alvo in text_header:
+                # VERIFICA SE ALGUMA DAS VARIAÇÕES ESTÁ NO TEXTO
+                encontrou_horario = False
+                for alvo in alvos_possiveis:
+                    if alvo in text_header:
+                        encontrou_horario = True
+                        break
+                
+                if encontrou_horario:
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
@@ -136,7 +154,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                     dezenas_encontradas.append(dezena)
                     if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
                     
-        return None, f"Horário {horario_alvo} não encontrado na página."
+        return None, f"Horário {horario_alvo} (ou variantes) não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
@@ -213,10 +231,12 @@ def gerar_matriz_hibrida(historico, indice_premio):
 
 def calcular_stress_atual(historico, indice_premio):
     if len(historico) < 10: return 0, 0
+    
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
     max_derrotas = 0; derrotas_consecutivas = 0
+    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
@@ -228,6 +248,7 @@ def calcular_stress_atual(historico, indice_premio):
             if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
+    
     stress_atual = 0
     for i in range(1, 20): 
         idx = -i
@@ -238,6 +259,7 @@ def calcular_stress_atual(historico, indice_premio):
         win = target_dezena in palpite
         if not win: stress_atual += 1
         else: break
+        
     return stress_atual, max_derrotas
 
 def executar_backtest_centurion(historico, indice_premio):
@@ -272,7 +294,7 @@ with st.sidebar:
     modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.markdown("---")
 
-    # MODO 1: UNITÁRIO
+    # === MODO 1: UNITÁRIO ===
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.subheader("Extração Unitária")
         opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
