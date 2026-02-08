@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V16.1 Radar Total", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V17.0 Pattern Finder", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -124,13 +124,28 @@ st.markdown("""
     .dash-perigo { background-color: #662200; border-color: #ff5500; }
     .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
     .dash-vitoria { background-color: #003300; border-color: #00ff00; }
-    .dash-unidade { background-color: #002244; border-color: #0099ff; } /* Azul para Unidade */
+    .dash-unidade { background-color: #002244; border-color: #0099ff; }
     
     .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
     .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
     .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
     .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
+
+    /* ESTILO PARA O RASTREADOR DE PADRÕES */
+    .pattern-row {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 3px solid #00ff00;
+    }
+    .pattern-date { font-size: 12px; color: #aaa; }
+    .pattern-result { font-size: 16px; font-weight: bold; color: #fff; }
+    .pattern-badge { background-color: #004d00; color: #00ff00; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 
     div[data-testid="stTable"] table { color: white; }
 </style>
@@ -434,20 +449,15 @@ def calcular_metricas_unidade_full(historico):
     max_loss = 0; seq_loss = 0
     max_win = 0; seq_win = 0
     
-    # Simula o passado
     for i in range(inicio_simulacao, total_disponivel):
         try:
             target_game = historico[i]
             target_unidade = target_game['dezenas'][0][-1]
-            
             hist_treino = historico[:i]
             lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True) 
-            
             finais = [d[-1] for d in lista_final]
             top_finais = [x[0] for x in Counter(finais).most_common(5)]
-            
             win = target_unidade in top_finais
-            
             if win:
                 seq_loss = 0
                 seq_win += 1
@@ -458,10 +468,8 @@ def calcular_metricas_unidade_full(historico):
                 if seq_loss > max_loss: max_loss = seq_loss
         except: continue
 
-    # 2. Cálculo do Status Atual
     atual_derrotas = 0
     atual_vitorias = 0
-    
     for i in range(1, 20):
         idx = -i
         try:
@@ -472,7 +480,6 @@ def calcular_metricas_unidade_full(historico):
             finais = [d[-1] for d in lista_final]
             top_finais = [x[0] for x in Counter(finais).most_common(5)]
             win = target_unidade in top_finais
-            
             if i == 1:
                 if win: atual_vitorias = 1
                 else: atual_derrotas = 1
@@ -486,6 +493,41 @@ def calcular_metricas_unidade_full(historico):
         except: break
         
     return atual_derrotas, max_loss, atual_vitorias, max_win
+
+# --- NOVO: ANALISAR PADRÕES FUTUROS (V17.0) ---
+def analisar_padroes_futuros(historico, indice_premio):
+    if len(historico) < 10: return None, []
+    
+    # 1. Pega a última dezena que saiu
+    ultima_dezena_real = historico[-1]['dezenas'][indice_premio]
+    
+    encontrados = []
+    
+    # 2. Varre de trás pra frente (começando do penúltimo jogo)
+    # Procuramos onde essa dezena saiu ANTES
+    for i in range(len(historico) - 2, -1, -1):
+        try:
+            jogo_atual = historico[i]
+            dezena_atual = jogo_atual['dezenas'][indice_premio]
+            
+            if dezena_atual == ultima_dezena_real:
+                # ACHOU! Pega o jogo SEGUINTE (i+1)
+                jogo_seguinte = historico[i+1]
+                dezena_seguinte = jogo_seguinte['dezenas'][indice_premio]
+                data_seg = jogo_seguinte['data']
+                hora_seg = jogo_seguinte['hora']
+                
+                encontrados.append({
+                    "data": data_seg,
+                    "hora": hora_seg,
+                    "veio": dezena_seguinte
+                })
+                
+                # Limita a 5 ocorrências
+                if len(encontrados) >= 5: break
+        except: continue
+        
+    return ultima_dezena_real, encontrados
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
@@ -518,7 +560,7 @@ def executar_backtest_unidade(historico):
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (ATUALIZADO V16.1) ---
+# --- 4. DASHBOARD GERAL ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -554,12 +596,10 @@ def tela_dashboard_global():
                 if banca_key == "TRADICIONAL":
                     uni_loss, uni_max_loss, uni_win, uni_max_win = calcular_metricas_unidade_full(historico)
                     if uni_max_loss > 0:
-                        # Alerta de Loss
                         if uni_loss >= uni_max_loss:
                             alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_loss, "rec": uni_max_loss, "tipo": "CRITICO_UNI"})
                         elif uni_loss == (uni_max_loss - 1):
                             alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_loss, "rec": uni_max_loss, "tipo": "PERIGO_UNI"})
-                    # Alerta de Win (Opcional, mas bom ter)
                     if uni_max_win > 2 and uni_win == (uni_max_win - 1):
                         alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_win, "rec": uni_max_win, "tipo": "VITORIA"})
 
@@ -579,7 +619,6 @@ def tela_dashboard_global():
                 classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "Loss"
             elif alerta['tipo'] == "VITORIA":
                 classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "Wins"
-            # NOVOS TIPOS PARA UNIDADE
             elif alerta['tipo'] == "CRITICO_UNI":
                 classe = "dash-unidade"; titulo = "🎯 SNIPER CRÍTICO"; texto = "Loss"
             elif alerta['tipo'] == "PERIGO_UNI":
@@ -765,7 +804,6 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # STATUS SNIPER (V16.1)
                 uni_curr_loss, uni_max_loss, uni_curr_win, uni_max_win = calcular_metricas_unidade_full(historico)
                 cor_uni_stress = "#ff4b4b" if uni_curr_loss > 0 else "#ffffff"
                 cor_uni_wins = "#00ff00" if uni_curr_win > 0 else "#ffffff"
@@ -816,7 +854,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V16.1: Radar Total (Dezenas + Unidades)</div>
+                <div class='subtitulo'>Estratégia V17: Centurion 46 (Double Money)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
@@ -844,11 +882,26 @@ else:
                     lbl = "WIN" if res['win'] else "LOSS"
                     num = res['dezena']
                     cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
-                
                 st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
             else:
                 st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
 
             st.markdown("---")
-            with st.expander("✂️ Ver Detalhes (Grupos e Cortes)"):
-                st.write(f"Grupos Cortados: {', '.join(cortadas)}")
+            
+            # --- NOVO: RASTREADOR DE PADRÕES (V17) ---
+            ultima_dz_real, padroes_futuros = analisar_padroes_futuros(historico, i)
+            if padroes_futuros:
+                st.markdown(f"#### 🔍 Rastreador de Padrões (Última: **{ultima_dz_real}**)")
+                st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
+                
+                for p in padroes_futuros:
+                    # Formatação visual
+                    st.markdown(f"""
+                    <div class='pattern-row'>
+                        <span class='pattern-date'>{p['data']} às {p['hora']}</span>
+                        <span class='pattern-result'>Veio a Dezena: {p['veio']}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.caption(f"A dezena {ultima_dz_real} é rara (menos de 5 ocorrências recentes). Sem padrão claro.")
+            # ----------------------------------------
