@@ -9,10 +9,18 @@ from datetime import datetime, date, timedelta
 import time
 from collections import Counter
 
+# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import LabelEncoder
+    HAS_AI = True
+except ImportError:
+    HAS_AI = False
+
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V11.0 Imunidade", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V12.0 AI", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -42,6 +50,13 @@ st.markdown("""
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
     }
+    .box-ai {
+        background: linear-gradient(135deg, #2b005c, #1a0033);
+        border: 1px solid #b300ff; padding: 15px; border-radius: 10px;
+        margin-bottom: 15px; text-align: left;
+    }
+    .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
+    
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
         padding: 15px; border-radius: 10px; text-align: center;
@@ -58,8 +73,9 @@ st.markdown("""
     .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
     .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .pill-pentagono { background-color: #002b4d; color: #00ccff; border: 1px solid #00ccff; }
+    .pill-ai { background-color: #2b005c; color: #d900ff; border: 1px solid #d900ff; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
+    
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -158,19 +174,106 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: PENTÁGONO + CENTURION (INTEGRAÇÃO TOTAL) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V12.0) ---
 # =============================================================================
 
-def gerar_matriz_hibrida_imunidade(historico, indice_premio):
+# FUNÇÃO: Previsão com Machine Learning (Scikit-Learn)
+def oraculo_ia(historico, indice_premio):
+    if not HAS_AI or len(historico) < 50:
+        return [], 0 # Sem dados suficientes ou sem biblioteca
+
+    # Prepara os dados para o Scikit-Learn
+    df = pd.DataFrame(historico)
+    
+    # 1. Feature Engineering (Criar colunas numéricas)
+    df['data_dt'] = pd.to_datetime(df['data'])
+    df['dia_semana'] = df['data_dt'].dt.dayofweek # 0=Seg, 6=Dom
+    
+    # Codificar Horário (String -> Número)
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['hora'])
+    
+    # Target: O Grupo que saiu (temos que converter a dezena para grupo)
+    grupos_saiu = []
+    for d_lista in df['dezenas']:
+        try:
+            d = d_lista[indice_premio]
+            g = DEZENA_TO_GRUPO.get(d, 0)
+            grupos_saiu.append(g)
+        except: grupos_saiu.append(0)
+    
+    df['target_grupo'] = grupos_saiu
+    
+    # Shift! Queremos prever o PRÓXIMO com base no ATUAL
+    # X (Features) = Dados do jogo T
+    # Y (Target) = Resultado do jogo T+1
+    df['target_futuro'] = df['target_grupo'].shift(-1)
+    
+    # Remove NaN (último jogo não tem futuro conhecido ainda no treino)
+    df_treino = df.dropna().tail(200) # Treina com os últimos 200 jogos para ser rápido
+    
+    if len(df_treino) < 30: return [], 0
+    
+    X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
+    y = df_treino['target_futuro']
+    
+    # Treina o Modelo (Random Forest)
+    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo.fit(X, y)
+    
+    # Prever o Próximo (Baseado no último jogo real)
+    ultimo_real = df.iloc[-1]
+    X_novo = pd.DataFrame({
+        'dia_semana': [ultimo_real['dia_semana']],
+        'hora_code': [ultimo_real['hora_code']],
+        'target_grupo': [ultimo_real['target_grupo']]
+    })
+    
+    # Pega as probabilidades
+    probs = modelo.predict_proba(X_novo)[0]
+    classes = modelo.classes_
+    
+    # Cria lista (Grupo, Probabilidade)
+    ranking_ia = []
+    for i, prob in enumerate(probs):
+        grupo = int(classes[i])
+        ranking_ia.append((grupo, prob))
+        
+    # Ordena e pega Top 3
+    ranking_ia.sort(key=lambda x: x[1], reverse=True)
+    top_3_grupos = [x[0] for x in ranking_ia[:3]]
+    confianca = ranking_ia[0][1] * 100 # % do top 1
+    
+    return top_3_grupos, confianca
+
+def calcular_radar_pentagono(historico, indice_premio):
+    if not historico: return []
+    ultima_aparicao = {}
+    total_jogos = len(historico)
+    for i in range(total_jogos - 1, -1, -1):
+        try:
+            dz = historico[i]['dezenas'][indice_premio]
+            if dz in DEZENA_TO_GRUPO:
+                grp = DEZENA_TO_GRUPO[dz]
+                if grp not in ultima_aparicao: ultima_aparicao[grp] = i
+        except: pass
+        if len(ultima_aparicao) == 25: break
+    atrasos = []
+    for g in range(1, 26):
+        atraso = (total_jogos - 1) - ultima_aparicao.get(g, -1)
+        atrasos.append((g, atraso))
+    atrasos.sort(key=lambda x: x[1], reverse=True)
+    return [x[0] for x in atrasos[:5]]
+
+def gerar_matriz_hibrida_ai(historico, indice_premio):
     if not historico:
         padrao = []
         for g in range(1, 26): padrao.extend(GRUPOS_BICHOS[g][:3])
-        return padrao, [], None, [], None
+        return padrao, [], None, [], None, [], 0
 
-    # 1. DADOS DE ENTRADA
     ultimo_jogo = historico[-1]
     try: ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
-    except: ultima_dezena = "99" # Fallback
+    except: ultima_dezena = "99"
     final_bloqueado = ultima_dezena[-1] 
 
     tamanho_analise = 50
@@ -182,7 +285,6 @@ def gerar_matriz_hibrida_imunidade(historico, indice_premio):
         except: pass
     contagem_dezenas = Counter(dezenas_historico)
 
-    # 2. SATURAÇÃO (Centurion Clássico)
     contagem_grupos = {}
     for g, dzs in GRUPOS_BICHOS.items():
         soma = 0
@@ -193,51 +295,28 @@ def gerar_matriz_hibrida_imunidade(historico, indice_premio):
     grupo_saturado = rank_grupos_sat[0][0]
     freq_saturado = rank_grupos_sat[0][1]
 
-    # 3. ATRASO PENTÁGONO (Calculado para O PRÊMIO ATUAL)
-    # Descobre os Top 5 grupos mais atrasados neste prêmio específico
-    ultima_aparicao = {}
-    total_jogos = len(historico)
-    for i in range(total_jogos - 1, -1, -1):
-        try:
-            dz = historico[i]['dezenas'][indice_premio]
-            grp = int(dz) // 4 + (1 if int(dz) % 4 != 0 or int(dz) == 0 else 0)
-            if int(dz) == 0: grp = 25 # Ajuste para 00
-            elif int(dz) % 4 == 0: grp = int(dz) // 4
-            else: grp = (int(dz) // 4) + 1
-            
-            # Correção mapeamento (melhor usar o dict reverso garantido)
-            if dz in DEZENA_TO_GRUPO:
-                grp = DEZENA_TO_GRUPO[dz]
-                if grp not in ultima_aparicao: ultima_aparicao[grp] = i
-        except: pass
+    # --- INTEGRAÇÃO PENTÁGONO + IA ---
+    grupos_atrasados = calcular_radar_pentagono(historico, indice_premio)
+    grupos_ia, confianca_ia = oraculo_ia(historico, indice_premio)
     
-    atrasos = []
-    for g in range(1, 26):
-        atraso = (total_jogos - 1) - ultima_aparicao.get(g, -1)
-        atrasos.append((g, atraso))
-    atrasos.sort(key=lambda x: x[1], reverse=True)
-    
-    # Top 5 Grupos Atrasados (Imunizados do Pentágono)
-    grupos_pentagono = [x[0] for x in atrasos[:5]]
+    # A LISTA DE PROTEGIDOS AGORA SOMA PENTÁGONO + IA
+    grupos_imunes = list(set(grupos_atrasados + grupos_ia))
 
-    # 4. SELEÇÃO COM IMUNIDADE
     palpite_inicial = []
     reservas_disponiveis = []
     dezenas_cortadas_log = []
 
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        # REGRA DE OURO: Se for Pentágono, ENTRA TUDO (Imunidade)
-        if grupo in grupos_pentagono:
+        # Se for Imune (Pentágono ou IA), entra tudo
+        if grupo in grupos_imunes:
             palpite_inicial.extend(lista_dezenas)
             continue
 
-        # Se for Saturado (e não for Pentágono), SAI TUDO
         if grupo == grupo_saturado:
             for d in lista_dezenas: reservas_disponiveis.append(d)
             dezenas_cortadas_log.append(f"G{grupo} (Saturado)")
             continue 
             
-        # Grupos Normais -> Regra Padrão (3 dentro, 1 fora)
         rank_dz = []
         for d in lista_dezenas:
             freq = contagem_dezenas.get(d, 0)
@@ -249,24 +328,17 @@ def gerar_matriz_hibrida_imunidade(historico, indice_premio):
         palpite_inicial.extend(dezenas_vencedoras)
         reservas_disponiveis.append(dezena_removida)
 
-    # 5. FILTRO FINAL KILLER + INJEÇÃO DE RESERVA
     palpite_filtrado = []
-    
-    # Remove final bloqueado (EXCETO se for de Grupo Pentágono - Imunidade Total)
     for d in palpite_inicial:
         grp = DEZENA_TO_GRUPO.get(d)
-        if d.endswith(final_bloqueado) and grp not in grupos_pentagono:
-            # Corta se tiver final ruim e não for VIP
+        # Se tem final bloqueado e NÃO é imune, corta
+        if d.endswith(final_bloqueado) and grp not in grupos_imunes:
             pass 
         else:
             palpite_filtrado.append(d)
     
-    # Preenchimento (Injection)
     vagas_abertas = 75 - len(palpite_filtrado)
-    
-    # Prepara Reservas: Prioriza dezenas que não tem o final ruim
     reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
-    # Ordena por frequência (as melhores sobras)
     reservas_rank = []
     for d in reservas_validas: reservas_rank.append((d, contagem_dezenas.get(d, 0)))
     reservas_rank.sort(key=lambda x: x[1], reverse=True)
@@ -277,7 +349,7 @@ def gerar_matriz_hibrida_imunidade(historico, indice_premio):
     palpite_final = sorted(list(set(palpite_filtrado)))
     dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
     
-    return palpite_final, dezenas_cortadas_log, dados_sat, grupos_pentagono, final_bloqueado
+    return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
 
 def calcular_stress_atual(historico, indice_premio):
     if len(historico) < 10: return 0, 0
@@ -286,11 +358,14 @@ def calcular_stress_atual(historico, indice_premio):
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
     max_derrotas = 0; derrotas_consecutivas = 0
     
+    # Nota: No backtest de stress, desligamos a IA para ser rápido (usa só estatística)
+    # ou usamos uma versão simplificada. Aqui vamos manter a lógica V11 para velocidade.
+    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
-        hist_treino = historico[:i]
-        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
+        # Palpite rápido (V11 logic) para stress test
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio) 
         win = target_dezena in palpite
         if not win: derrotas_consecutivas += 1
         else:
@@ -302,8 +377,7 @@ def calcular_stress_atual(historico, indice_premio):
         idx = -i
         target_game = historico[idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        hist_treino = historico[:idx] 
-        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio)
         win = target_dezena in palpite
         if not win: stress_atual += 1
         else: break
@@ -316,8 +390,7 @@ def executar_backtest_centurion(historico, indice_premio):
         target_idx = -i
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        hist_treino = historico[:target_idx]
-        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
@@ -505,16 +578,32 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
-            # CHAMA A NOVA MATRIZ COM IMUNIDADE (Cross-Check por prêmio)
-            lista_final, cortadas, sat, gps_imunes, final_bloq = gerar_matriz_hibrida_imunidade(historico, i)
+            # CHAMA A NOVA MATRIZ COM IA + PENTÁGONO + IMUNIDADE
+            lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i)
             stress_atual, max_loss = calcular_stress_atual(historico, i)
             
+            # --- ÁREA DA INTELIGÊNCIA ARTIFICIAL ---
+            if HAS_AI and gps_ia:
+                st.markdown(f"""
+                <div class='box-ai'>
+                    <div class='ai-title'>🧠 Oráculo IA (Random Forest)</div>
+                    <div style='color:#e0e0e0; margin-bottom:5px;'>Previsão de Grupos Fortes: <b>{', '.join(map(str, gps_ia))}</b></div>
+                    <div style='font-size:12px; color:#b300ff;'>Confiança do Modelo: {confianca_ia:.1f}%</div>
+                </div>
+                """, unsafe_allow_html=True)
+            elif not HAS_AI:
+                st.caption("⚠️ Módulo de IA desativado (Scikit-learn não encontrado).")
+
             aviso_alerta = ""
             if stress_atual >= max_loss and max_loss > 0:
                 aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
             
             info_sat = f"<span class='info-pill pill-sat'>🚫 SATURADO: G{sat[0]} ({sat[1]}x)</span>" if sat else ""
-            info_pentagono = f"<span class='info-pill pill-pentagono'>🛡️ IMUNIZADOS: {', '.join(map(str, gps_imunes))}</span>" if gps_imunes else ""
+            
+            # Imunidade mostra tanto Pentágono quanto IA
+            todos_imunes = list(set(gps_atrasados + gps_ia))
+            info_imunes = f"<span class='info-pill pill-ai'>🛡️ IMUNIZADOS (IA+P): {', '.join(map(str, todos_imunes))}</span>" if todos_imunes else ""
+            
             info_final = f"<span class='info-pill pill-final'>🛑 FINAL: {final_bloq}</span>" if final_bloq else ""
             
             qtd_final = len(lista_final) 
@@ -522,9 +611,9 @@ else:
             html_content = f"""
             {aviso_alerta}
             <div class='box-centurion'>
-                {info_sat} {info_pentagono} {info_final}
+                {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V11: Saturação + Final Killer + Imunidade Pentágono</div>
+                <div class='subtitulo'>Estratégia V12: IA + Pentágono + Saturação</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
