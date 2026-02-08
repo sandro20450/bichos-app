@@ -12,12 +12,12 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.4 Scanner", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.5 Manual", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
     "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
-    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
+    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] }, # 19:30 Adicionado fixo
     "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
@@ -68,7 +68,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (Scanner V7.4) ---
+# --- 2. CONEXÃO E RASPAGEM ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -108,30 +108,20 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
-        # --- LÓGICA DE SCANNER V7.4 (Busca Exata no Texto) ---
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # Encontra o texto imediatamente anterior à tabela (o cabeçalho)
                 prev_element = tabela.find_previous(string=True)
-                
-                # Se o elemento anterior for vazio, tenta subir mais um pouco
                 if not prev_element or not prev_element.strip():
                     prev_element = tabela.find_previous('div', class_='title')
                     if prev_element: text_header = prev_element.get_text()
                     else: text_header = ""
                 else:
-                    # Tenta pegar o texto do container pai se for string solta
                     if prev_element.parent: text_header = prev_element.parent.get_text()
                     else: text_header = prev_element
                 
                 text_header_upper = text_header.upper()
-                
-                # 1. Filtro Federal
-                if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper:
-                    continue 
+                if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper: continue 
 
-                # 2. Verifica se o horário alvo está CONTIDO no cabeçalho
-                # Ex: horario_alvo="19:30" e header="Caminho... 19:30..." -> MATCH!
                 if horario_alvo in text_header:
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
@@ -223,12 +213,10 @@ def gerar_matriz_hibrida(historico, indice_premio):
 
 def calcular_stress_atual(historico, indice_premio):
     if len(historico) < 10: return 0, 0
-    
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
     max_derrotas = 0; derrotas_consecutivas = 0
-    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
@@ -240,7 +228,6 @@ def calcular_stress_atual(historico, indice_premio):
             if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
-    
     stress_atual = 0
     for i in range(1, 20): 
         idx = -i
@@ -251,7 +238,6 @@ def calcular_stress_atual(historico, indice_premio):
         win = target_dezena in palpite
         if not win: stress_atual += 1
         else: break
-        
     return stress_atual, max_derrotas
 
 def executar_backtest_centurion(historico, indice_premio):
@@ -286,7 +272,7 @@ with st.sidebar:
     modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.markdown("---")
 
-    # === MODO 1: UNITÁRIO ===
+    # MODO 1: UNITÁRIO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.subheader("Extração Unitária")
         opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -296,14 +282,8 @@ with st.sidebar:
         
         # --- AJUSTE DE HORÁRIO CAMINHO (QUA e SAB) ---
         lista_horarios = conf['horarios'].copy()
-        
-        # Verifica se é Caminho da Sorte E se é Quarta (2) ou Sábado (5)
         if banca_sel == "CAMINHO" and (data_busca.weekday() == 2 or data_busca.weekday() == 5):
-            # Substituição FORÇADA da lista para garantir 19:30
-            lista_horarios = [
-                "09:40", "11:00", "12:40", "14:00", "15:40", 
-                "17:00", "18:30", "19:30", "21:00"
-            ]
+            lista_horarios = [h.replace("20:00", "19:30") for h in lista_horarios]
         # -----------------------------------------------
 
         hora_busca = st.selectbox("Horário:", lista_horarios)
@@ -331,7 +311,7 @@ with st.sidebar:
                         else: st.error(f"❌ {msg}")
             else: st.error("Erro Conexão Planilha")
 
-    # === MODO 2: EM MASSA ===
+    # MODO 2: EM MASSA
     else:
         st.subheader("Extração em Massa")
         col1, col2 = st.columns(2)
@@ -350,28 +330,19 @@ with st.sidebar:
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                
-                # Calcula total aproximado para a barra
-                total_ops = len(lista_datas) * 8 # Estimativa
+                total_ops = len(lista_datas) * 8
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    # --- LÓGICA DE HORÁRIO TURBO ---
                     horarios_do_dia = conf['horarios'].copy()
                     if banca_sel == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
-                        horarios_do_dia = [
-                            "09:40", "11:00", "12:40", "14:00", "15:40", 
-                            "17:00", "18:30", "19:30", "21:00"
-                        ]
-                    # -------------------------------
+                        horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
 
                     for hora in horarios_do_dia:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
-                        
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
@@ -387,6 +358,54 @@ with st.sidebar:
                 time.sleep(2)
                 st.rerun()
             else: st.error("Erro Conexão Planilha")
+
+    # === MODO 3: INSERÇÃO MANUAL (EMERGÊNCIA) ===
+    st.markdown("---")
+    with st.expander("✍️ Inserção Manual (Emergência)"):
+        st.caption("Use esta opção se o robô não encontrar o sorteio.")
+        man_data = st.date_input("Data Manual", date.today())
+        
+        # Carrega horários (com ajuste de 19:30 se necessário)
+        h_manual_list = conf['horarios'].copy()
+        if banca_sel == "CAMINHO":
+            # Garante que 19:30 esteja na lista
+            if "19:30" not in h_manual_list: h_manual_list.append("19:30")
+            h_manual_list.sort()
+            
+        man_hora = st.selectbox("Horário Manual", h_manual_list, index=0)
+        
+        st.markdown("**Digite as 5 Dezenas (00-99):**")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        p1 = c1.text_input("1º", max_chars=2, key="mp1")
+        p2 = c2.text_input("2º", max_chars=2, key="mp2")
+        p3 = c3.text_input("3º", max_chars=2, key="mp3")
+        p4 = c4.text_input("4º", max_chars=2, key="mp4")
+        p5 = c5.text_input("5º", max_chars=2, key="mp5")
+        
+        if st.button("💾 Salvar Manualmente"):
+            # Validação
+            man_dezenas = [p1, p2, p3, p4, p5]
+            if all(d.isdigit() and len(d) == 2 for d in man_dezenas):
+                ws = conectar_planilha(conf['aba'])
+                if ws:
+                    try:
+                        existentes = ws.get_all_values()
+                        chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
+                    except: chaves = []
+                    
+                    chave_atual = f"{man_data.strftime('%Y-%m-%d')}|{man_hora}"
+                    
+                    if chave_atual in chaves:
+                        st.warning("⚠️ Este horário já existe na planilha!")
+                    else:
+                        row = [man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas
+                        ws.append_row(row)
+                        st.success("✅ Salvo com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                else: st.error("Erro Conexão Planilha")
+            else:
+                st.error("❌ Preencha todas as 5 dezenas com 2 dígitos (Ex: 05, 99).")
 
 # --- TELA PRINCIPAL ---
 conf_atual = CONFIG_BANCAS[banca_sel]
@@ -408,7 +427,6 @@ tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º
 for i, tab in enumerate(tabs):
     with tab:
         lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
-        
         stress_atual, max_loss = calcular_stress_atual(historico, i)
         
         aviso_alerta = ""
