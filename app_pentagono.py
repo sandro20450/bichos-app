@@ -10,10 +10,18 @@ import time
 import altair as alt
 from collections import Counter
 
+# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL (NOVO NA V41) ---
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import LabelEncoder
+    HAS_AI = True
+except ImportError:
+    HAS_AI = False
+
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V40.0 - Sniper 4-4-4", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V41.0 - Hybrid AI", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -46,12 +54,18 @@ def reproduzir_som():
 def aplicar_estilo():
     st.markdown("""
     <style>
+        .stApp { background-color: #0e1117; color: #fff; }
         .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
+        .box-ai { background: linear-gradient(135deg, #1a0033, #2b005c); border: 1px solid #b300ff; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; box-shadow: 0 0 15px rgba(179, 0, 255, 0.2); }
+        .ai-title { color: #d900ff; font-weight: 900; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; text-transform: uppercase; }
+        .ai-desc { color: #e0b0ff; font-size: 14px; margin-bottom: 10px; }
+        .ai-badge { background-color: #4a004a; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px solid #d900ff; margin-right: 5px; }
+
         .box-sniper-hunter { background: linear-gradient(135deg, #004d00, #006400); border: 2px solid #00ff00; padding: 15px; border-radius: 8px; border-left: 8px solid #00ff00; margin-bottom: 15px; color: #ccffcc; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2); }
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
@@ -127,6 +141,59 @@ def carregar_dados_top5(nome_aba):
                 except: pass
         return dados_processados
     return []
+
+# --- CÉREBRO IA (V41) ---
+def treinar_oraculo_pentagono(historico, indice_premio):
+    if not HAS_AI or len(historico) < 50: return [], 0
+    
+    # Prepara DataFrame para IA
+    df = pd.DataFrame(historico)
+    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
+    df = df.dropna(subset=['data_dt']) # Remove datas invalidas
+    
+    df['dia_semana'] = df['data_dt'].dt.dayofweek 
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['horario'])
+    
+    # Extrai o alvo (bicho do prêmio específico)
+    bichos_alvo = [jogo['premios'][indice_premio] for jogo in historico if 'data_dt' in df.columns] # Alinha com o DF
+    
+    # Garante alinhamento de tamanho
+    df = df.iloc[:len(bichos_alvo)]
+    df['target_grupo'] = bichos_alvo
+    df['target_futuro'] = df['target_grupo'].shift(-1) # O que saiu no próximo sorteio
+    
+    df_treino = df.dropna().tail(200) # Treina com os últimos 200
+    
+    if len(df_treino) < 30: return [], 0
+    
+    X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
+    y = df_treino['target_futuro']
+    
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42)
+    modelo.fit(X, y)
+    
+    # Previsão para o próximo
+    ultimo_real = df.iloc[-1]
+    X_novo = pd.DataFrame({
+        'dia_semana': [ultimo_real['dia_semana']],
+        'hora_code': [ultimo_real['hora_code']],
+        'target_grupo': [ultimo_real['target_grupo']]
+    })
+    
+    probs = modelo.predict_proba(X_novo)[0]
+    classes = modelo.classes_
+    
+    ranking_ia = []
+    for i, prob in enumerate(probs):
+        grupo = int(classes[i])
+        ranking_ia.append((grupo, prob))
+        
+    ranking_ia.sort(key=lambda x: x[1], reverse=True)
+    top_5_ia = [x[0] for x in ranking_ia[:5]]
+    confianca = ranking_ia[0][1] * 100
+    
+    return top_5_ia, confianca
 
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
@@ -284,21 +351,11 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
     # 4. PROCESSAMENTO DAS DEZENAS (DEFESA 4 Grupos do Fraco)
     dezenas_proibidas = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
     grupos_defesa_base = SETORES[setor_fraco]
-    
-    # Ordena o setor fraco pelo score para pegar os 4 melhores
     rank_defesa = sorted(grupos_defesa_base, key=lambda x: calcular_score(x), reverse=True)
-    
-    # Filtra saturados da defesa
     grupos_defesa_finais = [g for g in rank_defesa if g not in saturados]
-    
-    # Limita a 4 Grupos para defesa (Config 4-4-4)
     grupos_defesa_finais = grupos_defesa_finais[:4]
-    
-    # Se ainda faltar para completar 4, pega da reserva (saturados ou fora do rank) com cuidado
     if len(grupos_defesa_finais) < 4:
         sobra = 4 - len(grupos_defesa_finais)
-        # Pega do resto do setor fraco mesmo que "saturado" se não tiver opção, ou de outros setores
-        # Aqui vamos priorizar completar com o próprio setor fraco para manter a lógica do setor
         resto_setor = [g for g in grupos_defesa_base if g not in grupos_defesa_finais]
         grupos_defesa_finais.extend(resto_setor[:sobra])
 
@@ -370,15 +427,13 @@ def executar_backtest_sniper(historico, indice_premio):
             match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
             nome_fraco = match.group(1) if match else ""
         else:
-            match = re.search(r"(\w+) Defesa", meta) # Ajustado para o novo texto
+            match = re.search(r"(\w+) Defesa", meta)
             nome_fraco = match.group(1) if match else ""
             
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
-                # Aqui no backtest, como é simplificado, verificamos se caiu no setor de defesa
-                # Na prática real, ganhamos se cair nas dezenas, mas para backtest de tendência, setor serve
                 win_defesa = target_num in SETORES[chave_setor]
         
         win_total = win_ataque or win_defesa
@@ -739,12 +794,18 @@ else:
                 
                 # --- SNIPER V40 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
+                
+                # --- ORÁCULO IA V41.0 (NOVO) ---
+                if HAS_AI:
+                    top_5_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
+                else:
+                    top_5_ia, confianca_ia = [], 0
+                
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
                 
-                # VISUAL SNIPER V40
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
                 badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
@@ -772,6 +833,25 @@ else:
 {msg_sat}
 </div>
 """, unsafe_allow_html=True)
+                
+                # --- EXIBIÇÃO DA IA (ORÁCULO) ---
+                if HAS_AI and top_5_ia:
+                    # Encontra interseção entre Sniper e IA
+                    super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_5_ia))
+                    
+                    html_super = ""
+                    if super_grupos:
+                        html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
+                    
+                    st.markdown(f"""
+                    <div class='box-ai'>
+                        <div class='ai-title'>🧠 Oráculo IA (Validação)</div>
+                        <div class='ai-desc'>A Inteligência Artificial analisou padrões de dia e horário.</div>
+                        <div style='color:#fff; font-size:16px; margin-bottom:5px;'>Top 5 IA: <b>{', '.join(map(str, top_5_ia))}</b></div>
+                        <div style='font-size:12px; color:#d900ff;'>Confiança: {confianca_ia:.1f}%</div>
+                        {html_super}
+                    </div>
+                    """, unsafe_allow_html=True)
                 
                 st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
                 
