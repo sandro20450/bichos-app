@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V15.2 Full Metrics", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V15.3 Sniper Top 4", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -82,7 +82,7 @@ st.markdown("""
     .box-unidade {
         background: linear-gradient(135deg, #003366, #004080);
         border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
-        margin-bottom: 15px; text-align: center;
+        margin-bottom: 5px; text-align: center;
         box-shadow: 0 0 15px rgba(0, 153, 255, 0.2);
     }
     .uni-title { color: #0099ff; font-weight: 900; font-size: 18px; text-transform: uppercase; margin-bottom: 5px; }
@@ -223,7 +223,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V15.1) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -418,12 +418,11 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
-# --- NOVO: CÁLCULO DE MÉTRICAS COMPLETAS PARA UNIDADE (V15.2) ---
+# --- NOVO: CÁLCULO DE MÉTRICAS COMPLETAS PARA UNIDADE (V15.2 + UPDATE V15.3) ---
 def calcular_metricas_unidade_full(historico):
     if len(historico) < 10: return 0, 0, 0, 0
     
     # 1. Varredura Histórica para achar Recordes (Max)
-    # Analisa os últimos 40 jogos para não ficar muito lento
     offset = 40 
     total_disponivel = len(historico)
     inicio_simulacao = max(10, total_disponivel - offset)
@@ -439,10 +438,11 @@ def calcular_metricas_unidade_full(historico):
             
             # Gera previsão com dados anteriores a 'i'
             hist_treino = historico[:i]
-            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True) # USA IA = Mais preciso
+            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True) 
             
             finais = [d[-1] for d in lista_final]
-            top_finais = [x[0] for x in Counter(finais).most_common(3)]
+            # ATUALIZADO PARA TOP 4 AQUI TAMBÉM
+            top_finais = [x[0] for x in Counter(finais).most_common(4)]
             
             win = target_unidade in top_finais
             
@@ -468,7 +468,8 @@ def calcular_metricas_unidade_full(historico):
             hist_treino = historico[:idx]
             lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
             finais = [d[-1] for d in lista_final]
-            top_finais = [x[0] for x in Counter(finais).most_common(3)]
+            # ATUALIZADO PARA TOP 4 AQUI TAMBÉM
+            top_finais = [x[0] for x in Counter(finais).most_common(4)]
             win = target_unidade in top_finais
             
             if i == 1:
@@ -485,6 +486,43 @@ def calcular_metricas_unidade_full(historico):
         
     return atual_derrotas, max_loss, atual_vitorias, max_win
 
+def calcular_stress_unidade(historico):
+    if len(historico) < 10: return 0, 0
+    
+    atual_derrotas = 0
+    atual_vitorias = 0
+    
+    # Analisa o status atual (Do último jogo para trás)
+    for i in range(1, 20):
+        idx = -i
+        try:
+            target_game = historico[idx]
+            target_unidade = target_game['dezenas'][0][-1]
+            
+            hist_treino = historico[:idx]
+            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+            
+            finais = [d[-1] for d in lista_final]
+            # ATUALIZADO PARA TOP 4
+            top_finais = [x[0] for x in Counter(finais).most_common(4)]
+            
+            win = target_unidade in top_finais
+            
+            if i == 1:
+                if win: atual_vitorias = 1
+                else: atual_derrotas = 1
+            else:
+                if atual_vitorias > 0:
+                    if win: atual_vitorias += 1
+                    else: break
+                elif atual_derrotas > 0:
+                    if not win: atual_derrotas += 1
+                    else: break
+        except: break
+        
+    return atual_derrotas, atual_vitorias
+
+# --- BACKTEST NORMAL (DEZENAS) ---
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
     resultados = []
@@ -497,6 +535,7 @@ def executar_backtest_centurion(historico, indice_premio):
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
+# --- BACKTEST SNIPER (UNIDADES) ---
 def executar_backtest_unidade(historico):
     if len(historico) < 60: return []
     resultados = []
@@ -510,7 +549,8 @@ def executar_backtest_unidade(historico):
         hist_treino = historico[:target_idx]
         lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
         finais = [d[-1] for d in lista_final]
-        top_finais = [x[0] for x in Counter(finais).most_common(3)]
+        # ATUALIZADO PARA TOP 4
+        top_finais = [x[0] for x in Counter(finais).most_common(4)]
         win = target_unidade in top_finais
         resultados.append({'index': i, 'real': target_unidade, 'win': win})
     return resultados
@@ -737,7 +777,8 @@ else:
             
             if banca_selecionada == "TRADICIONAL":
                 finais = [d[-1] for d in lista_final]
-                top_finais = [x[0] for x in Counter(finais).most_common(3)]
+                # ATUALIZADO PARA TOP 4 AQUI TAMBÉM
+                top_finais = [x[0] for x in Counter(finais).most_common(4)]
                 st.markdown(f"""
                 <div class='box-unidade'>
                     <div class='uni-title'>🎯 UNIDADE SNIPER (9.20x)</div>
@@ -747,13 +788,11 @@ else:
                 """, unsafe_allow_html=True)
                 
                 # --- STATUS DO SNIPER (V15.2 - FULL METRICS) ---
-                # Agora chamamos a função V15.2 que calcula recordes e atuais
                 uni_curr_loss, uni_max_loss, uni_curr_win, uni_max_win = calcular_metricas_unidade_full(historico)
                 
                 cor_uni_stress = "#ff4b4b" if uni_curr_loss > 0 else "#ffffff"
                 cor_uni_wins = "#00ff00" if uni_curr_win > 0 else "#ffffff"
                 
-                # Exibição Detalhada (Max e Atual)
                 st.markdown(f"""
                 <div style='text-align: center; margin-bottom:15px;'>
                     <span class='max-loss-pill'>📉 Derrotas: Max {uni_max_loss} | <b>Atual: <span style='color:{cor_uni_stress}'>{uni_curr_loss}</span></b></span>
@@ -801,7 +840,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V15.2: Tradicional + Unidade Sniper</div>
+                <div class='subtitulo'>Estratégia V15.3: Tradicional + Unidade Sniper (Top 4)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
