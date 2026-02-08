@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V14.5 Anti-Clone", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V15.0 Sniper Test", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -78,6 +78,7 @@ st.markdown("""
     }
     .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
     
+    /* BOX UNIDADE ESPECIAL (AZUL) */
     .box-unidade {
         background: linear-gradient(135deg, #003366, #004080);
         border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
@@ -165,12 +166,7 @@ def carregar_historico_dezenas(nome_aba):
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
-    
-    # SEGURANÇA 1: Força SEMPRE a URL com a data específica
-    # Isso impede que o site mostre "hoje" (cacheado) ou "ontem" misturado.
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    
-    # SEGURANÇA 2: Formata a data para verificação no texto (ex: "07/02/2026")
     data_formatada_verif = data_alvo.strftime('%d/%m/%Y')
     
     try:
@@ -179,40 +175,24 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         
-        # Lista de alvos: "23:20", "23:20h", "23:20H"
         alvos_possiveis = [horario_alvo, f"{horario_alvo}h", f"{horario_alvo}H"]
         if ":00" in horario_alvo:
             hora_simples = horario_alvo.split(':')[0]
             alvos_possiveis.extend([f"{hora_simples}h", f"{hora_simples}H", f"{hora_simples} h"])
-        
         if ":20" in horario_alvo:
              alvos_possiveis.append(f"{horario_alvo}h") 
 
         for alvo in alvos_possiveis:
-            # Encontra todos os cabeçalhos que contêm o HORÁRIO
             headers_found = soup.find_all(string=re.compile(re.escape(alvo)))
-            
             for header_text in headers_found:
-                # IGNORA FEDERAL
                 if "FEDERAL" in header_text.upper(): continue
-                
-                # SEGURANÇA 3 (ANTI-CLONE): 
-                # Verifica se a DATA CORRETA (07/02/2026) ou (07/02) está no mesmo texto do cabeçalho.
-                # Se o cabeçalho tiver o horário mas NÃO tiver a data de hoje, ele pula (evita pegar o de ontem).
-                # Exemplo de texto do site: "LT 23:20h - Resultado do dia 07/02/2026 (Sábado)"
-                
-                if data_formatada_verif[:5] not in header_text: 
-                    # Se não tem "07/02" no texto do cabeçalho, é lixo ou dia errado.
-                    continue
+                if data_formatada_verif[:5] not in header_text: continue
 
-                # Navega para encontrar a próxima tabela
                 element = header_text.parent
                 tabela = element.find_next('table')
-                
                 if tabela:
                     txt_tabela = tabela.get_text().upper()
-                    if "PRÊMIO" not in txt_tabela or "MILHAR" not in txt_tabela:
-                        continue 
+                    if "PRÊMIO" not in txt_tabela or "MILHAR" not in txt_tabela: continue 
 
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
@@ -223,7 +203,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                             numero_txt = cols[1].get_text().strip()
                             nums_premio = re.findall(r'\d+', premio_txt)
                             
-                            # TRADICIONAL: Pega apenas 1º prêmio
                             if banca_key == "TRADICIONAL":
                                 if nums_premio and int(nums_premio[0]) == 1:
                                     if numero_txt.isdigit() and len(numero_txt) >= 2:
@@ -232,7 +211,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                         while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
                                         return dezenas_encontradas, f"Sucesso (Confirmado: {data_formatada_verif})"
                             
-                            # OUTRAS BANCAS
                             elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
                                     dezena = numero_txt[-2:]
@@ -245,19 +223,16 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V14.5) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V15.0) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
-    if not HAS_AI or len(historico) < 50:
-        return [], 0 
-
+    if not HAS_AI or len(historico) < 50: return [], 0 
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'])
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
-    
     grupos_saiu = []
     for d_lista in df['dezenas']:
         try:
@@ -265,38 +240,29 @@ def oraculo_ia(historico, indice_premio):
             g = DEZENA_TO_GRUPO.get(d, 0)
             grupos_saiu.append(g)
         except: grupos_saiu.append(0)
-    
     df['target_grupo'] = grupos_saiu
     df['target_futuro'] = df['target_grupo'].shift(-1)
     df_treino = df.dropna().tail(200) 
-    
     if len(df_treino) < 30: return [], 0
-    
     X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
     y = df_treino['target_futuro']
-    
     modelo = RandomForestClassifier(n_estimators=50, random_state=42) 
     modelo.fit(X, y)
-    
     ultimo_real = df.iloc[-1]
     X_novo = pd.DataFrame({
         'dia_semana': [ultimo_real['dia_semana']],
         'hora_code': [ultimo_real['hora_code']],
         'target_grupo': [ultimo_real['target_grupo']]
     })
-    
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    
     ranking_ia = []
     for i, prob in enumerate(probs):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
-        
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
     top_3_grupos = [x[0] for x in ranking_ia[:3]]
     confianca = ranking_ia[0][1] * 100 
-    
     return top_3_grupos, confianca
 
 def calcular_radar_pentagono(historico, indice_premio):
@@ -452,6 +418,7 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
+# --- BACKTEST NORMAL (DEZENAS) ---
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
     resultados = []
@@ -462,6 +429,33 @@ def executar_backtest_centurion(historico, indice_premio):
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio, usar_ia=True)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
+    return resultados
+
+# --- NOVO: BACKTEST SNIPER (UNIDADES) ---
+def executar_backtest_unidade(historico):
+    if len(historico) < 60: return []
+    resultados = []
+    for i in range(1, 5):
+        target_idx = -i
+        target_game = historico[target_idx]
+        
+        # Pega a unidade real do 1º prêmio
+        try:
+            target_dezena = target_game['dezenas'][0]
+            target_unidade = target_dezena[-1]
+        except: continue
+
+        # Gera previsão com dados passados
+        hist_treino = historico[:target_idx]
+        lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+        
+        # Lógica Sniper (Top 3 Finais)
+        finais = [d[-1] for d in lista_final]
+        top_finais = [x[0] for x in Counter(finais).most_common(3)]
+        
+        win = target_unidade in top_finais
+        resultados.append({'index': i, 'real': target_unidade, 'win': win})
+    
     return resultados
 
 # =============================================================================
@@ -565,7 +559,7 @@ else:
         if st.sidebar.button("🚀 Baixar Sorteio"):
             ws = conectar_planilha(conf['aba'])
             if ws:
-                with st.spinner(f"Buscando {hora_busca} do dia {data_busca.strftime('%d/%m')}..."):
+                with st.spinner(f"Buscando {hora_busca}..."):
                     try:
                         existentes = ws.get_all_values()
                         chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
@@ -694,6 +688,19 @@ else:
                     <div style='font-size:12px; opacity:0.8;'>Baseado nas dezenas geradas</div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # --- BACKTEST SNIPER (NOVO) ---
+                bt_sniper = executar_backtest_unidade(historico)
+                if bt_sniper:
+                    cards_sniper = ""
+                    for res in reversed(bt_sniper):
+                        c_res = "bt-win" if res['win'] else "bt-loss"
+                        ico = "🟢" if res['win'] else "🔴"
+                        lbl = "WIN" if res['win'] else "LOSS"
+                        # Mostra qual foi o final real que saiu
+                        cards_sniper += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>F{res['real']}</div><div class='bt-label'>{lbl}</div></div>"
+                    st.markdown(f"<div class='backtest-container'>{cards_sniper}</div>", unsafe_allow_html=True)
+                # -------------------------------
 
             if HAS_AI and gps_ia:
                 st.markdown(f"""
@@ -724,7 +731,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V14.5: Tradicional + Unidade Sniper</div>
+                <div class='subtitulo'>Estratégia V15: Tradicional + Unidade Sniper</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
