@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V13.1 Radar Fix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V13.2 Mobile", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -41,10 +41,32 @@ DEZENA_TO_GRUPO = {}
 for g, nums in GRUPOS_BICHOS.items():
     for n in nums: DEZENA_TO_GRUPO[n] = g
 
-# Estilo Visual
+# Estilo Visual (COMPACTO PARA MOBILE)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
+    
+    /* DASHBOARD CARDS - VERSÃO COMPACTA */
+    .dash-card { 
+        padding: 10px 5px; 
+        border-radius: 8px; 
+        margin-bottom: 8px; 
+        text-align: center; 
+        border-left: 4px solid #fff;
+    }
+    .dash-critico { background-color: #4a0000; border-color: #ff0000; }
+    .dash-perigo { background-color: #662200; border-color: #ff5500; }
+    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
+    .dash-vitoria { background-color: #003300; border-color: #00ff00; }
+    
+    /* Fontes menores para caber no celular */
+    .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
+    .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
+    .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
+    .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
+
+    /* Outros estilos do App */
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
@@ -86,15 +108,6 @@ st.markdown("""
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
     .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
-    
-    /* DASHBOARD CARDS */
-    .dash-card { padding: 20px; border-radius: 10px; margin-bottom: 15px; text-align: center; border-left: 5px solid #fff; }
-    .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
-    .dash-perigo { background-color: #662200; border-color: #ff5500; } /* NOVA COR PARA 'FALTA 1' */
-    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
-    .dash-vitoria { background-color: #004a00; border-color: #00ff00; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
-    .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
-    .dash-metric { font-size: 28px; font-weight: bold; margin: 10px 0; }
 
     div[data-testid="stTable"] table { color: white; }
 </style>
@@ -414,7 +427,7 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (CORRIGIDO V13.1) ---
+# --- 4. DASHBOARD GERAL (COMPACTO) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -430,25 +443,18 @@ def tela_dashboard_global():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
                 for i in range(5):
+                    # IA DESLIGADA NO DASHBOARD PARA EVITAR TRAVAMENTO (usar_ia_no_backtest=False)
                     stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=False)
                     
-                    # 1. Analisa Risco (Derrotas) - REGRA NOVA V13.1
                     if max_stress > 0:
                         percentual_stress = stress / max_stress
-                        
-                        # ALERTA VERMELHO (Igualou ou bateu recorde)
                         if stress >= max_stress:
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "CRITICO"})
-                        
-                        # ALERTA LARANJA (Falta 1 para o recorde) -> ESTE É O NOVO QUE VOCÊ PEDIU
                         elif stress == (max_stress - 1):
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "PERIGO"})
-                        
-                        # ALERTA AMARELO (Acima de 70%)
                         elif percentual_stress >= 0.7:
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "ATENCAO"})
                     
-                    # 2. Analisa Oportunidade (Vitórias)
                     if max_wins > 2 and wins > 0:
                         if wins == (max_wins - 1):
                              alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": wins, "rec": max_wins, "tipo": "VITORIA"})
@@ -459,25 +465,26 @@ def tela_dashboard_global():
     
     if alertas_criticos:
         st.subheader("🚨 Zonas de Interesse Identificadas")
-        cols = st.columns(2)
+        # AGORA SÃO 4 COLUNAS NO DESKTOP PARA FICAR MENOR
+        cols = st.columns(4) 
         for idx, alerta in enumerate(alertas_criticos):
             if alerta['tipo'] == "CRITICO":
-                classe = "dash-critico"; titulo = "🚨 RECORDE NEGATIVO!"; texto = "Derrotas Seguidas"
+                classe = "dash-critico"; titulo = "🚨 RECORDE!"; texto = "Loss"
             elif alerta['tipo'] == "PERIGO":
-                classe = "dash-perigo"; titulo = "⚠️ POR UM FIO (Falta 1)"; texto = "Derrotas Seguidas"
+                classe = "dash-perigo"; titulo = "⚠️ POR 1"; texto = "Loss"
             elif alerta['tipo'] == "ATENCAO":
-                classe = "dash-atencao"; titulo = "⚠️ ZONA DE PRESSÃO"; texto = "Derrotas Seguidas"
+                classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "Loss"
             else: # VITORIA
-                classe = "dash-vitoria"; titulo = "🤑 RECORDE DE VITÓRIA!"; texto = "Vitórias Seguidas"
+                classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "Wins"
 
-            with cols[idx % 2]:
+            with cols[idx % 4]: # Distribui em 4 colunas
                 st.markdown(f"""
                 <div class='dash-card {classe}'>
-                    <div class='dash-title'>{alerta['banca']}</div>
+                    <div class='dash-title'>{alerta['banca'].split('(')[0]}</div>
                     <div class='dash-subtitle'>{alerta['premio']}</div>
                     <div class='dash-metric'>{alerta['val']} {texto}</div>
-                    <p>Recorde Histórico: {alerta['rec']}</p>
-                    <p><b>{titulo}</b></p>
+                    <p class='dash-footer'>Max Hist: {alerta['rec']}</p>
+                    <span class='dash-badge'>{titulo}</span>
                 </div>
                 """, unsafe_allow_html=True)
     else:
@@ -626,6 +633,7 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
+            # SÓ AQUI USA IA (porque é um único processo)
             lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
             stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=True)
             
@@ -658,7 +666,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V13.1: Radar Sensível + IA + Pentágono</div>
+                <div class='subtitulo'>Estratégia V12: IA + Pentágono + Saturação</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
