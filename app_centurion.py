@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V15.4 Sniper Top 5", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V16.0 Double Money", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -67,9 +67,9 @@ st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     .box-centurion {
-        background: linear-gradient(135deg, #5c0000, #2b0000);
-        border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
-        text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
+        background: linear-gradient(135deg, #004d00, #002600); /* Verde Escuro para Money */
+        border: 2px solid #00ff00; padding: 20px; border-radius: 12px;
+        text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(0, 255, 0, 0.15);
     }
     .box-ai {
         background: linear-gradient(135deg, #2b005c, #1a0033);
@@ -98,7 +98,7 @@ st.markdown("""
         70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
         100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
     }
-    .titulo-gold { color: #ffd700; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
+    .titulo-gold { color: #00ff00; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
     .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
@@ -223,7 +223,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V15.4) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V16.0 - 46 DEZENAS) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -356,16 +356,22 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
         else:
             palpite_filtrado.append(d)
     
-    vagas_abertas = 75 - len(palpite_filtrado)
+    # --- MUDANÇA V16.0: LIMITE DE 46 DEZENAS ---
+    vagas_abertas = 46 - len(palpite_filtrado)
+    
     reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
     reservas_rank = []
     for d in reservas_validas: reservas_rank.append((d, contagem_dezenas.get(d, 0)))
     reservas_rank.sort(key=lambda x: x[1], reverse=True)
     
-    for i in range(min(vagas_abertas, len(reservas_rank))):
-        palpite_filtrado.append(reservas_rank[i][0])
-        
-    palpite_final = sorted(list(set(palpite_filtrado)))
+    # Se ainda tiver vagas, preenche
+    if vagas_abertas > 0:
+        for i in range(min(vagas_abertas, len(reservas_rank))):
+            palpite_filtrado.append(reservas_rank[i][0])
+            
+    # Ordena e corta para garantir exatamente 46 (caso os grupos imunes passem do limite)
+    palpite_final = sorted(list(set(palpite_filtrado)))[:46]
+    
     dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
     
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
@@ -435,6 +441,7 @@ def calcular_metricas_unidade_full(historico):
             target_game = historico[i]
             target_unidade = target_game['dezenas'][0][-1]
             
+            # Gera previsão com dados anteriores a 'i'
             hist_treino = historico[:i]
             lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True) 
             
@@ -834,7 +841,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V15.4: Tradicional + Unidade Sniper (Top 5)</div>
+                <div class='subtitulo'>Estratégia V16.0: Centurion 46 (Double Money)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
