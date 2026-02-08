@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V14.4 Precision", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V14.5 Anti-Clone", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -133,7 +133,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (V14.4 PRECISION) ---
+# --- 2. CONEXÃO E RASPAGEM (V14.5 ANTI-CLONE) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -165,13 +165,14 @@ def carregar_historico_dezenas(nome_aba):
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
-    hoje = date.today()
-    delta = (hoje - data_alvo).days
-    base = "https://www.resultadofacil.com.br"
-    if delta == 0: url = f"{base}/resultados-{config['slug']}-de-hoje"
-    elif delta == 1: url = f"{base}/resultados-{config['slug']}-de-ontem"
-    else: url = f"{base}/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-
+    
+    # SEGURANÇA 1: Força SEMPRE a URL com a data específica
+    # Isso impede que o site mostre "hoje" (cacheado) ou "ontem" misturado.
+    url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    
+    # SEGURANÇA 2: Formata a data para verificação no texto (ex: "07/02/2026")
+    data_formatada_verif = data_alvo.strftime('%d/%m/%Y')
+    
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=10)
@@ -183,34 +184,35 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         if ":00" in horario_alvo:
             hora_simples = horario_alvo.split(':')[0]
             alvos_possiveis.extend([f"{hora_simples}h", f"{hora_simples}H", f"{hora_simples} h"])
+        
+        if ":20" in horario_alvo:
+             alvos_possiveis.append(f"{horario_alvo}h") 
 
-        # BUSCA PRECISA: Encontra o texto do cabeçalho e olha a tabela SEGUINTE
-        # Evita pegar tabelas erradas procurando "string=re.compile"
         for alvo in alvos_possiveis:
-            # Encontra todos os textos que contêm o horário E a palavra "Resultado" (para evitar links soltos)
-            # Ex: "LT 23:20h - Resultado do dia..."
+            # Encontra todos os cabeçalhos que contêm o HORÁRIO
             headers_found = soup.find_all(string=re.compile(re.escape(alvo)))
             
             for header_text in headers_found:
-                # Verifica se é Federal
+                # IGNORA FEDERAL
                 if "FEDERAL" in header_text.upper(): continue
                 
-                # Garante que é um cabeçalho de resultado (tem a palavra Resultado ou LT)
-                # Na tradicional eles usam "LT 23:20h"
-                if "LT" not in header_text and "Resultado" not in header_text:
+                # SEGURANÇA 3 (ANTI-CLONE): 
+                # Verifica se a DATA CORRETA (07/02/2026) ou (07/02) está no mesmo texto do cabeçalho.
+                # Se o cabeçalho tiver o horário mas NÃO tiver a data de hoje, ele pula (evita pegar o de ontem).
+                # Exemplo de texto do site: "LT 23:20h - Resultado do dia 07/02/2026 (Sábado)"
+                
+                if data_formatada_verif[:5] not in header_text: 
+                    # Se não tem "07/02" no texto do cabeçalho, é lixo ou dia errado.
                     continue
 
                 # Navega para encontrar a próxima tabela
                 element = header_text.parent
-                # Tenta subir até 3 níveis para achar o container e depois a tabela
                 tabela = element.find_next('table')
                 
                 if tabela:
-                    # VERIFICAÇÃO DE SEGURANÇA: A tabela tem que ter "Prêmio" e "Milhar"
-                    # Isso evita pegar tabelas de "Soma", "Atrasados", etc.
                     txt_tabela = tabela.get_text().upper()
                     if "PRÊMIO" not in txt_tabela or "MILHAR" not in txt_tabela:
-                        continue # Não é a tabela certa, pula
+                        continue 
 
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
@@ -227,9 +229,8 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                     if numero_txt.isdigit() and len(numero_txt) >= 2:
                                         dezena = numero_txt[-2:]
                                         dezenas_encontradas.append(dezena)
-                                        # Completa e retorna IMEDIATAMENTE
                                         while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
-                                        return dezenas_encontradas, f"Sucesso (Fonte: {alvo})"
+                                        return dezenas_encontradas, f"Sucesso (Confirmado: {data_formatada_verif})"
                             
                             # OUTRAS BANCAS
                             elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
@@ -240,11 +241,11 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                     if banca_key != "TRADICIONAL" and len(dezenas_encontradas) >= 5:
                         return dezenas_encontradas[:5], "Sucesso"
 
-        return None, f"Horário {horario_alvo} não localizado corretamente."
+        return None, f"Horário {horario_alvo} do dia {data_formatada_verif} não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V14.4) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V14.5) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -564,7 +565,7 @@ else:
         if st.sidebar.button("🚀 Baixar Sorteio"):
             ws = conectar_planilha(conf['aba'])
             if ws:
-                with st.spinner(f"Buscando {hora_busca}..."):
+                with st.spinner(f"Buscando {hora_busca} do dia {data_busca.strftime('%d/%m')}..."):
                     try:
                         existentes = ws.get_all_values()
                         chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
@@ -723,7 +724,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V14.4: Tradicional + Unidade Sniper</div>
+                <div class='subtitulo'>Estratégia V14.5: Tradicional + Unidade Sniper</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
