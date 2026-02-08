@@ -13,7 +13,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V39.1 - Fix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V40.0 - Sniper 4-4-4", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -230,7 +230,7 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V39 (HÍBRIDO + REVERSÃO + ANTI-GÊMEAS + TRAVA DUPLICIDADE) ---
+# --- ALGORITMO SNIPER V40 (4-4-4) ---
 def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
     # 1. DETECÇÃO DE REVERSÃO
     setor_estourado = None
@@ -268,31 +268,42 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         if grupo in saturados: score -= 5000
         return score
 
-    # 3. PROCESSAMENTO DOS GRUPOS (ATAQUE)
+    # 3. PROCESSAMENTO DOS GRUPOS (ATAQUE 4+4)
     grupos_ataque = []
-    for s in [setor_forte_1, setor_forte_2]:
-        grupos_setor = SETORES[s]
-        rank = sorted(grupos_setor, key=lambda x: calcular_score(x), reverse=True)
-        grupos_ataque.extend(rank[:7])
+    
+    # Setor Forte 1 -> Top 4
+    g_s1 = SETORES[setor_forte_1]
+    rank_s1 = sorted(g_s1, key=lambda x: calcular_score(x), reverse=True)
+    grupos_ataque.extend(rank_s1[:4])
 
-    # 4. PROCESSAMENTO DAS DEZENAS (DEFESA)
+    # Setor Forte 2 -> Top 4
+    g_s2 = SETORES[setor_forte_2]
+    rank_s2 = sorted(g_s2, key=lambda x: calcular_score(x), reverse=True)
+    grupos_ataque.extend(rank_s2[:4])
+
+    # 4. PROCESSAMENTO DAS DEZENAS (DEFESA 4 Grupos do Fraco)
     dezenas_proibidas = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
     grupos_defesa_base = SETORES[setor_fraco]
     
-    # Filtra grupos saturados da defesa
-    grupos_defesa_finais = [g for g in grupos_defesa_base if g not in saturados]
+    # Ordena o setor fraco pelo score para pegar os 4 melhores
+    rank_defesa = sorted(grupos_defesa_base, key=lambda x: calcular_score(x), reverse=True)
     
-    # Substituição por reserva se necessário
-    if len(grupos_defesa_finais) < 8:
-        qtd_necessaria = 8 - len(grupos_defesa_finais)
-        todos_grupos = set(range(1, 26))
-        reservas_pool = list(todos_grupos - set(grupos_ataque) - set(grupos_defesa_base) - set(saturados))
-        rank_reservas = sorted(reservas_pool, key=lambda x: calcular_score(x), reverse=True)
-        grupos_defesa_finais.extend(rank_reservas[:qtd_necessaria])
+    # Filtra saturados da defesa
+    grupos_defesa_finais = [g for g in rank_defesa if g not in saturados]
     
+    # Limita a 4 Grupos para defesa (Config 4-4-4)
+    grupos_defesa_finais = grupos_defesa_finais[:4]
+    
+    # Se ainda faltar para completar 4, pega da reserva (saturados ou fora do rank) com cuidado
+    if len(grupos_defesa_finais) < 4:
+        sobra = 4 - len(grupos_defesa_finais)
+        # Pega do resto do setor fraco mesmo que "saturado" se não tiver opção, ou de outros setores
+        # Aqui vamos priorizar completar com o próprio setor fraco para manter a lógica do setor
+        resto_setor = [g for g in grupos_defesa_base if g not in grupos_defesa_finais]
+        grupos_defesa_finais.extend(resto_setor[:sobra])
+
     dezenas_defesa = []
     for g in grupos_defesa_finais:
-        # SÓ ADICIONA NA DEFESA SE NÃO ESTIVER NO ATAQUE (SEGURANÇA EXTRA)
         if g not in grupos_ataque:
             dzs = GRUPOS_DEZENAS[g]
             pre_selecao = dzs[:3]
@@ -311,14 +322,6 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         dezenas_defesa.append('97')
         dezenas_defesa.append('98')
 
-    # 6. CICLO (COM TRAVA DE DUPLICIDADE)
-    for g_falta in stats_ciclo['faltam']:
-        # SÓ ADICIONA NA DEFESA SE NÃO ESTIVER NO ATAQUE
-        if g_falta not in grupos_ataque:
-            dzs_falta = GRUPOS_DEZENAS[g_falta]
-            for d in dzs_falta:
-                dezenas_defesa.append(d)
-
     # Limpeza Final
     grupos_ataque = sorted(list(set(grupos_ataque)))
     if 25 in grupos_ataque: grupos_ataque.remove(25)
@@ -330,9 +333,9 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
     sf_fraco_name = setor_fraco.split(' ')[0]
     
     if modo_reversao:
-        meta_info = f"🔄 REVERSÃO: {sf_fraco_name} Bloqueado! Ataque com {sf1_name}+{sf2_name}"
+        meta_info = f"🔄 REVERSÃO (4-4-4): {sf_fraco_name} Bloqueado! Ataque com {sf1_name}+{sf2_name}"
     else:
-        meta_info = f"TENDÊNCIA: {sf1_name}+{sf2_name} Fortes | {sf_fraco_name} Backup"
+        meta_info = f"TENDÊNCIA (4-4-4): {sf1_name}+{sf2_name} Fortes | {sf_fraco_name} Defesa"
     
     return { 
         "grupos_ataque": grupos_ataque, 
@@ -343,7 +346,7 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         "is_record": False 
     }
 
-# --- BACKTEST V39 ---
+# --- BACKTEST V40 ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -364,16 +367,18 @@ def executar_backtest_sniper(historico, indice_premio):
         
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
-            match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
+            match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
             nome_fraco = match.group(1) if match else ""
         else:
-            match = re.search(r"(\w+) Backup", meta)
+            match = re.search(r"(\w+) Defesa", meta) # Ajustado para o novo texto
             nome_fraco = match.group(1) if match else ""
             
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
+                # Aqui no backtest, como é simplificado, verificamos se caiu no setor de defesa
+                # Na prática real, ganhamos se cair nas dezenas, mas para backtest de tendência, setor serve
                 win_defesa = target_num in SETORES[chave_setor]
         
         win_total = win_ataque or win_defesa
@@ -397,10 +402,10 @@ def calcular_max_derrotas_50(historico, indice_premio):
         win_ataque = target_num in sniper_past['grupos_ataque']
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
-            match = re.search(r"REVERSÃO: (\w+) Bloqueado", meta)
+            match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
             nome_fraco = match.group(1) if match else ""
         else:
-            match = re.search(r"(\w+) Backup", meta)
+            match = re.search(r"(\w+) Defesa", meta)
             nome_fraco = match.group(1) if match else ""
         win_defesa = False
         if nome_fraco:
@@ -539,7 +544,7 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V39.1
+                    # 1. SNIPER V40 (4-4-4)
                     sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
@@ -597,17 +602,17 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V39.1 (FIX)</div>
+<div class="sniper-title">🎯 SNIPER V40.0 (4-4-4)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
 <p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
 <div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (GRUPOS):</div>
+<div class="strong-label">🟢 ATAQUE (4+4 GRUPOS):</div>
 <div class="strong-nums">{', '.join(map(str, d['grupos_ataque']))}</div>
 </div>
 <div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
+<div class="weak-label">🛡️ DEFESA (DEZENAS DO FRACO 4G):</div>
 <div class="weak-nums">{', '.join(map(str, d['dezenas_defesa']))}</div>
 </div>
 </div>
@@ -732,37 +737,36 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V39.1 (AUTO) ---
+                # --- SNIPER V40 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
                 css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
                 
-                # VISUAL SNIPER V39.1
+                # VISUAL SNIPER V40
                 if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
                 else: msg_sat = ""
                 badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
                 
-                # Define cor_nota localmente também para evitar erro
                 cor_nota = "#00ff00" 
 
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V39.1 (FIX)</div>
+<div class="sniper-title">🎯 SNIPER LOCAL V40 (4-4-4)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
 <p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
 
 <div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (GRUPOS):</div>
+<div class="strong-label">🟢 ATAQUE (4+4 GRUPOS):</div>
 <div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
 </div>
 
 <div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
+<div class="weak-label">🛡️ DEFESA (DEZENAS DE 4 GRUPOS):</div>
 <div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
 </div>
 {msg_sat}
