@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V12.1 Stable", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V12.2 Stable", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -183,7 +183,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (OTIMIZADO) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA ---
 # =============================================================================
 
 # FUNÇÃO: Previsão com Machine Learning (Scikit-Learn)
@@ -207,14 +207,14 @@ def oraculo_ia(historico, indice_premio):
     
     df['target_grupo'] = grupos_saiu
     df['target_futuro'] = df['target_grupo'].shift(-1)
-    df_treino = df.dropna().tail(200) # Otimização: Treina com os últimos 200
+    df_treino = df.dropna().tail(200)
     
     if len(df_treino) < 30: return [], 0
     
     X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
     y = df_treino['target_futuro']
     
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42) # Otimização: Menos árvores para ser rápido
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42)
     modelo.fit(X, y)
     
     ultimo_real = df.iloc[-1]
@@ -290,7 +290,6 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     # --- INTEGRAÇÃO OTIMIZADA ---
     grupos_atrasados = calcular_radar_pentagono(historico, indice_premio)
     
-    # SÓ EXECUTA A IA SE O FLAG ESTIVER LIGADO
     if usar_ia:
         grupos_ia, confianca_ia = oraculo_ia(historico, indice_premio)
     else:
@@ -355,7 +354,6 @@ def calcular_stress_atual(historico, indice_premio, usar_ia_no_backtest=False):
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
-        # OTIMIZAÇÃO: Usa False no backtest para ser muito rápido, ou True se quiser precisão máxima (lento)
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio, usar_ia=usar_ia_no_backtest) 
         win = target_dezena in palpite
         if not win: derrotas_consecutivas += 1
@@ -381,14 +379,13 @@ def executar_backtest_centurion(historico, indice_premio):
         target_idx = -i
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        # No backtest visual, usamos IA para ser preciso
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio, usar_ia=True)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (OTIMIZADO) ---
+# --- 4. DASHBOARD GERAL (CORRIGIDO SEM st.empty) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -399,27 +396,21 @@ def tela_dashboard_global():
     
     alertas_criticos = []
     
-    # AVISO DE CARREGAMENTO
-    container_loading = st.empty()
-    container_loading.info("Varrendo bancas com Protocolo V11 (Rápido)...")
-    
-    start_time = time.time()
-    
-    for banca_key, config in CONFIG_BANCAS.items():
-        historico = carregar_historico_dezenas(config['aba'])
-        if len(historico) > 50:
-            for i in range(5):
-                # OTIMIZAÇÃO: Usar IA=False no Dashboard para não travar
-                stress, recorde = calcular_stress_atual(historico, i, usar_ia_no_backtest=False)
-                if recorde > 0:
-                    percentual_stress = stress / recorde
-                    if percentual_stress >= 1.0:
-                        alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
-                    elif percentual_stress >= 0.7:
-                        alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
+    # --- CORREÇÃO DE RENDERIZAÇÃO: USANDO SPINNER EM VEZ DE EMPTY ---
+    with st.spinner("Analisando todas as bancas em tempo real..."):
+        for banca_key, config in CONFIG_BANCAS.items():
+            historico = carregar_historico_dezenas(config['aba'])
+            if len(historico) > 50:
+                for i in range(5):
+                    # IA DESLIGADA NO DASHBOARD PARA EVITAR TRAVAMENTO (usar_ia_no_backtest=False)
+                    stress, recorde = calcular_stress_atual(historico, i, usar_ia_no_backtest=False)
+                    if recorde > 0:
+                        percentual_stress = stress / recorde
+                        if percentual_stress >= 1.0:
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
+                        elif percentual_stress >= 0.7:
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
 
-    container_loading.empty() # Limpa aviso
-    
     col2.metric("Alertas Ativos", f"{len(alertas_criticos)}", "Críticos/Atenção")
     col3.metric("Status Base", "Online", "Google Sheets")
     st.markdown("---")
@@ -578,7 +569,7 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
-            # AQUI SIM usamos IA (usar_ia=True) porque é só 1 análise, não 15
+            # SÓ AQUI USA IA (porque é um único processo)
             lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
             stress_atual, max_loss = calcular_stress_atual(historico, i, usar_ia_no_backtest=True)
             
@@ -591,7 +582,7 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
             elif not HAS_AI:
-                st.caption("⚠️ IA desativada (Scikit-learn instalando...).")
+                st.caption("⚠️ IA desativada (Scikit-learn carregando...).")
 
             aviso_alerta = ""
             if stress_atual >= max_loss and max_loss > 0:
