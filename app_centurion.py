@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V17.0 Pattern Finder", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V17.1 Unit Tracker", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -142,6 +142,16 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
         border-left: 3px solid #00ff00;
+    }
+    .pattern-row-uni {
+        background-color: rgba(0, 153, 255, 0.1);
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 3px solid #0099ff;
     }
     .pattern-date { font-size: 12px; color: #aaa; }
     .pattern-result { font-size: 16px; font-weight: bold; color: #fff; }
@@ -494,40 +504,59 @@ def calcular_metricas_unidade_full(historico):
         
     return atual_derrotas, max_loss, atual_vitorias, max_win
 
-# --- NOVO: ANALISAR PADRÕES FUTUROS (V17.0) ---
+# --- RASTREADOR DE PADRÕES (DEZENA) ---
 def analisar_padroes_futuros(historico, indice_premio):
     if len(historico) < 10: return None, []
-    
-    # 1. Pega a última dezena que saiu
     ultima_dezena_real = historico[-1]['dezenas'][indice_premio]
-    
     encontrados = []
-    
-    # 2. Varre de trás pra frente (começando do penúltimo jogo)
-    # Procuramos onde essa dezena saiu ANTES
     for i in range(len(historico) - 2, -1, -1):
         try:
             jogo_atual = historico[i]
             dezena_atual = jogo_atual['dezenas'][indice_premio]
-            
             if dezena_atual == ultima_dezena_real:
-                # ACHOU! Pega o jogo SEGUINTE (i+1)
                 jogo_seguinte = historico[i+1]
                 dezena_seguinte = jogo_seguinte['dezenas'][indice_premio]
+                data_seg = jogo_seguinte['data']
+                hora_seg = jogo_seguinte['hora']
+                encontrados.append({ "data": data_seg, "hora": hora_seg, "veio": dezena_seguinte })
+                if len(encontrados) >= 5: break
+        except: continue
+    return ultima_dezena_real, encontrados
+
+# --- NOVO: RASTREADOR DE PADRÕES (UNIDADE) V17.1 ---
+def analisar_padroes_unidade(historico):
+    if len(historico) < 10: return None, []
+    
+    # 1. Pega a unidade do último jogo
+    try:
+        ultima_dezena_real = historico[-1]['dezenas'][0]
+        ultima_unidade_real = ultima_dezena_real[-1]
+    except: return None, []
+    
+    encontrados = []
+    
+    # 2. Varre para trás
+    for i in range(len(historico) - 2, -1, -1):
+        try:
+            jogo_atual = historico[i]
+            unidade_atual = jogo_atual['dezenas'][0][-1]
+            
+            if unidade_atual == ultima_unidade_real:
+                # Achou a mesma unidade! Pega a próxima.
+                jogo_seguinte = historico[i+1]
+                unidade_seguinte = jogo_seguinte['dezenas'][0][-1]
                 data_seg = jogo_seguinte['data']
                 hora_seg = jogo_seguinte['hora']
                 
                 encontrados.append({
                     "data": data_seg,
                     "hora": hora_seg,
-                    "veio": dezena_seguinte
+                    "veio": unidade_seguinte
                 })
-                
-                # Limita a 5 ocorrências
                 if len(encontrados) >= 5: break
         except: continue
         
-    return ultima_dezena_real, encontrados
+    return ultima_unidade_real, encontrados
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
@@ -824,6 +853,23 @@ else:
                         lbl = "WIN" if res['win'] else "LOSS"
                         cards_sniper += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>F{res['real']}</div><div class='bt-label'>{lbl}</div></div>"
                     st.markdown(f"<div class='backtest-container'>{cards_sniper}</div>", unsafe_allow_html=True)
+                
+                # --- RASTREADOR DE PADRÕES (UNIDADE - V17.1) ---
+                ultima_uni_real, padroes_uni = analisar_padroes_unidade(historico)
+                if padroes_uni:
+                    st.markdown(f"#### 🔍 Rastreador de Padrões (UNIDADE - Última: **{ultima_uni_real}**)")
+                    st.caption(f"Nas últimas 5 vezes que a unidade {ultima_uni_real} saiu, veja o que veio depois:")
+                    
+                    for p in padroes_uni:
+                        st.markdown(f"""
+                        <div class='pattern-row-uni'>
+                            <span class='pattern-date'>{p['data']} às {p['hora']}</span>
+                            <span class='pattern-result'>Veio Final: {p['veio']}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.caption(f"A unidade {ultima_uni_real} é rara (menos de 5 ocorrências recentes).")
+                # ----------------------------------------------------
 
             if HAS_AI and gps_ia:
                 st.markdown(f"""
@@ -854,7 +900,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V17: Centurion 46 (Double Money)</div>
+                <div class='subtitulo'>Estratégia V17.1: Centurion 46 (Double Money)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
@@ -883,19 +929,16 @@ else:
                     num = res['dezena']
                     cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
                 st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
-            else:
-                st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
 
             st.markdown("---")
             
-            # --- NOVO: RASTREADOR DE PADRÕES (V17) ---
+            # --- RASTREADOR DE PADRÕES (DEZENA - V17.0) ---
             ultima_dz_real, padroes_futuros = analisar_padroes_futuros(historico, i)
             if padroes_futuros:
-                st.markdown(f"#### 🔍 Rastreador de Padrões (Última: **{ultima_dz_real}**)")
+                st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
                 st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
                 
                 for p in padroes_futuros:
-                    # Formatação visual
                     st.markdown(f"""
                     <div class='pattern-row'>
                         <span class='pattern-date'>{p['data']} às {p['hora']}</span>
