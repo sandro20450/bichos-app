@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V10.0 Pentagono", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V11.0 Imunidade", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -28,7 +28,7 @@ for g in range(1, 26):
     dezenas = [("00" if n == 100 else f"{n:02}") for n in range(inicio, fim + 1)]
     GRUPOS_BICHOS[g] = dezenas 
 
-# Mapeamento Reverso (Dezena -> Grupo) para o Radar
+# Mapeamento Reverso
 DEZENA_TO_GRUPO = {}
 for g, nums in GRUPOS_BICHOS.items():
     for n in nums: DEZENA_TO_GRUPO[n] = g
@@ -42,14 +42,6 @@ st.markdown("""
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
     }
-    .box-pentagono {
-        background: linear-gradient(135deg, #001a33, #003366);
-        border: 1px solid #00ccff; padding: 15px; border-radius: 10px;
-        margin-bottom: 15px; text-align: left;
-    }
-    .pentagono-title { color: #00ccff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
-    .pentagono-nums { color: #fff; font-family: monospace; font-size: 16px; letter-spacing: 1px; }
-    
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
         padding: 15px; border-radius: 10px; text-align: center;
@@ -63,14 +55,11 @@ st.markdown("""
     .titulo-gold { color: #ffd700; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
-    
     .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
-    
     .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .pill-ref { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
+    .pill-pentagono { background-color: #002b4d; color: #00ccff; border: 1px solid #00ccff; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
-    
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -169,55 +158,19 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: PENTÁGONO + CENTURION ---
+# --- 3. CÉREBRO: PENTÁGONO + CENTURION (INTEGRAÇÃO TOTAL) ---
 # =============================================================================
 
-# FUNÇÃO NOVA: Lógica do Pentágono (Faltam Sair na Cabeça)
-def calcular_radar_pentagono(historico):
-    if not historico: return []
-    
-    # Analisa o histórico reverso procurando a última vez que cada grupo saiu na cabeça (1º premio)
-    # A lista 'historico' tem dicts com 'dezenas' = [1p, 2p, 3p, 4p, 5p]
-    
-    ultima_aparicao = {} # {grupo: indice_jogo}
-    total_jogos = len(historico)
-    
-    for i in range(total_jogos - 1, -1, -1): # Do mais recente para o mais antigo
-        jogo = historico[i]
-        try:
-            dz_cabeca = jogo['dezenas'][0] # Só interessa a cabeça para o conceito de "Falta Sair" padrão
-            if dz_cabeca in DEZENA_TO_GRUPO:
-                grp = DEZENA_TO_GRUPO[dz_cabeca]
-                if grp not in ultima_aparicao:
-                    ultima_aparicao[grp] = i # Guarda o índice mais recente
-        except: pass
-        
-        # Se já achou todos os 25, para (otimização)
-        if len(ultima_aparicao) == 25: break
-        
-    # Calcula o atraso
-    atrasos = []
-    for g in range(1, 26):
-        if g in ultima_aparicao:
-            atraso = (total_jogos - 1) - ultima_aparicao[g]
-        else:
-            atraso = 999 # Nunca saiu no período analisado
-        atrasos.append((g, atraso))
-        
-    # Ordena pelos mais atrasados (Maior atraso primeiro)
-    atrasos.sort(key=lambda x: x[1], reverse=True)
-    
-    # Retorna os top 10 "Faltam Sair"
-    return [x[0] for x in atrasos[:10]]
-
-def gerar_matriz_hibrida(historico, indice_premio):
+def gerar_matriz_hibrida_imunidade(historico, indice_premio):
     if not historico:
         padrao = []
         for g in range(1, 26): padrao.extend(GRUPOS_BICHOS[g][:3])
         return padrao, [], None, [], None
 
+    # 1. DADOS DE ENTRADA
     ultimo_jogo = historico[-1]
-    ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
+    try: ultima_dezena = ultimo_jogo['dezenas'][indice_premio]
+    except: ultima_dezena = "99" # Fallback
     final_bloqueado = ultima_dezena[-1] 
 
     tamanho_analise = 50
@@ -229,45 +182,91 @@ def gerar_matriz_hibrida(historico, indice_premio):
         except: pass
     contagem_dezenas = Counter(dezenas_historico)
 
+    # 2. SATURAÇÃO (Centurion Clássico)
     contagem_grupos = {}
     for g, dzs in GRUPOS_BICHOS.items():
         soma = 0
         for d in dzs: soma += contagem_dezenas.get(d, 0)
         contagem_grupos[g] = soma
-        
-    rank_grupos = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
-    grupo_saturado = rank_grupos[0][0]; freq_saturado = rank_grupos[0][1]
-    grupos_reforco = [x[0] for x in rank_grupos[-3:]]
+    
+    rank_grupos_sat = sorted(contagem_grupos.items(), key=lambda x: x[1], reverse=True)
+    grupo_saturado = rank_grupos_sat[0][0]
+    freq_saturado = rank_grupos_sat[0][1]
 
+    # 3. ATRASO PENTÁGONO (Calculado para O PRÊMIO ATUAL)
+    # Descobre os Top 5 grupos mais atrasados neste prêmio específico
+    ultima_aparicao = {}
+    total_jogos = len(historico)
+    for i in range(total_jogos - 1, -1, -1):
+        try:
+            dz = historico[i]['dezenas'][indice_premio]
+            grp = int(dz) // 4 + (1 if int(dz) % 4 != 0 or int(dz) == 0 else 0)
+            if int(dz) == 0: grp = 25 # Ajuste para 00
+            elif int(dz) % 4 == 0: grp = int(dz) // 4
+            else: grp = (int(dz) // 4) + 1
+            
+            # Correção mapeamento (melhor usar o dict reverso garantido)
+            if dz in DEZENA_TO_GRUPO:
+                grp = DEZENA_TO_GRUPO[dz]
+                if grp not in ultima_aparicao: ultima_aparicao[grp] = i
+        except: pass
+    
+    atrasos = []
+    for g in range(1, 26):
+        atraso = (total_jogos - 1) - ultima_aparicao.get(g, -1)
+        atrasos.append((g, atraso))
+    atrasos.sort(key=lambda x: x[1], reverse=True)
+    
+    # Top 5 Grupos Atrasados (Imunizados do Pentágono)
+    grupos_pentagono = [x[0] for x in atrasos[:5]]
+
+    # 4. SELEÇÃO COM IMUNIDADE
     palpite_inicial = []
     reservas_disponiveis = []
     dezenas_cortadas_log = []
 
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
+        # REGRA DE OURO: Se for Pentágono, ENTRA TUDO (Imunidade)
+        if grupo in grupos_pentagono:
+            palpite_inicial.extend(lista_dezenas)
+            continue
+
+        # Se for Saturado (e não for Pentágono), SAI TUDO
         if grupo == grupo_saturado:
             for d in lista_dezenas: reservas_disponiveis.append(d)
             dezenas_cortadas_log.append(f"G{grupo} (Saturado)")
             continue 
-        elif grupo in grupos_reforco:
-            palpite_inicial.extend(lista_dezenas)
-            continue
-        else:
-            rank_dz = []
-            for d in lista_dezenas:
-                freq = contagem_dezenas.get(d, 0)
-                rank_dz.append((d, freq))
-            rank_dz.sort(key=lambda x: x[1])
-            dezena_removida = rank_dz[0][0]
-            dezenas_vencedoras = [x[0] for x in rank_dz[1:]]
-            palpite_inicial.extend(dezenas_vencedoras)
-            reservas_disponiveis.append(dezena_removida)
+            
+        # Grupos Normais -> Regra Padrão (3 dentro, 1 fora)
+        rank_dz = []
+        for d in lista_dezenas:
+            freq = contagem_dezenas.get(d, 0)
+            rank_dz.append((d, freq))
+        rank_dz.sort(key=lambda x: x[1])
+        dezena_removida = rank_dz[0][0]
+        dezenas_vencedoras = [x[0] for x in rank_dz[1:]]
+        
+        palpite_inicial.extend(dezenas_vencedoras)
+        reservas_disponiveis.append(dezena_removida)
 
+    # 5. FILTRO FINAL KILLER + INJEÇÃO DE RESERVA
     palpite_filtrado = []
-    for d in palpite_inicial:
-        if not d.endswith(final_bloqueado): palpite_filtrado.append(d)
     
+    # Remove final bloqueado (EXCETO se for de Grupo Pentágono - Imunidade Total)
+    for d in palpite_inicial:
+        grp = DEZENA_TO_GRUPO.get(d)
+        if d.endswith(final_bloqueado) and grp not in grupos_pentagono:
+            # Corta se tiver final ruim e não for VIP
+            pass 
+        else:
+            palpite_filtrado.append(d)
+    
+    # Preenchimento (Injection)
     vagas_abertas = 75 - len(palpite_filtrado)
+    
+    # Prepara Reservas: Prioriza dezenas que não tem o final ruim
     reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
+    # Ordena por frequência (as melhores sobras)
     reservas_rank = []
     for d in reservas_validas: reservas_rank.append((d, contagem_dezenas.get(d, 0)))
     reservas_rank.sort(key=lambda x: x[1], reverse=True)
@@ -277,11 +276,11 @@ def gerar_matriz_hibrida(historico, indice_premio):
         
     palpite_final = sorted(list(set(palpite_filtrado)))
     dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
-    return palpite_final, dezenas_cortadas_log, dados_sat, grupos_reforco, final_bloqueado
+    
+    return palpite_final, dezenas_cortadas_log, dados_sat, grupos_pentagono, final_bloqueado
 
 def calcular_stress_atual(historico, indice_premio):
     if len(historico) < 10: return 0, 0
-    
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
@@ -291,25 +290,23 @@ def calcular_stress_atual(historico, indice_premio):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:i]
-        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
         win = target_dezena in palpite
         if not win: derrotas_consecutivas += 1
         else:
             if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
-    
     stress_atual = 0
     for i in range(1, 20): 
         idx = -i
         target_game = historico[idx]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:idx] 
-        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
         win = target_dezena in palpite
         if not win: stress_atual += 1
         else: break
-        
     return stress_atual, max_derrotas
 
 def executar_backtest_centurion(historico, indice_premio):
@@ -320,7 +317,7 @@ def executar_backtest_centurion(historico, indice_premio):
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
         hist_treino = historico[:target_idx]
-        palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
+        palpite, _, _, _, _ = gerar_matriz_hibrida_imunidade(hist_treino, indice_premio)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
@@ -380,14 +377,12 @@ else:
     banca_selecionada = escolha_menu
     conf = CONFIG_BANCAS[banca_selecionada]
     
-    # SIDEBAR ESPECÍFICA
     url_site_base = f"https://www.resultadofacil.com.br/resultados-{conf['slug']}-de-hoje"
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site_base)
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.sidebar.markdown("---")
 
-    # MODO 1: UNITÁRIO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.sidebar.subheader("Extração Unitária")
         opt_data = st.sidebar.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -420,7 +415,6 @@ else:
                         else: st.sidebar.error(f"❌ {msg}")
             else: st.sidebar.error("Erro Conexão Planilha")
 
-    # MODO 2: EM MASSA
     else:
         st.sidebar.subheader("Extração em Massa")
         col1, col2 = st.sidebar.columns(2)
@@ -467,7 +461,6 @@ else:
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
 
-    # MODO 3: MANUAL
     st.sidebar.markdown("---")
     with st.sidebar.expander("✍️ Inserção Manual"):
         man_data = st.sidebar.date_input("Data", date.today())
@@ -499,7 +492,6 @@ else:
                 else: st.sidebar.error("Erro")
             else: st.sidebar.error("Preencha 2 dígitos")
 
-    # DISPLAY PRINCIPAL
     st.subheader(f"Analise: {conf['display']}")
     historico = carregar_historico_dezenas(conf['aba'])
 
@@ -508,70 +500,36 @@ else:
     else:
         ult = historico[-1]
         st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
-        
-        # --- NOVO: RADAR PENTÁGONO SIDEBAR ---
-        grupos_atrasados = calcular_radar_pentagono(historico)
-        with st.sidebar.expander("🔮 Radar Pentágono (Faltam Sair)", expanded=True):
-            if grupos_atrasados:
-                st.write(f"**Top Atrasados (Sugestão):**")
-                lista_str = ", ".join(map(str, grupos_atrasados))
-                st.markdown(f"<div style='font-size:18px; color:#00ccff; font-weight:bold;'>{lista_str}</div>", unsafe_allow_html=True)
-                st.caption("Grupos que não saem na cabeça há mais tempo.")
-            else: st.write("Dados insuficientes para radar.")
 
     tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
 
     for i, tab in enumerate(tabs):
         with tab:
-            lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
+            # CHAMA A NOVA MATRIZ COM IMUNIDADE (Cross-Check por prêmio)
+            lista_final, cortadas, sat, gps_imunes, final_bloq = gerar_matriz_hibrida_imunidade(historico, i)
             stress_atual, max_loss = calcular_stress_atual(historico, i)
             
-            # --- INTEGRAÇÃO VISUAL PENTÁGONO ---
-            # Se tiver grupos atrasados, verificar quais dezenas da lista final pertencem a eles
-            grupos_pentagono = calcular_radar_pentagono(historico) if i == 0 else [] # Só calcula pra cabeça (1ºP) ou pra todos? Geralmente é 1º.
-            # Se quiser pra todos os premios, tire o "if i == 0"
-            # O conceito "Falta Sair" geralmente é pro 1º.
-            
-            if i == 0 and grupos_pentagono:
-                st.markdown(f"""
-                <div class='box-pentagono'>
-                    <div class='pentagono-title'>🔮 Radar Pentágono (Sugestão de Grupos)</div>
-                    <div class='pentagono-nums'>{', '.join(map(str, grupos_pentagono))}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
             aviso_alerta = ""
             if stress_atual >= max_loss and max_loss > 0:
                 aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
             
-            info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
-            info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
-            info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
-            
-            # Formata lista com destaque para Pentágono (só no 1º prêmio ou geral?)
-            # Vamos aplicar geral se a dezena for de um grupo atrasado
-            lista_formatada = []
-            for d in lista_final:
-                grp = DEZENA_TO_GRUPO.get(d)
-                if grp in grupos_pentagono: # Se pertence ao grupo atrasado
-                    lista_formatada.append(f"<span style='color:#00ccff; font-weight:900;'>{d}</span>")
-                else:
-                    lista_formatada.append(d)
+            info_sat = f"<span class='info-pill pill-sat'>🚫 SATURADO: G{sat[0]} ({sat[1]}x)</span>" if sat else ""
+            info_pentagono = f"<span class='info-pill pill-pentagono'>🛡️ IMUNIZADOS: {', '.join(map(str, gps_imunes))}</span>" if gps_imunes else ""
+            info_final = f"<span class='info-pill pill-final'>🛑 FINAL: {final_bloq}</span>" if final_bloq else ""
             
             qtd_final = len(lista_final) 
             
             html_content = f"""
             {aviso_alerta}
             <div class='box-centurion'>
-                {info_sat} {info_ref} {info_final}
+                {info_sat} {info_pentagono} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia Completa: Saturação + Final Killer + Reposição</div>
-                <div class='nums-destaque'>{', '.join(lista_formatada)}</div>
+                <div class='subtitulo'>Estratégia V11: Saturação + Final Killer + Imunidade Pentágono</div>
+                <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
             """
             st.markdown(html_content, unsafe_allow_html=True)
-            if i == 0: st.caption("ℹ️ Dezenas em AZUL são dos grupos indicados pelo Radar Pentágono.")
             
             cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
             st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
@@ -594,4 +552,4 @@ else:
 
             st.markdown("---")
             with st.expander("✂️ Ver Detalhes (Grupos e Cortes)"):
-                st.write(f"Grupos Cortados na Saturação: {', '.join(cortadas)}")
+                st.write(f"Grupos Cortados: {', '.join(cortadas)}")
