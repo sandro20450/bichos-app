@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V9.0 Dashboard", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V10.0 Pentagono", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -28,29 +28,28 @@ for g in range(1, 26):
     dezenas = [("00" if n == 100 else f"{n:02}") for n in range(inicio, fim + 1)]
     GRUPOS_BICHOS[g] = dezenas 
 
+# Mapeamento Reverso (Dezena -> Grupo) para o Radar
+DEZENA_TO_GRUPO = {}
+for g, nums in GRUPOS_BICHOS.items():
+    for n in nums: DEZENA_TO_GRUPO[n] = g
+
 # Estilo Visual
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
-    
-    /* DASHBOARD CARDS */
-    .dash-card {
-        padding: 20px; border-radius: 10px; margin-bottom: 15px;
-        text-align: center; border-left: 5px solid #fff;
-    }
-    .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
-    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
-    .dash-safe { background-color: #002b00; border-color: #00ff00; }
-    
-    .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
-    .dash-subtitle { font-size: 16px; opacity: 0.9; margin-bottom: 10px; }
-    .dash-metric { font-size: 28px; font-weight: bold; margin: 10px 0; }
-    
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
     }
+    .box-pentagono {
+        background: linear-gradient(135deg, #001a33, #003366);
+        border: 1px solid #00ccff; padding: 15px; border-radius: 10px;
+        margin-bottom: 15px; text-align: left;
+    }
+    .pentagono-title { color: #00ccff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
+    .pentagono-nums { color: #fff; font-family: monospace; font-size: 16px; letter-spacing: 1px; }
+    
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
         padding: 15px; border-radius: 10px; text-align: center;
@@ -64,11 +63,14 @@ st.markdown("""
     .titulo-gold { color: #ffd700; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
+    
     .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
+    
     .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pill-ref { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
+    
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -167,8 +169,47 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA V8.0 (Completa) ---
+# --- 3. CÉREBRO: PENTÁGONO + CENTURION ---
 # =============================================================================
+
+# FUNÇÃO NOVA: Lógica do Pentágono (Faltam Sair na Cabeça)
+def calcular_radar_pentagono(historico):
+    if not historico: return []
+    
+    # Analisa o histórico reverso procurando a última vez que cada grupo saiu na cabeça (1º premio)
+    # A lista 'historico' tem dicts com 'dezenas' = [1p, 2p, 3p, 4p, 5p]
+    
+    ultima_aparicao = {} # {grupo: indice_jogo}
+    total_jogos = len(historico)
+    
+    for i in range(total_jogos - 1, -1, -1): # Do mais recente para o mais antigo
+        jogo = historico[i]
+        try:
+            dz_cabeca = jogo['dezenas'][0] # Só interessa a cabeça para o conceito de "Falta Sair" padrão
+            if dz_cabeca in DEZENA_TO_GRUPO:
+                grp = DEZENA_TO_GRUPO[dz_cabeca]
+                if grp not in ultima_aparicao:
+                    ultima_aparicao[grp] = i # Guarda o índice mais recente
+        except: pass
+        
+        # Se já achou todos os 25, para (otimização)
+        if len(ultima_aparicao) == 25: break
+        
+    # Calcula o atraso
+    atrasos = []
+    for g in range(1, 26):
+        if g in ultima_aparicao:
+            atraso = (total_jogos - 1) - ultima_aparicao[g]
+        else:
+            atraso = 999 # Nunca saiu no período analisado
+        atrasos.append((g, atraso))
+        
+    # Ordena pelos mais atrasados (Maior atraso primeiro)
+    atrasos.sort(key=lambda x: x[1], reverse=True)
+    
+    # Retorna os top 10 "Faltam Sair"
+    return [x[0] for x in atrasos[:10]]
+
 def gerar_matriz_hibrida(historico, indice_premio):
     if not historico:
         padrao = []
@@ -285,7 +326,7 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (NOVO) ---
+# --- 4. DASHBOARD GERAL ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -300,27 +341,14 @@ def tela_dashboard_global():
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
-                for i in range(5): # 5 prêmios
+                for i in range(5):
                     stress, recorde = calcular_stress_atual(historico, i)
-                    
                     if recorde > 0:
                         percentual_stress = stress / recorde
-                        if percentual_stress >= 1.0: # Recorde batido ou empatado
-                            alertas_criticos.append({
-                                "banca": config['display'],
-                                "premio": f"{i+1}º Prêmio",
-                                "stress": stress,
-                                "recorde": recorde,
-                                "nivel": "CRITICO"
-                            })
-                        elif percentual_stress >= 0.7: # Quase lá
-                            alertas_criticos.append({
-                                "banca": config['display'],
-                                "premio": f"{i+1}º Prêmio",
-                                "stress": stress,
-                                "recorde": recorde,
-                                "nivel": "ATENCAO"
-                            })
+                        if percentual_stress >= 1.0:
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
+                        elif percentual_stress >= 0.7:
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
 
     col2.metric("Alertas Ativos", f"{len(alertas_criticos)}", "Críticos/Atenção")
     col3.metric("Status Base", "Online", "Google Sheets")
@@ -332,20 +360,10 @@ def tela_dashboard_global():
         for idx, alerta in enumerate(alertas_criticos):
             classe = "dash-critico" if alerta['nivel'] == "CRITICO" else "dash-atencao"
             titulo_card = "🚨 RECORD E AMEAÇADO!" if alerta['nivel'] == "CRITICO" else "⚠️ ZONA DE PRESSÃO"
-            
             with cols[idx % 2]:
-                st.markdown(f"""
-                <div class='dash-card {classe}'>
-                    <div class='dash-title'>{alerta['banca']}</div>
-                    <div class='dash-subtitle'>{alerta['premio']}</div>
-                    <div class='dash-metric'>{alerta['stress']} Derrotas Seguidas</div>
-                    <p>Recorde Histórico: {alerta['recorde']}</p>
-                    <p><b>{titulo_card}</b></p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div class='dash-card {classe}'><div class='dash-title'>{alerta['banca']}</div><div class='dash-subtitle'>{alerta['premio']}</div><div class='dash-metric'>{alerta['stress']} Derrotas Seguidas</div><p>Recorde Histórico: {alerta['recorde']}</p><p><b>{titulo_card}</b></p></div>", unsafe_allow_html=True)
     else:
-        st.success("✅ O Radar não detectou anomalias críticas no momento. As bancas estão estáveis.")
-        st.info("💡 Dica: Navegue pelo menu lateral para ver os palpites de cada banca individualmente.")
+        st.success("✅ O Radar não detectou anomalias críticas no momento.")
 
 # =============================================================================
 # --- 5. APP PRINCIPAL ---
@@ -361,8 +379,6 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
 else:
     banca_selecionada = escolha_menu
     conf = CONFIG_BANCAS[banca_selecionada]
-    
-    # --- LÓGICA ESPECÍFICA DA BANCA (O CÓDIGO ANTIGO VEM PRA CÁ) ---
     
     # SIDEBAR ESPECÍFICA
     url_site_base = f"https://www.resultadofacil.com.br/resultados-{conf['slug']}-de-hoje"
@@ -394,17 +410,13 @@ else:
                         chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
                     except: chaves = []
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
-                    if chave_atual in chaves:
-                        try: idx = chaves.index(chave_atual) + 2
-                        except: idx = "?"
-                        st.sidebar.warning(f"⚠️ Resultado já existe na Linha {idx}!")
+                    if chave_atual in chaves: st.sidebar.warning(f"⚠️ Resultado já existe na Linha {chaves.index(chave_atual) + 2}!")
                     else:
                         dezenas, msg = raspar_dezenas_site(banca_selecionada, data_busca, hora_busca)
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
-                            time.sleep(1)
-                            st.rerun()
+                            time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
             else: st.sidebar.error("Erro Conexão Planilha")
 
@@ -438,7 +450,7 @@ else:
                     for hora in horarios_do_dia:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
-                        status.text(f"🔍 {dia.strftime('%d/%m')} - {hora}")
+                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
@@ -451,27 +463,26 @@ else:
                             chaves.append(chave_atual)
                         time.sleep(1.0)
                 bar.progress(100)
-                status.success(f"🏁 {sucessos} novos.")
-                time.sleep(2)
-                st.rerun()
+                status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
+                time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
 
     # MODO 3: MANUAL
     st.sidebar.markdown("---")
     with st.sidebar.expander("✍️ Inserção Manual"):
-        man_data = st.date_input("Data", date.today())
+        man_data = st.sidebar.date_input("Data", date.today())
         h_manual_list = conf['horarios'].copy()
         if banca_selecionada == "CAMINHO" and "19:30" not in h_manual_list: h_manual_list.append("19:30"); h_manual_list.sort()
-        man_hora = st.selectbox("Horário", h_manual_list)
+        man_hora = st.sidebar.selectbox("Horário", h_manual_list)
         
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5 = st.sidebar.columns(5)
         p1 = c1.text_input("1", max_chars=2, key="mp1")
         p2 = c2.text_input("2", max_chars=2, key="mp2")
         p3 = c3.text_input("3", max_chars=2, key="mp3")
         p4 = c4.text_input("4", max_chars=2, key="mp4")
         p5 = c5.text_input("5", max_chars=2, key="mp5")
         
-        if st.button("💾 Salvar"):
+        if st.sidebar.button("💾 Salvar"):
             man_dezenas = [p1, p2, p3, p4, p5]
             if all(d.isdigit() and len(d) == 2 for d in man_dezenas):
                 ws = conectar_planilha(conf['aba'])
@@ -481,15 +492,14 @@ else:
                         chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
                     except: chaves = []
                     chave_atual = f"{man_data.strftime('%Y-%m-%d')}|{man_hora}"
-                    if chave_atual in chaves: st.warning("Já existe!")
+                    if chave_atual in chaves: st.sidebar.warning("Já existe!")
                     else:
                         ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
-                        st.success("Salvo!")
-                        time.sleep(1); st.rerun()
-                else: st.error("Erro")
-            else: st.error("Preencha 2 dígitos")
+                        st.sidebar.success("Salvo!"); time.sleep(1); st.rerun()
+                else: st.sidebar.error("Erro")
+            else: st.sidebar.error("Preencha 2 dígitos")
 
-    # DISPLAY PRINCIPAL DA BANCA
+    # DISPLAY PRINCIPAL
     st.subheader(f"Analise: {conf['display']}")
     historico = carregar_historico_dezenas(conf['aba'])
 
@@ -498,6 +508,16 @@ else:
     else:
         ult = historico[-1]
         st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
+        
+        # --- NOVO: RADAR PENTÁGONO SIDEBAR ---
+        grupos_atrasados = calcular_radar_pentagono(historico)
+        with st.sidebar.expander("🔮 Radar Pentágono (Faltam Sair)", expanded=True):
+            if grupos_atrasados:
+                st.write(f"**Top Atrasados (Sugestão):**")
+                lista_str = ", ".join(map(str, grupos_atrasados))
+                st.markdown(f"<div style='font-size:18px; color:#00ccff; font-weight:bold;'>{lista_str}</div>", unsafe_allow_html=True)
+                st.caption("Grupos que não saem na cabeça há mais tempo.")
+            else: st.write("Dados insuficientes para radar.")
 
     tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
 
@@ -506,6 +526,20 @@ else:
             lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
             stress_atual, max_loss = calcular_stress_atual(historico, i)
             
+            # --- INTEGRAÇÃO VISUAL PENTÁGONO ---
+            # Se tiver grupos atrasados, verificar quais dezenas da lista final pertencem a eles
+            grupos_pentagono = calcular_radar_pentagono(historico) if i == 0 else [] # Só calcula pra cabeça (1ºP) ou pra todos? Geralmente é 1º.
+            # Se quiser pra todos os premios, tire o "if i == 0"
+            # O conceito "Falta Sair" geralmente é pro 1º.
+            
+            if i == 0 and grupos_pentagono:
+                st.markdown(f"""
+                <div class='box-pentagono'>
+                    <div class='pentagono-title'>🔮 Radar Pentágono (Sugestão de Grupos)</div>
+                    <div class='pentagono-nums'>{', '.join(map(str, grupos_pentagono))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
             aviso_alerta = ""
             if stress_atual >= max_loss and max_loss > 0:
                 aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
@@ -513,6 +547,16 @@ else:
             info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
             info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
             info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
+            
+            # Formata lista com destaque para Pentágono (só no 1º prêmio ou geral?)
+            # Vamos aplicar geral se a dezena for de um grupo atrasado
+            lista_formatada = []
+            for d in lista_final:
+                grp = DEZENA_TO_GRUPO.get(d)
+                if grp in grupos_pentagono: # Se pertence ao grupo atrasado
+                    lista_formatada.append(f"<span style='color:#00ccff; font-weight:900;'>{d}</span>")
+                else:
+                    lista_formatada.append(d)
             
             qtd_final = len(lista_final) 
             
@@ -522,11 +566,12 @@ else:
                 {info_sat} {info_ref} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
                 <div class='subtitulo'>Estratégia Completa: Saturação + Final Killer + Reposição</div>
-                <div class='nums-destaque'>{', '.join(lista_final)}</div>
+                <div class='nums-destaque'>{', '.join(lista_formatada)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
             """
             st.markdown(html_content, unsafe_allow_html=True)
+            if i == 0: st.caption("ℹ️ Dezenas em AZUL são dos grupos indicados pelo Radar Pentágono.")
             
             cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
             st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
