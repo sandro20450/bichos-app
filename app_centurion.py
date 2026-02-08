@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V15.0 Sniper Test", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V15.1 Sniper Status", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -82,7 +82,7 @@ st.markdown("""
     .box-unidade {
         background: linear-gradient(135deg, #003366, #004080);
         border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
-        margin-bottom: 15px; text-align: center;
+        margin-bottom: 5px; text-align: center;
         box-shadow: 0 0 15px rgba(0, 153, 255, 0.2);
     }
     .uni-title { color: #0099ff; font-weight: 900; font-size: 18px; text-transform: uppercase; margin-bottom: 5px; }
@@ -223,7 +223,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V15.0) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (V15.1) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -418,6 +418,42 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
+# --- FUNÇÃO NOVA: CÁLCULO DE SEQUÊNCIA PARA UNIDADE ---
+def calcular_stress_unidade(historico):
+    if len(historico) < 10: return 0, 0
+    
+    atual_derrotas = 0
+    atual_vitorias = 0
+    
+    # Analisa o status atual (Do último jogo para trás)
+    for i in range(1, 20):
+        idx = -i
+        try:
+            target_game = historico[idx]
+            target_unidade = target_game['dezenas'][0][-1]
+            
+            hist_treino = historico[:idx]
+            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+            
+            finais = [d[-1] for d in lista_final]
+            top_finais = [x[0] for x in Counter(finais).most_common(3)]
+            
+            win = target_unidade in top_finais
+            
+            if i == 1:
+                if win: atual_vitorias = 1
+                else: atual_derrotas = 1
+            else:
+                if atual_vitorias > 0:
+                    if win: atual_vitorias += 1
+                    else: break
+                elif atual_derrotas > 0:
+                    if not win: atual_derrotas += 1
+                    else: break
+        except: break
+        
+    return atual_derrotas, atual_vitorias
+
 # --- BACKTEST NORMAL (DEZENAS) ---
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
@@ -431,7 +467,7 @@ def executar_backtest_centurion(historico, indice_premio):
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
-# --- NOVO: BACKTEST SNIPER (UNIDADES) ---
+# --- BACKTEST SNIPER (UNIDADES) ---
 def executar_backtest_unidade(historico):
     if len(historico) < 60: return []
     resultados = []
@@ -439,17 +475,14 @@ def executar_backtest_unidade(historico):
         target_idx = -i
         target_game = historico[target_idx]
         
-        # Pega a unidade real do 1º prêmio
         try:
             target_dezena = target_game['dezenas'][0]
             target_unidade = target_dezena[-1]
         except: continue
 
-        # Gera previsão com dados passados
         hist_treino = historico[:target_idx]
         lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
         
-        # Lógica Sniper (Top 3 Finais)
         finais = [d[-1] for d in lista_final]
         top_finais = [x[0] for x in Counter(finais).most_common(3)]
         
@@ -689,7 +722,19 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # --- BACKTEST SNIPER (NOVO) ---
+                # --- STATUS DO SNIPER (V15.1) ---
+                uni_loss, uni_win = calcular_stress_unidade(historico)
+                cor_uni_stress = "#ff4b4b" if uni_loss > 0 else "#ffffff"
+                cor_uni_wins = "#00ff00" if uni_win > 0 else "#ffffff"
+                
+                st.markdown(f"""
+                <div style='text-align: center; margin-bottom:15px;'>
+                    <span class='max-loss-pill'>📉 Derrotas: {uni_loss}</span>
+                    <span class='max-win-pill'>📈 Vitórias: {uni_win}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                # -------------------------------
+                
                 bt_sniper = executar_backtest_unidade(historico)
                 if bt_sniper:
                     cards_sniper = ""
@@ -697,10 +742,8 @@ else:
                         c_res = "bt-win" if res['win'] else "bt-loss"
                         ico = "🟢" if res['win'] else "🔴"
                         lbl = "WIN" if res['win'] else "LOSS"
-                        # Mostra qual foi o final real que saiu
                         cards_sniper += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>F{res['real']}</div><div class='bt-label'>{lbl}</div></div>"
                     st.markdown(f"<div class='backtest-container'>{cards_sniper}</div>", unsafe_allow_html=True)
-                # -------------------------------
 
             if HAS_AI and gps_ia:
                 st.markdown(f"""
@@ -731,7 +774,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V15: Tradicional + Unidade Sniper</div>
+                <div class='subtitulo'>Estratégia V15.1: Tradicional + Unidade Sniper</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
