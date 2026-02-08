@@ -10,7 +10,7 @@ import time
 import altair as alt
 from collections import Counter
 
-# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL (NOVO NA V41) ---
+# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.preprocessing import LabelEncoder
@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V41.0 - Hybrid AI", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V42.0 - Turbo", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -142,57 +142,40 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# --- CÉREBRO IA (V41) ---
+# --- CÉREBRO IA ---
 def treinar_oraculo_pentagono(historico, indice_premio):
     if not HAS_AI or len(historico) < 50: return [], 0
-    
-    # Prepara DataFrame para IA
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
-    df = df.dropna(subset=['data_dt']) # Remove datas invalidas
-    
+    df = df.dropna(subset=['data_dt']) 
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['horario'])
-    
-    # Extrai o alvo (bicho do prêmio específico)
-    bichos_alvo = [jogo['premios'][indice_premio] for jogo in historico if 'data_dt' in df.columns] # Alinha com o DF
-    
-    # Garante alinhamento de tamanho
+    bichos_alvo = [jogo['premios'][indice_premio] for jogo in historico if 'data_dt' in df.columns]
     df = df.iloc[:len(bichos_alvo)]
     df['target_grupo'] = bichos_alvo
-    df['target_futuro'] = df['target_grupo'].shift(-1) # O que saiu no próximo sorteio
-    
-    df_treino = df.dropna().tail(200) # Treina com os últimos 200
-    
+    df['target_futuro'] = df['target_grupo'].shift(-1)
+    df_treino = df.dropna().tail(200)
     if len(df_treino) < 30: return [], 0
-    
     X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
     y = df_treino['target_futuro']
-    
     modelo = RandomForestClassifier(n_estimators=50, random_state=42)
     modelo.fit(X, y)
-    
-    # Previsão para o próximo
     ultimo_real = df.iloc[-1]
     X_novo = pd.DataFrame({
         'dia_semana': [ultimo_real['dia_semana']],
         'hora_code': [ultimo_real['hora_code']],
         'target_grupo': [ultimo_real['target_grupo']]
     })
-    
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    
     ranking_ia = []
     for i, prob in enumerate(probs):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
-        
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
     top_5_ia = [x[0] for x in ranking_ia[:5]]
     confianca = ranking_ia[0][1] * 100
-    
     return top_5_ia, confianca
 
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
@@ -299,7 +282,6 @@ def identificar_saturados(historico, indice_premio):
 
 # --- ALGORITMO SNIPER V40 (4-4-4) ---
 def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
-    # 1. DETECÇÃO DE REVERSÃO
     setor_estourado = None
     for index, row in df_stress.iterrows():
         if "VACA" not in row['SETOR']:
@@ -335,20 +317,14 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         if grupo in saturados: score -= 5000
         return score
 
-    # 3. PROCESSAMENTO DOS GRUPOS (ATAQUE 4+4)
+    # 4+4 Grupos Ataque
     grupos_ataque = []
-    
-    # Setor Forte 1 -> Top 4
-    g_s1 = SETORES[setor_forte_1]
-    rank_s1 = sorted(g_s1, key=lambda x: calcular_score(x), reverse=True)
+    rank_s1 = sorted(SETORES[setor_forte_1], key=lambda x: calcular_score(x), reverse=True)
     grupos_ataque.extend(rank_s1[:4])
-
-    # Setor Forte 2 -> Top 4
-    g_s2 = SETORES[setor_forte_2]
-    rank_s2 = sorted(g_s2, key=lambda x: calcular_score(x), reverse=True)
+    rank_s2 = sorted(SETORES[setor_forte_2], key=lambda x: calcular_score(x), reverse=True)
     grupos_ataque.extend(rank_s2[:4])
 
-    # 4. PROCESSAMENTO DAS DEZENAS (DEFESA 4 Grupos do Fraco)
+    # 4 Grupos Defesa
     dezenas_proibidas = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
     grupos_defesa_base = SETORES[setor_fraco]
     rank_defesa = sorted(grupos_defesa_base, key=lambda x: calcular_score(x), reverse=True)
@@ -367,7 +343,6 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
             filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
             dezenas_defesa.extend(filtradas)
 
-    # 5. VACA
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
@@ -379,10 +354,8 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         dezenas_defesa.append('97')
         dezenas_defesa.append('98')
 
-    # Limpeza Final
     grupos_ataque = sorted(list(set(grupos_ataque)))
     if 25 in grupos_ataque: grupos_ataque.remove(25)
-    
     dezenas_defesa = sorted(list(set(dezenas_defesa))) 
     
     sf1_name = setor_forte_1.split(' ')[0]
@@ -394,16 +367,8 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
     else:
         meta_info = f"TENDÊNCIA (4-4-4): {sf1_name}+{sf2_name} Fortes | {sf_fraco_name} Defesa"
     
-    return { 
-        "grupos_ataque": grupos_ataque, 
-        "dezenas_defesa": dezenas_defesa,
-        "nota": 100, 
-        "meta_info": meta_info, 
-        "modo_reversao": modo_reversao,
-        "is_record": False 
-    }
+    return { "grupos_ataque": grupos_ataque, "dezenas_defesa": dezenas_defesa, "nota": 100, "meta_info": meta_info, "modo_reversao": modo_reversao, "is_record": False }
 
-# --- BACKTEST V40 ---
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
     for i in range(1, 5):
@@ -411,31 +376,25 @@ def executar_backtest_sniper(historico, indice_premio):
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
-        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
-        
         win_ataque = target_num in sniper_past['grupos_ataque']
-        
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
             match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
             nome_fraco = match.group(1) if match else ""
         else:
-            match = re.search(r"(\w+) Defesa", meta)
+            match = re.search(r"(\w+) Defesa", meta) 
             nome_fraco = match.group(1) if match else ""
-            
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
                 win_defesa = target_num in SETORES[chave_setor]
-        
         win_total = win_ataque or win_defesa
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
     return resultados_backtest
@@ -510,7 +469,6 @@ def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
     destaque = [g for g in palpite_final if g in stats_ciclo['faltam']]
     return { "tipo": "SMART MIX", "grupos": palpite_final, "destaque": destaque, "motivo": motivo }
 
-# ROBÔ
 def montar_url_correta(slug, data_alvo):
     hoje = date.today()
     delta = (hoje - data_alvo).days
@@ -644,8 +602,7 @@ def tela_dashboard_global():
         col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
         st.markdown("---")
         
-        # DEFINE COR_NOTA ANTES DE USAR
-        cor_nota = "#ffffff" # Default safety
+        cor_nota = "#ffffff"
         
         if melhor_sniper:
             d = melhor_sniper['dados']
@@ -657,7 +614,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V40.0 (4-4-4)</div>
+<div class="sniper-title">🎯 SNIPER V42.0 (4-4-4)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -702,6 +659,11 @@ aplicar_estilo()
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
+# --- BOTÃO PARA CENTURION ---
+st.sidebar.markdown("---")
+st.sidebar.link_button("🛡️ Ir para App CENTURION", "https://seu-app-centurion.streamlit.app") # COLOQUE SEU LINK AQUI
+st.sidebar.markdown("---")
+
 if escolha_menu == "🏠 RADAR GERAL (Home)":
     tela_dashboard_global()
 
@@ -709,44 +671,91 @@ else:
     banca_selecionada = escolha_menu
     config_banca = CONFIG_BANCAS[banca_selecionada]
     
-    st.sidebar.markdown("---")
     url_site = f"https://www.resultadofacil.com.br/resultados-{config_banca['slug']}-de-hoje"
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    with st.sidebar.expander("📥 Importar Resultado", expanded=True):
-        opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
-        if opcao_data == "Hoje": data_busca = date.today()
-        elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-        else: data_busca = st.sidebar.date_input("Escolha:", date.today())
+    # --- MODO TURBO (EXTRAÇÃO EM MASSA) ---
+    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
+    
+    if modo_extracao == "🎯 Unitária":
+        with st.sidebar.expander("📥 Importar Resultado", expanded=True):
+            opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+            if opcao_data == "Hoje": data_busca = date.today()
+            elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
+            else: data_busca = st.sidebar.date_input("Escolha:", date.today())
+            
+            horario_busca = st.selectbox("Horário:", config_banca['horarios'])
+            
+            if st.button("🚀 Baixar & Salvar"):
+                ws = conectar_planilha(config_banca['nome_aba'])
+                if ws:
+                    with st.spinner(f"Buscando {horario_busca}..."):
+                        try:
+                            existentes = ws.get_all_values()
+                            chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
+                        except: chaves = []
+                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
+                        if chave_atual in chaves:
+                            try:
+                                idx = chaves.index(chave_atual) + 2
+                                st.warning(f"Resultado já existe na Linha {idx} da planilha!")
+                            except: st.warning("Resultado já existe!")
+                        else:
+                            top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
+                            if top5:
+                                row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
+                                ws.append_row(row)
+                                st.session_state['tocar_som'] = True
+                                st.toast(f"Sucesso! {top5}", icon="✅")
+                                time.sleep(1)
+                                st.rerun()
+                            else: st.error(msg)
+                else: st.error("Erro Planilha")
+                
+    else: # MODO TURBO
+        st.sidebar.subheader("🌪️ Extração Turbo")
+        col1, col2 = st.sidebar.columns(2)
+        with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
+        with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
         
-        horario_busca = st.selectbox("Horário:", config_banca['horarios'])
-        
-        if st.button("🚀 Baixar & Salvar"):
+        if st.sidebar.button("🚀 INICIAR TURBO"):
             ws = conectar_planilha(config_banca['nome_aba'])
             if ws:
-                with st.spinner(f"Buscando {horario_busca}..."):
-                    try:
-                        existentes = ws.get_all_values()
-                        chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
-                    except: chaves = []
-                    chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
-                    if chave_atual in chaves:
-                        try:
-                            idx = chaves.index(chave_atual) + 2
-                            st.warning(f"Resultado já existe na Linha {idx} da planilha!")
-                        except: st.warning("Resultado já existe!")
-                    else:
-                        top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
+                status = st.sidebar.empty()
+                bar = st.sidebar.progress(0)
+                try:
+                    existentes = ws.get_all_values()
+                    chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
+                except: chaves = []
+                
+                delta = data_fim - data_ini
+                lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
+                total_ops = len(lista_datas) * len(config_banca['horarios'])
+                op_atual = 0; sucessos = 0
+                
+                for dia in lista_datas:
+                    for hora in config_banca['horarios']:
+                        op_atual += 1
+                        if op_atual <= total_ops: bar.progress(op_atual / total_ops)
+                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                        
+                        if chave_atual in chaves: continue
+                        if dia > date.today(): continue
+                        if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
+
+                        top5, msg = raspar_horario_especifico(banca_selecionada, dia, hora)
                         if top5:
-                            row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
-                            ws.append_row(row)
-                            st.session_state['tocar_som'] = True
-                            st.toast(f"Sucesso! {top5}", icon="✅")
-                            time.sleep(1)
-                            st.rerun()
-                        else: st.error(msg)
-            else: st.error("Erro Planilha")
+                            ws.append_row([dia.strftime('%Y-%m-%d'), hora] + top5)
+                            sucessos += 1
+                            chaves.append(chave_atual)
+                        time.sleep(1.0) # Respeita limites do site
+                
+                bar.progress(100)
+                status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
+                time.sleep(2); st.rerun()
+            else: st.sidebar.error("Erro Conexão")
 
     st.header(f"🔭 {config_banca['display_name']}")
     with st.spinner("Carregando dados..."):
@@ -795,7 +804,7 @@ else:
                 # --- SNIPER V40 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 
-                # --- ORÁCULO IA V41.0 (NOVO) ---
+                # --- ORÁCULO IA V41.0 ---
                 if HAS_AI:
                     top_5_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
                 else:
@@ -834,11 +843,9 @@ else:
 </div>
 """, unsafe_allow_html=True)
                 
-                # --- EXIBIÇÃO DA IA (ORÁCULO) ---
+                # --- EXIBIÇÃO DA IA ---
                 if HAS_AI and top_5_ia:
-                    # Encontra interseção entre Sniper e IA
                     super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_5_ia))
-                    
                     html_super = ""
                     if super_grupos:
                         html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
