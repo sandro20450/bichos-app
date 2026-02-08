@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V12.2 Stable", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V13.0 Victory Radar", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -85,11 +85,13 @@ st.markdown("""
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
+    .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
     
     /* DASHBOARD CARDS */
     .dash-card { padding: 20px; border-radius: 10px; margin-bottom: 15px; text-align: center; border-left: 5px solid #fff; }
     .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
     .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
+    .dash-vitoria { background-color: #004a00; border-color: #00ff00; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
     .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
     .dash-metric { font-size: 28px; font-weight: bold; margin: 10px 0; }
 
@@ -183,13 +185,12 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (OTIMIZADO) ---
 # =============================================================================
 
-# FUNÇÃO: Previsão com Machine Learning (Scikit-Learn)
 def oraculo_ia(historico, indice_premio):
     if not HAS_AI or len(historico) < 50:
-        return [], 0 # Sem dados suficientes ou sem biblioteca
+        return [], 0 
 
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'])
@@ -207,14 +208,14 @@ def oraculo_ia(historico, indice_premio):
     
     df['target_grupo'] = grupos_saiu
     df['target_futuro'] = df['target_grupo'].shift(-1)
-    df_treino = df.dropna().tail(200)
+    df_treino = df.dropna().tail(200) 
     
     if len(df_treino) < 30: return [], 0
     
     X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
     y = df_treino['target_futuro']
     
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42)
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42) 
     modelo.fit(X, y)
     
     ultimo_real = df.iloc[-1]
@@ -344,33 +345,59 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
 
-def calcular_stress_atual(historico, indice_premio, usar_ia_no_backtest=False):
-    if len(historico) < 10: return 0, 0
+# --- FUNÇÃO NOVA: CALCULA STRESS (Derrotas) E GLORY (Vitórias) ---
+def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=False):
+    if len(historico) < 10: return 0, 0, 0, 0
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
-    max_derrotas = 0; derrotas_consecutivas = 0
     
+    max_derrotas = 0; seq_derrotas = 0
+    max_vitorias = 0; seq_vitorias = 0
+    
+    # 1. Analisa Histórico (Recordes)
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio, usar_ia=usar_ia_no_backtest) 
         win = target_dezena in palpite
-        if not win: derrotas_consecutivas += 1
+        
+        if win:
+            seq_derrotas = 0
+            seq_vitorias += 1
+            if seq_vitorias > max_vitorias: max_vitorias = seq_vitorias
         else:
-            if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
-            derrotas_consecutivas = 0
-    if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
-    stress_atual = 0
+            seq_vitorias = 0
+            seq_derrotas += 1
+            if seq_derrotas > max_derrotas: max_derrotas = seq_derrotas
+
+    # 2. Analisa Momento Atual (Recente)
+    atual_derrotas = 0
+    atual_vitorias = 0
+    
+    # Verifica o último jogo para saber se estamos em WIN ou LOSS
     for i in range(1, 20): 
         idx = -i
         target_game = historico[idx]
         target_dezena = target_game['dezenas'][indice_premio]
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
         win = target_dezena in palpite
-        if not win: stress_atual += 1
-        else: break
-    return stress_atual, max_derrotas
+        
+        # Se começou contando derrotas
+        if i == 1 and not win:
+            atual_derrotas = 1
+        elif i == 1 and win:
+            atual_vitorias = 1
+        
+        # Continua contando...
+        elif atual_derrotas > 0:
+            if not win: atual_derrotas += 1
+            else: break # Interrompe pois mudou para vitória
+        elif atual_vitorias > 0:
+            if win: atual_vitorias += 1
+            else: break # Interrompe pois mudou para derrota
+
+    return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
@@ -379,13 +406,14 @@ def executar_backtest_centurion(historico, indice_premio):
         target_idx = -i
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
+        # No backtest visual, usamos IA para ser preciso
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio, usar_ia=True)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (CORRIGIDO SEM st.empty) ---
+# --- 4. DASHBOARD GERAL (ATUALIZADO V13) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -396,33 +424,52 @@ def tela_dashboard_global():
     
     alertas_criticos = []
     
-    # --- CORREÇÃO DE RENDERIZAÇÃO: USANDO SPINNER EM VEZ DE EMPTY ---
-    with st.spinner("Analisando todas as bancas em tempo real..."):
+    with st.spinner("Varrendo todas as bancas (Busca de Recordes Win/Loss)..."):
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
                 for i in range(5):
-                    # IA DESLIGADA NO DASHBOARD PARA EVITAR TRAVAMENTO (usar_ia_no_backtest=False)
-                    stress, recorde = calcular_stress_atual(historico, i, usar_ia_no_backtest=False)
-                    if recorde > 0:
-                        percentual_stress = stress / recorde
+                    # Chama a nova função completa
+                    stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=False)
+                    
+                    # 1. Analisa Risco (Derrotas)
+                    if max_stress > 0:
+                        percentual_stress = stress / max_stress
                         if percentual_stress >= 1.0:
-                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "CRITICO"})
                         elif percentual_stress >= 0.7:
-                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "ATENCAO"})
+                    
+                    # 2. Analisa Oportunidade (Vitórias) - Faltando 1 para o recorde
+                    if max_wins > 2 and wins > 0: # Ignora recordes muito pequenos (ex: 1 ou 2)
+                        if wins == (max_wins - 1):
+                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": wins, "rec": max_wins, "tipo": "VITORIA"})
 
-    col2.metric("Alertas Ativos", f"{len(alertas_criticos)}", "Críticos/Atenção")
+    col2.metric("Sinais no Radar", f"{len(alertas_criticos)}", "Win/Loss")
     col3.metric("Status Base", "Online", "Google Sheets")
     st.markdown("---")
     
     if alertas_criticos:
-        st.subheader("🚨 Zonas de Tiro Identificadas")
+        st.subheader("🚨 Zonas de Interesse Identificadas")
         cols = st.columns(2)
         for idx, alerta in enumerate(alertas_criticos):
-            classe = "dash-critico" if alerta['nivel'] == "CRITICO" else "dash-atencao"
-            titulo_card = "🚨 RECORD E AMEAÇADO!" if alerta['nivel'] == "CRITICO" else "⚠️ ZONA DE PRESSÃO"
+            if alerta['tipo'] == "CRITICO":
+                classe = "dash-critico"; titulo = "🚨 RECORDE NEGATIVO!"; texto = "Derrotas Seguidas"
+            elif alerta['tipo'] == "ATENCAO":
+                classe = "dash-atencao"; titulo = "⚠️ ZONA DE PRESSÃO"; texto = "Derrotas Seguidas"
+            else: # VITORIA
+                classe = "dash-vitoria"; titulo = "🤑 RECORDE DE VITÓRIA!"; texto = "Vitórias Seguidas"
+
             with cols[idx % 2]:
-                st.markdown(f"<div class='dash-card {classe}'><div class='dash-title'>{alerta['banca']}</div><div class='dash-subtitle'>{alerta['premio']}</div><div class='dash-metric'>{alerta['stress']} Derrotas Seguidas</div><p>Recorde Histórico: {alerta['recorde']}</p><p><b>{titulo_card}</b></p></div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class='dash-card {classe}'>
+                    <div class='dash-title'>{alerta['banca']}</div>
+                    <div class='dash-subtitle'>{alerta['premio']}</div>
+                    <div class='dash-metric'>{alerta['val']} {texto}</div>
+                    <p>Recorde Histórico: {alerta['rec']}</p>
+                    <p><b>{titulo}</b></p>
+                </div>
+                """, unsafe_allow_html=True)
     else:
         st.success("✅ O Radar não detectou anomalias críticas no momento.")
 
@@ -569,9 +616,9 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
-            # SÓ AQUI USA IA (porque é um único processo)
             lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
-            stress_atual, max_loss = calcular_stress_atual(historico, i, usar_ia_no_backtest=True)
+            # CHAMA A MÉTRICA COMPLETA
+            stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=True)
             
             if HAS_AI and gps_ia:
                 st.markdown(f"""
@@ -585,8 +632,8 @@ else:
                 st.caption("⚠️ IA desativada (Scikit-learn carregando...).")
 
             aviso_alerta = ""
-            if stress_atual >= max_loss and max_loss > 0:
-                aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
+            if stress >= max_stress and max_stress > 0:
+                aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress} Derrotas Seguidas (Recorde Atingido!)</div>"
             
             info_sat = f"<span class='info-pill pill-sat'>🚫 SATURADO: G{sat[0]} ({sat[1]}x)</span>" if sat else ""
             
@@ -602,15 +649,23 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V12: IA + Pentágono + Saturação</div>
+                <div class='subtitulo'>Estratégia V13: Radar de Vitórias + IA + Pentágono</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
             """
             st.markdown(html_content, unsafe_allow_html=True)
             
-            cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
-            st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
+            cor_stress = "#ff4b4b" if stress >= max_stress else "#ffffff"
+            cor_wins = "#00ff00" if wins >= (max_wins - 1) else "#ffffff"
+
+            # Mostra as duas barras: Derrotas e Vitórias
+            st.markdown(f"""
+            <div style='text-align: center; margin-bottom:10px;'>
+                <span class='max-loss-pill'>📉 Derrotas: Max {max_stress} | <b>Atual: <span style='color:{cor_stress}'>{stress}</span></b></span>
+                <span class='max-win-pill'>📈 Vitórias: Max {max_wins} | <b>Atual: <span style='color:{cor_wins}'>{wins}</span></b></span>
+            </div>
+            """, unsafe_allow_html=True)
 
             bt_results = executar_backtest_centurion(historico, i)
             
