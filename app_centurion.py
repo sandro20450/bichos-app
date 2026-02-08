@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V12.0 AI", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V12.1 Stable", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -75,6 +75,7 @@ st.markdown("""
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pill-ai { background-color: #2b005c; color: #d900ff; border: 1px solid #d900ff; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
+    .pill-pent { background-color: #003366; color: #00ccff; border: 1px solid #00ccff; }
     
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -84,6 +85,14 @@ st.markdown("""
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
+    
+    /* DASHBOARD CARDS */
+    .dash-card { padding: 20px; border-radius: 10px; margin-bottom: 15px; text-align: center; border-left: 5px solid #fff; }
+    .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
+    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
+    .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
+    .dash-metric { font-size: 28px; font-weight: bold; margin: 10px 0; }
+
     div[data-testid="stTable"] table { color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -174,7 +183,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V12.0) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA (OTIMIZADO) ---
 # =============================================================================
 
 # FUNÇÃO: Previsão com Machine Learning (Scikit-Learn)
@@ -182,18 +191,12 @@ def oraculo_ia(historico, indice_premio):
     if not HAS_AI or len(historico) < 50:
         return [], 0 # Sem dados suficientes ou sem biblioteca
 
-    # Prepara os dados para o Scikit-Learn
     df = pd.DataFrame(historico)
-    
-    # 1. Feature Engineering (Criar colunas numéricas)
     df['data_dt'] = pd.to_datetime(df['data'])
-    df['dia_semana'] = df['data_dt'].dt.dayofweek # 0=Seg, 6=Dom
-    
-    # Codificar Horário (String -> Número)
+    df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
     
-    # Target: O Grupo que saiu (temos que converter a dezena para grupo)
     grupos_saiu = []
     for d_lista in df['dezenas']:
         try:
@@ -203,25 +206,17 @@ def oraculo_ia(historico, indice_premio):
         except: grupos_saiu.append(0)
     
     df['target_grupo'] = grupos_saiu
-    
-    # Shift! Queremos prever o PRÓXIMO com base no ATUAL
-    # X (Features) = Dados do jogo T
-    # Y (Target) = Resultado do jogo T+1
     df['target_futuro'] = df['target_grupo'].shift(-1)
-    
-    # Remove NaN (último jogo não tem futuro conhecido ainda no treino)
-    df_treino = df.dropna().tail(200) # Treina com os últimos 200 jogos para ser rápido
+    df_treino = df.dropna().tail(200) # Otimização: Treina com os últimos 200
     
     if len(df_treino) < 30: return [], 0
     
     X = df_treino[['dia_semana', 'hora_code', 'target_grupo']]
     y = df_treino['target_futuro']
     
-    # Treina o Modelo (Random Forest)
-    modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42) # Otimização: Menos árvores para ser rápido
     modelo.fit(X, y)
     
-    # Prever o Próximo (Baseado no último jogo real)
     ultimo_real = df.iloc[-1]
     X_novo = pd.DataFrame({
         'dia_semana': [ultimo_real['dia_semana']],
@@ -229,20 +224,17 @@ def oraculo_ia(historico, indice_premio):
         'target_grupo': [ultimo_real['target_grupo']]
     })
     
-    # Pega as probabilidades
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
     
-    # Cria lista (Grupo, Probabilidade)
     ranking_ia = []
     for i, prob in enumerate(probs):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
         
-    # Ordena e pega Top 3
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
     top_3_grupos = [x[0] for x in ranking_ia[:3]]
-    confianca = ranking_ia[0][1] * 100 # % do top 1
+    confianca = ranking_ia[0][1] * 100 
     
     return top_3_grupos, confianca
 
@@ -265,7 +257,7 @@ def calcular_radar_pentagono(historico, indice_premio):
     atrasos.sort(key=lambda x: x[1], reverse=True)
     return [x[0] for x in atrasos[:5]]
 
-def gerar_matriz_hibrida_ai(historico, indice_premio):
+def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     if not historico:
         padrao = []
         for g in range(1, 26): padrao.extend(GRUPOS_BICHOS[g][:3])
@@ -295,11 +287,15 @@ def gerar_matriz_hibrida_ai(historico, indice_premio):
     grupo_saturado = rank_grupos_sat[0][0]
     freq_saturado = rank_grupos_sat[0][1]
 
-    # --- INTEGRAÇÃO PENTÁGONO + IA ---
+    # --- INTEGRAÇÃO OTIMIZADA ---
     grupos_atrasados = calcular_radar_pentagono(historico, indice_premio)
-    grupos_ia, confianca_ia = oraculo_ia(historico, indice_premio)
     
-    # A LISTA DE PROTEGIDOS AGORA SOMA PENTÁGONO + IA
+    # SÓ EXECUTA A IA SE O FLAG ESTIVER LIGADO
+    if usar_ia:
+        grupos_ia, confianca_ia = oraculo_ia(historico, indice_premio)
+    else:
+        grupos_ia, confianca_ia = [], 0
+    
     grupos_imunes = list(set(grupos_atrasados + grupos_ia))
 
     palpite_inicial = []
@@ -307,7 +303,6 @@ def gerar_matriz_hibrida_ai(historico, indice_premio):
     dezenas_cortadas_log = []
 
     for grupo, lista_dezenas in GRUPOS_BICHOS.items():
-        # Se for Imune (Pentágono ou IA), entra tudo
         if grupo in grupos_imunes:
             palpite_inicial.extend(lista_dezenas)
             continue
@@ -331,7 +326,6 @@ def gerar_matriz_hibrida_ai(historico, indice_premio):
     palpite_filtrado = []
     for d in palpite_inicial:
         grp = DEZENA_TO_GRUPO.get(d)
-        # Se tem final bloqueado e NÃO é imune, corta
         if d.endswith(final_bloqueado) and grp not in grupos_imunes:
             pass 
         else:
@@ -351,21 +345,18 @@ def gerar_matriz_hibrida_ai(historico, indice_premio):
     
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
 
-def calcular_stress_atual(historico, indice_premio):
+def calcular_stress_atual(historico, indice_premio, usar_ia_no_backtest=False):
     if len(historico) < 10: return 0, 0
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
     max_derrotas = 0; derrotas_consecutivas = 0
     
-    # Nota: No backtest de stress, desligamos a IA para ser rápido (usa só estatística)
-    # ou usamos uma versão simplificada. Aqui vamos manter a lógica V11 para velocidade.
-    
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
-        # Palpite rápido (V11 logic) para stress test
-        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio) 
+        # OTIMIZAÇÃO: Usa False no backtest para ser muito rápido, ou True se quiser precisão máxima (lento)
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio, usar_ia=usar_ia_no_backtest) 
         win = target_dezena in palpite
         if not win: derrotas_consecutivas += 1
         else:
@@ -377,7 +368,7 @@ def calcular_stress_atual(historico, indice_premio):
         idx = -i
         target_game = historico[idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio)
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
         win = target_dezena in palpite
         if not win: stress_atual += 1
         else: break
@@ -390,13 +381,14 @@ def executar_backtest_centurion(historico, indice_premio):
         target_idx = -i
         target_game = historico[target_idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio)
+        # No backtest visual, usamos IA para ser preciso
+        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:target_idx], indice_premio, usar_ia=True)
         vitoria = target_dezena in palpite
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL ---
+# --- 4. DASHBOARD GERAL (OTIMIZADO) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -407,19 +399,27 @@ def tela_dashboard_global():
     
     alertas_criticos = []
     
-    with st.spinner("Varrendo todas as bancas em busca de sinais..."):
-        for banca_key, config in CONFIG_BANCAS.items():
-            historico = carregar_historico_dezenas(config['aba'])
-            if len(historico) > 50:
-                for i in range(5):
-                    stress, recorde = calcular_stress_atual(historico, i)
-                    if recorde > 0:
-                        percentual_stress = stress / recorde
-                        if percentual_stress >= 1.0:
-                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
-                        elif percentual_stress >= 0.7:
-                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
+    # AVISO DE CARREGAMENTO
+    container_loading = st.empty()
+    container_loading.info("Varrendo bancas com Protocolo V11 (Rápido)...")
+    
+    start_time = time.time()
+    
+    for banca_key, config in CONFIG_BANCAS.items():
+        historico = carregar_historico_dezenas(config['aba'])
+        if len(historico) > 50:
+            for i in range(5):
+                # OTIMIZAÇÃO: Usar IA=False no Dashboard para não travar
+                stress, recorde = calcular_stress_atual(historico, i, usar_ia_no_backtest=False)
+                if recorde > 0:
+                    percentual_stress = stress / recorde
+                    if percentual_stress >= 1.0:
+                        alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "CRITICO"})
+                    elif percentual_stress >= 0.7:
+                        alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "stress": stress, "recorde": recorde, "nivel": "ATENCAO"})
 
+    container_loading.empty() # Limpa aviso
+    
     col2.metric("Alertas Ativos", f"{len(alertas_criticos)}", "Críticos/Atenção")
     col3.metric("Status Base", "Online", "Google Sheets")
     st.markdown("---")
@@ -578,11 +578,10 @@ else:
 
     for i, tab in enumerate(tabs):
         with tab:
-            # CHAMA A NOVA MATRIZ COM IA + PENTÁGONO + IMUNIDADE
-            lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i)
-            stress_atual, max_loss = calcular_stress_atual(historico, i)
+            # AQUI SIM usamos IA (usar_ia=True) porque é só 1 análise, não 15
+            lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
+            stress_atual, max_loss = calcular_stress_atual(historico, i, usar_ia_no_backtest=True)
             
-            # --- ÁREA DA INTELIGÊNCIA ARTIFICIAL ---
             if HAS_AI and gps_ia:
                 st.markdown(f"""
                 <div class='box-ai'>
@@ -592,7 +591,7 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
             elif not HAS_AI:
-                st.caption("⚠️ Módulo de IA desativado (Scikit-learn não encontrado).")
+                st.caption("⚠️ IA desativada (Scikit-learn instalando...).")
 
             aviso_alerta = ""
             if stress_atual >= max_loss and max_loss > 0:
@@ -600,7 +599,6 @@ else:
             
             info_sat = f"<span class='info-pill pill-sat'>🚫 SATURADO: G{sat[0]} ({sat[1]}x)</span>" if sat else ""
             
-            # Imunidade mostra tanto Pentágono quanto IA
             todos_imunes = list(set(gps_atrasados + gps_ia))
             info_imunes = f"<span class='info-pill pill-ai'>🛡️ IMUNIZADOS (IA+P): {', '.join(map(str, todos_imunes))}</span>" if todos_imunes else ""
             
