@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V16.0 Double Money", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V16.1 Radar Total", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -67,7 +67,7 @@ st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     .box-centurion {
-        background: linear-gradient(135deg, #004d00, #002600); /* Verde Escuro para Money */
+        background: linear-gradient(135deg, #004d00, #002600);
         border: 2px solid #00ff00; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(0, 255, 0, 0.15);
     }
@@ -118,11 +118,14 @@ st.markdown("""
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
     .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
     
+    /* DASHBOARD CARDS */
     .dash-card { padding: 10px 5px; border-radius: 8px; margin-bottom: 8px; text-align: center; border-left: 4px solid #fff; }
     .dash-critico { background-color: #4a0000; border-color: #ff0000; }
     .dash-perigo { background-color: #662200; border-color: #ff5500; }
     .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
     .dash-vitoria { background-color: #003300; border-color: #00ff00; }
+    .dash-unidade { background-color: #002244; border-color: #0099ff; } /* Azul para Unidade */
+    
     .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
     .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
@@ -356,20 +359,16 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
         else:
             palpite_filtrado.append(d)
     
-    # --- MUDANÇA V16.0: LIMITE DE 46 DEZENAS ---
     vagas_abertas = 46 - len(palpite_filtrado)
-    
     reservas_validas = [d for d in reservas_disponiveis if not d.endswith(final_bloqueado)]
     reservas_rank = []
     for d in reservas_validas: reservas_rank.append((d, contagem_dezenas.get(d, 0)))
     reservas_rank.sort(key=lambda x: x[1], reverse=True)
     
-    # Se ainda tiver vagas, preenche
     if vagas_abertas > 0:
         for i in range(min(vagas_abertas, len(reservas_rank))):
             palpite_filtrado.append(reservas_rank[i][0])
             
-    # Ordena e corta para garantir exatamente 46 (caso os grupos imunes passem do limite)
     palpite_final = sorted(list(set(palpite_filtrado)))[:46]
     
     dados_sat = (grupo_saturado, freq_saturado, tamanho_analise)
@@ -424,7 +423,7 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
-# --- NOVO: CÁLCULO DE MÉTRICAS COMPLETAS PARA UNIDADE (V15.4 TOP 5) ---
+# --- CÁLCULO DE MÉTRICAS COMPLETAS PARA UNIDADE (V15.4 TOP 5) ---
 def calcular_metricas_unidade_full(historico):
     if len(historico) < 10: return 0, 0, 0, 0
     
@@ -441,12 +440,10 @@ def calcular_metricas_unidade_full(historico):
             target_game = historico[i]
             target_unidade = target_game['dezenas'][0][-1]
             
-            # Gera previsão com dados anteriores a 'i'
             hist_treino = historico[:i]
             lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True) 
             
             finais = [d[-1] for d in lista_final]
-            # ATUALIZADO PARA TOP 5 (50% Cobertura)
             top_finais = [x[0] for x in Counter(finais).most_common(5)]
             
             win = target_unidade in top_finais
@@ -461,7 +458,7 @@ def calcular_metricas_unidade_full(historico):
                 if seq_loss > max_loss: max_loss = seq_loss
         except: continue
 
-    # 2. Cálculo do Status Atual (Current)
+    # 2. Cálculo do Status Atual
     atual_derrotas = 0
     atual_vitorias = 0
     
@@ -473,7 +470,6 @@ def calcular_metricas_unidade_full(historico):
             hist_treino = historico[:idx]
             lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
             finais = [d[-1] for d in lista_final]
-            # ATUALIZADO PARA TOP 5
             top_finais = [x[0] for x in Counter(finais).most_common(5)]
             win = target_unidade in top_finais
             
@@ -491,39 +487,6 @@ def calcular_metricas_unidade_full(historico):
         
     return atual_derrotas, max_loss, atual_vitorias, max_win
 
-def calcular_stress_unidade(historico):
-    if len(historico) < 10: return 0, 0
-    
-    atual_derrotas = 0
-    atual_vitorias = 0
-    
-    for i in range(1, 20):
-        idx = -i
-        try:
-            target_game = historico[idx]
-            target_unidade = target_game['dezenas'][0][-1]
-            hist_treino = historico[:idx]
-            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
-            finais = [d[-1] for d in lista_final]
-            # ATUALIZADO PARA TOP 5
-            top_finais = [x[0] for x in Counter(finais).most_common(5)]
-            win = target_unidade in top_finais
-            
-            if i == 1:
-                if win: atual_vitorias = 1
-                else: atual_derrotas = 1
-            else:
-                if atual_vitorias > 0:
-                    if win: atual_vitorias += 1
-                    else: break
-                elif atual_derrotas > 0:
-                    if not win: atual_derrotas += 1
-                    else: break
-        except: break
-        
-    return atual_derrotas, atual_vitorias
-
-# --- BACKTEST NORMAL (DEZENAS) ---
 def executar_backtest_centurion(historico, indice_premio):
     if len(historico) < 60: return []
     resultados = []
@@ -536,7 +499,6 @@ def executar_backtest_centurion(historico, indice_premio):
         resultados.append({'index': i, 'dezena': target_dezena, 'win': vitoria})
     return resultados
 
-# --- BACKTEST SNIPER (UNIDADES - TOP 5) ---
 def executar_backtest_unidade(historico):
     if len(historico) < 60: return []
     resultados = []
@@ -550,14 +512,13 @@ def executar_backtest_unidade(historico):
         hist_treino = historico[:target_idx]
         lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
         finais = [d[-1] for d in lista_final]
-        # ATUALIZADO PARA TOP 5
         top_finais = [x[0] for x in Counter(finais).most_common(5)]
         win = target_unidade in top_finais
         resultados.append({'index': i, 'real': target_unidade, 'win': win})
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL ---
+# --- 4. DASHBOARD GERAL (ATUALIZADO V16.1) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -574,9 +535,9 @@ def tela_dashboard_global():
             if len(historico) > 50:
                 limit_range = 1 if banca_key == "TRADICIONAL" else 5
                 
+                # --- ANÁLISE DEZENAS ---
                 for i in range(limit_range):
                     stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=False)
-                    
                     if max_stress > 0:
                         percentual_stress = stress / max_stress
                         if stress >= max_stress:
@@ -585,10 +546,22 @@ def tela_dashboard_global():
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "PERIGO"})
                         elif percentual_stress >= 0.7:
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "ATENCAO"})
-                    
                     if max_wins > 2 and wins > 0:
                         if wins == (max_wins - 1):
                              alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": wins, "rec": max_wins, "tipo": "VITORIA"})
+
+                # --- ANÁLISE UNIDADES (SÓ TRADICIONAL) ---
+                if banca_key == "TRADICIONAL":
+                    uni_loss, uni_max_loss, uni_win, uni_max_win = calcular_metricas_unidade_full(historico)
+                    if uni_max_loss > 0:
+                        # Alerta de Loss
+                        if uni_loss >= uni_max_loss:
+                            alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_loss, "rec": uni_max_loss, "tipo": "CRITICO_UNI"})
+                        elif uni_loss == (uni_max_loss - 1):
+                            alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_loss, "rec": uni_max_loss, "tipo": "PERIGO_UNI"})
+                    # Alerta de Win (Opcional, mas bom ter)
+                    if uni_max_win > 2 and uni_win == (uni_max_win - 1):
+                        alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": uni_win, "rec": uni_max_win, "tipo": "VITORIA"})
 
     col2.metric("Sinais no Radar", f"{len(alertas_criticos)}", "Win/Loss")
     col3.metric("Status Base", "Online", "Google Sheets")
@@ -604,8 +577,13 @@ def tela_dashboard_global():
                 classe = "dash-perigo"; titulo = "⚠️ POR 1"; texto = "Loss"
             elif alerta['tipo'] == "ATENCAO":
                 classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "Loss"
-            else: # VITORIA
+            elif alerta['tipo'] == "VITORIA":
                 classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "Wins"
+            # NOVOS TIPOS PARA UNIDADE
+            elif alerta['tipo'] == "CRITICO_UNI":
+                classe = "dash-unidade"; titulo = "🎯 SNIPER CRÍTICO"; texto = "Loss"
+            elif alerta['tipo'] == "PERIGO_UNI":
+                classe = "dash-unidade"; titulo = "🎯 SNIPER ALERTA"; texto = "Loss"
 
             with cols[idx % 4]: 
                 st.markdown(f"""
@@ -778,7 +756,6 @@ else:
             
             if banca_selecionada == "TRADICIONAL":
                 finais = [d[-1] for d in lista_final]
-                # ATUALIZADO PARA TOP 5 (50% COBERTURA)
                 top_finais = [x[0] for x in Counter(finais).most_common(5)]
                 st.markdown(f"""
                 <div class='box-unidade'>
@@ -788,9 +765,8 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # --- STATUS DO SNIPER (V15.4 - FULL METRICS TOP 5) ---
+                # STATUS SNIPER (V16.1)
                 uni_curr_loss, uni_max_loss, uni_curr_win, uni_max_win = calcular_metricas_unidade_full(historico)
-                
                 cor_uni_stress = "#ff4b4b" if uni_curr_loss > 0 else "#ffffff"
                 cor_uni_wins = "#00ff00" if uni_curr_win > 0 else "#ffffff"
                 
@@ -800,7 +776,6 @@ else:
                     <span class='max-win-pill'>📈 Vitórias: Max {uni_max_win} | <b>Atual: <span style='color:{cor_uni_wins}'>{uni_curr_win}</span></b></span>
                 </div>
                 """, unsafe_allow_html=True)
-                # ----------------------------------------------------
                 
                 bt_sniper = executar_backtest_unidade(historico)
                 if bt_sniper:
@@ -841,7 +816,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V16.0: Centurion 46 (Double Money)</div>
+                <div class='subtitulo'>Estratégia V16.1: Radar Total (Dezenas + Unidades)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
