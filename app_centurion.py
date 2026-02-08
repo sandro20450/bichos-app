@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.3 TimeFix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.4 Scanner", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -68,7 +68,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (Scanner V7.4) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -107,38 +107,47 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-
+        
+        # --- LÓGICA DE SCANNER V7.4 (Busca Exata no Texto) ---
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-                if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
-                prev = tabela.find_previous(string=padrao_hora)
-                if prev:
-                    m = re.search(padrao_hora, prev)
-                    if m:
-                        raw = m.group(1).strip()
-                        if ':' in raw: h_detect = raw
-                        elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
-                        else: h_detect = raw.strip().zfill(2) + ":00"
-                        
-                        # Comparação flexível para pegar o horário exato
-                        if h_detect == horario_alvo:
-                            dezenas_encontradas = []
-                            linhas = tabela.find_all('tr')
-                            for linha in linhas:
-                                cols = linha.find_all('td')
-                                if len(cols) >= 2:
-                                    premio_txt = cols[0].get_text().strip(); numero_txt = cols[1].get_text().strip()
-                                    nums_premio = re.findall(r'\d+', premio_txt)
-                                    if nums_premio and 1 <= int(nums_premio[0]) <= 5:
-                                        if numero_txt.isdigit() and len(numero_txt) >= 2:
-                                            dezena = numero_txt[-2:]
-                                            dezenas_encontradas.append(dezena)
-                            if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
-                            else: return None, "Incompleto"
-        return None, "Horário não encontrado"
-    except Exception as e: return None, f"Erro: {e}"
+                # Encontra o texto imediatamente anterior à tabela (o cabeçalho)
+                prev_element = tabela.find_previous(string=True)
+                
+                # Se o elemento anterior for vazio, tenta subir mais um pouco
+                if not prev_element or not prev_element.strip():
+                    prev_element = tabela.find_previous('div', class_='title')
+                    if prev_element: text_header = prev_element.get_text()
+                    else: text_header = ""
+                else:
+                    # Tenta pegar o texto do container pai se for string solta
+                    if prev_element.parent: text_header = prev_element.parent.get_text()
+                    else: text_header = prev_element
+                
+                text_header_upper = text_header.upper()
+                
+                # 1. Filtro Federal
+                if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper:
+                    continue 
+
+                # 2. Verifica se o horário alvo está CONTIDO no cabeçalho
+                # Ex: horario_alvo="19:30" e header="Caminho... 19:30..." -> MATCH!
+                if horario_alvo in text_header:
+                    dezenas_encontradas = []
+                    linhas = tabela.find_all('tr')
+                    for linha in linhas:
+                        cols = linha.find_all('td')
+                        if len(cols) >= 2:
+                            premio_txt = cols[0].get_text().strip(); numero_txt = cols[1].get_text().strip()
+                            nums_premio = re.findall(r'\d+', premio_txt)
+                            if nums_premio and 1 <= int(nums_premio[0]) <= 5:
+                                if numero_txt.isdigit() and len(numero_txt) >= 2:
+                                    dezena = numero_txt[-2:]
+                                    dezenas_encontradas.append(dezena)
+                    if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
+                    
+        return None, f"Horário {horario_alvo} não encontrado na página."
+    except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
 # --- 3. CÉREBRO: LÓGICA V7.3 + STRESS CALCULATOR ---
