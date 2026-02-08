@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.1 Monitor", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.2 TimeFix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -286,6 +286,7 @@ with st.sidebar:
     modo_extracao = st.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.markdown("---")
 
+    # === MODO 1: UNITÁRIO ===
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.subheader("Extração Unitária")
         opt_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -293,7 +294,16 @@ with st.sidebar:
         elif opt_data == "Ontem": data_busca = date.today() - timedelta(days=1)
         else: data_busca = st.date_input("Escolha a Data:", date.today())
         
-        hora_busca = st.selectbox("Horário:", conf['horarios'])
+        # --- AJUSTE DE HORÁRIO CAMINHO (QUA e SAB) ---
+        lista_horarios = conf['horarios'].copy()
+        if banca_sel == "CAMINHO":
+            dia_semana = data_busca.weekday() # 0=Seg, 2=Qua, 5=Sab
+            if dia_semana == 2 or dia_semana == 5:
+                # Troca 20:00 por 19:30
+                lista_horarios = [h.replace("20:00", "19:30") for h in lista_horarios]
+        # -----------------------------------------------
+
+        hora_busca = st.selectbox("Horário:", lista_horarios)
         
         if st.button("🚀 Baixar Sorteio"):
             ws = conectar_planilha(conf['aba'])
@@ -318,6 +328,7 @@ with st.sidebar:
                         else: st.error(f"❌ {msg}")
             else: st.error("Erro Conexão Planilha")
 
+    # === MODO 2: EM MASSA ===
     else:
         st.subheader("Extração em Massa")
         col1, col2 = st.columns(2)
@@ -340,7 +351,14 @@ with st.sidebar:
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    for hora in conf['horarios']:
+                    # --- AJUSTE DE HORÁRIO TURBO CAMINHO ---
+                    horarios_do_dia = conf['horarios'].copy()
+                    if banca_sel == "CAMINHO":
+                         if dia.weekday() == 2 or dia.weekday() == 5:
+                             horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
+                    # ---------------------------------------
+
+                    for hora in horarios_do_dia:
                         op_atual += 1
                         bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
