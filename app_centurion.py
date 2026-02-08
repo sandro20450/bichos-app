@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.0 Radar", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.1 Monitor", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -42,7 +42,7 @@ st.markdown("""
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
         padding: 15px; border-radius: 10px; text-align: center;
-        margin: 15px 0; animation: pulse 2s infinite;
+        margin: 15px 0; animation: pulse 2s infinite; font-size: 18px; font-weight: bold;
     }
     
     @keyframes pulse {
@@ -220,10 +220,9 @@ def gerar_matriz_hibrida(historico, indice_premio):
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_reforco, final_bloqueado
 
 def calcular_stress_atual(historico, indice_premio):
-    # Calcula quantas derrotas consecutivas estamos TENDO AGORA (Stress Atual)
     if len(historico) < 10: return 0, 0
     
-    # 1. Pior Sequência Histórica (Recorde)
+    # 1. Pior Sequência Histórica (Recorde 50 jogos)
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
@@ -241,18 +240,17 @@ def calcular_stress_atual(historico, indice_premio):
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
     
-    # 2. Stress Atual (Derrotas seguidas vindo do presente para o passado)
+    # 2. Stress Atual
     stress_atual = 0
-    for i in range(1, 20): # Verifica até 20 jogos para trás
+    for i in range(1, 20): 
         idx = -i
         target_game = historico[idx]
         target_dezena = target_game['dezenas'][indice_premio]
-        hist_treino = historico[:idx] # Tudo antes deste jogo
+        hist_treino = historico[:idx] 
         palpite, _, _, _, _ = gerar_matriz_hibrida(hist_treino, indice_premio)
         win = target_dezena in palpite
-        
         if not win: stress_atual += 1
-        else: break # Parou de perder, achamos a última vitória
+        else: break
         
     return stress_atual, max_derrotas
 
@@ -373,6 +371,10 @@ if len(historico) == 0:
     st.warning("⚠️ Base de dados vazia para esta banca.")
     st.info("👉 Use o menu lateral para baixar os primeiros resultados.")
     st.stop()
+else:
+    # --- MONITOR DE ÚLTIMA ATUALIZAÇÃO ---
+    ult = historico[-1]
+    st.info(f"📅 **STATUS ATUAL:** O último sorteio registrado nesta banca foi em **{ult['data']}** às **{ult['hora']}**.")
 
 tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
 
@@ -380,14 +382,12 @@ for i, tab in enumerate(tabs):
     with tab:
         lista_final, cortadas, sat, reforcos, final_bloq = gerar_matriz_hibrida(historico, i)
         
-        # --- CALCULA STRESS E ALERTA ---
         stress_atual, max_loss = calcular_stress_atual(historico, i)
         
         aviso_alerta = ""
         if stress_atual >= max_loss and max_loss > 0:
             aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {stress_atual} Derrotas Seguidas (Recorde Atingido!)</div>"
         
-        # --- INFO PILLS ---
         info_sat = f"<span class='info-pill pill-sat'>🚫 GRUPO SATURADO: {sat[0]} ({sat[1]}x)</span>" if sat else ""
         info_ref = f"<span class='info-pill pill-ref'>✅ REFORÇOS: {', '.join(map(str, reforcos))}</span>" if reforcos else ""
         info_final = f"<span class='info-pill pill-final'>🛑 FINAL BLOQUEADO: {final_bloq}</span>" if final_bloq else ""
@@ -406,9 +406,8 @@ for i, tab in enumerate(tabs):
         """
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # Mostra o status do stress
         cor_stress = "#ff4b4b" if stress_atual >= max_loss else "#00ff00"
-        st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico: {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; margin-bottom:10px;'><span class='max-loss-pill'>📉 Recorde Histórico (50 Jogos): {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{stress_atual}</span></b></span></div>", unsafe_allow_html=True)
 
         bt_results = executar_backtest_centurion(historico, i)
         
@@ -423,7 +422,6 @@ for i, tab in enumerate(tabs):
                 cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
             
             st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
-        
         else:
             st.caption("ℹ️ Baixe mais resultados (mínimo 60) para ver o Backtest e Risco.")
 
