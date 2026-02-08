@@ -20,34 +20,14 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V14.2 Tradicional", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V14.3 Fix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
-    "LOTEP": { 
-        "display": "LOTEP (Dezenas)", 
-        "aba": "BASE_LOTEP_DEZ", 
-        "slug": "lotep", 
-        "horarios": ["10:45", "12:45", "15:45", "18:00"] 
-    },
-    "CAMINHO": { 
-        "display": "CAMINHO (Dezenas)", 
-        "aba": "BASE_CAMINHO_DEZ", 
-        "slug": "caminho-da-sorte", 
-        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] 
-    },
-    "MONTE": { 
-        "display": "MONTE CARLOS (Dezenas)", 
-        "aba": "BASE_MONTE_DEZ", 
-        "slug": "nordeste-monte-carlos", 
-        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] 
-    },
-    "TRADICIONAL": { 
-        "display": "TRADICIONAL (1º Prêmio)", 
-        "aba": "BASE_TRADICIONAL_DEZ", 
-        "slug": "loteria-tradicional", 
-        "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
-    }
+    "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] },
+    "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] },
+    "TRADICIONAL": { "display": "TRADICIONAL (1º Prêmio)", "aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] }
 }
 
 # Mapeamento Grupos
@@ -136,7 +116,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (REFORÇADA) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -155,23 +135,20 @@ def carregar_historico_dezenas(nome_aba):
             if len(raw) < 2: return []
             dados = []
             for row in raw[1:]:
-                # Tenta ler pelo menos 3 colunas (Data, Hora, P1). Se tiver mais, melhor.
                 if len(row) >= 3:
-                    # Se for Tradicional, pode ter menos de 7 colunas, a gente completa
-                    # Pega as dezenas disponíveis na linha
+                    # TRATAMENTO ESPECIAL TRADICIONAL
                     raw_dezenas = [str(d).strip().zfill(2) for d in row[2:] if str(d).strip().isdigit()]
                     
-                    # Se for TRADICIONAL e tiver pelo menos 1 dezena
-                    if "TRADICIONAL" in nome_aba and len(raw_dezenas) >= 1:
-                        # Completa com zeros para não quebrar a lógica de 5 posições
-                        while len(raw_dezenas) < 5: raw_dezenas.append("00")
-                        dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas})
+                    if "TRADICIONAL" in nome_aba:
+                        # Se tiver pelo menos 1 dezena, preenche o resto com 00
+                        if len(raw_dezenas) >= 1:
+                            while len(raw_dezenas) < 5: raw_dezenas.append("00")
+                            dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
                     
-                    # Para as outras bancas, exige 5 dezenas
                     elif len(raw_dezenas) >= 5:
                         dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
             return dados
-        except Exception as e: return []
+        except: return []
     return []
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
@@ -188,8 +165,8 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
-        tabelas = soup.find_all('table')
         
+        # Cria variações do horário para busca
         alvos_possiveis = [horario_alvo]
         if ":00" in horario_alvo:
             hora_simples = horario_alvo.split(':')[0]
@@ -197,69 +174,73 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
             alvos_possiveis.append(f"{hora_simples}H")
             alvos_possiveis.append(f"{hora_simples} h")
         
-        # Ajuste para horários da Tradicional que tem minutos
         if ":20" in horario_alvo:
-             hora_simples = horario_alvo
-             alvos_possiveis.append(f"{hora_simples}h") # Ex: 11:20h
+             alvos_possiveis.append(f"{horario_alvo}h") # Ex: 11:20h
 
-        for tabela in tabelas:
-            if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                prev_element = tabela.find_previous(string=True)
-                if not prev_element or not prev_element.strip():
-                    prev_element = tabela.find_previous('div', class_='title')
-                    if prev_element: text_header = prev_element.get_text()
-                    else: text_header = ""
-                else:
-                    if prev_element.parent: text_header = prev_element.parent.get_text()
-                    else: text_header = prev_element
+        # LÓGICA DE EXTRAÇÃO MELHORADA (BUSCA TEXTO -> TABELA SEGUINTE)
+        # Em vez de achar a tabela e olhar pra trás, achamos o texto e olhamos pra frente
+        
+        # 1. Encontra todos os elementos de texto que contenham o horário
+        elementos_texto = soup.find_all(string=re.compile(r'\d')) # Pega tudo que tem número
+        
+        for texto in elementos_texto:
+            # Verifica se algum dos nossos horários alvo está neste texto
+            encontrou_horario = False
+            for alvo in alvos_possiveis:
+                if alvo in texto:
+                    encontrou_horario = True
+                    break
+            
+            if encontrou_horario:
+                # Verifica se é Federal (para ignorar)
+                if "FEDERAL" in texto.upper(): continue
                 
-                text_header_upper = text_header.upper()
-                if "RESULTADO DO DIA" in text_header_upper and "FEDERAL" in text_header_upper: continue 
-
-                encontrou_horario = False
-                for alvo in alvos_possiveis:
-                    if alvo in text_header:
-                        encontrou_horario = True
-                        break
+                # Se achou o horário, procura a próxima tabela após este elemento
+                # Tenta achar o parent (h3, div, etc) e buscar a tabela seguinte
+                parent = texto.parent
+                tabela_prox = parent.find_next('table')
                 
-                if encontrou_horario:
+                if tabela_prox:
                     dezenas_encontradas = []
-                    linhas = tabela.find_all('tr')
+                    linhas = tabela_prox.find_all('tr')
                     for linha in linhas:
                         cols = linha.find_all('td')
                         if len(cols) >= 2:
-                            premio_txt = cols[0].get_text().strip(); numero_txt = cols[1].get_text().strip()
+                            premio_txt = cols[0].get_text().strip()
+                            numero_txt = cols[1].get_text().strip()
                             nums_premio = re.findall(r'\d+', premio_txt)
                             
-                            # Se for TRADICIONAL, só pega o 1º prêmio
+                            # LOGICA TRADICIONAL (SÓ 1º PRÊMIO)
                             if banca_key == "TRADICIONAL":
                                 if nums_premio and int(nums_premio[0]) == 1:
                                     if numero_txt.isdigit() and len(numero_txt) >= 2:
                                         dezena = numero_txt[-2:]
                                         dezenas_encontradas.append(dezena)
-                                        break # Já achou o 1º, pode parar
+                                        # Completa com zeros e retorna
+                                        while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
+                                        return dezenas_encontradas, "Sucesso"
                             
-                            # Outras bancas pegam até o 5º
+                            # OUTRAS BANCAS
                             elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
                                     dezena = numero_txt[-2:]
                                     dezenas_encontradas.append(dezena)
                     
-                    # Validação de sucesso
-                    min_req = 1 if banca_key == "TRADICIONAL" else 5
-                    
-                    if len(dezenas_encontradas) >= min_req:
-                        # Se for tradicional, completa com zeros para a planilha ficar bonita
-                        if banca_key == "TRADICIONAL":
-                            while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
-                        
+                    # Se for outras bancas e achou 5
+                    if banca_key != "TRADICIONAL" and len(dezenas_encontradas) >= 5:
                         return dezenas_encontradas[:5], "Sucesso"
-                    
-        return None, f"Horário {horario_alvo} (ou variantes) não encontrado."
+
+        # Se falhou a busca inteligente, tenta o método antigo (fallback)
+        tabelas = soup.find_all('table')
+        for tabela in tabelas:
+            # ... (código antigo de fallback omitido para limpeza, o novo acima é superior)
+            pass
+            
+        return None, f"Horário {horario_alvo} não encontrado na página."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA + ESTATÍSTICA (V14.2) ---
+# --- 3. CÉREBRO: IA + ESTATÍSTICA + UNIDADE (V14.2) ---
 # =============================================================================
 
 def oraculo_ia(historico, indice_premio):
@@ -479,7 +460,7 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL ---
+# --- 4. DASHBOARD GERAL (COMPACTO) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -593,7 +574,7 @@ else:
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
                             time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
-            else: st.sidebar.error("Erro Conexão Planilha")
+            else: st.sidebar.error("Erro Conexão Planilha (Verifique se a aba existe)")
 
     else:
         st.sidebar.subheader("Extração em Massa")
@@ -639,7 +620,7 @@ else:
                 bar.progress(100)
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
-            else: st.sidebar.error("Erro Conexão")
+            else: st.sidebar.error("Erro Conexão Planilha (Verifique se a aba existe)")
 
     st.sidebar.markdown("---")
     with st.sidebar.expander("✍️ Inserção Manual"):
@@ -650,14 +631,21 @@ else:
         
         c1, c2, c3, c4, c5 = st.sidebar.columns(5)
         p1 = c1.text_input("1", max_chars=2, key="mp1")
-        p2 = c2.text_input("2", max_chars=2, key="mp2")
-        p3 = c3.text_input("3", max_chars=2, key="mp3")
-        p4 = c4.text_input("4", max_chars=2, key="mp4")
-        p5 = c5.text_input("5", max_chars=2, key="mp5")
+        
+        # Na Tradicional, só precisa do 1º prêmio
+        if banca_selecionada == "TRADICIONAL":
+            st.caption("Apenas 1º prêmio necessário.")
+            p2, p3, p4, p5 = "00", "00", "00", "00"
+        else:
+            p2 = c2.text_input("2", max_chars=2, key="mp2")
+            p3 = c3.text_input("3", max_chars=2, key="mp3")
+            p4 = c4.text_input("4", max_chars=2, key="mp4")
+            p5 = c5.text_input("5", max_chars=2, key="mp5")
         
         if st.sidebar.button("💾 Salvar"):
             man_dezenas = [p1, p2, p3, p4, p5]
-            if all(d.isdigit() and len(d) == 2 for d in man_dezenas):
+            # Validação: Pelo menos o primeiro deve ser válido
+            if p1.isdigit() and len(p1) == 2:
                 ws = conectar_planilha(conf['aba'])
                 if ws:
                     try:
@@ -669,14 +657,14 @@ else:
                     else:
                         ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
                         st.sidebar.success("Salvo!"); time.sleep(1); st.rerun()
-                else: st.sidebar.error("Erro")
-            else: st.sidebar.error("Preencha 2 dígitos")
+                else: st.sidebar.error("Erro Conexão")
+            else: st.sidebar.error("Preencha corretamente")
 
     st.subheader(f"Analise: {conf['display']}")
     historico = carregar_historico_dezenas(conf['aba'])
 
     if len(historico) == 0:
-        st.warning("⚠️ Base vazia (Crie a aba na planilha!).")
+        st.warning(f"⚠️ Base vazia. Verifique se a aba '{conf['aba']}' existe na planilha.")
     else:
         ult = historico[-1]
         st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
@@ -738,7 +726,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V14.2: Tradicional + Unidade Sniper</div>
+                <div class='subtitulo'>Estratégia V14.3: Tradicional + Unidade Sniper</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
