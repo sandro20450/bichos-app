@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V13.0 Victory Radar", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V13.1 Radar Fix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -90,6 +90,7 @@ st.markdown("""
     /* DASHBOARD CARDS */
     .dash-card { padding: 20px; border-radius: 10px; margin-bottom: 15px; text-align: center; border-left: 5px solid #fff; }
     .dash-critico { background-color: #4a0000; border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.2); }
+    .dash-perigo { background-color: #662200; border-color: #ff5500; } /* NOVA COR PARA 'FALTA 1' */
     .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
     .dash-vitoria { background-color: #004a00; border-color: #00ff00; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
     .dash-title { font-size: 22px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
@@ -413,7 +414,7 @@ def executar_backtest_centurion(historico, indice_premio):
     return resultados
 
 # =============================================================================
-# --- 4. DASHBOARD GERAL (ATUALIZADO V13) ---
+# --- 4. DASHBOARD GERAL (CORRIGIDO V13.1) ---
 # =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
@@ -424,24 +425,31 @@ def tela_dashboard_global():
     
     alertas_criticos = []
     
-    with st.spinner("Varrendo todas as bancas (Busca de Recordes Win/Loss)..."):
+    with st.spinner("Analisando todas as bancas em tempo real..."):
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
                 for i in range(5):
-                    # Chama a nova função completa
                     stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=False)
                     
-                    # 1. Analisa Risco (Derrotas)
+                    # 1. Analisa Risco (Derrotas) - REGRA NOVA V13.1
                     if max_stress > 0:
                         percentual_stress = stress / max_stress
-                        if percentual_stress >= 1.0:
+                        
+                        # ALERTA VERMELHO (Igualou ou bateu recorde)
+                        if stress >= max_stress:
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "CRITICO"})
+                        
+                        # ALERTA LARANJA (Falta 1 para o recorde) -> ESTE É O NOVO QUE VOCÊ PEDIU
+                        elif stress == (max_stress - 1):
+                            alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "PERIGO"})
+                        
+                        # ALERTA AMARELO (Acima de 70%)
                         elif percentual_stress >= 0.7:
                             alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": stress, "rec": max_stress, "tipo": "ATENCAO"})
                     
-                    # 2. Analisa Oportunidade (Vitórias) - Faltando 1 para o recorde
-                    if max_wins > 2 and wins > 0: # Ignora recordes muito pequenos (ex: 1 ou 2)
+                    # 2. Analisa Oportunidade (Vitórias)
+                    if max_wins > 2 and wins > 0:
                         if wins == (max_wins - 1):
                              alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": wins, "rec": max_wins, "tipo": "VITORIA"})
 
@@ -455,6 +463,8 @@ def tela_dashboard_global():
         for idx, alerta in enumerate(alertas_criticos):
             if alerta['tipo'] == "CRITICO":
                 classe = "dash-critico"; titulo = "🚨 RECORDE NEGATIVO!"; texto = "Derrotas Seguidas"
+            elif alerta['tipo'] == "PERIGO":
+                classe = "dash-perigo"; titulo = "⚠️ POR UM FIO (Falta 1)"; texto = "Derrotas Seguidas"
             elif alerta['tipo'] == "ATENCAO":
                 classe = "dash-atencao"; titulo = "⚠️ ZONA DE PRESSÃO"; texto = "Derrotas Seguidas"
             else: # VITORIA
@@ -617,7 +627,6 @@ else:
     for i, tab in enumerate(tabs):
         with tab:
             lista_final, cortadas, sat, gps_atrasados, final_bloq, gps_ia, confianca_ia = gerar_matriz_hibrida_ai(historico, i, usar_ia=True)
-            # CHAMA A MÉTRICA COMPLETA
             stress, max_stress, wins, max_wins = calcular_metricas_completas(historico, i, usar_ia_no_backtest=True)
             
             if HAS_AI and gps_ia:
@@ -649,7 +658,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V13: Radar de Vitórias + IA + Pentágono</div>
+                <div class='subtitulo'>Estratégia V13.1: Radar Sensível + IA + Pentágono</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
@@ -659,7 +668,6 @@ else:
             cor_stress = "#ff4b4b" if stress >= max_stress else "#ffffff"
             cor_wins = "#00ff00" if wins >= (max_wins - 1) else "#ffffff"
 
-            # Mostra as duas barras: Derrotas e Vitórias
             st.markdown(f"""
             <div style='text-align: center; margin-bottom:10px;'>
                 <span class='max-loss-pill'>📉 Derrotas: Max {max_stress} | <b>Atual: <span style='color:{cor_stress}'>{stress}</span></b></span>
