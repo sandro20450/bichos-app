@@ -12,7 +12,7 @@ from collections import Counter
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 75 - V7.2 TimeFix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 75 - V7.3 TimeFix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -32,36 +32,29 @@ for g in range(1, 26):
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
-    
     .box-centurion {
         background: linear-gradient(135deg, #5c0000, #2b0000);
         border: 2px solid #ffd700; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.15);
     }
-    
     .box-alert {
         background-color: #4a0000; border: 2px solid #ff0000;
         padding: 15px; border-radius: 10px; text-align: center;
         margin: 15px 0; animation: pulse 2s infinite; font-size: 18px; font-weight: bold;
     }
-    
     @keyframes pulse {
         0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4); }
         70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
         100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
     }
-    
     .titulo-gold { color: #ffd700; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
-    
     .lucro-info { background-color: rgba(0, 255, 0, 0.05); border: 1px solid #00ff00; padding: 10px; border-radius: 8px; color: #00ff00; font-weight: bold; margin-top: 20px; font-size: 16px; }
-    
     .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
     .pill-ref { background-color: #003300; color: #00ff00; border: 1px solid #00ff00; }
     .pill-final { background-color: #4a004a; color: #ff00ff; border: 1px solid #ff00ff; }
-    
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
@@ -69,9 +62,7 @@ st.markdown("""
     .bt-icon { font-size: 20px; margin-bottom: 2px; }
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
-
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
-    
     div[data-testid="stTable"] table { color: white; }
 </style>
 """, unsafe_allow_html=True)
@@ -130,6 +121,8 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
+                        
+                        # Comparação flexível para pegar o horário exato
                         if h_detect == horario_alvo:
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
@@ -148,7 +141,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: LÓGICA V6.0 + STRESS CALCULATOR ---
+# --- 3. CÉREBRO: LÓGICA V7.3 + STRESS CALCULATOR ---
 # =============================================================================
 def gerar_matriz_hibrida(historico, indice_premio):
     if not historico:
@@ -222,7 +215,6 @@ def gerar_matriz_hibrida(historico, indice_premio):
 def calcular_stress_atual(historico, indice_premio):
     if len(historico) < 10: return 0, 0
     
-    # 1. Pior Sequência Histórica (Recorde 50 jogos)
     offset_treino = 50
     total_disponivel = len(historico)
     inicio_simulacao = max(offset_treino, total_disponivel - 50)
@@ -240,7 +232,6 @@ def calcular_stress_atual(historico, indice_premio):
             derrotas_consecutivas = 0
     if derrotas_consecutivas > max_derrotas: max_derrotas = derrotas_consecutivas
     
-    # 2. Stress Atual
     stress_atual = 0
     for i in range(1, 20): 
         idx = -i
@@ -296,11 +287,14 @@ with st.sidebar:
         
         # --- AJUSTE DE HORÁRIO CAMINHO (QUA e SAB) ---
         lista_horarios = conf['horarios'].copy()
-        if banca_sel == "CAMINHO":
-            dia_semana = data_busca.weekday() # 0=Seg, 2=Qua, 5=Sab
-            if dia_semana == 2 or dia_semana == 5:
-                # Troca 20:00 por 19:30
-                lista_horarios = [h.replace("20:00", "19:30") for h in lista_horarios]
+        
+        # Verifica se é Caminho da Sorte E se é Quarta (2) ou Sábado (5)
+        if banca_sel == "CAMINHO" and (data_busca.weekday() == 2 or data_busca.weekday() == 5):
+            # Substituição FORÇADA da lista para garantir 19:30
+            lista_horarios = [
+                "09:40", "11:00", "12:40", "14:00", "15:40", 
+                "17:00", "18:30", "19:30", "21:00"
+            ]
         # -----------------------------------------------
 
         hora_busca = st.selectbox("Horário:", lista_horarios)
@@ -347,22 +341,28 @@ with st.sidebar:
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                total_ops = len(lista_datas) * len(conf['horarios'])
+                
+                # Calcula total aproximado para a barra
+                total_ops = len(lista_datas) * 8 # Estimativa
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    # --- AJUSTE DE HORÁRIO TURBO CAMINHO ---
+                    # --- LÓGICA DE HORÁRIO TURBO ---
                     horarios_do_dia = conf['horarios'].copy()
-                    if banca_sel == "CAMINHO":
-                         if dia.weekday() == 2 or dia.weekday() == 5:
-                             horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
-                    # ---------------------------------------
+                    if banca_sel == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
+                        horarios_do_dia = [
+                            "09:40", "11:00", "12:40", "14:00", "15:40", 
+                            "17:00", "18:30", "19:30", "21:00"
+                        ]
+                    # -------------------------------
 
                     for hora in horarios_do_dia:
                         op_atual += 1
-                        bar.progress(op_atual / total_ops)
+                        if op_atual <= total_ops: bar.progress(op_atual / total_ops)
+                        
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                        
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
