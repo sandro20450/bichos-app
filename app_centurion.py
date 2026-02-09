@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V17.1 Unit Tracker", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V18.1 Fix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -75,6 +75,7 @@ st.markdown("""
         background: linear-gradient(135deg, #2b005c, #1a0033);
         border: 1px solid #b300ff; padding: 15px; border-radius: 10px;
         margin-bottom: 15px; text-align: left;
+        box-shadow: 0 0 15px rgba(179, 0, 255, 0.2);
     }
     .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
     
@@ -162,7 +163,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (V14.5 ANTI-CLONE) ---
+# --- 2. CONEXÃO E RASPAGEM ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -400,18 +401,23 @@ def gerar_matriz_hibrida_ai(historico, indice_premio, usar_ia=True):
     
     return palpite_final, dezenas_cortadas_log, dados_sat, grupos_atrasados, final_bloqueado, grupos_ia, confianca_ia
 
+# --- CORREÇÃO: Unificação do Cálculo de Métricas (V18.1) ---
 def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=False):
     if len(historico) < 10: return 0, 0, 0, 0
+    # Padroniza para analisar os últimos 200 jogos para recordes
     offset_treino = 50
     total_disponivel = len(historico)
-    inicio_simulacao = max(offset_treino, total_disponivel - 50)
+    # Define início para cálculo de recordes (Max)
+    inicio_simulacao = max(offset_treino, total_disponivel - 200) 
     
     max_derrotas = 0; seq_derrotas = 0
     max_vitorias = 0; seq_vitorias = 0
     
+    # 1. Calcula Recordes Históricos (Max)
     for i in range(inicio_simulacao, total_disponivel):
         target_game = historico[i]
         target_dezena = target_game['dezenas'][indice_premio]
+        # Aqui usamos sempre a mesma função geradora para ser consistente
         palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:i], indice_premio, usar_ia=usar_ia_no_backtest) 
         win = target_dezena in palpite
         
@@ -424,27 +430,37 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
             seq_derrotas += 1
             if seq_derrotas > max_derrotas: max_derrotas = seq_derrotas
 
+    # 2. Calcula Status Atual (Current) - Olhando de trás pra frente
     atual_derrotas = 0
     atual_vitorias = 0
     
-    for i in range(1, 20): 
-        idx = -i
-        target_game = historico[idx]
-        target_dezena = target_game['dezenas'][indice_premio]
-        palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
-        win = target_dezena in palpite
-        
-        if i == 1 and not win:
-            atual_derrotas = 1
-        elif i == 1 and win:
-            atual_vitorias = 1
-        
-        elif atual_derrotas > 0:
-            if not win: atual_derrotas += 1
-            else: break 
-        elif atual_vitorias > 0:
-            if win: atual_vitorias += 1
-            else: break 
+    # Verifica o último jogo (i=1)
+    idx = -1
+    target_game = historico[idx]
+    target_dezena = target_game['dezenas'][indice_premio]
+    palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
+    win_last = target_dezena in palpite
+    
+    if win_last:
+        atual_vitorias = 1
+        # Conta para trás quantas vitórias seguidas
+        for i in range(2, 20):
+            idx = -i
+            target_game = historico[idx]
+            target_dezena = target_game['dezenas'][indice_premio]
+            palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
+            if target_dezena in palpite: atual_vitorias += 1
+            else: break
+    else:
+        atual_derrotas = 1
+        # Conta para trás quantas derrotas seguidas
+        for i in range(2, 20):
+            idx = -i
+            target_game = historico[idx]
+            target_dezena = target_game['dezenas'][indice_premio]
+            palpite, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(historico[:idx], indice_premio, usar_ia=usar_ia_no_backtest)
+            if target_dezena not in palpite: atual_derrotas += 1
+            else: break
 
     return atual_derrotas, max_derrotas, atual_vitorias, max_vitorias
 
@@ -452,9 +468,8 @@ def calcular_metricas_completas(historico, indice_premio, usar_ia_no_backtest=Fa
 def calcular_metricas_unidade_full(historico):
     if len(historico) < 10: return 0, 0, 0, 0
     
-    offset = 40 
     total_disponivel = len(historico)
-    inicio_simulacao = max(10, total_disponivel - offset)
+    inicio_simulacao = max(50, total_disponivel - 200)
     
     max_loss = 0; seq_loss = 0
     max_win = 0; seq_win = 0
@@ -480,27 +495,43 @@ def calcular_metricas_unidade_full(historico):
 
     atual_derrotas = 0
     atual_vitorias = 0
-    for i in range(1, 20):
-        idx = -i
-        try:
-            target_game = historico[idx]
-            target_unidade = target_game['dezenas'][0][-1]
-            hist_treino = historico[:idx]
-            lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
-            finais = [d[-1] for d in lista_final]
-            top_finais = [x[0] for x in Counter(finais).most_common(5)]
-            win = target_unidade in top_finais
-            if i == 1:
-                if win: atual_vitorias = 1
-                else: atual_derrotas = 1
-            else:
-                if atual_vitorias > 0:
-                    if win: atual_vitorias += 1
-                    else: break
-                elif atual_derrotas > 0:
-                    if not win: atual_derrotas += 1
-                    else: break
-        except: break
+    
+    # Verifica ultimo jogo
+    idx = -1
+    try:
+        target_game = historico[idx]
+        target_unidade = target_game['dezenas'][0][-1]
+        hist_treino = historico[:idx]
+        lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+        finais = [d[-1] for d in lista_final]
+        top_finais = [x[0] for x in Counter(finais).most_common(5)]
+        win_last = target_unidade in top_finais
+        
+        if win_last:
+            atual_vitorias = 1
+            for i in range(2, 20):
+                idx = -i
+                target_game = historico[idx]
+                target_unidade = target_game['dezenas'][0][-1]
+                hist_treino = historico[:idx]
+                lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+                finais = [d[-1] for d in lista_final]
+                top_finais = [x[0] for x in Counter(finais).most_common(5)]
+                if target_unidade in top_finais: atual_vitorias += 1
+                else: break
+        else:
+            atual_derrotas = 1
+            for i in range(2, 20):
+                idx = -i
+                target_game = historico[idx]
+                target_unidade = target_game['dezenas'][0][-1]
+                hist_treino = historico[:idx]
+                lista_final, _, _, _, _, _, _ = gerar_matriz_hibrida_ai(hist_treino, 0, usar_ia=True)
+                finais = [d[-1] for d in lista_final]
+                top_finais = [x[0] for x in Counter(finais).most_common(5)]
+                if target_unidade not in top_finais: atual_derrotas += 1
+                else: break
+    except: pass
         
     return atual_derrotas, max_loss, atual_vitorias, max_win
 
@@ -523,39 +554,26 @@ def analisar_padroes_futuros(historico, indice_premio):
         except: continue
     return ultima_dezena_real, encontrados
 
-# --- NOVO: RASTREADOR DE PADRÕES (UNIDADE) V17.1 ---
+# --- RASTREADOR DE PADRÕES (UNIDADE) ---
 def analisar_padroes_unidade(historico):
     if len(historico) < 10: return None, []
-    
-    # 1. Pega a unidade do último jogo
     try:
         ultima_dezena_real = historico[-1]['dezenas'][0]
         ultima_unidade_real = ultima_dezena_real[-1]
     except: return None, []
-    
     encontrados = []
-    
-    # 2. Varre para trás
     for i in range(len(historico) - 2, -1, -1):
         try:
             jogo_atual = historico[i]
             unidade_atual = jogo_atual['dezenas'][0][-1]
-            
             if unidade_atual == ultima_unidade_real:
-                # Achou a mesma unidade! Pega a próxima.
                 jogo_seguinte = historico[i+1]
                 unidade_seguinte = jogo_seguinte['dezenas'][0][-1]
                 data_seg = jogo_seguinte['data']
                 hora_seg = jogo_seguinte['hora']
-                
-                encontrados.append({
-                    "data": data_seg,
-                    "hora": hora_seg,
-                    "veio": unidade_seguinte
-                })
+                encontrados.append({ "data": data_seg, "hora": hora_seg, "veio": unidade_seguinte })
                 if len(encontrados) >= 5: break
         except: continue
-        
     return ultima_unidade_real, encontrados
 
 def executar_backtest_centurion(historico, indice_premio):
@@ -641,17 +659,17 @@ def tela_dashboard_global():
         cols = st.columns(4) 
         for idx, alerta in enumerate(alertas_criticos):
             if alerta['tipo'] == "CRITICO":
-                classe = "dash-critico"; titulo = "🚨 RECORDE!"; texto = "Loss"
+                classe = "dash-critico"; titulo = "🚨 RECORDE!"; texto = "DERROTAS"
             elif alerta['tipo'] == "PERIGO":
-                classe = "dash-perigo"; titulo = "⚠️ POR 1"; texto = "Loss"
+                classe = "dash-perigo"; titulo = "⚠️ POR 1"; texto = "DERROTAS"
             elif alerta['tipo'] == "ATENCAO":
-                classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "Loss"
+                classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "DERROTAS"
             elif alerta['tipo'] == "VITORIA":
-                classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "Wins"
+                classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "VITÓRIAS"
             elif alerta['tipo'] == "CRITICO_UNI":
-                classe = "dash-unidade"; titulo = "🎯 SNIPER CRÍTICO"; texto = "Loss"
+                classe = "dash-unidade"; titulo = "🎯 SNIPER CRÍTICO"; texto = "DERROTAS"
             elif alerta['tipo'] == "PERIGO_UNI":
-                classe = "dash-unidade"; titulo = "🎯 SNIPER ALERTA"; texto = "Loss"
+                classe = "dash-unidade"; titulo = "🎯 SNIPER ALERTA"; texto = "DERROTAS"
 
             with cols[idx % 4]: 
                 st.markdown(f"""
@@ -672,6 +690,9 @@ def tela_dashboard_global():
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
+# --- BOTÃO PARA PENTÁGONO ---
+st.sidebar.markdown("---")
+st.sidebar.link_button("🛡️ Ir para App PENTÁGONO", "https://seu-app-pentagono.streamlit.app") # COLOQUE O LINK CERTO
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
@@ -850,26 +871,9 @@ else:
                     for res in reversed(bt_sniper):
                         c_res = "bt-win" if res['win'] else "bt-loss"
                         ico = "🟢" if res['win'] else "🔴"
-                        lbl = "WIN" if res['win'] else "LOSS"
+                        lbl = "VITÓRIA" if res['win'] else "DERROTA"
                         cards_sniper += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>F{res['real']}</div><div class='bt-label'>{lbl}</div></div>"
                     st.markdown(f"<div class='backtest-container'>{cards_sniper}</div>", unsafe_allow_html=True)
-                
-                # --- RASTREADOR DE PADRÕES (UNIDADE - V17.1) ---
-                ultima_uni_real, padroes_uni = analisar_padroes_unidade(historico)
-                if padroes_uni:
-                    st.markdown(f"#### 🔍 Rastreador de Padrões (UNIDADE - Última: **{ultima_uni_real}**)")
-                    st.caption(f"Nas últimas 5 vezes que a unidade {ultima_uni_real} saiu, veja o que veio depois:")
-                    
-                    for p in padroes_uni:
-                        st.markdown(f"""
-                        <div class='pattern-row-uni'>
-                            <span class='pattern-date'>{p['data']} às {p['hora']}</span>
-                            <span class='pattern-result'>Veio Final: {p['veio']}</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.caption(f"A unidade {ultima_uni_real} é rara (menos de 5 ocorrências recentes).")
-                # ----------------------------------------------------
 
             if HAS_AI and gps_ia:
                 st.markdown(f"""
@@ -900,7 +904,7 @@ else:
             <div class='box-centurion'>
                 {info_sat} {info_imunes} {info_final}
                 <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V17.1: Centurion 46 (Double Money)</div>
+                <div class='subtitulo'>Estratégia V18.1: Centurion 46 (Double Money)</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
                 <div class='lucro-info'>💰 Custo: R$ {qtd_final},00 | Retorno: R$ 92,00 | Lucro: R$ {92 - qtd_final},00</div>
             </div>
@@ -925,14 +929,13 @@ else:
                 for res in reversed(bt_results):
                     c_res = "bt-win" if res['win'] else "bt-loss"
                     ico = "🟢" if res['win'] else "🔴"
-                    lbl = "WIN" if res['win'] else "LOSS"
+                    lbl = "VITÓRIA" if res['win'] else "DERROTA"
                     num = res['dezena']
                     cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
                 st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
 
             st.markdown("---")
             
-            # --- RASTREADOR DE PADRÕES (DEZENA - V17.0) ---
             ultima_dz_real, padroes_futuros = analisar_padroes_futuros(historico, i)
             if padroes_futuros:
                 st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
@@ -947,4 +950,17 @@ else:
                     """, unsafe_allow_html=True)
             else:
                 st.caption(f"A dezena {ultima_dz_real} é rara (menos de 5 ocorrências recentes). Sem padrão claro.")
-            # ----------------------------------------
+            
+            # UNIDADES PADRÕES
+            if banca_selecionada == "TRADICIONAL":
+                ultima_uni_real, padroes_uni = analisar_padroes_unidade(historico)
+                if padroes_uni:
+                    st.markdown(f"#### 🔍 Rastreador de Padrões (UNIDADE - Última: **{ultima_uni_real}**)")
+                    st.caption(f"Nas últimas 5 vezes que a unidade {ultima_uni_real} saiu, veja o que veio depois:")
+                    for p in padroes_uni:
+                        st.markdown(f"""
+                        <div class='pattern-row-uni'>
+                            <span class='pattern-date'>{p['data']} às {p['hora']}</span>
+                            <span class='pattern-result'>Veio Final: {p['veio']}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
