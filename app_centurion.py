@@ -20,107 +20,30 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V19.2 Final Fix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V19.3 Native", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
-    "LOTEP": { 
-        "display": "LOTEP (Dezenas)", 
-        "aba": "BASE_LOTEP_DEZ", 
-        "slug": "lotep", 
-        "horarios": ["10:45", "12:45", "15:45", "18:00"] 
-    },
-    "CAMINHO": { 
-        "display": "CAMINHO (Dezenas)", 
-        "aba": "BASE_CAMINHO_DEZ", 
-        "slug": "caminho-da-sorte", 
-        "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] 
-    },
-    "MONTE": { 
-        "display": "MONTE CARLOS (Dezenas)", 
-        "aba": "BASE_MONTE_DEZ", 
-        "slug": "nordeste-monte-carlos", 
-        "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] 
-    },
-    "TRADICIONAL": { 
-        "display": "TRADICIONAL (1º Prêmio)", 
-        "aba": "BASE_TRADICIONAL_DEZ", 
-        "slug": "loteria-tradicional", 
-        "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
-    }
+    "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] },
+    "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] },
+    "TRADICIONAL": { "display": "TRADICIONAL (1º Prêmio)", "aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] }
 }
 
-# Estilo Visual
+# Mapeamento Reverso
+DEZENA_TO_GRUPO = {}
+for g in range(1, 26):
+    fim = g * 4; inicio = fim - 3
+    for n in range(inicio, fim + 1):
+        d_str = "00" if n == 100 else f"{n:02}"
+        DEZENA_TO_GRUPO[d_str] = g
+
+# Estilo Visual Mínimo (Apenas para tabelas e ajustes finos)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
-    
-    .box-centurion {
-        background: linear-gradient(135deg, #004d00, #002600);
-        border: 2px solid #00ff00; padding: 20px; border-radius: 12px;
-        text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(0, 255, 0, 0.15);
-    }
-    
-    .box-ai {
-        background: linear-gradient(135deg, #2b005c, #1a0033);
-        border: 1px solid #b300ff; padding: 15px; border-radius: 10px;
-        margin-bottom: 15px; text-align: left;
-        box-shadow: 0 0 15px rgba(179, 0, 255, 0.2);
-    }
-    .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
-    
-    .box-unidade {
-        background: linear-gradient(135deg, #003366, #004080);
-        border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
-        margin-bottom: 5px; text-align: center;
-        box-shadow: 0 0 15px rgba(0, 153, 255, 0.2);
-    }
-    .uni-title { color: #0099ff; font-weight: 900; font-size: 18px; text-transform: uppercase; margin-bottom: 5px; }
-    .uni-nums { font-size: 22px; color: #fff; font-weight: bold; letter-spacing: 3px; }
-    
-    .box-alert {
-        background-color: #4a0000; border: 2px solid #ff0000;
-        padding: 15px; border-radius: 10px; text-align: center;
-        margin: 15px 0; animation: pulse 2s infinite; font-size: 18px; font-weight: bold;
-    }
-    
-    .titulo-gold { color: #00ff00; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
-    .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
-    .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
-    
-    .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
-    .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    
-    .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-    .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
-    .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
-    .bt-icon { font-size: 20px; margin-bottom: 2px; }
-    .bt-num { font-size: 14px; font-weight: bold; }
-    .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
-    
-    .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
-    .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
-    
-    .dash-card { padding: 10px 5px; border-radius: 8px; margin-bottom: 8px; text-align: center; border-left: 4px solid #fff; }
-    .dash-critico { background-color: #4a0000; border-color: #ff0000; }
-    .dash-perigo { background-color: #662200; border-color: #ff5500; }
-    .dash-atencao { background-color: #4a3b00; border-color: #ffcc00; }
-    .dash-vitoria { background-color: #003300; border-color: #00ff00; }
-    .dash-unidade { background-color: #002244; border-color: #0099ff; }
-    
-    .dash-title { font-size: 13px; font-weight: 900; margin-bottom: 0px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dash-subtitle { font-size: 11px; opacity: 0.8; margin-bottom: 2px; }
-    .dash-metric { font-size: 20px; font-weight: bold; margin: 2px 0; line-height: 1.2; }
-    .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
-    .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
-
-    .pattern-row { background-color: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #00ff00; }
-    .pattern-row-uni { background-color: rgba(0, 153, 255, 0.1); padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #0099ff; }
-    .pattern-date { font-size: 12px; color: #aaa; }
-    .pattern-result { font-size: 16px; font-weight: bold; color: #fff; }
-
     div[data-testid="stTable"] table { color: white; }
+    .big-font { font-size: 20px !important; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -146,11 +69,9 @@ def carregar_historico_dezenas(nome_aba):
             for row in raw[1:]:
                 if len(row) >= 3:
                     raw_dezenas = [str(d).strip().zfill(2) for d in row[2:] if str(d).strip().isdigit()]
-                    if "TRADICIONAL" in nome_aba and len(raw_dezenas) >= 1:
+                    if "TRADICIONAL" in nome_aba:
                         while len(raw_dezenas) < 5: raw_dezenas.append("00")
-                        dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
-                    elif len(raw_dezenas) >= 5:
-                        dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
+                    dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
             return dados
         except: return [] 
     return []
@@ -182,9 +103,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                 element = header_text.parent
                 tabela = element.find_next('table')
                 if tabela:
-                    txt_tabela = tabela.get_text().upper()
-                    if "PRÊMIO" not in txt_tabela or "MILHAR" not in txt_tabela: continue 
-
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
@@ -201,7 +119,6 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                                         dezenas_encontradas.append(dezena)
                                         while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
                                         return dezenas_encontradas, f"Sucesso (Confirmado: {data_formatada_verif})"
-                            
                             elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
                                     dezena = numero_txt[-2:]
@@ -209,12 +126,11 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                     
                     if banca_key != "TRADICIONAL" and len(dezenas_encontradas) >= 5:
                         return dezenas_encontradas[:5], "Sucesso"
-
         return None, f"Horário {horario_alvo} do dia {data_formatada_verif} não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (V19.2) ---
+# --- 3. CÉREBRO: IA PURE ---
 # =============================================================================
 
 def treinar_oraculo_dezenas(historico, indice_premio):
@@ -285,23 +201,19 @@ def calcular_metricas_ai_pure(historico, indice_premio):
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(50, total - 100) 
-    max_loss = 0; seq_loss = 0
-    max_win = 0; seq_win = 0
+    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
     for i in range(inicio, total):
         target_dezena = historico[i]['dezenas'][indice_premio]
         hist_parcial = historico[:i]
         palpite, _, _ = gerar_legiao_46_ai_pure(hist_parcial, indice_premio)
         win = target_dezena in palpite
         if win:
-            seq_loss = 0
-            seq_win += 1
+            seq_loss = 0; seq_win += 1
             if seq_win > max_win: max_win = seq_win
         else:
-            seq_win = 0
-            seq_loss += 1
+            seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
-    atual_loss = 0
-    atual_win = 0
+    atual_loss = 0; atual_win = 0
     idx = -1
     target_last = historico[idx]['dezenas'][indice_premio]
     palpite_last, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
@@ -342,10 +254,9 @@ def calcular_metricas_unidade_full(historico):
                 if seq_loss > max_loss: max_loss = seq_loss
         except: continue
     atual_loss = 0; atual_win = 0
-    idx = -1
     try:
-        target = historico[idx]['dezenas'][0][-1]
-        lista_final, _, _ = gerar_legiao_46_ai_pure(historico[:idx], 0)
+        target = historico[-1]['dezenas'][0][-1]
+        lista_final, _, _ = gerar_legiao_46_ai_pure(historico[:-1], 0)
         finais = [d[-1] for d in lista_final]
         top_finais = [x[0] for x in Counter(finais).most_common(5)]
         if target in top_finais:
@@ -423,10 +334,8 @@ def executar_backtest_unidade(historico):
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
     st.markdown("### 📡 Radar Global de Oportunidades")
-    
     col1, col2, col3 = st.columns(3)
     col1.metric("Bancas", "4", "Lotep, Caminho, Monte, Trad")
-    
     alertas_criticos = []
     
     with st.spinner("Analisando todas as bancas em tempo real..."):
@@ -434,7 +343,6 @@ def tela_dashboard_global():
             historico = carregar_historico_dezenas(config['aba'])
             if len(historico) > 50:
                 limit_range = 1 if banca_key == "TRADICIONAL" else 5
-                
                 for i in range(limit_range):
                     loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
                     if max_loss > 0:
@@ -442,7 +350,6 @@ def tela_dashboard_global():
                         elif loss == (max_loss - 1): alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "PERIGO"})
                     if max_win > 2 and win == (max_win - 1):
                          alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": win, "rec": max_win, "tipo": "VITORIA"})
-
                 if banca_key == "TRADICIONAL":
                     u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidade_full(historico)
                     if u_max_loss > 0:
@@ -455,25 +362,17 @@ def tela_dashboard_global():
     
     if alertas_criticos:
         st.subheader("🚨 Zonas de Interesse Identificadas")
-        cols = st.columns(4) 
-        for idx, alerta in enumerate(alertas_criticos):
-            if alerta['tipo'] == "CRITICO": classe = "dash-critico"; titulo = "🚨 RECORDE!"; texto = "DERROTAS"
-            elif alerta['tipo'] == "PERIGO": classe = "dash-perigo"; titulo = "⚠️ POR 1"; texto = "DERROTAS"
-            elif alerta['tipo'] == "VITORIA": classe = "dash-vitoria"; titulo = "🤑 RECORD WIN!"; texto = "VITÓRIAS"
-            elif alerta['tipo'] == "CRITICO_UNI": classe = "dash-unidade"; titulo = "🎯 SNIPER CRÍTICO"; texto = "DERROTAS"
-            elif alerta['tipo'] == "PERIGO_UNI": classe = "dash-unidade"; titulo = "🎯 SNIPER ALERTA"; texto = "DERROTAS"
-            else: classe = "dash-atencao"; titulo = "⚠️ ATENÇÃO"; texto = "DERROTAS"
-
-            with cols[idx % 4]: 
-                st.markdown(f"""
-                <div class='dash-card {classe}'>
-                    <div class='dash-title'>{alerta['banca'].split('(')[0]}</div>
-                    <div class='dash-subtitle'>{alerta['premio']}</div>
-                    <div class='dash-metric'>{alerta['val']} {texto}</div>
-                    <p class='dash-footer'>Max Hist: {alerta['rec']}</p>
-                    <span class='dash-badge'>{titulo}</span>
-                </div>
-                """, unsafe_allow_html=True)
+        for alerta in alertas_criticos:
+            if alerta['tipo'] == "CRITICO":
+                st.error(f"🚨 **{alerta['banca']} - {alerta['premio']}** | RECORDE ATINGIDO! {alerta['val']} Derrotas (Max: {alerta['rec']})")
+            elif alerta['tipo'] == "PERIGO":
+                st.warning(f"⚠️ **{alerta['banca']} - {alerta['premio']}** | ZONA DE PERIGO: {alerta['val']} Derrotas (Max: {alerta['rec']})")
+            elif alerta['tipo'] == "VITORIA":
+                st.success(f"🤑 **{alerta['banca']} - {alerta['premio']}** | SEQUÊNCIA DE VITÓRIAS! {alerta['val']} Vitórias (Max: {alerta['rec']})")
+            elif alerta['tipo'] == "CRITICO_UNI":
+                st.error(f"🎯 **{alerta['banca']} - {alerta['premio']}** | SNIPER CRÍTICO! {alerta['val']} Derrotas (Max: {alerta['rec']})")
+            elif alerta['tipo'] == "PERIGO_UNI":
+                st.warning(f"🎯 **{alerta['banca']} - {alerta['premio']}** | SNIPER ALERTA! {alerta['val']} Derrotas (Max: {alerta['rec']})")
     else:
         st.success("✅ O Radar não detectou anomalias críticas no momento.")
 
@@ -500,6 +399,8 @@ else:
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.sidebar.markdown("---")
 
+    # (CÓDIGO DE EXTRAÇÃO MANTIDO IGUAL - OMITIDO AQUI POR BREVIDADE MAS INCLUA NO SEU ARQUIVO SE ESTIVER FALTANDO, OU USE O BLOCO DA VERSÃO ANTERIOR)
+    # VOU INCLUIR O BLOCO DE EXTRAÇÃO PARA O CODIGO FICAR 100% COMPLETO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.sidebar.subheader("Extração Unitária")
         opt_data = st.sidebar.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -554,7 +455,11 @@ else:
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    for hora in conf['horarios']:
+                    horarios_do_dia = conf['horarios'].copy()
+                    if banca_selecionada == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
+                        horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
+
+                    for hora in horarios_do_dia:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
@@ -630,57 +535,42 @@ else:
             lista_final, cortadas, confianca_ia = gerar_legiao_46_ai_pure(historico, i)
             loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
             
-            # --- CARD 1: IA ORÁCULO ---
+            # --- USO DE COMPONENTES NATIVOS DO STREAMLIT PARA EVITAR ERROS DE HTML ---
+            
             if HAS_AI:
-                st.markdown(f"""
-                <div class='box-ai'>
-                    <div class='ai-title'>🧠 Oráculo IA (Pure Dezenas)</div>
-                    <div style='color:#fff; font-size:16px; margin-bottom:5px;'>Análise Pura de Tendência (00-99)</div>
-                    <div style='font-size:12px; color:#d900ff;'>Confiança do Modelo: {confianca_ia:.1f}%</div>
-                </div>
-                """, unsafe_allow_html=True)
-            elif not HAS_AI:
-                st.caption("⚠️ IA desativada (Scikit-learn carregando...).")
-
-            # --- CARD 2: LEGIÃO 46 ---
-            aviso_alerta = ""
+                with st.container(border=True):
+                    st.markdown("### 🧠 Oráculo IA (Pure Dezenas)")
+                    st.info(f"Confiança do Modelo: {confianca_ia:.1f}%")
+            
+            # Alertas
             if loss >= max_loss and max_loss > 0:
-                aviso_alerta = f"<div class='box-alert'>🚨 <b>ALERTA MÁXIMO:</b> {loss} Derrotas Seguidas (Recorde Atingido!)</div>"
+                st.error(f"🚨 **ALERTA MÁXIMO:** {loss} Derrotas Seguidas (Recorde Atingido!)")
             
-            info_cortes = f"<span class='info-pill pill-sat'>🚫 {len(cortadas)} SATURADAS CORTADAS</span>" if cortadas else ""
+            # Card Principal (Nativo)
+            with st.container(border=True):
+                if cortadas:
+                    st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
+                
+                st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
+                st.caption("Estratégia V19.3: AI Pure + Filtro Saturação")
+                st.code(", ".join(lista_final), language="text")
             
-            st.markdown(f"""
-            {aviso_alerta}
-            <div class='box-centurion'>
-                {info_cortes}
-                <div class='titulo-gold'>LEGIÃO 46 - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V19.2: AI Pure + Filtro Saturação</div>
-                <div class='nums-destaque'>{', '.join(lista_final)}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Métricas
+            col_m1, col_m2 = st.columns(2)
+            col_m1.metric("Derrotas", f"{loss}", f"Max: {max_loss}", delta_color="inverse")
+            col_m2.metric("Vitórias", f"{win}", f"Max: {max_win}")
             
-            cor_stress = "#ff4b4b" if loss >= max_loss else "#ffffff"
-            cor_wins = "#00ff00" if win >= (max_win - 1) else "#ffffff"
-
-            st.markdown(f"""
-            <div style='text-align: center; margin-bottom:10px;'>
-                <span class='max-loss-pill'>📉 Derrotas: Max {max_loss} | <b>Atual: <span style='color:{cor_stress}'>{loss}</span></b></span>
-                <span class='max-win-pill'>📈 Vitórias: Max {max_win} | <b>Atual: <span style='color:{cor_wins}'>{win}</span></b></span>
-            </div>
-            """, unsafe_allow_html=True)
-
+            # Backtest
             bt_results = executar_backtest_centurion(historico, i)
-            
             if bt_results:
                 st.markdown("### ⏪ Performance Recente")
-                cards_html = ""
-                for res in reversed(bt_results):
-                    c_res = "bt-win" if res['win'] else "bt-loss"
-                    ico = "🟢" if res['win'] else "🔴"
-                    lbl = "VITÓRIA" if res['win'] else "DERROTA"
-                    num = res['dezena']
-                    cards_html += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>{num}</div><div class='bt-label'>{lbl}</div></div>"
-                st.markdown(f"<div class='backtest-container'>{cards_html}</div>", unsafe_allow_html=True)
+                cols_bt = st.columns(len(bt_results))
+                for idx_bt, res in enumerate(reversed(bt_results)):
+                    with cols_bt[idx_bt]:
+                        lbl = "VITÓRIA" if res['win'] else "DERROTA"
+                        val = res['dezena']
+                        if res['win']: st.success(f"{val} ({lbl})")
+                        else: st.error(f"{val} ({lbl})")
 
             st.markdown("---")
             
@@ -688,56 +578,35 @@ else:
             if padroes_futuros:
                 st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
                 st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
-                
-                for p in padroes_futuros:
-                    st.markdown(f"""
-                    <div class='pattern-row'>
-                        <span class='pattern-date'>{p['data']} às {p['hora']}</span>
-                        <span class='pattern-result'>Veio a Dezena: {p['veio']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.caption(f"A dezena {ultima_dz_real} é rara (menos de 5 ocorrências recentes). Sem padrão claro.")
+                st.table(pd.DataFrame(padroes_futuros))
             
             if banca_selecionada == "TRADICIONAL":
                 finais = [d[-1] for d in lista_final]
                 top_finais = [x[0] for x in Counter(finais).most_common(5)]
                 
-                st.markdown(f"""
-                <div class='box-unidade'>
-                    <div class='uni-title'>🎯 UNIDADE SNIPER (9.20x)</div>
-                    <div class='uni-nums'>Finais Fortes: {', '.join(top_finais)}</div>
-                    <div style='font-size:12px; opacity:0.8;'>Baseado nas 46 dezenas da IA</div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown("### 🎯 UNIDADE SNIPER (9.20x)")
+                    st.markdown(f"**Finais Fortes:** {', '.join(top_finais)}")
+                    st.caption("Baseado nas 46 dezenas da IA")
                 
                 u_loss, u_max, u_win, u_max_win = calcular_metricas_unidade_full(historico)
-                cor_u = "#ff4b4b" if u_loss > 0 else "#fff"
-                st.markdown(f"""
-                <div style='text-align: center; margin-bottom:15px;'>
-                    <span class='max-loss-pill'>📉 Derrotas: Max {u_max} | <b>Atual: <span style='color:{cor_u}'>{u_loss}</span></b></span>
-                    <span class='max-win-pill'>📈 Vitórias: Max {u_max_win} | <b>Atual: {u_win}</b></span>
-                </div>
-                """, unsafe_allow_html=True)
+                
+                c_u1, c_u2 = st.columns(2)
+                c_u1.metric("Uni Derrotas", f"{u_loss}", f"Max: {u_max}", delta_color="inverse")
+                c_u2.metric("Uni Vitórias", f"{u_win}", f"Max: {u_max_win}")
                 
                 bt_sniper = executar_backtest_unidade(historico)
                 if bt_sniper:
-                    cards_sniper = ""
-                    for res in reversed(bt_sniper):
-                        c_res = "bt-win" if res['win'] else "bt-loss"
-                        ico = "🟢" if res['win'] else "🔴"
-                        lbl = "VITÓRIA" if res['win'] else "DERROTA"
-                        cards_sniper += f"<div class='bt-card {c_res}'><div class='bt-icon'>{ico}</div><div class='bt-num'>F{res['real']}</div><div class='bt-label'>{lbl}</div></div>"
-                    st.markdown(f"<div class='backtest-container'>{cards_sniper}</div>", unsafe_allow_html=True)
+                    cols_ubt = st.columns(len(bt_sniper))
+                    for idx_ubt, res in enumerate(reversed(bt_sniper)):
+                        with cols_ubt[idx_ubt]:
+                            lbl = "WIN" if res['win'] else "LOSS"
+                            val = f"F{res['real']}"
+                            if res['win']: st.success(f"{val}")
+                            else: st.error(f"{val}")
 
                 ultima_uni_real, padroes_uni = analisar_padroes_unidade(historico)
                 if padroes_uni:
                     st.markdown(f"#### 🔍 Rastreador de Padrões (UNIDADE - Última: **{ultima_uni_real}**)")
                     st.caption(f"Nas últimas 5 vezes que a unidade {ultima_uni_real} saiu, veja o que veio depois:")
-                    for p in padroes_uni:
-                        st.markdown(f"""
-                        <div class='pattern-row-uni'>
-                            <span class='pattern-date'>{p['data']} às {p['hora']}</span>
-                            <span class='pattern-result'>Veio Final: {p['veio']}</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    st.table(pd.DataFrame(padroes_uni))
