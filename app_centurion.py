@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V20.0 Turbo", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V21.0 Dual AI", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -30,20 +30,12 @@ CONFIG_BANCAS = {
     "TRADICIONAL": { "display": "TRADICIONAL (1º Prêmio)", "aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] }
 }
 
-# Mapeamento Reverso
-DEZENA_TO_GRUPO = {}
-for g in range(1, 26):
-    fim = g * 4; inicio = fim - 3
-    for n in range(inicio, fim + 1):
-        d_str = "00" if n == 100 else f"{n:02}"
-        DEZENA_TO_GRUPO[d_str] = g
-
 # Estilo Visual Mínimo (Nativo)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
-    /* Ajustes finos para tabelas nativas */
+    .stMetric label { color: #aaaaaa !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,7 +45,6 @@ st.markdown("""
 
 @st.cache_resource(show_spinner=False)
 def conectar_planilha_cached():
-    """Conecta ao Google Sheets e mantem a conexão em cache."""
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
@@ -63,9 +54,8 @@ def conectar_planilha_cached():
         return gc
     return None
 
-@st.cache_data(ttl=60, show_spinner=False) # Atualiza a cada 60 segundos
+@st.cache_data(ttl=60, show_spinner=False)
 def carregar_historico_dezenas(nome_aba):
-    """Baixa os dados da planilha e armazena em cache por 1 minuto."""
     gc = conectar_planilha_cached()
     if gc:
         try:
@@ -85,7 +75,6 @@ def carregar_historico_dezenas(nome_aba):
     return []
 
 def conectar_planilha_para_escrita(nome_aba):
-    """Conexão direta para escrita (sem cache de dados)"""
     gc = conectar_planilha_cached()
     if gc:
         try:
@@ -95,7 +84,6 @@ def conectar_planilha_para_escrita(nome_aba):
     return None
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
-    # Não usamos cache aqui pois é uma ação de busca em tempo real
     config = CONFIG_BANCAS[banca_key]
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     data_formatada_verif = data_alvo.strftime('%d/%m/%Y')
@@ -149,14 +137,11 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (COM CACHE) ---
+# --- 3. CÉREBRO: IA PURE (DEZENAS) ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
 def treinar_oraculo_dezenas(historico, indice_premio):
-    """
-    Treina a IA. O resultado é cacheado. Se 'historico' não mudar, é instantâneo.
-    """
     if not HAS_AI or len(historico) < 50: return [], 0
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
@@ -228,12 +213,8 @@ def calcular_metricas_ai_pure(historico, indice_premio):
     inicio = max(50, total - 100) 
     max_loss = 0; seq_loss = 0
     max_win = 0; seq_win = 0
-    
-    # Loop de simulação
     for i in range(inicio, total):
         target_dezena = historico[i]['dezenas'][indice_premio]
-        # Nota: Chamamos a função cacheada aqui. Como 'hist_parcial' muda a cada iteração,
-        # o cache será criado para cada passo do loop na primeira vez, e reutilizado depois.
         hist_parcial = historico[:i]
         palpite, _, _ = gerar_legiao_46_ai_pure(hist_parcial, indice_premio)
         win = target_dezena in palpite
@@ -243,13 +224,11 @@ def calcular_metricas_ai_pure(historico, indice_premio):
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
-            
     atual_loss = 0; atual_win = 0
     idx = -1
     target_last = historico[idx]['dezenas'][indice_premio]
     palpite_last, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
     win_last = target_last in palpite_last
-    
     if win_last:
         atual_win = 1
         for k in range(2, 15):
@@ -266,50 +245,126 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             else: break
     return atual_loss, max_loss, atual_win, max_win
 
+# =============================================================================
+# --- 3.1 CÉREBRO: IA PURE (UNIDADES) - NOVO V21.0 ---
+# =============================================================================
+
 @st.cache_data(show_spinner=False)
-def calcular_metricas_unidade_full(historico):
+def treinar_oraculo_unidades(historico):
+    """
+    Treina uma IA específica para o último dígito (Unidade).
+    Retorna: Lista rankeada (0-9) e Confiança do #1.
+    """
+    if not HAS_AI or len(historico) < 50: return [], 0
+    
+    # Prepara dados focados na unidade
+    df = pd.DataFrame(historico)
+    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
+    df = df.dropna(subset=['data_dt'])
+    
+    df['dia_semana'] = df['data_dt'].dt.dayofweek 
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['hora'])
+    
+    # Extrai o alvo: APENAS O ÚLTIMO DÍGITO
+    try:
+        # Pega a dezena do 1º prêmio e extrai o último caractere, converte para int
+        unidades_alvo = [int(j['dezenas'][0][-1]) for j in historico if 'data_dt' in df.columns]
+    except: return [], 0
+    
+    # Alinha tamanho
+    df = df.iloc[:len(unidades_alvo)]
+    df['target_uni'] = unidades_alvo
+    df['target_futuro'] = df['target_uni'].shift(-1)
+    
+    df_treino = df.dropna().tail(200) # Treina com os últimos 200
+    
+    if len(df_treino) < 30: return [], 0
+    
+    X = df_treino[['dia_semana', 'hora_code', 'target_uni']]
+    y = df_treino['target_futuro']
+    
+    modelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+    modelo.fit(X, y)
+    
+    # Previsão
+    ultimo_real = df.iloc[-1]
+    X_novo = pd.DataFrame({
+        'dia_semana': [ultimo_real['dia_semana']],
+        'hora_code': [ultimo_real['hora_code']],
+        'target_uni': [ultimo_real['target_uni']]
+    })
+    
+    probs = modelo.predict_proba(X_novo)[0]
+    classes = modelo.classes_
+    
+    ranking_uni = []
+    for i, prob in enumerate(probs):
+        uni = int(classes[i])
+        ranking_uni.append((uni, prob))
+        
+    ranking_uni.sort(key=lambda x: x[1], reverse=True)
+    
+    return ranking_uni, (ranking_uni[0][1] * 100)
+
+@st.cache_data(show_spinner=False)
+def calcular_metricas_unidade_ia(historico):
+    """
+    Calcula acertos da IA de Unidade (Top 5).
+    """
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(50, total - 100)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    
     for i in range(inicio, total):
         try:
-            target = historico[i]['dezenas'][0][-1]
+            target = int(historico[i]['dezenas'][0][-1])
             hist_p = historico[:i]
-            lista_final, _, _ = gerar_legiao_46_ai_pure(hist_p, 0)
-            finais = [d[-1] for d in lista_final]
-            top_finais = [x[0] for x in Counter(finais).most_common(5)]
-            if target in top_finais:
+            # Usa a IA de unidades para prever
+            rank_u, _ = treinar_oraculo_unidades(hist_p)
+            # Pega o Top 5 sugerido pela IA
+            top_5_ia = [u for u, p in rank_u[:5]]
+            
+            if target in top_5_ia:
                 seq_loss = 0; seq_win += 1
                 if seq_win > max_win: max_win = seq_win
             else:
                 seq_win = 0; seq_loss += 1
                 if seq_loss > max_loss: max_loss = seq_loss
         except: continue
+        
+    # Atual
     atual_loss = 0; atual_win = 0
+    idx = -1
     try:
-        target = historico[-1]['dezenas'][0][-1]
-        lista_final, _, _ = gerar_legiao_46_ai_pure(historico[:-1], 0)
-        finais = [d[-1] for d in lista_final]
-        top_finais = [x[0] for x in Counter(finais).most_common(5)]
-        if target in top_finais:
+        target = int(historico[idx]['dezenas'][0][-1])
+        rank_u, _ = treinar_oraculo_unidades(historico[:idx])
+        top_5_ia = [u for u, p in rank_u[:5]]
+        
+        if target in top_5_ia:
             atual_win = 1
             for k in range(2, 15):
-                t = historico[-k]['dezenas'][0][-1]
-                lf, _, _ = gerar_legiao_46_ai_pure(historico[:-k], 0)
-                tf = [x[0] for x in Counter([d[-1] for d in lf]).most_common(5)]
-                if t in tf: atual_win += 1
+                t = int(historico[-k]['dezenas'][0][-1])
+                ru, _ = treinar_oraculo_unidades(historico[:-k])
+                t5 = [u for u, p in ru[:5]]
+                if t in t5: atual_win += 1
                 else: break
         else:
             atual_loss = 1
             for k in range(2, 15):
-                t = historico[-k]['dezenas'][0][-1]
-                lf, _, _ = gerar_legiao_46_ai_pure(historico[:-k], 0)
-                tf = [x[0] for x in Counter([d[-1] for d in lf]).most_common(5)]
-                if t not in tf: atual_loss += 1
+                t = int(historico[-k]['dezenas'][0][-1])
+                ru, _ = treinar_oraculo_unidades(historico[:-k])
+                t5 = [u for u, p in ru[:5]]
+                if t not in t5: atual_loss += 1
                 else: break
     except: pass
+    
     return atual_loss, max_loss, atual_win, max_win
+
+# =============================================================================
+# --- 4. EXIBIÇÃO E DASHBOARD ---
+# =============================================================================
 
 def analisar_padroes_futuros(historico, indice_premio):
     if len(historico) < 10: return None, []
@@ -353,17 +408,14 @@ def executar_backtest_unidade(historico):
     for i in range(1, 5):
         idx = -i
         try:
-            target = historico[idx]['dezenas'][0][-1]
-            lf, _, _ = gerar_legiao_46_ai_pure(historico[:idx], 0)
-            tf = [x[0] for x in Counter([d[-1] for d in lf]).most_common(5)]
-            win = target in tf
+            target = int(historico[idx]['dezenas'][0][-1])
+            rank_u, _ = treinar_oraculo_unidades(historico[:idx])
+            top_5_ia = [u for u, p in rank_u[:5]]
+            win = target in top_5_ia
             resultados.append({'index': i, 'real': target, 'win': win})
         except: continue
     return resultados
 
-# =============================================================================
-# --- 4. DASHBOARD GERAL ---
-# =============================================================================
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
     st.markdown("### 📡 Radar Global de Oportunidades")
@@ -375,16 +427,12 @@ def tela_dashboard_global():
     
     with st.spinner("Analisando todas as bancas em tempo real..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            # AQUI O CACHE ENTRA EM AÇÃO
             historico = carregar_historico_dezenas(config['aba'])
-            
             if len(historico) > 50:
                 limit_range = 1 if banca_key == "TRADICIONAL" else 5
                 
                 for i in range(limit_range):
-                    # AQUI TAMBÉM TEM CACHE
                     loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
-                    
                     if max_loss > 0:
                         if loss >= max_loss: alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "CRITICO"})
                         elif loss == (max_loss - 1): alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "PERIGO"})
@@ -392,10 +440,11 @@ def tela_dashboard_global():
                          alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": win, "rec": max_win, "tipo": "VITORIA"})
 
                 if banca_key == "TRADICIONAL":
-                    u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidade_full(historico)
+                    # Usa a métrica da NOVA IA de unidades
+                    u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidade_ia(historico)
                     if u_max_loss > 0:
-                        if u_loss >= u_max_loss: alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "CRITICO_UNI"})
-                        elif u_loss == (u_max_loss - 1): alertas_criticos.append({"banca": "TRADICIONAL (Unidade)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "PERIGO_UNI"})
+                        if u_loss >= u_max_loss: alertas_criticos.append({"banca": "TRADICIONAL (Unidade IA)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "CRITICO_UNI"})
+                        elif u_loss == (u_max_loss - 1): alertas_criticos.append({"banca": "TRADICIONAL (Unidade IA)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "PERIGO_UNI"})
 
     col2.metric("Sinais no Radar", f"{len(alertas_criticos)}", "Win/Loss")
     col3.metric("Status Base", "Online", "Google Sheets")
@@ -454,7 +503,6 @@ else:
         hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
         
         if st.sidebar.button("🚀 Baixar Sorteio"):
-            # Para escrever, usamos a conexão sem cache ou forçamos
             ws = conectar_planilha_para_escrita(conf['aba'])
             if ws:
                 with st.spinner(f"Buscando {hora_busca}..."):
@@ -469,7 +517,6 @@ else:
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
-                            # Limpa o cache para forçar atualização
                             st.cache_data.clear()
                             time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
@@ -513,7 +560,7 @@ else:
                             chaves.append(chave_atual)
                         time.sleep(1.0)
                 bar.progress(100)
-                st.cache_data.clear() # Limpa cache após inserção em massa
+                st.cache_data.clear() 
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -549,7 +596,7 @@ else:
                     if chave_atual in chaves: st.sidebar.warning("Já existe!")
                     else:
                         ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
-                        st.cache_data.clear() # Limpa cache após inserção
+                        st.cache_data.clear() 
                         st.sidebar.success("Salvo!"); time.sleep(1); st.rerun()
                 else: st.sidebar.error("Erro Conexão")
             else: st.sidebar.error("Preencha corretamente")
@@ -575,7 +622,7 @@ else:
             lista_final, cortadas, confianca_ia = gerar_legiao_46_ai_pure(historico, i)
             loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
             
-            # --- CARD 1: IA ORÁCULO (NATIVO) ---
+            # --- CARD 1: IA ORÁCULO DEZENAS (NATIVO) ---
             if HAS_AI:
                 with st.container(border=True):
                     st.markdown("### 🧠 Oráculo IA (Pure Dezenas)")
@@ -590,7 +637,7 @@ else:
                     st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
                 
                 st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
-                st.caption("Estratégia V20.0: AI Pure + Filtro Saturação")
+                st.caption("Estratégia V21.0: AI Pure + Filtro Saturação")
                 st.code(", ".join(lista_final), language="text")
             
             # Métricas
@@ -616,19 +663,23 @@ else:
             if padroes_futuros:
                 st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
                 st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
-                # Usando DataFrame nativo para evitar erro de HTML
                 st.table(pd.DataFrame(padroes_futuros))
             
+            # --- IA DE UNIDADES (NOVO V21.0) ---
             if banca_selecionada == "TRADICIONAL":
-                finais = [d[-1] for d in lista_final]
-                top_finais = [x[0] for x in Counter(finais).most_common(5)]
+                if HAS_AI:
+                    rank_unidades, conf_uni = treinar_oraculo_unidades(historico)
+                    # Pega top 5
+                    top_5_uni = [str(u) for u, p in rank_unidades[:5]]
+                    
+                    with st.container(border=True):
+                        st.markdown("### 🧠 Oráculo IA (Unidades)")
+                        st.info(f"Confiança: {conf_uni:.1f}%")
+                        st.markdown(f"**Top 5 Finais:** {', '.join(top_5_uni)}")
+                        st.caption("Estratégia Exclusiva de Final")
                 
-                with st.container(border=True):
-                    st.markdown("### 🎯 UNIDADE SNIPER (9.20x)")
-                    st.markdown(f"**Finais Fortes:** {', '.join(top_finais)}")
-                    st.caption("Baseado nas 46 dezenas da IA")
-                
-                u_loss, u_max, u_win, u_max_win = calcular_metricas_unidade_full(historico)
+                # Métricas baseadas na IA de Unidade
+                u_loss, u_max, u_win, u_max_win = calcular_metricas_unidade_ia(historico)
                 
                 c_u1, c_u2 = st.columns(2)
                 c_u1.metric("Uni Derrotas", f"{u_loss}", f"Max: {u_max}", delta_color="inverse")
