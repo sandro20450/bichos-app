@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V44.0 - AI Backtest", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V45.0 - Dual Sector", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -29,11 +29,11 @@ CONFIG_BANCAS = {
     "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
+# --- NOVA DEFINIÇÃO DE SETORES (DUAL) ---
 SETORES = {
-    "BAIXO (01-08)": list(range(1, 9)),
-    "MÉDIO (09-16)": list(range(9, 17)),
-    "ALTO (17-24)": list(range(17, 25)),
-    "VACA (25)": [25]
+    "BAIXO (01-16)": list(range(1, 17)),  # Grupos 01 ao 16
+    "ALTO (17-24)": list(range(17, 25)),  # Grupos 17 ao 24
+    "VACA (25)": [25]                     # Neutro
 }
 
 GRUPOS_DEZENAS = {}
@@ -94,20 +94,21 @@ def aplicar_estilo():
         
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
-        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 5px; margin-bottom: 10px; flex-wrap: wrap; }
-        .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 5px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
+        .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
         .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
-        .bt-icon { font-size: 18px; margin-bottom: 2px; }
-        .bt-num { font-size: 14px; font-weight: bold; margin-bottom: 0px; }
-        .bt-label { font-size: 10px; opacity: 0.8; }
+        .bt-icon { font-size: 24px; margin-bottom: 5px; }
+        .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+        .bt-label { font-size: 11px; opacity: 0.8; }
         
-        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 5px; margin-bottom: 10px; font-size: 12px; font-weight: bold; }
+        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; font-size: 14px; font-weight: bold; }
         
-        .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
+        /* CORES DAS BOLAS - ADAPTADO PARA DUAL SECTOR */
+        .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; } /* Azul (1-16) */
+        .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; } /* Vermelho (17-24) */
+        .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; } /* Roxo (25) */
+        
         div[data-testid="stTable"] table { color: white; }
         thead tr th:first-child {display:none}
         tbody th {display:none}
@@ -178,56 +179,39 @@ def treinar_oraculo_pentagono(historico, indice_premio):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
-    top_ia = [x[0] for x in ranking_ia[:8]] # TOP 8
+    top_ia = [x[0] for x in ranking_ia[:8]] 
     confianca = ranking_ia[0][1] * 100
     return top_ia, confianca
 
-# --- NOVO: BACKTEST DA IA ---
+# --- BACKTEST DA IA ---
 def executar_backtest_ia(historico, indice_premio):
     if not HAS_AI or len(historico) < 60: return []
     resultados = []
-    # Analisa os últimos 4 jogos
     for i in range(1, 5):
         target_idx = -i
         target_game = historico[target_idx]
         target_num = target_game['premios'][indice_premio]
-        
-        # Simula o passado (treina com dados até antes do jogo alvo)
         hist_treino = historico[:target_idx]
-        
         top_8_prev, _ = treinar_oraculo_pentagono(hist_treino, indice_premio)
-        
         win = target_num in top_8_prev
         resultados.append({'index': i, 'numero_real': target_num, 'vitoria': win})
-        
     return resultados
 
-# --- NOVO: MAX DERROTAS DA IA EM 50 JOGOS ---
 def calcular_max_derrotas_ia_50(historico, indice_premio):
     if not HAS_AI or len(historico) < 60: return 0
     max_derrotas = 0; derrotas_consecutivas_temp = 0
-    
-    # Analisa os últimos 50 jogos
-    # Para performance, reduzimos o conjunto de treino dentro do loop se necessário, 
-    # mas aqui usaremos a função padrão que já corta os ultimos 200.
-    
     range_analise = min(50, len(historico) - 50)
     start_idx = len(historico) - range_analise
-    
     for i in range(start_idx, len(historico)):
         target_game = historico[i]
         target_num = target_game['premios'][indice_premio]
-        
         hist_treino = historico[:i]
         top_8_prev, _ = treinar_oraculo_pentagono(hist_treino, indice_premio)
-        
         win = target_num in top_8_prev
-        
         if not win: derrotas_consecutivas_temp += 1
         else:
             if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
             derrotas_consecutivas_temp = 0
-            
     if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
     return max_derrotas
 
@@ -333,8 +317,9 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V40 (4-4-4) ---
+# --- ALGORITMO SNIPER V45 (DUAL SECTOR ADAPTADO) ---
 def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
+    # Identifica reversão em qualquer setor
     setor_estourado = None
     for index, row in df_stress.iterrows():
         if "VACA" not in row['SETOR']:
@@ -345,18 +330,18 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
     modo_reversao = False
     setores_reais = df_stress[~df_stress['SETOR'].str.contains("VACA")]
     
+    # Define Forte e Fraco baseado no % PRESENÇA ou ATRASO
+    setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
+    setor_forte = setores_ordenados.iloc[0]['SETOR']
+    setor_fraco = setores_ordenados.iloc[-1]['SETOR'] # No caso de 2, é o segundo
+
     if setor_estourado:
         modo_reversao = True
-        setor_fraco = setor_estourado
-        setores_ataque_df = setores_reais[setores_reais['SETOR'] != setor_estourado]
-        setores_ataque_ordenados = setores_ataque_df.sort_values(by='% PRESENÇA', ascending=False)
-        setor_forte_1 = setores_ataque_ordenados.iloc[0]['SETOR']
-        setor_forte_2 = setores_ataque_ordenados.iloc[1]['SETOR']
-    else:
-        setores_ordenados = setores_reais.sort_values(by='% PRESENÇA', ascending=False)
-        setor_forte_1 = setores_ordenados.iloc[0]['SETOR']
-        setor_forte_2 = setores_ordenados.iloc[1]['SETOR']
-        setor_fraco = setores_ordenados.iloc[-1]['SETOR']
+        setor_fraco = setor_estourado # Força o estourado como fraco para evitar defesa nele? Não, REVERSÃO = Ele vai quebrar, então apostamos CONTRA ele? 
+        # Lógica Reversão Padrão: Se estourou vitorias, ele vai falhar. Então ele vira DEFESA (não joga nele) ou joga nos outros.
+        # Aqui simplificamos: Se estourou, ele é o alvo a ser evitado no ataque principal.
+        if setor_estourado == setor_forte:
+             setor_forte = setores_ordenados.iloc[-1]['SETOR'] # Inverte
 
     lista_diamantes_segura = []
     if not df_diamante.empty and 'GRUPO' in df_diamante.columns:
@@ -370,32 +355,30 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         if grupo in saturados: score -= 5000
         return score
 
-    # 4+4 Grupos Ataque
+    # ATAQUE (8 GRUPOS): 5 do Forte + 3 do Fraco (Balanceamento)
     grupos_ataque = []
-    rank_s1 = sorted(SETORES[setor_forte_1], key=lambda x: calcular_score(x), reverse=True)
-    grupos_ataque.extend(rank_s1[:4])
-    rank_s2 = sorted(SETORES[setor_forte_2], key=lambda x: calcular_score(x), reverse=True)
-    grupos_ataque.extend(rank_s2[:4])
+    
+    rank_forte = sorted(SETORES[setor_forte], key=lambda x: calcular_score(x), reverse=True)
+    grupos_ataque.extend(rank_forte[:5]) # 5 do Forte
 
-    # 4 Grupos Defesa
+    rank_fraco = sorted(SETORES[setor_fraco], key=lambda x: calcular_score(x), reverse=True)
+    grupos_ataque.extend(rank_fraco[:3]) # 3 do Fraco
+
+    # DEFESA (4 GRUPOS): 4 Melhores do Fraco que NÃO estão no ataque
+    # (Para cobrir surpresas no setor fraco)
     dezenas_proibidas = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
-    grupos_defesa_base = SETORES[setor_fraco]
-    rank_defesa = sorted(grupos_defesa_base, key=lambda x: calcular_score(x), reverse=True)
-    grupos_defesa_finais = [g for g in rank_defesa if g not in saturados]
-    grupos_defesa_finais = grupos_defesa_finais[:4]
-    if len(grupos_defesa_finais) < 4:
-        sobra = 4 - len(grupos_defesa_finais)
-        resto_setor = [g for g in grupos_defesa_base if g not in grupos_defesa_finais]
-        grupos_defesa_finais.extend(resto_setor[:sobra])
+    
+    grupos_defesa_candidatos = [g for g in rank_fraco if g not in grupos_ataque and g not in saturados]
+    grupos_defesa_finais = grupos_defesa_candidatos[:4]
 
     dezenas_defesa = []
     for g in grupos_defesa_finais:
-        if g not in grupos_ataque:
-            dzs = GRUPOS_DEZENAS[g]
-            pre_selecao = dzs[:3]
-            filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
-            dezenas_defesa.extend(filtradas)
+        dzs = GRUPOS_DEZENAS[g]
+        pre_selecao = dzs[:3]
+        filtradas = [d for d in pre_selecao if d not in dezenas_proibidas]
+        dezenas_defesa.extend(filtradas)
 
+    # VACA
     score_vaca = 0
     row_vaca = df_stress[df_stress['SETOR'].str.contains("VACA")].iloc[0]
     if row_vaca['ATRASO'] > 12: score_vaca += 80 
@@ -407,18 +390,18 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
         dezenas_defesa.append('97')
         dezenas_defesa.append('98')
 
+    # Limpeza
     grupos_ataque = sorted(list(set(grupos_ataque)))
     if 25 in grupos_ataque: grupos_ataque.remove(25)
     dezenas_defesa = sorted(list(set(dezenas_defesa))) 
     
-    sf1_name = setor_forte_1.split(' ')[0]
-    sf2_name = setor_forte_2.split(' ')[0]
-    sf_fraco_name = setor_fraco.split(' ')[0]
+    sf_name = setor_forte.split(' ')[0]
+    sw_name = setor_fraco.split(' ')[0]
     
     if modo_reversao:
-        meta_info = f"🔄 REVERSÃO (4-4-4): {sf_fraco_name} Bloqueado! Ataque com {sf1_name}+{sf2_name}"
+        meta_info = f"🔄 REVERSÃO: Evitando {sw_name} (Estourado). Foco em {sf_name}."
     else:
-        meta_info = f"TENDÊNCIA (4-4-4): {sf1_name}+{sf2_name} Fortes | {sf_fraco_name} Defesa"
+        meta_info = f"TENDÊNCIA: {sf_name} Dominante (5G) + {sw_name} Apoio (3G)."
     
     return { "grupos_ataque": grupos_ataque, "dezenas_defesa": dezenas_defesa, "nota": 100, "meta_info": meta_info, "modo_reversao": modo_reversao, "is_record": False }
 
@@ -429,26 +412,28 @@ def executar_backtest_sniper(historico, indice_premio):
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
+        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
+        
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
+        
         win_ataque = target_num in sniper_past['grupos_ataque']
-        meta = sniper_past['meta_info']
-        if "REVERSÃO" in meta:
-            match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
-            nome_fraco = match.group(1) if match else ""
-        else:
-            match = re.search(r"(\w+) Defesa", meta) 
-            nome_fraco = match.group(1) if match else ""
-        win_defesa = False
-        if nome_fraco:
-            chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
-            if chave_setor:
-                win_defesa = target_num in SETORES[chave_setor]
-        win_total = win_ataque or win_defesa
+        
+        # Defesa no backtest simplificado (se caiu num grupo de defesa, consideramos win parcial ou apenas monitoramos o ataque)
+        # Vamos manter a logica de WIN TOTAL se cair no ataque OU defesa
+        # Mas para defesa precisamos saber em quais grupos ela apostou
+        # A função retorna dezenas, mas podemos inferir os grupos ou mudar a função.
+        # Para simplificar e manter compatibilidade, vamos focar no WIN DO ATAQUE principal.
+        
+        # Se quiser considerar defesa (dezenas):
+        # win_defesa = any(str(target_num).zfill(2) in str(d) for d in sniper_past['dezenas_defesa']) # Simplificado
+        # Vamos focar no Ataque que é o principal
+        
+        win_total = win_ataque #+ win_defesa
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
     return resultados_backtest
 
@@ -466,19 +451,9 @@ def calcular_max_derrotas_50(historico, indice_premio):
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
-        win_ataque = target_num in sniper_past['grupos_ataque']
-        meta = sniper_past['meta_info']
-        if "REVERSÃO" in meta:
-            match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
-            nome_fraco = match.group(1) if match else ""
-        else:
-            match = re.search(r"(\w+) Defesa", meta)
-            nome_fraco = match.group(1) if match else ""
-        win_defesa = False
-        if nome_fraco:
-            chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
-            if chave_setor: win_defesa = target_num in SETORES[chave_setor]
-        win = win_ataque or win_defesa
+        
+        win = target_num in sniper_past['grupos_ataque'] # Foco no ataque principal
+        
         if not win: derrotas_consecutivas_temp += 1
         else:
             if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
@@ -487,29 +462,37 @@ def calcular_max_derrotas_50(historico, indice_premio):
     return max_derrotas
 
 def gerar_palpite_8_grupos(df_stress, stats_ciclo, df_diamante):
+    # Adaptado para 2 setores
     candidatos = [] 
+    # Pega o setor com maior atraso relativo (critico)
     setor_critico = None
     for index, row in df_stress.iterrows():
         setor = row['SETOR']
         if "VACA" not in setor and (row['REC. ATRASO'] - row['ATRASO']) <= 1 and row['REC. ATRASO'] >= 5:
             setor_critico = setor
             break
-    motivo = "Mix Equilibrado."
+            
+    motivo = "Mix Equilibrado (Dual)."
     if setor_critico:
         motivo = f"Foco no {setor_critico} (Crítico) + Proteção."
         grupos_setor = SETORES[setor_critico]
         for g in grupos_setor:
             if g in stats_ciclo['faltam']: candidatos.append(g)
+            
     if not df_diamante.empty:
         for index, row in df_diamante.iterrows():
             if "🔥" in row['STATUS / DICA'] or "⏳" in row['STATUS / DICA']: candidatos.append(row['GRUPO'])
+            
+    # Preenchimento
     if setor_critico:
-        grupos_setor = SETORES[setor_critico]
-        for g in grupos_setor: candidatos.append(g)
+        for g in SETORES[setor_critico]: candidatos.append(g)
+        
     for g in stats_ciclo['faltam']: candidatos.append(g)
-    maior_atraso = df_stress.loc[~df_stress['SETOR'].str.contains("VACA")].sort_values(by='ATRASO', ascending=False).iloc[0]
-    setor_bkp = maior_atraso['SETOR']
-    for g in SETORES[setor_bkp]: candidatos.append(g)
+    
+    # Garante grupos do setor oposto para equilibrio
+    setores_normais = [s for s in SETORES.keys() if "VACA" not in s]
+    for s in setores_normais:
+        for g in SETORES[s][:2]: candidatos.append(g) # Pega os primeiros de cada setor
 
     palpite_final = []
     seen = set()
@@ -574,8 +557,7 @@ def gerar_bolinhas_recentes(historico, indice_premio):
         bicho = jogo['premios'][indice_premio]
         classe = ""
         letra = ""
-        if bicho in SETORES["BAIXO (01-08)"]: classe = "bola-b"; letra = "B"
-        elif bicho in SETORES["MÉDIO (09-16)"]: classe = "bola-m"; letra = "M"
+        if bicho in SETORES["BAIXO (01-16)"]: classe = "bola-b"; letra = "B"
         elif bicho in SETORES["ALTO (17-24)"]: classe = "bola-a"; letra = "A"
         elif bicho == 25: classe = "bola-v"; letra = "V"
         html += f"<div class='{classe}'>{letra}</div>"
@@ -610,7 +592,7 @@ def tela_dashboard_global():
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V40
+                    # 1. SNIPER V45 (Dual)
                     sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
@@ -622,7 +604,7 @@ def tela_dashboard_global():
                             "ultimo_horario": historico[-1]['horario']
                         }
                     
-                    # --- MONITORAMENTO GLOBAL DA IA (V43.0) ---
+                    # --- MONITORAMENTO GLOBAL DA IA ---
                     if HAS_AI:
                         _, conf_ia_global = treinar_oraculo_pentagono(historico, idx_pos)
                         if conf_ia_global >= 60.0:
@@ -680,17 +662,17 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V44.0 (4-4-4)</div>
+<div class="sniper-title">🎯 SNIPER V45.0 (DUAL)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
 <p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
 <div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (4+4 GRUPOS):</div>
+<div class="strong-label">🟢 ATAQUE (8 GRUPOS):</div>
 <div class="strong-nums">{', '.join(map(str, d['grupos_ataque']))}</div>
 </div>
 <div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS DO FRACO 4G):</div>
+<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
 <div class="weak-nums">{', '.join(map(str, d['dezenas_defesa']))}</div>
 </div>
 </div>
@@ -870,13 +852,12 @@ else:
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V40 (AUTO) ---
+                # --- SNIPER V45 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 
                 # --- ORÁCULO IA V43.0 (TOP 8) ---
                 if HAS_AI:
                     top_8_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
-                    # BACKTEST IA
                     bt_ia = executar_backtest_ia(historico, idx_aba)
                     max_loss_ia = calcular_max_derrotas_ia_50(historico, idx_aba)
                 else:
@@ -895,14 +876,13 @@ else:
                 
                 cor_nota = "#00ff00" 
 
-                # 1. ORÁCULO IA (AGORA COM BACKTEST)
+                # 1. PRIMEIRO O ORÁCULO IA
                 if HAS_AI and top_8_ia:
                     super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_8_ia))
                     html_super = ""
                     if super_grupos:
                         html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
                     
-                    # Gera os cards de Backtest da IA
                     cards_ia_html = ""
                     if bt_ia:
                         for res in reversed(bt_ia):
@@ -921,23 +901,23 @@ else:
                     </div>
                     """, unsafe_allow_html=True)
 
-                # 2. SNIPER LOCAL
+                # 2. DEPOIS O SNIPER LOCAL V45
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V40 (4-4-4)</div>
+<div class="sniper-title">🎯 SNIPER LOCAL V45 (DUAL)</div>
 <div class="sniper-bank">{nome_banca_clean}</div>
 <div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
 <div class="sniper-next">{prox_tiro_local}</div>
 <p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
 
 <div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (4+4 GRUPOS):</div>
+<div class="strong-label">🟢 ATAQUE (8 GRUPOS):</div>
 <div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
 </div>
 
 <div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS DE 4 GRUPOS):</div>
+<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
 <div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
 </div>
 {msg_sat}
@@ -963,12 +943,12 @@ else:
                 st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- GRÁFICO DONUT ---
+                # --- GRÁFICO DONUT (ADAPTADO V45) ---
                 df_chart = df_stress.copy()
                 df_chart = df_chart.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
                 base = alt.Chart(df_chart).encode(theta=alt.Theta("PRESENCA", stack=True))
                 pie = base.mark_arc(outerRadius=120).encode(
-                    color=alt.Color("CATEGORIA", scale=alt.Scale(domain=['BAIXO (01-08)', 'MÉDIO (09-16)', 'ALTO (17-24)', 'VACA (25)'], range=['#00d2ff', '#ff9900', '#ff3333', '#aa00ff']), legend=None),
+                    color=alt.Color("CATEGORIA", scale=alt.Scale(domain=['BAIXO (01-16)', 'ALTO (17-24)', 'VACA (25)'], range=['#17a2b8', '#dc3545', '#6f42c1']), legend=None),
                     order=alt.Order("PRESENCA", sort="descending"), tooltip=["CATEGORIA", "PRESENCA"]
                 )
                 text = base.mark_text(radius=140).encode(text=alt.Text("PRESENCA", format=".1f"), order=alt.Order("PRESENCA", sort="descending"), color=alt.value("white"))
