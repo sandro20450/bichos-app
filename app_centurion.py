@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V19.3 Native", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V20.0 Turbo", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -38,31 +38,39 @@ for g in range(1, 26):
         d_str = "00" if n == 100 else f"{n:02}"
         DEZENA_TO_GRUPO[d_str] = g
 
-# Estilo Visual Mínimo (Apenas para tabelas e ajustes finos)
+# Estilo Visual Mínimo (Nativo)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
-    .big-font { font-size: 20px !important; font-weight: bold; }
+    /* Ajustes finos para tabelas nativas */
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (COM CACHE) ---
 # =============================================================================
-def conectar_planilha(nome_aba):
+
+@st.cache_resource(show_spinner=False)
+def conectar_planilha_cached():
+    """Conecta ao Google Sheets e mantem a conexão em cache."""
     if "gcp_service_account" in st.secrets:
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"], 
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
         gc = gspread.authorize(creds)
-        sh = gc.open("CentralBichos")
-        try: return sh.worksheet(nome_aba)
-        except: return None
+        return gc
     return None
 
+@st.cache_data(ttl=60, show_spinner=False) # Atualiza a cada 60 segundos
 def carregar_historico_dezenas(nome_aba):
-    ws = conectar_planilha(nome_aba)
-    if ws:
+    """Baixa os dados da planilha e armazena em cache por 1 minuto."""
+    gc = conectar_planilha_cached()
+    if gc:
         try:
+            sh = gc.open("CentralBichos")
+            ws = sh.worksheet(nome_aba)
             raw = ws.get_all_values()
             if len(raw) < 2: return []
             dados = []
@@ -76,7 +84,18 @@ def carregar_historico_dezenas(nome_aba):
         except: return [] 
     return []
 
+def conectar_planilha_para_escrita(nome_aba):
+    """Conexão direta para escrita (sem cache de dados)"""
+    gc = conectar_planilha_cached()
+    if gc:
+        try:
+            sh = gc.open("CentralBichos")
+            return sh.worksheet(nome_aba)
+        except: return None
+    return None
+
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
+    # Não usamos cache aqui pois é uma ação de busca em tempo real
     config = CONFIG_BANCAS[banca_key]
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     data_formatada_verif = data_alvo.strftime('%d/%m/%Y')
@@ -130,10 +149,14 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE ---
+# --- 3. CÉREBRO: IA PURE (COM CACHE) ---
 # =============================================================================
 
+@st.cache_data(show_spinner=False)
 def treinar_oraculo_dezenas(historico, indice_premio):
+    """
+    Treina a IA. O resultado é cacheado. Se 'historico' não mudar, é instantâneo.
+    """
     if not HAS_AI or len(historico) < 50: return [], 0
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
@@ -178,6 +201,7 @@ def identificar_dezenas_saturadas(historico, indice_premio):
         return saturadas
     except: return []
 
+@st.cache_data(show_spinner=False)
 def gerar_legiao_46_ai_pure(historico, indice_premio):
     if not historico: return [], [], 0
     ranking_ia, confianca = treinar_oraculo_dezenas(historico, indice_premio)
@@ -197,13 +221,19 @@ def gerar_legiao_46_ai_pure(historico, indice_premio):
             if dezena not in palpite_final: palpite_final.append(dezena)
     return sorted(palpite_final), cortadas_log, confianca
 
+@st.cache_data(show_spinner=False)
 def calcular_metricas_ai_pure(historico, indice_premio):
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(50, total - 100) 
-    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    max_loss = 0; seq_loss = 0
+    max_win = 0; seq_win = 0
+    
+    # Loop de simulação
     for i in range(inicio, total):
         target_dezena = historico[i]['dezenas'][indice_premio]
+        # Nota: Chamamos a função cacheada aqui. Como 'hist_parcial' muda a cada iteração,
+        # o cache será criado para cada passo do loop na primeira vez, e reutilizado depois.
         hist_parcial = historico[:i]
         palpite, _, _ = gerar_legiao_46_ai_pure(hist_parcial, indice_premio)
         win = target_dezena in palpite
@@ -213,11 +243,13 @@ def calcular_metricas_ai_pure(historico, indice_premio):
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
+            
     atual_loss = 0; atual_win = 0
     idx = -1
     target_last = historico[idx]['dezenas'][indice_premio]
     palpite_last, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
     win_last = target_last in palpite_last
+    
     if win_last:
         atual_win = 1
         for k in range(2, 15):
@@ -234,6 +266,7 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             else: break
     return atual_loss, max_loss, atual_win, max_win
 
+@st.cache_data(show_spinner=False)
 def calcular_metricas_unidade_full(historico):
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
@@ -285,7 +318,7 @@ def analisar_padroes_futuros(historico, indice_premio):
     for i in range(len(historico) - 2, -1, -1):
         try:
             if historico[i]['dezenas'][indice_premio] == ultima_dezena_real:
-                encontrados.append({ "data": historico[i+1]['data'], "hora": historico[i+1]['hora'], "veio": historico[i+1]['dezenas'][indice_premio] })
+                encontrados.append({ "Data": historico[i+1]['data'], "Hora": historico[i+1]['hora'], "Veio Dezena": historico[i+1]['dezenas'][indice_premio] })
                 if len(encontrados) >= 5: break
         except: continue
     return ultima_dezena_real, encontrados
@@ -298,7 +331,7 @@ def analisar_padroes_unidade(historico):
     for i in range(len(historico) - 2, -1, -1):
         try:
             if historico[i]['dezenas'][0][-1] == ultima_uni:
-                encontrados.append({ "data": historico[i+1]['data'], "hora": historico[i+1]['hora'], "veio": historico[i+1]['dezenas'][0][-1] })
+                encontrados.append({ "Data": historico[i+1]['data'], "Hora": historico[i+1]['hora'], "Veio Final": historico[i+1]['dezenas'][0][-1] })
                 if len(encontrados) >= 5: break
         except: continue
     return ultima_uni, encontrados
@@ -334,22 +367,30 @@ def executar_backtest_unidade(historico):
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
     st.markdown("### 📡 Radar Global de Oportunidades")
+    
     col1, col2, col3 = st.columns(3)
     col1.metric("Bancas", "4", "Lotep, Caminho, Monte, Trad")
+    
     alertas_criticos = []
     
     with st.spinner("Analisando todas as bancas em tempo real..."):
         for banca_key, config in CONFIG_BANCAS.items():
+            # AQUI O CACHE ENTRA EM AÇÃO
             historico = carregar_historico_dezenas(config['aba'])
+            
             if len(historico) > 50:
                 limit_range = 1 if banca_key == "TRADICIONAL" else 5
+                
                 for i in range(limit_range):
+                    # AQUI TAMBÉM TEM CACHE
                     loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
+                    
                     if max_loss > 0:
                         if loss >= max_loss: alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "CRITICO"})
                         elif loss == (max_loss - 1): alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "PERIGO"})
                     if max_win > 2 and win == (max_win - 1):
                          alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": win, "rec": max_win, "tipo": "VITORIA"})
+
                 if banca_key == "TRADICIONAL":
                     u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidade_full(historico)
                     if u_max_loss > 0:
@@ -399,8 +440,6 @@ else:
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
     st.sidebar.markdown("---")
 
-    # (CÓDIGO DE EXTRAÇÃO MANTIDO IGUAL - OMITIDO AQUI POR BREVIDADE MAS INCLUA NO SEU ARQUIVO SE ESTIVER FALTANDO, OU USE O BLOCO DA VERSÃO ANTERIOR)
-    # VOU INCLUIR O BLOCO DE EXTRAÇÃO PARA O CODIGO FICAR 100% COMPLETO
     if modo_extracao == "🎯 Unitária (1 Sorteio)":
         st.sidebar.subheader("Extração Unitária")
         opt_data = st.sidebar.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -415,7 +454,8 @@ else:
         hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
         
         if st.sidebar.button("🚀 Baixar Sorteio"):
-            ws = conectar_planilha(conf['aba'])
+            # Para escrever, usamos a conexão sem cache ou forçamos
+            ws = conectar_planilha_para_escrita(conf['aba'])
             if ws:
                 with st.spinner(f"Buscando {hora_busca}..."):
                     try:
@@ -429,6 +469,8 @@ else:
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
+                            # Limpa o cache para forçar atualização
+                            st.cache_data.clear()
                             time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -440,7 +482,7 @@ else:
         with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
         
         if st.sidebar.button("🚀 INICIAR TURBO"):
-            ws = conectar_planilha(conf['aba'])
+            ws = conectar_planilha_para_escrita(conf['aba'])
             if ws:
                 status = st.sidebar.empty()
                 bar = st.sidebar.progress(0)
@@ -455,11 +497,7 @@ else:
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    horarios_do_dia = conf['horarios'].copy()
-                    if banca_selecionada == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
-                        horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
-
-                    for hora in horarios_do_dia:
+                    for hora in conf['horarios']:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
@@ -475,6 +513,7 @@ else:
                             chaves.append(chave_atual)
                         time.sleep(1.0)
                 bar.progress(100)
+                st.cache_data.clear() # Limpa cache após inserção em massa
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -500,7 +539,7 @@ else:
         if st.sidebar.button("💾 Salvar"):
             man_dezenas = [p1, p2, p3, p4, p5]
             if p1.isdigit() and len(p1) == 2:
-                ws = conectar_planilha(conf['aba'])
+                ws = conectar_planilha_para_escrita(conf['aba'])
                 if ws:
                     try:
                         existentes = ws.get_all_values()
@@ -510,6 +549,7 @@ else:
                     if chave_atual in chaves: st.sidebar.warning("Já existe!")
                     else:
                         ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
+                        st.cache_data.clear() # Limpa cache após inserção
                         st.sidebar.success("Salvo!"); time.sleep(1); st.rerun()
                 else: st.sidebar.error("Erro Conexão")
             else: st.sidebar.error("Preencha corretamente")
@@ -529,30 +569,28 @@ else:
         with tab:
             if banca_selecionada == "TRADICIONAL" and i > 0:
                 st.warning("⚠️ Esta banca foca exclusivamente no 1º Prêmio (Cabeça).")
-                st.caption("A análise foi desativada para os outros prêmios.")
                 continue
 
+            # AQUI O CACHE ACELERA TUDO
             lista_final, cortadas, confianca_ia = gerar_legiao_46_ai_pure(historico, i)
             loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
             
-            # --- USO DE COMPONENTES NATIVOS DO STREAMLIT PARA EVITAR ERROS DE HTML ---
-            
+            # --- CARD 1: IA ORÁCULO (NATIVO) ---
             if HAS_AI:
                 with st.container(border=True):
                     st.markdown("### 🧠 Oráculo IA (Pure Dezenas)")
                     st.info(f"Confiança do Modelo: {confianca_ia:.1f}%")
             
-            # Alertas
+            # --- CARD 2: LEGIÃO 46 (NATIVO) ---
             if loss >= max_loss and max_loss > 0:
                 st.error(f"🚨 **ALERTA MÁXIMO:** {loss} Derrotas Seguidas (Recorde Atingido!)")
             
-            # Card Principal (Nativo)
             with st.container(border=True):
                 if cortadas:
                     st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
                 
                 st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
-                st.caption("Estratégia V19.3: AI Pure + Filtro Saturação")
+                st.caption("Estratégia V20.0: AI Pure + Filtro Saturação")
                 st.code(", ".join(lista_final), language="text")
             
             # Métricas
@@ -578,6 +616,7 @@ else:
             if padroes_futuros:
                 st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
                 st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
+                # Usando DataFrame nativo para evitar erro de HTML
                 st.table(pd.DataFrame(padroes_futuros))
             
             if banca_selecionada == "TRADICIONAL":
