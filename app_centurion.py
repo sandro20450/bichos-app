@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V21.1 Fix Extraction", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V21.2 Fix Duplication", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -75,7 +75,7 @@ def carregar_historico_dezenas(nome_aba):
     return []
 
 def conectar_planilha_para_escrita(nome_aba):
-    """Conecta sem cache para operações de escrita/verificação imediata."""
+    """Conecta sem cache para escrita."""
     gc = conectar_planilha_cached()
     if gc:
         try:
@@ -83,6 +83,21 @@ def conectar_planilha_para_escrita(nome_aba):
             return sh.worksheet(nome_aba)
         except: return None
     return None
+
+def obter_chaves_existentes_fresh(ws):
+    """Lê a planilha AGORA (sem cache) para ver o que já tem."""
+    try:
+        # Pega apenas as colunas A e B para ser mais rápido
+        raw = ws.get('A:B')
+        chaves = []
+        for row in raw:
+            if len(row) >= 2:
+                # Normaliza: remove espaços e garante formato
+                d = str(row[0]).strip()
+                h = str(row[1]).strip()
+                chaves.append(f"{d}|{h}")
+        return chaves
+    except: return []
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
@@ -466,27 +481,22 @@ else:
         hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
         
         if st.sidebar.button("🚀 Baixar Sorteio"):
-            # CORREÇÃO: Conexão direta para escrita (bypass cache de leitura)
+            # Conexão direta para verificar duplicidade SEM CACHE
             ws = conectar_planilha_para_escrita(conf['aba'])
             if ws:
                 with st.spinner(f"Buscando {hora_busca}..."):
-                    try:
-                        # Pega valores atuais SEM cache para verificar duplicidade real
-                        existentes = ws.get_all_values()
-                        chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
-                    except: chaves = []
-                    
+                    # Verifica chaves existentes de forma limpa e fresca
+                    chaves_existentes = obter_chaves_existentes_fresh(ws)
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
                     
-                    if chave_atual in chaves:
-                        st.sidebar.warning(f"⚠️ Resultado já existe na Linha {chaves.index(chave_atual) + 2}!")
+                    if chave_atual in chaves_existentes:
+                        st.sidebar.warning(f"⚠️ Resultado {hora_busca} já existe na planilha!")
                     else:
                         dezenas, msg = raspar_dezenas_site(banca_selecionada, data_busca, hora_busca)
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
-                            # LIMPA O CACHE DE DADOS PARA REFLETIR A MUDANÇA
-                            st.cache_data.clear()
+                            st.cache_data.clear() # Limpa cache
                             time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -502,10 +512,9 @@ else:
             if ws:
                 status = st.sidebar.empty()
                 bar = st.sidebar.progress(0)
-                try:
-                    existentes = ws.get_all_values()
-                    chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
-                except: chaves = []
+                
+                # Lista de chaves já existentes (fresca)
+                chaves_existentes = obter_chaves_existentes_fresh(ws)
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
@@ -519,7 +528,8 @@ else:
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        if chave_atual in chaves: continue
+                        if chave_atual in chaves_existentes: continue # Pula se já existe
+                        
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
 
@@ -527,10 +537,10 @@ else:
                         if dezenas:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
                             sucessos += 1
-                            chaves.append(chave_atual)
+                            chaves_existentes.append(chave_atual) # Adiciona à lista local para não duplicar no mesmo loop
                         time.sleep(1.0)
                 bar.progress(100)
-                st.cache_data.clear() # Limpa cache
+                st.cache_data.clear() # Limpa cache global
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -558,12 +568,9 @@ else:
             if p1.isdigit() and len(p1) == 2:
                 ws = conectar_planilha_para_escrita(conf['aba'])
                 if ws:
-                    try:
-                        existentes = ws.get_all_values()
-                        chaves = [f"{str(r[0]).strip()}|{str(r[1]).strip()}" for r in existentes if len(r) > 1]
-                    except: chaves = []
+                    chaves_existentes = obter_chaves_existentes_fresh(ws)
                     chave_atual = f"{man_data.strftime('%Y-%m-%d')}|{man_hora}"
-                    if chave_atual in chaves: st.sidebar.warning("Já existe!")
+                    if chave_atual in chaves_existentes: st.sidebar.warning("Já existe!")
                     else:
                         ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
                         st.cache_data.clear()
@@ -604,7 +611,7 @@ else:
                     st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
                 
                 st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
-                st.caption("Estratégia V21.1: AI Pure + Filtro Saturação")
+                st.caption("Estratégia V21.2: AI Pure + Filtro Saturação")
                 st.code(", ".join(lista_final), language="text")
             
             col_m1, col_m2 = st.columns(2)
