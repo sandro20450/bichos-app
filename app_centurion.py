@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V21.2 Fix Duplication", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V22.0 Precision", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -30,7 +30,7 @@ CONFIG_BANCAS = {
     "TRADICIONAL": { "display": "TRADICIONAL (1º Prêmio)", "aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] }
 }
 
-# Estilo Visual Mínimo (Nativo)
+# Estilo Visual Nativo + Ajustes
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
@@ -40,11 +40,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (COM CACHE) ---
+# --- 2. CONEXÃO E RASPAGEM (AJUSTADO PARA PRECISÃO) ---
 # =============================================================================
 
 @st.cache_resource(show_spinner=False)
 def conectar_planilha_cached():
+    """Mantém a conexão autenticada em cache."""
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
@@ -54,7 +55,8 @@ def conectar_planilha_cached():
         return gc
     return None
 
-@st.cache_data(ttl=60, show_spinner=False)
+# CACHE REDUZIDO PARA 30 SEGUNDOS PARA EVITAR DADOS VELHOS
+@st.cache_data(ttl=30, show_spinner=False)
 def carregar_historico_dezenas(nome_aba):
     gc = conectar_planilha_cached()
     if gc:
@@ -75,7 +77,7 @@ def carregar_historico_dezenas(nome_aba):
     return []
 
 def conectar_planilha_para_escrita(nome_aba):
-    """Conecta sem cache para escrita."""
+    """Conexão direta para escrita (sem cache de dados)."""
     gc = conectar_planilha_cached()
     if gc:
         try:
@@ -85,14 +87,12 @@ def conectar_planilha_para_escrita(nome_aba):
     return None
 
 def obter_chaves_existentes_fresh(ws):
-    """Lê a planilha AGORA (sem cache) para ver o que já tem."""
+    """Lê a planilha AGORA para evitar duplicidade."""
     try:
-        # Pega apenas as colunas A e B para ser mais rápido
         raw = ws.get('A:B')
         chaves = []
         for row in raw:
             if len(row) >= 2:
-                # Normaliza: remove espaços e garante formato
                 d = str(row[0]).strip()
                 h = str(row[1]).strip()
                 chaves.append(f"{d}|{h}")
@@ -101,6 +101,7 @@ def obter_chaves_existentes_fresh(ws):
 
 def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
+    # URL específica do dia para evitar pegar dados de ontem
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     data_formatada_verif = data_alvo.strftime('%d/%m/%Y')
     
@@ -110,21 +111,24 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         
+        # Variações de horário para busca
         alvos_possiveis = [horario_alvo, f"{horario_alvo}h", f"{horario_alvo}H"]
         if ":00" in horario_alvo:
             hora_simples = horario_alvo.split(':')[0]
             alvos_possiveis.extend([f"{hora_simples}h", f"{hora_simples}H", f"{hora_simples} h"])
-        if ":20" in horario_alvo:
-             alvos_possiveis.append(f"{horario_alvo}h") 
-
+        
+        # Varre o HTML buscando o horário
         for alvo in alvos_possiveis:
             headers_found = soup.find_all(string=re.compile(re.escape(alvo)))
             for header_text in headers_found:
+                # Filtros de Segurança Anti-Erro
                 if "FEDERAL" in header_text.upper(): continue
-                if data_formatada_verif[:5] not in header_text: continue
+                # Verifica se a data está no bloco (para evitar pegar dia errado)
+                # if data_formatada_verif[:5] not in header_text.parent.parent.text: continue (Muito restrito, as vezes falha)
 
                 element = header_text.parent
                 tabela = element.find_next('table')
+                
                 if tabela:
                     dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
@@ -133,27 +137,39 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                         if len(cols) >= 2:
                             premio_txt = cols[0].get_text().strip()
                             numero_txt = cols[1].get_text().strip()
-                            nums_premio = re.findall(r'\d+', premio_txt)
                             
+                            # Extrai apenas números do prêmio (ex: "1º Prêmio" -> 1)
+                            nums_premio = re.findall(r'\d+', premio_txt)
+                            if not nums_premio: continue
+                            idx_premio = int(nums_premio[0])
+
+                            # Lógica Tradicional (Só 1º prêmio)
                             if banca_key == "TRADICIONAL":
-                                if nums_premio and int(nums_premio[0]) == 1:
-                                    if numero_txt.isdigit() and len(numero_txt) >= 2:
-                                        dezena = numero_txt[-2:]
+                                if idx_premio == 1:
+                                    # Limpa o número (remove pontos, traços)
+                                    numero_limpo = re.sub(r'\D', '', numero_txt)
+                                    if len(numero_limpo) >= 2:
+                                        dezena = numero_limpo[-2:] # Pega os 2 últimos dígitos
                                         dezenas_encontradas.append(dezena)
+                                        # Preenche o resto com 00 para manter padrão 5 posições
                                         while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
-                                        return dezenas_encontradas, f"Sucesso (Confirmado: {data_formatada_verif})"
-                            elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
-                                if numero_txt.isdigit() and len(numero_txt) >= 2:
-                                    dezena = numero_txt[-2:]
+                                        return dezenas_encontradas, f"Sucesso"
+                            
+                            # Lógica Outras Bancas (1º ao 5º)
+                            elif 1 <= idx_premio <= 5:
+                                numero_limpo = re.sub(r'\D', '', numero_txt)
+                                if len(numero_limpo) >= 2:
+                                    dezena = numero_limpo[-2:]
                                     dezenas_encontradas.append(dezena)
                     
                     if banca_key != "TRADICIONAL" and len(dezenas_encontradas) >= 5:
                         return dezenas_encontradas[:5], "Sucesso"
-        return None, f"Horário {horario_alvo} do dia {data_formatada_verif} não encontrado."
+
+        return None, f"Horário {horario_alvo} não encontrado nesta data."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (DEZENAS) ---
+# --- 3. CÉREBRO: IA PURE (DEZENAS & UNIDADES) ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -227,8 +243,7 @@ def calcular_metricas_ai_pure(historico, indice_premio):
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(50, total - 100) 
-    max_loss = 0; seq_loss = 0
-    max_win = 0; seq_win = 0
+    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
     for i in range(inicio, total):
         target_dezena = historico[i]['dezenas'][indice_premio]
         hist_parcial = historico[:i]
@@ -260,10 +275,6 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             if target not in palp: atual_loss += 1
             else: break
     return atual_loss, max_loss, atual_win, max_win
-
-# =============================================================================
-# --- 3.1 CÉREBRO: IA PURE (UNIDADES) ---
-# =============================================================================
 
 @st.cache_data(show_spinner=False)
 def treinar_oraculo_unidades(historico):
@@ -402,6 +413,13 @@ def executar_backtest_unidade(historico):
 def tela_dashboard_global():
     st.title("🛡️ CENTURION COMMAND CENTER")
     st.markdown("### 📡 Radar Global de Oportunidades")
+    
+    # Botão de atualização manual para caso o cache esteja velho
+    if st.button("🔄 Forçar Atualização de Dados (Limpar Cache)"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.rerun()
+        
     col1, col2, col3 = st.columns(3)
     col1.metric("Bancas", "4", "Lotep, Caminho, Monte, Trad")
     alertas_criticos = []
@@ -481,22 +499,20 @@ else:
         hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
         
         if st.sidebar.button("🚀 Baixar Sorteio"):
-            # Conexão direta para verificar duplicidade SEM CACHE
             ws = conectar_planilha_para_escrita(conf['aba'])
             if ws:
                 with st.spinner(f"Buscando {hora_busca}..."):
-                    # Verifica chaves existentes de forma limpa e fresca
                     chaves_existentes = obter_chaves_existentes_fresh(ws)
                     chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
                     
                     if chave_atual in chaves_existentes:
-                        st.sidebar.warning(f"⚠️ Resultado {hora_busca} já existe na planilha!")
+                        st.sidebar.warning(f"⚠️ Resultado já existe na Linha {chaves_existentes.index(chave_atual) + 2}!")
                     else:
                         dezenas, msg = raspar_dezenas_site(banca_selecionada, data_busca, hora_busca)
                         if dezenas:
                             ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
                             st.sidebar.success(f"✅ Salvo! {dezenas}")
-                            st.cache_data.clear() # Limpa cache
+                            st.cache_data.clear() # Limpa cache após salvar
                             time.sleep(1); st.rerun()
                         else: st.sidebar.error(f"❌ {msg}")
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -513,7 +529,6 @@ else:
                 status = st.sidebar.empty()
                 bar = st.sidebar.progress(0)
                 
-                # Lista de chaves já existentes (fresca)
                 chaves_existentes = obter_chaves_existentes_fresh(ws)
                 
                 delta = data_fim - data_ini
@@ -528,7 +543,7 @@ else:
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        if chave_atual in chaves_existentes: continue # Pula se já existe
+                        if chave_atual in chaves_existentes: continue
                         
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
@@ -537,10 +552,10 @@ else:
                         if dezenas:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
                             sucessos += 1
-                            chaves_existentes.append(chave_atual) # Adiciona à lista local para não duplicar no mesmo loop
+                            chaves_existentes.append(chave_atual)
                         time.sleep(1.0)
                 bar.progress(100)
-                st.cache_data.clear() # Limpa cache global
+                st.cache_data.clear() # Limpa cache
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Planilha")
@@ -611,7 +626,7 @@ else:
                     st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
                 
                 st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
-                st.caption("Estratégia V21.2: AI Pure + Filtro Saturação")
+                st.caption("Estratégia V22.0: AI Pure + Filtro Saturação")
                 st.code(", ".join(lista_final), language="text")
             
             col_m1, col_m2 = st.columns(2)
