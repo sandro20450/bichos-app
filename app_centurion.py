@@ -18,33 +18,35 @@ except ImportError:
     HAS_AI = False
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES E DADOS ---
+# --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V23.0 Stable", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V24.0", page_icon="🎯", layout="wide")
 
-# Configuração das Bancas
-CONFIG_BANCAS = {
-    "LOTEP": { "display": "LOTEP (Dezenas)", "aba": "BASE_LOTEP_DEZ", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
-    "CAMINHO": { "display": "CAMINHO (Dezenas)", "aba": "BASE_CAMINHO_DEZ", "slug": "caminho-da-sorte", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "19:30", "20:00", "21:00"] },
-    "MONTE": { "display": "MONTE CARLOS (Dezenas)", "aba": "BASE_MONTE_DEZ", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] },
-    "TRADICIONAL": { "display": "TRADICIONAL (1º Prêmio)", "aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] }
+# Configuração Única: TRADICIONAL
+CONFIG_TRADICIONAL = {
+    "display": "TRADICIONAL (1º Prêmio)", 
+    "aba": "BASE_TRADICIONAL_DEZ", 
+    "slug": "loteria-tradicional", 
+    "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
 }
 
-# Estilo Visual Mínimo (Nativo)
+# Estilo Visual Nativo (Dark & Clean)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
+    h1, h2, h3 { color: #00ff00 !important; }
+    .css-1aumxhk { background-color: #0e1117; }
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (SEM CACHE - LIVE) ---
+# --- 2. CONEXÃO E RASPAGEM (LIVE - SEM CACHE) ---
 # =============================================================================
 
-def conectar_planilha(nome_aba):
-    """Conecta ao Google Sheets (Conexão Direta)."""
+def conectar_planilha():
+    """Conecta ao Google Sheets (Conexão Direta/Live)."""
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
@@ -53,13 +55,13 @@ def conectar_planilha(nome_aba):
         gc = gspread.authorize(creds)
         try:
             sh = gc.open("CentralBichos")
-            return sh.worksheet(nome_aba)
+            return sh.worksheet(CONFIG_TRADICIONAL['aba'])
         except: return None
     return None
 
-def carregar_historico_dezenas(nome_aba):
-    """Baixa os dados da planilha em tempo real."""
-    ws = conectar_planilha(nome_aba)
+def carregar_historico():
+    """Baixa o histórico da Tradicional em tempo real."""
+    ws = conectar_planilha()
     if ws:
         try:
             raw = ws.get_all_values()
@@ -67,16 +69,22 @@ def carregar_historico_dezenas(nome_aba):
             dados = []
             for row in raw[1:]:
                 if len(row) >= 3:
-                    raw_dezenas = [str(d).strip().zfill(2) for d in row[2:] if str(d).strip().isdigit()]
-                    if "TRADICIONAL" in nome_aba:
-                        while len(raw_dezenas) < 5: raw_dezenas.append("00")
-                    dados.append({"data": row[0], "hora": row[1], "dezenas": raw_dezenas[:5]})
+                    # Tradicional foca no 1º prêmio (index 2 na planilha, pois 0=data, 1=hora)
+                    # Mas a estrutura salva geralmente é [data, hora, p1, p2, p3, p4, p5]
+                    # Vamos pegar apenas a primeira dezena
+                    d1 = str(row[2]).strip().zfill(2) if len(row) > 2 else "00"
+                    
+                    # Cria estrutura compatível com as funções de IA (lista de dezenas)
+                    # Preenche o resto com 00 para não quebrar lógica antiga
+                    dezenas = [d1, "00", "00", "00", "00"]
+                    
+                    dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
             return dados
         except: return [] 
     return []
 
 def obter_chaves_existentes(ws):
-    """Lê chaves existentes para evitar duplicidade."""
+    """Lê chaves (Data|Hora) para evitar duplicidade."""
     try:
         raw = ws.get('A:B')
         chaves = []
@@ -88,9 +96,8 @@ def obter_chaves_existentes(ws):
         return chaves
     except: return []
 
-def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
-    config = CONFIG_BANCAS[banca_key]
-    url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+def raspar_site(data_alvo, horario_alvo):
+    url = f"https://www.resultadofacil.com.br/resultados-{CONFIG_TRADICIONAL['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -98,13 +105,12 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
         
+        # Variações de horário
         alvos_possiveis = [horario_alvo, f"{horario_alvo}h", f"{horario_alvo}H"]
         if ":00" in horario_alvo:
             hora_simples = horario_alvo.split(':')[0]
-            alvos_possiveis.extend([f"{hora_simples}h", f"{hora_simples}H", f"{hora_simples} h"])
-        if ":20" in horario_alvo:
-             alvos_possiveis.append(f"{horario_alvo}h") 
-
+            alvos_possiveis.extend([f"{hora_simples}h", f"{hora_simples}H"])
+        
         for alvo in alvos_possiveis:
             headers_found = soup.find_all(string=re.compile(re.escape(alvo)))
             for header_text in headers_found:
@@ -113,121 +119,159 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
                 element = header_text.parent
                 tabela = element.find_next('table')
                 if tabela:
-                    dezenas_encontradas = []
                     linhas = tabela.find_all('tr')
                     for linha in linhas:
                         cols = linha.find_all('td')
                         if len(cols) >= 2:
-                            premio_txt = cols[0].get_text().strip()
-                            numero_txt = cols[1].get_text().strip()
-                            nums_premio = re.findall(r'\d+', premio_txt)
+                            premio_txt = cols[0].get_text().strip() # Ex: "1º Prêmio"
+                            numero_txt = cols[1].get_text().strip() # Ex: "1234"
                             
-                            if banca_key == "TRADICIONAL":
-                                if nums_premio and int(nums_premio[0]) == 1:
-                                    if numero_txt.isdigit() and len(numero_txt) >= 2:
-                                        dezena = numero_txt[-2:]
-                                        dezenas_encontradas.append(dezena)
-                                        while len(dezenas_encontradas) < 5: dezenas_encontradas.append("00")
-                                        return dezenas_encontradas, f"Sucesso"
-                            elif nums_premio and 1 <= int(nums_premio[0]) <= 5:
+                            # Filtra apenas o 1º Prêmio
+                            nums_premio = re.findall(r'\d+', premio_txt)
+                            if nums_premio and int(nums_premio[0]) == 1:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
-                                    dezena = numero_txt[-2:]
-                                    dezenas_encontradas.append(dezena)
-                    
-                    if banca_key != "TRADICIONAL" and len(dezenas_encontradas) >= 5:
-                        return dezenas_encontradas[:5], "Sucesso"
-        return None, f"Horário {horario_alvo} do dia {data_alvo.strftime('%d/%m/%Y')} não encontrado."
+                                    dezena = numero_txt[-2:] # Pega a dezena (últimos 2)
+                                    # Retorna formato lista com padding para compatibilidade
+                                    return [dezena, "00", "00", "00", "00"], "Sucesso"
+        
+        return None, f"Horário {horario_alvo} não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (SEM CACHE) ---
+# --- 3. CÉREBRO: IA PURE (DEZENAS & UNIDADES) ---
 # =============================================================================
 
-def treinar_oraculo_dezenas(historico, indice_premio):
-    if not HAS_AI or len(historico) < 50: return [], 0
+def treinar_oraculo_dezenas(historico):
+    """IA focada em Dezenas (00-99)."""
+    if not HAS_AI or len(historico) < 30: return [], 0
+    
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
     df = df.dropna(subset=['data_dt'])
+    
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
+    
+    # Alvo: Dezena do 1º Prêmio (indice 0)
     try:
-        dezenas_alvo = [j['dezenas'][indice_premio] for j in historico if 'data_dt' in df.columns]
+        dezenas_alvo = [j['dezenas'][0] for j in historico if 'data_dt' in df.columns]
     except: return [], 0
+    
     df = df.iloc[:len(dezenas_alvo)]
-    df['target_dezena'] = dezenas_alvo
-    df['target_futuro'] = df['target_dezena'].shift(-1)
+    df['target'] = dezenas_alvo
+    df['target_futuro'] = df['target'].shift(-1)
     
-    # Reduzido para os últimos 150 para ganhar performance sem cache
-    df_treino = df.dropna().tail(150)
+    df_treino = df.dropna().tail(150) # Treino rápido e recente
+    if len(df_treino) < 20: return [], 0
     
-    if len(df_treino) < 30: return [], 0
-    X = df_treino[['dia_semana', 'hora_code', 'target_dezena']]
+    X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
     
-    # Menos estimadores para ser mais rápido em tempo real
     modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
     
-    ultimo_real = df.iloc[-1]
-    X_novo = pd.DataFrame({
-        'dia_semana': [ultimo_real['dia_semana']],
-        'hora_code': [ultimo_real['hora_code']],
-        'target_dezena': [ultimo_real['target_dezena']]
-    })
+    # Previsão
+    ultimo = df.iloc[-1]
+    X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
+    
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    ranking_ia = []
+    
+    ranking = []
     for i, prob in enumerate(probs):
-        dezena = classes[i]
-        ranking_ia.append((dezena, prob))
-    ranking_ia.sort(key=lambda x: x[1], reverse=True)
-    return ranking_ia, (ranking_ia[0][1] * 100)
+        ranking.append((classes[i], prob))
+    ranking.sort(key=lambda x: x[1], reverse=True)
+    
+    return ranking, (ranking[0][1] * 100)
 
-def identificar_dezenas_saturadas(historico, indice_premio):
+def treinar_oraculo_unidades(historico):
+    """IA focada em Unidades (0-9)."""
+    if not HAS_AI or len(historico) < 30: return [], 0
+    
+    df = pd.DataFrame(historico)
+    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
+    df = df.dropna(subset=['data_dt'])
+    
+    df['dia_semana'] = df['data_dt'].dt.dayofweek 
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['hora'])
+    
+    try:
+        unis_alvo = [int(j['dezenas'][0][-1]) for j in historico if 'data_dt' in df.columns]
+    except: return [], 0
+    
+    df = df.iloc[:len(unis_alvo)]
+    df['target'] = unis_alvo
+    df['target_futuro'] = df['target'].shift(-1)
+    
+    df_treino = df.dropna().tail(150)
+    if len(df_treino) < 20: return [], 0
+    
+    X = df_treino[['dia_semana', 'hora_code', 'target']]
+    y = df_treino['target_futuro']
+    
+    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
+    modelo.fit(X, y)
+    
+    ultimo = df.iloc[-1]
+    X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
+    
+    probs = modelo.predict_proba(X_novo)[0]
+    classes = modelo.classes_
+    
+    ranking = []
+    for i, prob in enumerate(probs):
+        ranking.append((int(classes[i]), prob))
+    ranking.sort(key=lambda x: x[1], reverse=True)
+    
+    return ranking, (ranking[0][1] * 100)
+
+def identificar_saturadas(historico):
+    """Retorna dezenas que saíram >= 4 vezes nos últimos 40 jogos."""
     if len(historico) < 40: return []
     recorte = historico[-40:]
-    try:
-        dezenas = [j['dezenas'][indice_premio] for j in recorte]
-        contagem = Counter(dezenas)
-        saturadas = [d for d, qtd in contagem.items() if qtd >= 4]
-        return saturadas
-    except: return []
+    dezenas = [j['dezenas'][0] for j in recorte]
+    contagem = Counter(dezenas)
+    return [d for d, qtd in contagem.items() if qtd >= 4]
 
-def gerar_legiao_46_ai_pure(historico, indice_premio):
+def gerar_estrategia_dezenas(historico):
+    """Gera as 46 dezenas (AI Pure + Filtro Saturação)."""
     if not historico: return [], [], 0
-    ranking_ia, confianca = treinar_oraculo_dezenas(historico, indice_premio)
-    if not ranking_ia: return [], [], 0
-    saturadas = identificar_dezenas_saturadas(historico, indice_premio)
-    palpite_final = []
-    cortadas_log = []
-    for dezena, prob in ranking_ia:
-        if len(palpite_final) >= 46: break
-        if dezena in saturadas:
-            cortadas_log.append(dezena)
-            continue 
-        palpite_final.append(dezena)
-    if len(palpite_final) < 46:
-        for dezena, prob in ranking_ia:
-            if len(palpite_final) >= 46: break
-            if dezena not in palpite_final: palpite_final.append(dezena)
-    return sorted(palpite_final), cortadas_log, confianca
-
-def calcular_metricas_ai_pure(historico, indice_premio):
-    if len(historico) < 10: return 0, 0, 0, 0
-    total = len(historico)
-    # Analisa últimos 50 jogos para performance (sem cache, reduzir range é bom)
-    inicio = max(50, total - 50) 
-    max_loss = 0; seq_loss = 0
-    max_win = 0; seq_win = 0
+    ranking, conf = treinar_oraculo_dezenas(historico)
+    if not ranking: return [], [], 0
     
-    # Loop Otimizado
+    saturadas = identificar_saturadas(historico)
+    final = []; cortadas = []
+    
+    for dezena, prob in ranking:
+        if len(final) >= 46: break
+        if dezena in saturadas:
+            cortadas.append(dezena)
+            continue
+        final.append(dezena)
+        
+    # Completa se faltar
+    if len(final) < 46:
+        for dezena, prob in ranking:
+            if len(final) >= 46: break
+            if dezena not in final: final.append(dezena)
+            
+    return sorted(final), cortadas, conf
+
+# --- BACKTESTS OTIMIZADOS ---
+def calcular_metricas_dezenas(historico):
+    if len(historico) < 20: return 0, 0, 0, 0
+    total = len(historico)
+    inicio = max(20, total - 50)
+    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    
     for i in range(inicio, total):
-        target_dezena = historico[i]['dezenas'][indice_premio]
-        # Treina com dados passados
-        hist_parcial = historico[:i]
-        palpite, _, _ = gerar_legiao_46_ai_pure(hist_parcial, indice_premio)
-        win = target_dezena in palpite
+        target = historico[i]['dezenas'][0]
+        # Simulação rápida (treino parcial)
+        hist_p = historico[:i]
+        palpite, _, _ = gerar_estrategia_dezenas(hist_p)
+        win = target in palpite
         if win:
             seq_loss = 0; seq_win += 1
             if seq_win > max_win: max_win = seq_win
@@ -236,428 +280,269 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             if seq_loss > max_loss: max_loss = seq_loss
             
     # Atual
-    atual_loss = 0; atual_win = 0
-    idx = -1
-    target_last = historico[idx]['dezenas'][indice_premio]
-    palpite_last, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
-    win_last = target_last in palpite_last
+    idx = -1; atual_loss = 0; atual_win = 0
+    target = historico[idx]['dezenas'][0]
+    palpite, _, _ = gerar_estrategia_dezenas(historico[:idx])
     
-    if win_last:
+    if target in palpite:
         atual_win = 1
-        for k in range(2, 10): # Reduzido para 10 para velocidade
-            target = historico[-k]['dezenas'][indice_premio]
-            palp, _, _ = gerar_legiao_46_ai_pure(historico[:-k], indice_premio)
-            if target in palp: atual_win += 1
+        # Check backward
+        for k in range(2, 10):
+            t = historico[-k]['dezenas'][0]
+            p, _, _ = gerar_estrategia_dezenas(historico[:-k])
+            if t in p: atual_win += 1
             else: break
     else:
         atual_loss = 1
         for k in range(2, 10):
-            target = historico[-k]['dezenas'][indice_premio]
-            palp, _, _ = gerar_legiao_46_ai_pure(historico[:-k], indice_premio)
-            if target not in palp: atual_loss += 1
+            t = historico[-k]['dezenas'][0]
+            p, _, _ = gerar_estrategia_dezenas(historico[:-k])
+            if t not in p: atual_loss += 1
             else: break
             
     return atual_loss, max_loss, atual_win, max_win
 
-# --- IA UNIDADES ---
-def treinar_oraculo_unidades(historico):
-    if not HAS_AI or len(historico) < 50: return [], 0
-    df = pd.DataFrame(historico)
-    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
-    df = df.dropna(subset=['data_dt'])
-    df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder()
-    df['hora_code'] = le_hora.fit_transform(df['hora'])
-    try:
-        unidades_alvo = [int(j['dezenas'][0][-1]) for j in historico if 'data_dt' in df.columns]
-    except: return [], 0
-    df = df.iloc[:len(unidades_alvo)]
-    df['target_uni'] = unidades_alvo
-    df['target_futuro'] = df['target_uni'].shift(-1)
-    
-    df_treino = df.dropna().tail(150)
-    if len(df_treino) < 30: return [], 0
-    X = df_treino[['dia_semana', 'hora_code', 'target_uni']]
-    y = df_treino['target_futuro']
-    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
-    modelo.fit(X, y)
-    
-    ultimo_real = df.iloc[-1]
-    X_novo = pd.DataFrame({
-        'dia_semana': [ultimo_real['dia_semana']],
-        'hora_code': [ultimo_real['hora_code']],
-        'target_uni': [ultimo_real['target_uni']]
-    })
-    probs = modelo.predict_proba(X_novo)[0]
-    classes = modelo.classes_
-    ranking_uni = []
-    for i, prob in enumerate(probs):
-        uni = int(classes[i])
-        ranking_uni.append((uni, prob))
-    ranking_uni.sort(key=lambda x: x[1], reverse=True)
-    return ranking_uni, (ranking_uni[0][1] * 100)
-
-def calcular_metricas_unidade_ia(historico):
-    if len(historico) < 10: return 0, 0, 0, 0
+def calcular_metricas_unidades(historico):
+    if len(historico) < 20: return 0, 0, 0, 0
     total = len(historico)
-    inicio = max(50, total - 50)
+    inicio = max(20, total - 50)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
-    for i in range(inicio, total):
-        try:
-            target = int(historico[i]['dezenas'][0][-1])
-            hist_p = historico[:i]
-            rank_u, _ = treinar_oraculo_unidades(hist_p)
-            top_5_ia = [u for u, p in rank_u[:5]]
-            if target in top_5_ia:
-                seq_loss = 0; seq_win += 1
-                if seq_win > max_win: max_win = seq_win
-            else:
-                seq_win = 0; seq_loss += 1
-                if seq_loss > max_loss: max_loss = seq_loss
-        except: continue
     
-    atual_loss = 0; atual_win = 0
-    idx = -1
-    try:
-        target = int(historico[idx]['dezenas'][0][-1])
-        rank_u, _ = treinar_oraculo_unidades(historico[:idx])
-        top_5_ia = [u for u, p in rank_u[:5]]
-        if target in top_5_ia:
-            atual_win = 1
-            for k in range(2, 10):
-                t = int(historico[-k]['dezenas'][0][-1])
-                ru, _ = treinar_oraculo_unidades(historico[:-k])
-                t5 = [u for u, p in ru[:5]]
-                if t in t5: atual_win += 1
-                else: break
+    for i in range(inicio, total):
+        target = int(historico[i]['dezenas'][0][-1])
+        hist_p = historico[:i]
+        rank, _ = treinar_oraculo_unidades(hist_p)
+        top5 = [u for u, p in rank[:5]]
+        
+        if target in top5:
+            seq_loss = 0; seq_win += 1
+            if seq_win > max_win: max_win = seq_win
         else:
-            atual_loss = 1
-            for k in range(2, 10):
-                t = int(historico[-k]['dezenas'][0][-1])
-                ru, _ = treinar_oraculo_unidades(historico[:-k])
-                t5 = [u for u, p in ru[:5]]
-                if t not in t5: atual_loss += 1
-                else: break
-    except: pass
+            seq_win = 0; seq_loss += 1
+            if seq_loss > max_loss: max_loss = seq_loss
+            
+    # Atual
+    idx = -1; atual_loss = 0; atual_win = 0
+    target = int(historico[idx]['dezenas'][0][-1])
+    rank, _ = treinar_oraculo_unidades(historico[:idx])
+    top5 = [u for u, p in rank[:5]]
+    
+    if target in top5:
+        atual_win = 1
+        for k in range(2, 10):
+            t = int(historico[-k]['dezenas'][0][-1])
+            r, _ = treinar_oraculo_unidades(historico[:-k])
+            t5 = [u for u, p in r[:5]]
+            if t in t5: atual_win += 1
+            else: break
+    else:
+        atual_loss = 1
+        for k in range(2, 10):
+            t = int(historico[-k]['dezenas'][0][-1])
+            r, _ = treinar_oraculo_unidades(historico[:-k])
+            t5 = [u for u, p in r[:5]]
+            if t not in t5: atual_loss += 1
+            else: break
+            
     return atual_loss, max_loss, atual_win, max_win
 
-# =============================================================================
-# --- 4. EXIBIÇÃO ---
-# =============================================================================
-
-def analisar_padroes_futuros(historico, indice_premio):
-    if len(historico) < 10: return None, []
-    ultima_dezena_real = historico[-1]['dezenas'][indice_premio]
-    encontrados = []
-    for i in range(len(historico) - 2, -1, -1):
-        try:
-            if historico[i]['dezenas'][indice_premio] == ultima_dezena_real:
-                encontrados.append({ "Data": historico[i+1]['data'], "Hora": historico[i+1]['hora'], "Veio Dezena": historico[i+1]['dezenas'][indice_premio] })
-                if len(encontrados) >= 5: break
-        except: continue
-    return ultima_dezena_real, encontrados
-
-def analisar_padroes_unidade(historico):
-    if len(historico) < 10: return None, []
-    try: ultima_uni = historico[-1]['dezenas'][0][-1]
-    except: return None, []
-    encontrados = []
-    for i in range(len(historico) - 2, -1, -1):
-        try:
-            if historico[i]['dezenas'][0][-1] == ultima_uni:
-                encontrados.append({ "Data": historico[i+1]['data'], "Hora": historico[i+1]['hora'], "Veio Final": historico[i+1]['dezenas'][0][-1] })
-                if len(encontrados) >= 5: break
-        except: continue
-    return ultima_uni, encontrados
-
-def executar_backtest_centurion(historico, indice_premio):
-    if len(historico) < 60: return []
-    resultados = []
-    for i in range(1, 5):
+def executar_backtest_recente(historico, tipo="DEZENA"):
+    results = []
+    for i in range(1, 6): # Últimos 5 jogos
         idx = -i
-        target = historico[idx]['dezenas'][indice_premio]
-        palpite, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
-        win = target in palpite
-        resultados.append({'index': i, 'dezena': target, 'win': win})
-    return resultados
-
-def executar_backtest_unidade(historico):
-    if len(historico) < 60: return []
-    resultados = []
-    for i in range(1, 5):
-        idx = -i
-        try:
+        if tipo == "DEZENA":
+            target = historico[idx]['dezenas'][0]
+            palp, _, _ = gerar_estrategia_dezenas(historico[:idx])
+            win = target in palp
+            results.append({"val": target, "win": win})
+        else:
             target = int(historico[idx]['dezenas'][0][-1])
-            rank_u, _ = treinar_oraculo_unidades(historico[:idx])
-            top_5_ia = [u for u, p in rank_u[:5]]
-            win = target in top_5_ia
-            resultados.append({'index': i, 'real': target, 'win': win})
-        except: continue
-    return resultados
+            rank, _ = treinar_oraculo_unidades(historico[:idx])
+            top5 = [u for u, p in rank[:5]]
+            win = target in top5
+            results.append({"val": f"Final {target}", "win": win})
+    return results
 
-def tela_dashboard_global():
-    st.title("🛡️ CENTURION COMMAND CENTER")
-    st.markdown("### 📡 Radar Global de Oportunidades")
+def rastreador_padroes(historico, tipo="DEZENA"):
+    if len(historico) < 10: return []
+    encontrados = []
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Bancas", "4", "Lotep, Caminho, Monte, Trad")
-    alertas_criticos = []
-    
-    with st.spinner("Analisando todas as bancas em tempo real..."):
-        for banca_key, config in CONFIG_BANCAS.items():
-            historico = carregar_historico_dezenas(config['aba'])
-            if len(historico) > 50:
-                limit_range = 1 if banca_key == "TRADICIONAL" else 5
-                for i in range(limit_range):
-                    loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
-                    if max_loss > 0:
-                        if loss >= max_loss: alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "CRITICO"})
-                        elif loss == (max_loss - 1): alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": loss, "rec": max_loss, "tipo": "PERIGO"})
-                    if max_win > 2 and win == (max_win - 1):
-                         alertas_criticos.append({"banca": config['display'], "premio": f"{i+1}º Prêmio", "val": win, "rec": max_win, "tipo": "VITORIA"})
-                if banca_key == "TRADICIONAL":
-                    u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidade_ia(historico)
-                    if u_max_loss > 0:
-                        if u_loss >= u_max_loss: alertas_criticos.append({"banca": "TRADICIONAL (Unidade IA)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "CRITICO_UNI"})
-                        elif u_loss == (u_max_loss - 1): alertas_criticos.append({"banca": "TRADICIONAL (Unidade IA)", "premio": "Sniper 50%", "val": u_loss, "rec": u_max_loss, "tipo": "PERIGO_UNI"})
-
-    col2.metric("Sinais no Radar", f"{len(alertas_criticos)}", "Win/Loss")
-    col3.metric("Status Base", "Online", "Google Sheets")
-    st.markdown("---")
-    
-    if alertas_criticos:
-        st.subheader("🚨 Zonas de Interesse Identificadas")
-        for alerta in alertas_criticos:
-            if alerta['tipo'] == "CRITICO":
-                st.error(f"🚨 **{alerta['banca']} - {alerta['premio']}** | RECORDE ATINGIDO! {alerta['val']} Derrotas (Max: {alerta['rec']})")
-            elif alerta['tipo'] == "PERIGO":
-                st.warning(f"⚠️ **{alerta['banca']} - {alerta['premio']}** | ZONA DE PERIGO: {alerta['val']} Derrotas (Max: {alerta['rec']})")
-            elif alerta['tipo'] == "VITORIA":
-                st.success(f"🤑 **{alerta['banca']} - {alerta['premio']}** | SEQUÊNCIA DE VITÓRIAS! {alerta['val']} Vitórias (Max: {alerta['rec']})")
-            elif alerta['tipo'] == "CRITICO_UNI":
-                st.error(f"🎯 **{alerta['banca']} - {alerta['premio']}** | SNIPER CRÍTICO! {alerta['val']} Derrotas (Max: {alerta['rec']})")
-            elif alerta['tipo'] == "PERIGO_UNI":
-                st.warning(f"🎯 **{alerta['banca']} - {alerta['premio']}** | SNIPER ALERTA! {alerta['val']} Derrotas (Max: {alerta['rec']})")
+    if tipo == "DEZENA":
+        ultimo_real = historico[-1]['dezenas'][0]
+        label = ultimo_real
+        for i in range(len(historico)-2, -1, -1):
+            if historico[i]['dezenas'][0] == ultimo_real:
+                encontrados.append({
+                    "Data": historico[i+1]['data'],
+                    "Veio": historico[i+1]['dezenas'][0]
+                })
+                if len(encontrados) >= 5: break
     else:
-        st.success("✅ O Radar não detectou anomalias críticas no momento.")
+        ultimo_real = historico[-1]['dezenas'][0][-1]
+        label = f"Final {ultimo_real}"
+        for i in range(len(historico)-2, -1, -1):
+            if historico[i]['dezenas'][0][-1] == ultimo_real:
+                encontrados.append({
+                    "Data": historico[i+1]['data'],
+                    "Veio": f"Final {historico[i+1]['dezenas'][0][-1]}"
+                })
+                if len(encontrados) >= 5: break
+                
+    return label, encontrados
 
 # =============================================================================
-# --- 5. APP PRINCIPAL ---
+# --- 4. INTERFACE ---
 # =============================================================================
-menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
-escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
+
+# --- SIDEBAR (EXTRAÇÃO) ---
+st.sidebar.header("🔧 Extração de Dados")
+modo_extracao = st.sidebar.radio("Modo:", ["Unitária", "Turbo (Massa)"])
+
+if modo_extracao == "Unitária":
+    d_data = st.sidebar.date_input("Data:", date.today())
+    d_hora = st.sidebar.selectbox("Horário:", CONFIG_TRADICIONAL['horarios'])
+    
+    if st.sidebar.button("🚀 Baixar Resultado"):
+        ws = conectar_planilha()
+        if ws:
+            with st.spinner("Buscando..."):
+                chaves = obter_chaves_existentes(ws)
+                key = f"{d_data.strftime('%Y-%m-%d')}|{d_hora}"
+                
+                if key in chaves:
+                    st.sidebar.warning("Resultado já existe na planilha!")
+                else:
+                    dez, msg = raspar_site(d_data, d_hora)
+                    if dez:
+                        ws.append_row([d_data.strftime('%Y-%m-%d'), d_hora] + dez)
+                        st.sidebar.success(f"Salvo: {dez[0]}")
+                        time.sleep(1); st.rerun()
+                    else:
+                        st.sidebar.error(f"Erro: {msg}")
+        else:
+            st.sidebar.error("Erro Conexão")
+
+else: # Turbo
+    d_ini = st.sidebar.date_input("Início:", date.today())
+    d_fim = st.sidebar.date_input("Fim:", date.today())
+    
+    if st.sidebar.button("🚀 INICIAR TURBO"):
+        ws = conectar_planilha()
+        if ws:
+            bar = st.sidebar.progress(0)
+            chaves = obter_chaves_existentes(ws)
+            delta = d_fim - d_ini
+            dias = [d_ini + timedelta(days=i) for i in range(delta.days + 1)]
+            total = len(dias) * len(CONFIG_TRADICIONAL['horarios'])
+            count = 0; success = 0
+            
+            for dia in dias:
+                for hora in CONFIG_TRADICIONAL['horarios']:
+                    count += 1
+                    bar.progress(count / total)
+                    
+                    if dia > date.today(): continue
+                    if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
+                    
+                    key = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                    if key in chaves: continue
+                    
+                    dez, msg = raspar_site(dia, hora)
+                    if dez:
+                        ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dez)
+                        chaves.append(key) # Atualiza lista local
+                        success += 1
+                    time.sleep(0.5)
+            
+            st.sidebar.success(f"Finalizado! {success} novos.")
+            time.sleep(2); st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.link_button("🛡️ Ir para App PENTÁGONO", "https://seu-app-pentagono.streamlit.app")
-st.sidebar.markdown("---")
+st.sidebar.link_button("🛡️ Ir para PENTÁGONO", "https://seu-app-pentagono.streamlit.app")
 
-if escolha_menu == "🏠 RADAR GERAL (Home)":
-    tela_dashboard_global()
+# --- MAIN PAGE (ANÁLISE) ---
+st.title("🎯 CENTURION (Tradicional Exclusive)")
+
+historico = carregar_historico()
+
+if len(historico) > 0:
+    ult = historico[-1]
+    st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['hora']} | **Resultado:** {ult['dezenas'][0]}")
+    
+    # ---------------------------------------------------------
+    # COLUNA 1: IA DEZENAS (LEGIÃO 46)
+    # ---------------------------------------------------------
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.subheader("🎲 IA Dezenas (Legião 46)")
+        
+        lista_46, cortadas, conf_dez = gerar_estrategia_dezenas(historico)
+        loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_dezenas(historico)
+        
+        if HAS_AI:
+            st.info(f"🧠 Confiança do Modelo: {conf_dez:.1f}%")
+        
+        if loss_d >= max_loss_d and max_loss_d > 0:
+            st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
+        
+        with st.container(border=True):
+            if cortadas: st.warning(f"🚫 {len(cortadas)} Saturadas Cortadas")
+            st.code(", ".join(lista_46), language="text")
+            
+        m1, m2 = st.columns(2)
+        m1.metric("Derrotas", f"{loss_d}", f"Max: {max_loss_d}", delta_color="inverse")
+        m2.metric("Vitórias", f"{win_d}", f"Max: {max_win_d}")
+        
+        st.markdown("**Histórico Recente:**")
+        bt_dez = executar_backtest_recente(historico, "DEZENA")
+        cols_bt = st.columns(5)
+        for i, res in enumerate(reversed(bt_dez)):
+            with cols_bt[i]:
+                if res['win']: st.success(res['val'])
+                else: st.error(res['val'])
+                
+        lbl_d, padroes_d = rastreador_padroes(historico, "DEZENA")
+        if padroes_d:
+            st.caption(f"Padrões após a dezena **{lbl_d}**:")
+            st.table(pd.DataFrame(padroes_d))
+
+    # ---------------------------------------------------------
+    # COLUNA 2: IA UNIDADES (TOP 5)
+    # ---------------------------------------------------------
+    with c2:
+        st.subheader("🎯 IA Unidades (Top 5)")
+        
+        rank_uni, conf_uni = treinar_oraculo_unidades(historico)
+        top5_uni = [str(u) for u, p in rank_uni[:5]]
+        loss_u, max_loss_u, win_u, max_win_u = calcular_metricas_unidades(historico)
+        
+        if HAS_AI:
+            st.info(f"🧠 Confiança do Modelo: {conf_uni:.1f}%")
+            
+        if loss_u >= max_loss_u and max_loss_u > 0:
+            st.error(f"🚨 ALERTA: {loss_u} Derrotas (Recorde!)")
+            
+        with st.container(border=True):
+            st.markdown(f"### Finais: {', '.join(top5_uni)}")
+            
+        m3, m4 = st.columns(2)
+        m3.metric("Derrotas", f"{loss_u}", f"Max: {max_loss_u}", delta_color="inverse")
+        m4.metric("Vitórias", f"{win_u}", f"Max: {max_win_u}")
+        
+        st.markdown("**Histórico Recente:**")
+        bt_uni = executar_backtest_recente(historico, "UNIDADE")
+        cols_bt_u = st.columns(5)
+        for i, res in enumerate(reversed(bt_uni)):
+            with cols_bt_u[i]:
+                if res['win']: st.success(res['val'])
+                else: st.error(res['val'])
+
+        lbl_u, padroes_u = rastreador_padroes(historico, "UNIDADE")
+        if padroes_u:
+            st.caption(f"Padrões após o **{lbl_u}**:")
+            st.table(pd.DataFrame(padroes_u))
 
 else:
-    banca_selecionada = escolha_menu
-    conf = CONFIG_BANCAS[banca_selecionada]
-    
-    url_site_base = f"https://www.resultadofacil.com.br/resultados-{conf['slug']}-de-hoje"
-    st.sidebar.link_button("🔗 Ver Site Oficial", url_site_base)
-    
-    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária (1 Sorteio)", "🌪️ Em Massa (Turbo)"])
-    st.sidebar.markdown("---")
-
-    if modo_extracao == "🎯 Unitária (1 Sorteio)":
-        st.sidebar.subheader("Extração Unitária")
-        opt_data = st.sidebar.radio("Data:", ["Hoje", "Ontem", "Outra"])
-        if opt_data == "Hoje": data_busca = date.today()
-        elif opt_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-        else: data_busca = st.sidebar.date_input("Escolha a Data:", date.today())
-        
-        lista_horarios = conf['horarios'].copy()
-        if banca_selecionada == "CAMINHO" and (data_busca.weekday() == 2 or data_busca.weekday() == 5):
-            lista_horarios = [h.replace("20:00", "19:30") for h in lista_horarios]
-
-        hora_busca = st.sidebar.selectbox("Horário:", lista_horarios)
-        
-        if st.sidebar.button("🚀 Baixar Sorteio"):
-            ws = conectar_planilha(conf['aba'])
-            if ws:
-                with st.spinner(f"Buscando {hora_busca}..."):
-                    # Busca FRESH para evitar duplicidade
-                    chaves_existentes = obter_chaves_existentes(ws)
-                    chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{hora_busca}"
-                    
-                    if chave_atual in chaves_existentes:
-                        st.sidebar.warning(f"⚠️ Resultado {hora_busca} já existe na planilha!")
-                    else:
-                        dezenas, msg = raspar_dezenas_site(banca_selecionada, data_busca, hora_busca)
-                        if dezenas:
-                            ws.append_row([data_busca.strftime('%Y-%m-%d'), hora_busca] + dezenas)
-                            st.sidebar.success(f"✅ Salvo! {dezenas}")
-                            time.sleep(1); st.rerun()
-                        else: st.sidebar.error(f"❌ {msg}")
-            else: st.sidebar.error("Erro Conexão Planilha")
-
-    else:
-        st.sidebar.subheader("Extração em Massa")
-        col1, col2 = st.sidebar.columns(2)
-        with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
-        with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
-        
-        if st.sidebar.button("🚀 INICIAR TURBO"):
-            ws = conectar_planilha(conf['aba'])
-            if ws:
-                status = st.sidebar.empty()
-                bar = st.sidebar.progress(0)
-                
-                chaves_existentes = obter_chaves_existentes(ws)
-                
-                delta = data_fim - data_ini
-                lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                total_ops = len(lista_datas) * len(conf['horarios'])
-                op_atual = 0; sucessos = 0
-                
-                for dia in lista_datas:
-                    for hora in conf['horarios']:
-                        op_atual += 1
-                        if op_atual <= total_ops: bar.progress(op_atual / total_ops)
-                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                        
-                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        if chave_atual in chaves_existentes: continue
-                        
-                        if dia > date.today(): continue
-                        if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
-
-                        dezenas, msg = raspar_dezenas_site(banca_selecionada, dia, hora)
-                        if dezenas:
-                            ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
-                            sucessos += 1
-                            chaves_existentes.append(chave_atual)
-                        time.sleep(1.0)
-                bar.progress(100)
-                status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
-                time.sleep(2); st.rerun()
-            else: st.sidebar.error("Erro Conexão Planilha")
-
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("✍️ Inserção Manual"):
-        man_data = st.sidebar.date_input("Data", date.today())
-        h_manual_list = conf['horarios'].copy()
-        if banca_selecionada == "CAMINHO" and "19:30" not in h_manual_list: h_manual_list.append("19:30"); h_manual_list.sort()
-        man_hora = st.sidebar.selectbox("Horário", h_manual_list)
-        
-        c1, c2, c3, c4, c5 = st.sidebar.columns(5)
-        p1 = c1.text_input("1", max_chars=2, key="mp1")
-        if banca_selecionada == "TRADICIONAL":
-            st.caption("Apenas 1º prêmio necessário.")
-            p2, p3, p4, p5 = "00", "00", "00", "00"
-        else:
-            p2 = c2.text_input("2", max_chars=2, key="mp2")
-            p3 = c3.text_input("3", max_chars=2, key="mp3")
-            p4 = c4.text_input("4", max_chars=2, key="mp4")
-            p5 = c5.text_input("5", max_chars=2, key="mp5")
-        
-        if st.sidebar.button("💾 Salvar"):
-            man_dezenas = [p1, p2, p3, p4, p5]
-            if p1.isdigit() and len(p1) == 2:
-                ws = conectar_planilha(conf['aba'])
-                if ws:
-                    chaves_existentes = obter_chaves_existentes(ws)
-                    chave_atual = f"{man_data.strftime('%Y-%m-%d')}|{man_hora}"
-                    if chave_atual in chaves_existentes: st.sidebar.warning("Já existe!")
-                    else:
-                        ws.append_row([man_data.strftime('%Y-%m-%d'), man_hora] + man_dezenas)
-                        st.sidebar.success("Salvo!"); time.sleep(1); st.rerun()
-                else: st.sidebar.error("Erro Conexão")
-            else: st.sidebar.error("Preencha corretamente")
-
-    st.subheader(f"Analise: {conf['display']}")
-    historico = carregar_historico_dezenas(conf['aba'])
-
-    if len(historico) == 0:
-        st.warning(f"⚠️ Base vazia. Verifique se a aba '{conf['aba']}' existe na planilha.")
-    else:
-        ult = historico[-1]
-        st.info(f"📅 **STATUS ATUAL:** Último: **{ult['data']}** às **{ult['hora']}**.")
-
-    tabs = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
-
-    for i, tab in enumerate(tabs):
-        with tab:
-            if banca_selecionada == "TRADICIONAL" and i > 0:
-                st.warning("⚠️ Esta banca foca exclusivamente no 1º Prêmio (Cabeça).")
-                continue
-
-            lista_final, cortadas, confianca_ia = gerar_legiao_46_ai_pure(historico, i)
-            loss, max_loss, win, max_win = calcular_metricas_ai_pure(historico, i)
-            
-            if HAS_AI:
-                with st.container(border=True):
-                    st.markdown("### 🧠 Oráculo IA (Pure Dezenas)")
-                    st.info(f"Confiança do Modelo: {confianca_ia:.1f}%")
-            
-            if loss >= max_loss and max_loss > 0:
-                st.error(f"🚨 **ALERTA MÁXIMO:** {loss} Derrotas Seguidas (Recorde Atingido!)")
-            
-            with st.container(border=True):
-                if cortadas:
-                    st.warning(f"🚫 {len(cortadas)} Dezenas Saturadas Cortadas")
-                
-                st.markdown(f"<h2 style='text-align: center; color: #00ff00;'>LEGIÃO 46 - {i+1}º PRÊMIO</h2>", unsafe_allow_html=True)
-                st.caption("Estratégia V23.0: AI Pure + Filtro Saturação")
-                st.code(", ".join(lista_final), language="text")
-            
-            col_m1, col_m2 = st.columns(2)
-            col_m1.metric("Derrotas", f"{loss}", f"Max: {max_loss}", delta_color="inverse")
-            col_m2.metric("Vitórias", f"{win}", f"Max: {max_win}")
-            
-            bt_results = executar_backtest_centurion(historico, i)
-            if bt_results:
-                st.markdown("### ⏪ Performance Recente")
-                cols_bt = st.columns(len(bt_results))
-                for idx_bt, res in enumerate(reversed(bt_results)):
-                    with cols_bt[idx_bt]:
-                        lbl = "VITÓRIA" if res['win'] else "DERROTA"
-                        val = res['dezena']
-                        if res['win']: st.success(f"{val} ({lbl})")
-                        else: st.error(f"{val} ({lbl})")
-
-            st.markdown("---")
-            
-            ultima_dz_real, padroes_futuros = analisar_padroes_futuros(historico, i)
-            if padroes_futuros:
-                st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
-                st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
-                st.table(pd.DataFrame(padroes_futuros))
-            
-            if banca_selecionada == "TRADICIONAL":
-                if HAS_AI:
-                    rank_unidades, conf_uni = treinar_oraculo_unidades(historico)
-                    top_5_uni = [str(u) for u, p in rank_unidades[:5]]
-                    
-                    with st.container(border=True):
-                        st.markdown("### 🧠 Oráculo IA (Unidades)")
-                        st.info(f"Confiança: {conf_uni:.1f}%")
-                        st.markdown(f"**Top 5 Finais:** {', '.join(top_5_uni)}")
-                        st.caption("Estratégia Exclusiva de Final")
-                
-                u_loss, u_max, u_win, u_max_win = calcular_metricas_unidade_ia(historico)
-                
-                c_u1, c_u2 = st.columns(2)
-                c_u1.metric("Uni Derrotas", f"{u_loss}", f"Max: {u_max}", delta_color="inverse")
-                c_u2.metric("Uni Vitórias", f"{u_win}", f"Max: {u_max_win}")
-                
-                bt_sniper = executar_backtest_unidade(historico)
-                if bt_sniper:
-                    cols_ubt = st.columns(len(bt_sniper))
-                    for idx_ubt, res in enumerate(reversed(bt_sniper)):
-                        with cols_ubt[idx_ubt]:
-                            lbl = "WIN" if res['win'] else "LOSS"
-                            val = f"F{res['real']}"
-                            if res['win']: st.success(f"{val}")
-                            else: st.error(f"{val}")
-
-                ultima_uni_real, padroes_uni = analisar_padroes_unidade(historico)
-                if padroes_uni:
-                    st.markdown(f"#### 🔍 Rastreador de Padrões (UNIDADE - Última: **{ultima_uni_real}**)")
-                    st.caption(f"Nas últimas 5 vezes que a unidade {ultima_uni_real} saiu, veja o que veio depois:")
-                    st.table(pd.DataFrame(padroes_uni))
+    st.warning("⚠️ Base de dados vazia. Utilize o menu lateral para importar resultados.")
