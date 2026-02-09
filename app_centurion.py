@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V19.1 Visual Fix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V19.2 Final Fix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -214,7 +214,7 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (V19.1) ---
+# --- 3. CÉREBRO: IA PURE (V19.2) ---
 # =============================================================================
 
 def treinar_oraculo_dezenas(historico, indice_premio):
@@ -649,16 +649,15 @@ else:
             
             info_cortes = f"<span class='info-pill pill-sat'>🚫 {len(cortadas)} SATURADAS CORTADAS</span>" if cortadas else ""
             
-            html_content = f"""
+            st.markdown(f"""
             {aviso_alerta}
             <div class='box-centurion'>
                 {info_cortes}
                 <div class='titulo-gold'>LEGIÃO 46 - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V19.1: AI Pure + Filtro Saturação</div>
+                <div class='subtitulo'>Estratégia V19.2: AI Pure + Filtro Saturação</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
             </div>
-            """
-            st.markdown(html_content, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
             cor_stress = "#ff4b4b" if loss >= max_loss else "#ffffff"
             cor_wins = "#00ff00" if win >= (max_win - 1) else "#ffffff"
