@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION 46 - V19.0 AI Pure", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="CENTURION 46 - V19.1 Visual Fix", page_icon="🛡️", layout="wide")
 
 # Configuração das Bancas
 CONFIG_BANCAS = {
@@ -55,14 +55,12 @@ st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     
-    /* BOX PRINCIPAL (VERDE) */
     .box-centurion {
         background: linear-gradient(135deg, #004d00, #002600);
         border: 2px solid #00ff00; padding: 20px; border-radius: 12px;
         text-align: center; margin-bottom: 10px; box-shadow: 0 0 25px rgba(0, 255, 0, 0.15);
     }
     
-    /* BOX IA (ROXO) - AGORA NO TOPO */
     .box-ai {
         background: linear-gradient(135deg, #2b005c, #1a0033);
         border: 1px solid #b300ff; padding: 15px; border-radius: 10px;
@@ -71,7 +69,6 @@ st.markdown("""
     }
     .ai-title { color: #b300ff; font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
     
-    /* BOX UNIDADE ESPECIAL (AZUL) */
     .box-unidade {
         background: linear-gradient(135deg, #003366, #004080);
         border: 2px solid #0099ff; padding: 15px; border-radius: 10px;
@@ -81,13 +78,18 @@ st.markdown("""
     .uni-title { color: #0099ff; font-weight: 900; font-size: 18px; text-transform: uppercase; margin-bottom: 5px; }
     .uni-nums { font-size: 22px; color: #fff; font-weight: bold; letter-spacing: 3px; }
     
+    .box-alert {
+        background-color: #4a0000; border: 2px solid #ff0000;
+        padding: 15px; border-radius: 10px; text-align: center;
+        margin: 15px 0; animation: pulse 2s infinite; font-size: 18px; font-weight: bold;
+    }
+    
     .titulo-gold { color: #00ff00; font-weight: 900; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
     .subtitulo { color: #cccccc; font-size: 14px; margin-bottom: 20px; font-style: italic; }
     .nums-destaque { font-size: 20px; color: #ffffff; font-weight: bold; word-wrap: break-word; line-height: 1.8; letter-spacing: 1px; }
     
     .info-pill { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; margin: 5px; }
     .pill-sat { background-color: #330000; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    .pill-ia { background-color: #2b005c; color: #d900ff; border: 1px solid #d900ff; }
     
     .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .bt-card { background-color: rgba(30, 30, 30, 0.9); border-radius: 8px; padding: 10px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -96,10 +98,10 @@ st.markdown("""
     .bt-icon { font-size: 20px; margin-bottom: 2px; }
     .bt-num { font-size: 14px; font-weight: bold; }
     .bt-label { font-size: 10px; opacity: 0.8; text-transform: uppercase; }
+    
     .max-loss-pill { background-color: rgba(255, 0, 0, 0.15); border: 1px solid #ff4b4b; color: #ffcccc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; }
     .max-win-pill { background-color: rgba(0, 255, 0, 0.15); border: 1px solid #00ff00; color: #ccffcc; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 14px; display: inline-block; margin-bottom: 15px; margin-left: 10px; }
     
-    /* DASHBOARD CARDS */
     .dash-card { padding: 10px 5px; border-radius: 8px; margin-bottom: 8px; text-align: center; border-left: 4px solid #fff; }
     .dash-critico { background-color: #4a0000; border-color: #ff0000; }
     .dash-perigo { background-color: #662200; border-color: #ff5500; }
@@ -113,27 +115,8 @@ st.markdown("""
     .dash-footer { font-size: 10px; opacity: 0.7; margin: 0; }
     .dash-badge { font-size: 10px; font-weight: bold; margin-top: 2px; display: block; }
 
-    /* ESTILO PARA O RASTREADOR DE PADRÕES */
-    .pattern-row {
-        background-color: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 3px solid #00ff00;
-    }
-    .pattern-row-uni {
-        background-color: rgba(0, 153, 255, 0.1);
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 3px solid #0099ff;
-    }
+    .pattern-row { background-color: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #00ff00; }
+    .pattern-row-uni { background-color: rgba(0, 153, 255, 0.1); padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #0099ff; }
     .pattern-date { font-size: 12px; color: #aaa; }
     .pattern-result { font-size: 16px; font-weight: bold; color: #fff; }
 
@@ -231,156 +214,84 @@ def raspar_dezenas_site(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (V19.0) ---
+# --- 3. CÉREBRO: IA PURE (V19.1) ---
 # =============================================================================
 
 def treinar_oraculo_dezenas(historico, indice_premio):
-    """
-    Treina a IA para prever a probabilidade de cada dezena (00-99).
-    """
     if not HAS_AI or len(historico) < 50: return [], 0
-    
     df = pd.DataFrame(historico)
-    # Garante datas corretas
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
     df = df.dropna(subset=['data_dt'])
-    
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
-    
-    # Extrai alvo
     try:
         dezenas_alvo = [j['dezenas'][indice_premio] for j in historico if 'data_dt' in df.columns]
     except: return [], 0
-    
-    # Alinha tamanho
     df = df.iloc[:len(dezenas_alvo)]
     df['target_dezena'] = dezenas_alvo
     df['target_futuro'] = df['target_dezena'].shift(-1)
-    
-    # Treina com os últimos 200 jogos para pegar tendência recente mas sólida
     df_treino = df.dropna().tail(200)
-    
     if len(df_treino) < 30: return [], 0
-    
     X = df_treino[['dia_semana', 'hora_code', 'target_dezena']]
     y = df_treino['target_futuro']
-    
     modelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
-    
-    # Previsão para o próximo
     ultimo_real = df.iloc[-1]
     X_novo = pd.DataFrame({
         'dia_semana': [ultimo_real['dia_semana']],
         'hora_code': [ultimo_real['hora_code']],
         'target_dezena': [ultimo_real['target_dezena']]
     })
-    
-    # Probabilidades para todas as classes conhecidas
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    
     ranking_ia = []
     for i, prob in enumerate(probs):
         dezena = classes[i]
         ranking_ia.append((dezena, prob))
-        
-    # Ordena por maior probabilidade
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
-    
-    # Retorna lista completa rankeada e a confiança do Top 1
     return ranking_ia, (ranking_ia[0][1] * 100)
 
 def identificar_dezenas_saturadas(historico, indice_premio):
-    """
-    Identifica dezenas que saíram muito nos últimos 40 jogos.
-    """
     if len(historico) < 40: return []
     recorte = historico[-40:]
     try:
         dezenas = [j['dezenas'][indice_premio] for j in recorte]
         contagem = Counter(dezenas)
-        # Se saiu 4 vezes ou mais em 40 jogos, considera saturada (filtro agressivo)
         saturadas = [d for d, qtd in contagem.items() if qtd >= 4]
         return saturadas
     except: return []
 
 def gerar_legiao_46_ai_pure(historico, indice_premio):
-    """
-    Gera as 46 dezenas baseadas puramente na IA, filtrando saturadas.
-    """
     if not historico: return [], [], 0
-    
-    # 1. Obter Ranking da IA (Todas as dezenas prováveis)
     ranking_ia, confianca = treinar_oraculo_dezenas(historico, indice_premio)
-    
-    if not ranking_ia:
-        # Fallback se IA falhar: Dezenas mais atrasadas
-        return [], [], 0
-        
-    # 2. Identificar Saturadas
+    if not ranking_ia: return [], [], 0
     saturadas = identificar_dezenas_saturadas(historico, indice_premio)
-    
     palpite_final = []
     cortadas_log = []
-    
-    # 3. Seleção
     for dezena, prob in ranking_ia:
-        if len(palpite_final) >= 46:
-            break
-            
+        if len(palpite_final) >= 46: break
         if dezena in saturadas:
             cortadas_log.append(dezena)
-            continue # Pula saturada
-            
+            continue 
         palpite_final.append(dezena)
-        
-    # Se faltar (caso muitas saturadas), completa com as melhores saturadas
     if len(palpite_final) < 46:
         for dezena, prob in ranking_ia:
             if len(palpite_final) >= 46: break
-            if dezena not in palpite_final:
-                palpite_final.append(dezena)
-                
+            if dezena not in palpite_final: palpite_final.append(dezena)
     return sorted(palpite_final), cortadas_log, confianca
 
-# --- METRICAS RECALCULADAS PARA V19 (IA PURE) ---
 def calcular_metricas_ai_pure(historico, indice_premio):
     if len(historico) < 10: return 0, 0, 0, 0
-    
-    # Analisa histórico profundo para recordes
-    offset = 50
     total = len(historico)
-    inicio = max(offset, total - 100) # Analisa últimos 100 jogos para performance
-    
+    inicio = max(50, total - 100) 
     max_loss = 0; seq_loss = 0
     max_win = 0; seq_win = 0
-    
-    # Simulação do Passado (Backtest Rápido)
-    # Nota: Treinar a IA 100 vezes é lento. Usaremos uma heurística:
-    # Treina uma vez com dados até o ponto de corte, e verifica os últimos X jogos.
-    # Para precisão total, precisaria treinar a cada passo. Vamos fazer um treino parcial.
-    
-    # Para não travar o app, vamos calcular recordes baseados nos últimos 50 jogos REAIS
-    # usando um modelo treinado até o jogo anterior.
-    
-    # Loop Otimizado (Treina a cada 10 jogos para atualizar tendências)
     for i in range(inicio, total):
         target_dezena = historico[i]['dezenas'][indice_premio]
-        
-        # Simula treino (na prática, pega o ranking gerado com dados até i)
-        # Para ser rápido no Streamlit, usamos uma janela deslizante simples aqui ou aceitamos
-        # que o modelo final tem um viés de "olhar o futuro" se não treinarmos em loop.
-        # VAMOS TREINAR EM LOOP CURTO (Últimos 20 jogos) para ter o "Atual" e "Max" recentes corretos.
-        
-        # Treina com dados até i
         hist_parcial = historico[:i]
         palpite, _, _ = gerar_legiao_46_ai_pure(hist_parcial, indice_premio)
-        
         win = target_dezena in palpite
-        
         if win:
             seq_loss = 0
             seq_win += 1
@@ -389,17 +300,12 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             seq_win = 0
             seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
-            
-    # Status Atual (Últimos jogos)
     atual_loss = 0
     atual_win = 0
-    
-    # Verifica o último
     idx = -1
     target_last = historico[idx]['dezenas'][indice_premio]
     palpite_last, _, _ = gerar_legiao_46_ai_pure(historico[:idx], indice_premio)
     win_last = target_last in palpite_last
-    
     if win_last:
         atual_win = 1
         for k in range(2, 15):
@@ -414,23 +320,16 @@ def calcular_metricas_ai_pure(historico, indice_premio):
             palp, _, _ = gerar_legiao_46_ai_pure(historico[:-k], indice_premio)
             if target not in palp: atual_loss += 1
             else: break
-            
     return atual_loss, max_loss, atual_win, max_win
 
-# --- MÉTRICAS UNIDADE (MANTIDAS) ---
 def calcular_metricas_unidade_full(historico):
-    # Mantém a lógica da V18 pois a unidade independe da seleção de dezenas (é estatística de final)
-    # Mas para ser consistente, podemos usar as 46 dezenas da IA para derivar a unidade forte.
-    # Vamos manter o cálculo original que era robusto.
     if len(historico) < 10: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(50, total - 100)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
-    
     for i in range(inicio, total):
         try:
             target = historico[i]['dezenas'][0][-1]
-            # Usa IA Pure para gerar dezenas e extrair top finais
             hist_p = historico[:i]
             lista_final, _, _ = gerar_legiao_46_ai_pure(hist_p, 0)
             finais = [d[-1] for d in lista_final]
@@ -442,8 +341,6 @@ def calcular_metricas_unidade_full(historico):
                 seq_win = 0; seq_loss += 1
                 if seq_loss > max_loss: max_loss = seq_loss
         except: continue
-
-    # Atual
     atual_loss = 0; atual_win = 0
     idx = -1
     try:
@@ -470,7 +367,6 @@ def calcular_metricas_unidade_full(historico):
     except: pass
     return atual_loss, max_loss, atual_win, max_win
 
-# --- RASTREADORES (MANTIDOS V17) ---
 def analisar_padroes_futuros(historico, indice_premio):
     if len(historico) < 10: return None, []
     ultima_dezena_real = historico[-1]['dezenas'][indice_premio]
@@ -658,11 +554,7 @@ else:
                 op_atual = 0; sucessos = 0
                 
                 for dia in lista_datas:
-                    horarios_do_dia = conf['horarios'].copy()
-                    if banca_selecionada == "CAMINHO" and (dia.weekday() == 2 or dia.weekday() == 5):
-                        horarios_do_dia = [h.replace("20:00", "19:30") for h in horarios_do_dia]
-
-                    for hora in horarios_do_dia:
+                    for hora in conf['horarios']:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
@@ -757,14 +649,12 @@ else:
             
             info_cortes = f"<span class='info-pill pill-sat'>🚫 {len(cortadas)} SATURADAS CORTADAS</span>" if cortadas else ""
             
-            qtd_final = len(lista_final) 
-            
             html_content = f"""
             {aviso_alerta}
             <div class='box-centurion'>
                 {info_cortes}
-                <div class='titulo-gold'>LEGIÃO {qtd_final} - {i+1}º PRÊMIO</div>
-                <div class='subtitulo'>Estratégia V19.0: AI Pure + Filtro Saturação</div>
+                <div class='titulo-gold'>LEGIÃO 46 - {i+1}º PRÊMIO</div>
+                <div class='subtitulo'>Estratégia V19.1: AI Pure + Filtro Saturação</div>
                 <div class='nums-destaque'>{', '.join(lista_final)}</div>
             </div>
             """
@@ -799,6 +689,7 @@ else:
             if padroes_futuros:
                 st.markdown(f"#### 🔍 Rastreador de Padrões (DEZENA - Última: **{ultima_dz_real}**)")
                 st.caption(f"Nas últimas 5 vezes que a dezena {ultima_dz_real} saiu, veja o que veio depois:")
+                
                 for p in padroes_futuros:
                     st.markdown(f"""
                     <div class='pattern-row'>
@@ -809,7 +700,6 @@ else:
             else:
                 st.caption(f"A dezena {ultima_dz_real} é rara (menos de 5 ocorrências recentes). Sem padrão claro.")
             
-            # UNIDADES ESTRUTURAIS
             if banca_selecionada == "TRADICIONAL":
                 finais = [d[-1] for d in lista_final]
                 top_finais = [x[0] for x in Counter(finais).most_common(5)]
