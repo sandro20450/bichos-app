@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V24.1 Tabs", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V24.2 Calibration", page_icon="🎯", layout="wide")
 
 # Configuração Única: TRADICIONAL
 CONFIG_TRADICIONAL = {
@@ -69,7 +69,6 @@ def carregar_historico():
             dados = []
             for row in raw[1:]:
                 if len(row) >= 3:
-                    # Tradicional foca no 1º prêmio
                     d1 = str(row[2]).strip().zfill(2) if len(row) > 2 else "00"
                     dezenas = [d1, "00", "00", "00", "00"]
                     dados.append({"data": row[0], "hora": row[1], "dezenas": dezenas})
@@ -78,7 +77,6 @@ def carregar_historico():
     return []
 
 def obter_chaves_existentes(ws):
-    """Lê chaves (Data|Hora) para evitar duplicidade."""
     try:
         raw = ws.get('A:B')
         chaves = []
@@ -92,7 +90,6 @@ def obter_chaves_existentes(ws):
 
 def raspar_site(data_alvo, horario_alvo):
     url = f"https://www.resultadofacil.com.br/resultados-{CONFIG_TRADICIONAL['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=10)
@@ -108,7 +105,6 @@ def raspar_site(data_alvo, horario_alvo):
             headers_found = soup.find_all(string=re.compile(re.escape(alvo)))
             for header_text in headers_found:
                 if "FEDERAL" in header_text.upper(): continue
-                
                 element = header_text.parent
                 tabela = element.find_next('table')
                 if tabela:
@@ -118,18 +114,16 @@ def raspar_site(data_alvo, horario_alvo):
                         if len(cols) >= 2:
                             premio_txt = cols[0].get_text().strip()
                             numero_txt = cols[1].get_text().strip()
-                            
                             nums_premio = re.findall(r'\d+', premio_txt)
                             if nums_premio and int(nums_premio[0]) == 1:
                                 if numero_txt.isdigit() and len(numero_txt) >= 2:
                                     dezena = numero_txt[-2:]
                                     return [dezena, "00", "00", "00", "00"], "Sucesso"
-        
         return None, f"Horário {horario_alvo} não encontrado."
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (DEZENAS & UNIDADES) ---
+# --- 3. CÉREBRO: IA PURE (CORE) ---
 # =============================================================================
 
 def treinar_oraculo_dezenas(historico):
@@ -140,27 +134,20 @@ def treinar_oraculo_dezenas(historico):
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
-    
     try:
         dezenas_alvo = [j['dezenas'][0] for j in historico if 'data_dt' in df.columns]
     except: return [], 0
-    
     df = df.iloc[:len(dezenas_alvo)]
     df['target'] = dezenas_alvo
     df['target_futuro'] = df['target'].shift(-1)
-    
     df_treino = df.dropna().tail(150)
     if len(df_treino) < 20: return [], 0
-    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
-    
-    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
-    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
-    
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
     ranking = []
@@ -177,27 +164,20 @@ def treinar_oraculo_unidades(historico):
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
-    
     try:
         unis_alvo = [int(j['dezenas'][0][-1]) for j in historico if 'data_dt' in df.columns]
     except: return [], 0
-    
     df = df.iloc[:len(unis_alvo)]
     df['target'] = unis_alvo
     df['target_futuro'] = df['target'].shift(-1)
-    
     df_treino = df.dropna().tail(150)
     if len(df_treino) < 20: return [], 0
-    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
-    
-    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
-    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
-    
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
     ranking = []
@@ -231,13 +211,51 @@ def gerar_estrategia_dezenas(historico):
             if dezena not in final: final.append(dezena)
     return sorted(final), cortadas, conf
 
-# --- BACKTESTS ---
+# =============================================================================
+# --- 4. BACKTESTS E CALIBRAÇÃO (NOVIDADE) ---
+# =============================================================================
+
+def verificar_precisao_confianca(historico, tipo="DEZENA", threshold=60.0):
+    """
+    Analisa os últimos 15 jogos.
+    Conta quantas vezes a IA teve confiança >= threshold.
+    Dessas vezes, quantas ela acertou.
+    """
+    if len(historico) < 20: return 0, 0, 0
+    
+    total_high_conf = 0
+    total_hits = 0
+    
+    # Loop curto (15 jogos) para não travar
+    for i in range(1, 16):
+        idx = -i
+        hist_treino = historico[:idx]
+        target_real = historico[idx]['dezenas'][0]
+        
+        if tipo == "DEZENA":
+            # Gera estratégia e pega confiança
+            palpite, _, conf = gerar_estrategia_dezenas(hist_treino)
+            if conf >= threshold:
+                total_high_conf += 1
+                if target_real in palpite:
+                    total_hits += 1
+        else: # UNIDADE
+            target_uni = int(target_real[-1])
+            rank, conf = treinar_oraculo_unidades(hist_treino)
+            if conf >= threshold:
+                total_high_conf += 1
+                top5 = [u for u, p in rank[:5]]
+                if target_uni in top5:
+                    total_hits += 1
+                    
+    perc_acerto = (total_hits / total_high_conf * 100) if total_high_conf > 0 else 0
+    return total_hits, total_high_conf, perc_acerto
+
 def calcular_metricas_dezenas(historico):
     if len(historico) < 20: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(20, total - 50)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
-    
     for i in range(inicio, total):
         target = historico[i]['dezenas'][0]
         hist_p = historico[:i]
@@ -249,11 +267,9 @@ def calcular_metricas_dezenas(historico):
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
-            
     idx = -1; atual_loss = 0; atual_win = 0
     target = historico[idx]['dezenas'][0]
     palpite, _, _ = gerar_estrategia_dezenas(historico[:idx])
-    
     if target in palpite:
         atual_win = 1
         for k in range(2, 10):
@@ -275,7 +291,6 @@ def calcular_metricas_unidades(historico):
     total = len(historico)
     inicio = max(20, total - 50)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
-    
     for i in range(inicio, total):
         target = int(historico[i]['dezenas'][0][-1])
         hist_p = historico[:i]
@@ -287,12 +302,10 @@ def calcular_metricas_unidades(historico):
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
-            
     idx = -1; atual_loss = 0; atual_win = 0
     target = int(historico[idx]['dezenas'][0][-1])
     rank, _ = treinar_oraculo_unidades(historico[:idx])
     top5 = [u for u, p in rank[:5]]
-    
     if target in top5:
         atual_win = 1
         for k in range(2, 10):
@@ -348,7 +361,7 @@ def rastreador_padroes(historico, tipo="DEZENA"):
     return label, encontrados
 
 # =============================================================================
-# --- 4. INTERFACE ---
+# --- 5. INTERFACE ---
 # =============================================================================
 
 # --- SIDEBAR ---
@@ -420,7 +433,6 @@ if len(historico) > 0:
     ult = historico[-1]
     st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['hora']} | **Resultado:** {ult['dezenas'][0]}")
     
-    # CRIAÇÃO DAS ABAS
     aba_dez, aba_uni = st.tabs(["🎲 IA Dezenas (Legião 46)", "🎯 IA Unidades (Top 5)"])
     
     # --- ABA DEZENAS ---
@@ -430,7 +442,19 @@ if len(historico) > 0:
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_dezenas(historico)
         
         if HAS_AI:
-            st.info(f"🧠 Confiança do Modelo: {conf_dez:.1f}%")
+            with st.container(border=True):
+                st.markdown(f"### 🧠 Confiança do Modelo: {conf_dez:.1f}%")
+                
+                # VERIFICAÇÃO DE CALIBRAÇÃO (NOVIDADE)
+                if conf_dez >= 60.0:
+                    hits, total_h, perc_h = verificar_precisao_confianca(historico, "DEZENA", 60.0)
+                    if total_h > 0:
+                        msg_calib = f"Histórico dessa Confiança (>60%): Acertou {hits} de {total_h} vezes ({perc_h:.0f}%)"
+                        if perc_h >= 80: st.success(f"✅ {msg_calib} - Alta Confiabilidade")
+                        elif perc_h >= 50: st.info(f"ℹ️ {msg_calib} - Confiabilidade Moderada")
+                        else: st.warning(f"⚠️ {msg_calib} - Cuidado: Confiança costuma falhar")
+                    else:
+                        st.caption("Sem dados históricos suficientes para essa faixa de confiança.")
         
         if loss_d >= max_loss_d and max_loss_d > 0:
             st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
@@ -464,7 +488,17 @@ if len(historico) > 0:
         loss_u, max_loss_u, win_u, max_win_u = calcular_metricas_unidades(historico)
         
         if HAS_AI:
-            st.info(f"🧠 Confiança do Modelo: {conf_uni:.1f}%")
+            with st.container(border=True):
+                st.markdown(f"### 🧠 Confiança do Modelo: {conf_uni:.1f}%")
+                
+                # VERIFICAÇÃO DE CALIBRAÇÃO (UNIDADE)
+                if conf_uni >= 60.0:
+                    hits_u, total_hu, perc_hu = verificar_precisao_confianca(historico, "UNIDADE", 60.0)
+                    if total_hu > 0:
+                        msg_calib_u = f"Histórico (>60%): Acertou {hits_u}/{total_hu} ({perc_hu:.0f}%)"
+                        if perc_hu >= 80: st.success(f"✅ {msg_calib_u}")
+                        elif perc_hu >= 50: st.info(f"ℹ️ {msg_calib_u}")
+                        else: st.warning(f"⚠️ {msg_calib_u}")
             
         if loss_u >= max_loss_u and max_loss_u > 0:
             st.error(f"🚨 ALERTA: {loss_u} Derrotas (Recorde!)")
