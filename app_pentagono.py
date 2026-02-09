@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V43.0 - AI First", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V44.0 - AI Backtest", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -94,15 +94,16 @@ def aplicar_estilo():
         
         .sniper-meta { font-size: 14px; color: #a8d0e6; font-style: italic; margin-top: 10px; }
         
-        .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
-        .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .backtest-container { display: flex; justify-content: center; gap: 10px; margin-top: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+        .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 5px; width: 90px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
         .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
-        .bt-icon { font-size: 24px; margin-bottom: 5px; }
-        .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
-        .bt-label { font-size: 11px; opacity: 0.8; }
+        .bt-icon { font-size: 18px; margin-bottom: 2px; }
+        .bt-num { font-size: 14px; font-weight: bold; margin-bottom: 0px; }
+        .bt-label { font-size: 10px; opacity: 0.8; }
         
-        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; font-size: 14px; font-weight: bold; }
+        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 5px; margin-bottom: 10px; font-size: 12px; font-weight: bold; }
+        
         .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-m { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #fd7e14; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
         .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
@@ -177,12 +178,58 @@ def treinar_oraculo_pentagono(historico, indice_premio):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
-    
-    # ATUALIZADO PARA TOP 8
-    top_ia = [x[0] for x in ranking_ia[:8]]
+    top_ia = [x[0] for x in ranking_ia[:8]] # TOP 8
     confianca = ranking_ia[0][1] * 100
-    
     return top_ia, confianca
+
+# --- NOVO: BACKTEST DA IA ---
+def executar_backtest_ia(historico, indice_premio):
+    if not HAS_AI or len(historico) < 60: return []
+    resultados = []
+    # Analisa os últimos 4 jogos
+    for i in range(1, 5):
+        target_idx = -i
+        target_game = historico[target_idx]
+        target_num = target_game['premios'][indice_premio]
+        
+        # Simula o passado (treina com dados até antes do jogo alvo)
+        hist_treino = historico[:target_idx]
+        
+        top_8_prev, _ = treinar_oraculo_pentagono(hist_treino, indice_premio)
+        
+        win = target_num in top_8_prev
+        resultados.append({'index': i, 'numero_real': target_num, 'vitoria': win})
+        
+    return resultados
+
+# --- NOVO: MAX DERROTAS DA IA EM 50 JOGOS ---
+def calcular_max_derrotas_ia_50(historico, indice_premio):
+    if not HAS_AI or len(historico) < 60: return 0
+    max_derrotas = 0; derrotas_consecutivas_temp = 0
+    
+    # Analisa os últimos 50 jogos
+    # Para performance, reduzimos o conjunto de treino dentro do loop se necessário, 
+    # mas aqui usaremos a função padrão que já corta os ultimos 200.
+    
+    range_analise = min(50, len(historico) - 50)
+    start_idx = len(historico) - range_analise
+    
+    for i in range(start_idx, len(historico)):
+        target_game = historico[i]
+        target_num = target_game['premios'][indice_premio]
+        
+        hist_treino = historico[:i]
+        top_8_prev, _ = treinar_oraculo_pentagono(hist_treino, indice_premio)
+        
+        win = target_num in top_8_prev
+        
+        if not win: derrotas_consecutivas_temp += 1
+        else:
+            if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+            derrotas_consecutivas_temp = 0
+            
+    if derrotas_consecutivas_temp > max_derrotas: max_derrotas = derrotas_consecutivas_temp
+    return max_derrotas
 
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
@@ -382,17 +429,13 @@ def executar_backtest_sniper(historico, indice_premio):
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
-        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
-        
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
-        
         win_ataque = target_num in sniper_past['grupos_ataque']
-        
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
             match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
@@ -400,13 +443,11 @@ def executar_backtest_sniper(historico, indice_premio):
         else:
             match = re.search(r"(\w+) Defesa", meta) 
             nome_fraco = match.group(1) if match else ""
-            
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
                 win_defesa = target_num in SETORES[chave_setor]
-        
         win_total = win_ataque or win_defesa
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
     return resultados_backtest
@@ -581,7 +622,7 @@ def tela_dashboard_global():
                             "ultimo_horario": historico[-1]['horario']
                         }
                     
-                    # --- NOVO NA V43: MONITORAMENTO GLOBAL DA IA ---
+                    # --- MONITORAMENTO GLOBAL DA IA (V43.0) ---
                     if HAS_AI:
                         _, conf_ia_global = treinar_oraculo_pentagono(historico, idx_pos)
                         if conf_ia_global >= 60.0:
@@ -639,7 +680,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V40.0 (4-4-4)</div>
+<div class="sniper-title">🎯 SNIPER V44.0 (4-4-4)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -835,8 +876,13 @@ else:
                 # --- ORÁCULO IA V43.0 (TOP 8) ---
                 if HAS_AI:
                     top_8_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
+                    # BACKTEST IA
+                    bt_ia = executar_backtest_ia(historico, idx_aba)
+                    max_loss_ia = calcular_max_derrotas_ia_50(historico, idx_aba)
                 else:
                     top_8_ia, confianca_ia = [], 0
+                    bt_ia = []
+                    max_loss_ia = 0
                 
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
@@ -849,24 +895,33 @@ else:
                 
                 cor_nota = "#00ff00" 
 
-                # 1. PRIMEIRO O ORÁCULO IA (HIERARQUIA INVERTIDA)
+                # 1. ORÁCULO IA (AGORA COM BACKTEST)
                 if HAS_AI and top_8_ia:
                     super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_8_ia))
                     html_super = ""
                     if super_grupos:
                         html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
                     
+                    # Gera os cards de Backtest da IA
+                    cards_ia_html = ""
+                    if bt_ia:
+                        for res in reversed(bt_ia):
+                            classe_res = "bt-win" if res['vitoria'] else "bt-loss"
+                            icon = "🟢" if res['vitoria'] else "❌"
+                            cards_ia_html += f"<div class='bt-card {classe_res}' style='width:70px; padding:2px;'><div class='bt-icon' style='font-size:14px;'>{icon}</div><div class='bt-num' style='font-size:12px;'>{res['numero_real']}</div></div>"
+                    
                     st.markdown(f"""
                     <div class='box-ai'>
-                        <div class='ai-title'>🧠 Oráculo IA (Validação)</div>
-                        <div class='ai-desc'>A Inteligência Artificial analisou padrões de dia e horário.</div>
-                        <div style='color:#fff; font-size:16px; margin-bottom:5px;'>Top 8 IA: <b>{', '.join(map(str, top_8_ia))}</b></div>
-                        <div style='font-size:12px; color:#d900ff;'>Confiança: {confianca_ia:.1f}%</div>
+                        <div class='ai-title'>🧠 Oráculo IA (Top 8)</div>
+                        <div class='ai-desc'>Confiança: <b>{confianca_ia:.1f}%</b> | Top 8: <b>{', '.join(map(str, top_8_ia))}</b></div>
                         {html_super}
+                        <div style='margin-top:10px; font-size:12px; font-weight:bold; color:#ccc;'>Histórico Recente IA:</div>
+                        <div class='backtest-container' style='justify-content:flex-start;'>{cards_ia_html}</div>
+                        <div style='color:#ffaaaa; font-size:12px;'>📉 Pior Sequência IA (50 Jogos): {max_loss_ia} Derrotas</div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                # 2. DEPOIS O SNIPER LOCAL
+                # 2. SNIPER LOCAL
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
@@ -889,7 +944,7 @@ else:
 </div>
 """, unsafe_allow_html=True)
                 
-                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência Sniper (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
                 
                 if bt_results:
                     cards_html = ""
