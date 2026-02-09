@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V42.0 - Turbo", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V43.0 - AI First", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -56,16 +56,19 @@ def aplicar_estilo():
     <style>
         .stApp { background-color: #0e1117; color: #fff; }
         .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        
         .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
         .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
         .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
         .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
         
-        .box-ai { background: linear-gradient(135deg, #1a0033, #2b005c); border: 1px solid #b300ff; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; box-shadow: 0 0 15px rgba(179, 0, 255, 0.2); }
+        /* BOX IA ALERTA NO RADAR */
+        .box-ia-alert { background: linear-gradient(135deg, #2b005c, #1a0033); padding: 15px; border-radius: 8px; border-left: 5px solid #00ffea; margin-bottom: 15px; color: #e0b0ff; box-shadow: 0 0 10px rgba(0, 255, 234, 0.2); }
+
+        .box-ai { background: linear-gradient(135deg, #1a0033, #2b005c); border: 2px solid #b300ff; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; box-shadow: 0 0 20px rgba(179, 0, 255, 0.3); }
         .ai-title { color: #d900ff; font-weight: 900; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; text-transform: uppercase; }
         .ai-desc { color: #e0b0ff; font-size: 14px; margin-bottom: 10px; }
-        .ai-badge { background-color: #4a004a; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px solid #d900ff; margin-right: 5px; }
-
+        
         .box-sniper-hunter { background: linear-gradient(135deg, #004d00, #006400); border: 2px solid #00ff00; padding: 15px; border-radius: 8px; border-left: 8px solid #00ff00; margin-bottom: 15px; color: #ccffcc; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2); }
         .palpite-box { background: linear-gradient(90deg, #004d00 0%, #002b00 100%); border: 1px solid #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #ccffcc; }
         .palpite-nums { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 2px; }
@@ -142,7 +145,7 @@ def carregar_dados_top5(nome_aba):
         return dados_processados
     return []
 
-# --- CÉREBRO IA ---
+# --- CÉREBRO IA V43 (TOP 8) ---
 def treinar_oraculo_pentagono(historico, indice_premio):
     if not HAS_AI or len(historico) < 50: return [], 0
     df = pd.DataFrame(historico)
@@ -174,9 +177,12 @@ def treinar_oraculo_pentagono(historico, indice_premio):
         grupo = int(classes[i])
         ranking_ia.append((grupo, prob))
     ranking_ia.sort(key=lambda x: x[1], reverse=True)
-    top_5_ia = [x[0] for x in ranking_ia[:5]]
+    
+    # ATUALIZADO PARA TOP 8
+    top_ia = [x[0] for x in ranking_ia[:8]]
     confianca = ranking_ia[0][1] * 100
-    return top_5_ia, confianca
+    
+    return top_ia, confianca
 
 def obter_proxima_batalha(banca_key, ultimo_horario_str):
     horarios = CONFIG_BANCAS[banca_key]['horarios']
@@ -376,13 +382,17 @@ def executar_backtest_sniper(historico, indice_premio):
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
         hist_treino = historico[:-i]
+        
         df_s = calcular_stress_tabela(hist_treino, indice_premio)
         st_c = calcular_ciclo(hist_treino, indice_premio)
         df_d = calcular_tabela_diamante(hist_treino, indice_premio)
         u_b = hist_treino[-1]['premios'][indice_premio]
         sat = identificar_saturados(hist_treino, indice_premio)
+        
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
+        
         win_ataque = target_num in sniper_past['grupos_ataque']
+        
         meta = sniper_past['meta_info']
         if "REVERSÃO" in meta:
             match = re.search(r"REVERSÃO.*: (\w+) Bloqueado", meta)
@@ -390,11 +400,13 @@ def executar_backtest_sniper(historico, indice_premio):
         else:
             match = re.search(r"(\w+) Defesa", meta) 
             nome_fraco = match.group(1) if match else ""
+            
         win_defesa = False
         if nome_fraco:
             chave_setor = next((k for k in SETORES.keys() if nome_fraco in k), None)
             if chave_setor:
                 win_defesa = target_num in SETORES[chave_setor]
+        
         win_total = win_ataque or win_defesa
         resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
     return resultados_backtest
@@ -550,14 +562,14 @@ def tela_dashboard_global():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
-                    # CALCULA DADOS
+                    # CALCULA DADOS ESTATÍSTICOS
                     df_stress = calcular_stress_tabela(historico, idx_pos)
                     stats_ciclo = calcular_ciclo(historico, idx_pos)
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V40 (4-4-4)
+                    # 1. SNIPER V40
                     sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
                     if sniper['nota'] > melhor_nota_sniper:
                         melhor_nota_sniper = sniper['nota']
@@ -569,7 +581,20 @@ def tela_dashboard_global():
                             "ultimo_horario": historico[-1]['horario']
                         }
                     
-                    # 2. VERIFICAÇÃO DE FALHAS
+                    # --- NOVO NA V43: MONITORAMENTO GLOBAL DA IA ---
+                    if HAS_AI:
+                        _, conf_ia_global = treinar_oraculo_pentagono(historico, idx_pos)
+                        if conf_ia_global >= 60.0:
+                            prox_hora = obter_proxima_batalha(banca_key, historico[-1]['horario'])
+                            alertas_globais.append({
+                                "tipo": "IA_HIGH_CONFIDENCE",
+                                "banca": config['display_name'].split("(")[0].strip(),
+                                "premio": f"{idx_pos+1}º Prêmio",
+                                "msg_extra": f"🤖 ALTA CONFIANÇA IA ({conf_ia_global:.1f}%)! {prox_hora}"
+                            })
+                    # ------------------------------------------------
+
+                    # 2. VERIFICAÇÃO DE FALHAS SNIPER
                     bt_results = executar_backtest_sniper(historico, idx_pos)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
@@ -614,7 +639,7 @@ def tela_dashboard_global():
             st.markdown(f"""
 <div class="sniper-box {css_extra}">
 {badge_rev}
-<div class="sniper-title">🎯 SNIPER V42.0 (4-4-4)</div>
+<div class="sniper-title">🎯 SNIPER V40.0 (4-4-4)</div>
 <div class="sniper-bank">{melhor_sniper['banca']}</div>
 <div class="sniper-target">{melhor_sniper['premio']}</div>
 <div class="sniper-next">{prox_tiro}</div>
@@ -637,6 +662,8 @@ def tela_dashboard_global():
             for i, alerta in enumerate(alertas_globais):
                 if alerta['tipo'] == "SNIPER_OPPORTUNITY":
                     with cols[i % 2]: st.markdown(f"<div class='box-sniper-hunter'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b></p><p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p></div>", unsafe_allow_html=True)
+                elif alerta['tipo'] == "IA_HIGH_CONFIDENCE":
+                    with cols[i % 2]: st.markdown(f"<div class='box-ia-alert'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b></p><p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p></div>", unsafe_allow_html=True)
                 else:
                     if alerta['tipo'] == "ATRASO":
                         classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
@@ -671,6 +698,7 @@ else:
     banca_selecionada = escolha_menu
     config_banca = CONFIG_BANCAS[banca_selecionada]
     
+    st.sidebar.markdown("---")
     url_site = f"https://www.resultadofacil.com.br/resultados-{config_banca['slug']}-de-hoje"
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
@@ -804,11 +832,11 @@ else:
                 # --- SNIPER V40 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 
-                # --- ORÁCULO IA V41.0 ---
+                # --- ORÁCULO IA V43.0 (TOP 8) ---
                 if HAS_AI:
-                    top_5_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
+                    top_8_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
                 else:
-                    top_5_ia, confianca_ia = [], 0
+                    top_8_ia, confianca_ia = [], 0
                 
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
@@ -821,6 +849,24 @@ else:
                 
                 cor_nota = "#00ff00" 
 
+                # 1. PRIMEIRO O ORÁCULO IA (HIERARQUIA INVERTIDA)
+                if HAS_AI and top_8_ia:
+                    super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_8_ia))
+                    html_super = ""
+                    if super_grupos:
+                        html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
+                    
+                    st.markdown(f"""
+                    <div class='box-ai'>
+                        <div class='ai-title'>🧠 Oráculo IA (Validação)</div>
+                        <div class='ai-desc'>A Inteligência Artificial analisou padrões de dia e horário.</div>
+                        <div style='color:#fff; font-size:16px; margin-bottom:5px;'>Top 8 IA: <b>{', '.join(map(str, top_8_ia))}</b></div>
+                        <div style='font-size:12px; color:#d900ff;'>Confiança: {confianca_ia:.1f}%</div>
+                        {html_super}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # 2. DEPOIS O SNIPER LOCAL
                 st.markdown(f"""
 <div class="sniper-box {css_extra}" style="margin-top:0;">
 {badge_rev}
@@ -842,23 +888,6 @@ else:
 {msg_sat}
 </div>
 """, unsafe_allow_html=True)
-                
-                # --- EXIBIÇÃO DA IA ---
-                if HAS_AI and top_5_ia:
-                    super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_5_ia))
-                    html_super = ""
-                    if super_grupos:
-                        html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
-                    
-                    st.markdown(f"""
-                    <div class='box-ai'>
-                        <div class='ai-title'>🧠 Oráculo IA (Validação)</div>
-                        <div class='ai-desc'>A Inteligência Artificial analisou padrões de dia e horário.</div>
-                        <div style='color:#fff; font-size:16px; margin-bottom:5px;'>Top 5 IA: <b>{', '.join(map(str, top_5_ia))}</b></div>
-                        <div style='font-size:12px; color:#d900ff;'>Confiança: {confianca_ia:.1f}%</div>
-                        {html_super}
-                    </div>
-                    """, unsafe_allow_html=True)
                 
                 st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
                 
