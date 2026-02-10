@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V45.1 - Clean", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V46.0 Native", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -29,7 +29,7 @@ CONFIG_BANCAS = {
     "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
 
-# SETORES DUAL (BAIXO 1-16 / ALTO 17-24 / VACA 25)
+# SETORES DUAL
 SETORES = {
     "BAIXO (01-16)": list(range(1, 17)),
     "ALTO (17-24)": list(range(17, 25)),
@@ -48,73 +48,22 @@ for g in range(1, 26):
 if 'tocar_som' not in st.session_state: st.session_state['tocar_som'] = False
 
 def reproduzir_som():
-    sound_url = "https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=success-1-6297.mp3"
-    st.markdown(f"""<audio autoplay style="display:none;"><source src="{sound_url}" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
+    # Som simplificado ou removido para evitar problemas de carregamento, 
+    # mantendo apenas a lógica se necessário futuramente.
+    pass
 
-def aplicar_estilo():
-    st.markdown("""
-    <style>
-        .stApp { background-color: #0e1117; color: #fff; }
-        .stMetric { background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-        
-        .box-alerta { background-color: #580000; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; color: #ffcccc; }
-        .box-aviso { background-color: #584e00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffd700; margin-bottom: 15px; color: #fffacd; }
-        .box-inverso-critico { background-color: #2e004f; padding: 15px; border-radius: 8px; border-left: 5px solid #d000ff; margin-bottom: 15px; color: #e0b0ff; font-weight: bold; }
-        .box-inverso-atencao { background-color: #1a002e; padding: 15px; border-radius: 8px; border-left: 5px solid #9932cc; margin-bottom: 15px; color: #dda0dd; }
-        
-        .box-ia-alert { background: linear-gradient(135deg, #2b005c, #1a0033); padding: 15px; border-radius: 8px; border-left: 5px solid #00ffea; margin-bottom: 15px; color: #e0b0ff; box-shadow: 0 0 10px rgba(0, 255, 234, 0.2); }
-
-        .box-ai { background: linear-gradient(135deg, #1a0033, #2b005c); border: 2px solid #b300ff; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; box-shadow: 0 0 20px rgba(179, 0, 255, 0.3); }
-        .ai-title { color: #d900ff; font-weight: 900; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; text-transform: uppercase; }
-        .ai-desc { color: #e0b0ff; font-size: 14px; margin-bottom: 10px; }
-        
-        .box-sniper-hunter { background: linear-gradient(135deg, #004d00, #006400); border: 2px solid #00ff00; padding: 15px; border-radius: 8px; border-left: 8px solid #00ff00; margin-bottom: 15px; color: #ccffcc; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2); }
-        
-        .sniper-box { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); border: 2px solid #00d2ff; padding: 20px; border-radius: 15px; margin-bottom: 10px; text-align: center; box-shadow: 0px 0px 25px rgba(0, 210, 255, 0.2); }
-        .sniper-record { border: 2px solid #ff00de !important; box-shadow: 0px 0px 25px rgba(255, 0, 222, 0.4) !important; background: linear-gradient(135deg, #3a0035, #240b36) !important; }
-        .sniper-reversao { border: 2px solid #ff4b4b !important; box-shadow: 0px 0px 25px rgba(255, 75, 75, 0.4) !important; background: linear-gradient(135deg, #4a0000, #2c0000) !important; }
-        .reversao-badge { background-color: #ff4b4b; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 14px; margin-bottom: 10px; display: inline-block; }
-
-        .sniper-title { font-size: 20px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
-        .sniper-bank { font-size: 32px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0px 0px 15px rgba(0,210,255,0.6); }
-        .sniper-target { font-size: 20px; font-weight: bold; color: #fff; margin-bottom: 10px; text-transform: uppercase; }
-        .sniper-next { font-size: 18px; color: #00ff00; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; display: inline-block; margin-bottom: 15px; border: 1px solid #00ff00; }
-        
-        .section-strong { margin: 10px 0; border: 1px dashed #00ff00; padding: 10px; border-radius: 8px; background: rgba(0, 255, 0, 0.05); }
-        .strong-label { color: #00ff00; font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: left; }
-        .strong-nums { color: #fff; font-size: 24px; font-weight: bold; letter-spacing: 2px; }
-        
-        .section-weak { margin: 10px 0; border: 1px dashed #00d2ff; padding: 10px; border-radius: 8px; background: rgba(0, 210, 255, 0.05); }
-        .weak-label { color: #00d2ff; font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: left; }
-        .weak-nums { color: #fff; font-size: 18px; font-weight: normal; letter-spacing: 1px; word-wrap: break-word; }
-        
-        .backtest-container { display: flex; justify-content: center; gap: 15px; margin-top: 5px; margin-bottom: 30px; flex-wrap: wrap; }
-        .bt-card { background-color: rgba(30, 30, 30, 0.8); border-radius: 10px; padding: 10px; width: 100px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .bt-win { border: 2px solid #00ff00; color: #ccffcc; }
-        .bt-loss { border: 2px solid #ff0000; color: #ffcccc; }
-        .bt-icon { font-size: 24px; margin-bottom: 5px; }
-        .bt-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
-        .bt-label { font-size: 11px; opacity: 0.8; }
-        
-        .max-loss-info { text-align: center; background-color: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); color: #ffaaaa; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-top: 10px; font-size: 14px; font-weight: bold; }
-        
-        /* CORES DAS BOLAS */
-        .bola-b { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #17a2b8; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        .bola-a { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #dc3545; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        .bola-v { display: inline-block; width: 35px; height: 35px; line-height: 35px; border-radius: 50%; background-color: #6f42c1; color: white; text-align: center; font-weight: bold; margin: 2px; border: 2px solid white; }
-        
-        div[data-testid="stTable"] table { color: white; }
-        thead tr th:first-child {display:none}
-        tbody th {display:none}
-    </style>
-    """, unsafe_allow_html=True)
-
-if st.session_state['tocar_som']:
-    reproduzir_som()
-    st.session_state['tocar_som'] = False
+# Estilo Mínimo (Apenas para tabelas ficarem legíveis no Dark Mode)
+st.markdown("""
+<style>
+    .stApp { background-color: #0e1117; color: #fff; }
+    div[data-testid="stTable"] table { color: white; }
+    .stMetric label { color: #aaaaaa !important; }
+    h1, h2, h3 { color: #00ff00 !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E LÓGICA ---
+# --- 2. CONEXÃO E LÓGICA (SEM CACHE) ---
 # =============================================================================
 def conectar_planilha(nome_aba):
     if "gcp_service_account" in st.secrets:
@@ -181,7 +130,7 @@ def treinar_oraculo_pentagono(historico, indice_premio):
 def executar_backtest_ia(historico, indice_premio):
     if not HAS_AI or len(historico) < 60: return []
     resultados = []
-    for i in range(1, 5):
+    for i in range(1, 6):
         target_idx = -i
         target_game = historico[target_idx]
         target_num = target_game['premios'][indice_premio]
@@ -220,8 +169,8 @@ def obter_proxima_batalha(banca_key, ultimo_horario_str):
                 idx = i
                 break
         if idx != -1:
-            if idx == len(horarios) - 1: return f"PARA AS {horarios[0]} HS (Amanhã)"
-            else: return f"PARA AS {horarios[idx+1]} HS"
+            if idx == len(horarios) - 1: return f"AMANHÃ AS {horarios[0]} HS"
+            else: return f"HOJE AS {horarios[idx+1]} HS"
         else: return "PRÓXIMO SORTEIO" 
     except: return "PRÓXIMO SORTEIO"
 
@@ -288,16 +237,15 @@ def calcular_tabela_diamante(historico, indice_premio):
             media = 30 / qtd
             atraso_atual = ultimo_visto.get(bicho, 0)
             status = ""
-            if atraso_atual <= 2: status = "❄️ Saiu Agora (Aguarde)"
+            if atraso_atual <= 2: status = "Saiu Agora (Aguarde)"
             elif atraso_atual >= media: status = "🔥 PONTO DE ENTRADA"
             elif atraso_atual >= (media * 0.6): status = "⏳ Aquece (Quase lá)"
-            else: status = "💤 Neutro"
+            else: status = "Neutro"
             tabela_dados.append({ "GRUPO": bicho, "SAÍDAS (30 Jogos)": qtd, "MÉDIA": f"1 a cada {media:.1f}", "ÚLTIMA VEZ": f"Há {atraso_atual} jogos", "STATUS / DICA": status })
     def sort_key(x):
         s = x['STATUS / DICA']
         if "🔥" in s: return 0
         if "⏳" in s: return 1
-        if "❄️" in s: return 3
         return 2
     tabela_dados.sort(key=sort_key)
     return pd.DataFrame(tabela_dados)
@@ -311,7 +259,6 @@ def identificar_saturados(historico, indice_premio):
         saturados = [grp for grp, qtd in contagem.items() if qtd >= 6]
     return saturados
 
-# --- ALGORITMO SNIPER V45 (DUAL SECTOR ADAPTADO) ---
 def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados):
     # Identifica reversão em qualquer setor
     setor_estourado = None
@@ -395,7 +342,7 @@ def gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, sa
 
 def executar_backtest_sniper(historico, indice_premio):
     resultados_backtest = []
-    for i in range(1, 5):
+    for i in range(1, 6):
         if len(historico) <= i + 20: break
         target_game = historico[-i]
         target_num = target_game['premios'][indice_premio]
@@ -410,9 +357,7 @@ def executar_backtest_sniper(historico, indice_premio):
         sniper_past = gerar_sniper_v39_final(df_s, st_c, df_d, u_b, sat)
         
         win_ataque = target_num in sniper_past['grupos_ataque']
-        
-        win_total = win_ataque
-        resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_total })
+        resultados_backtest.append({ "index": i, "numero_real": target_num, "vitoria": win_ataque })
     return resultados_backtest
 
 def calcular_max_derrotas_50(historico, indice_premio):
@@ -485,153 +430,77 @@ def raspar_horario_especifico(banca_key, data_alvo, horario_alvo):
         return None, "Horário não encontrado"
     except Exception as e: return None, f"Erro: {e}"
 
-def gerar_bolinhas_recentes(historico, indice_premio):
-    html = "<div>"
-    for jogo in reversed(historico[-12:]):
-        bicho = jogo['premios'][indice_premio]
-        classe = ""
-        letra = ""
-        if bicho in SETORES["BAIXO (01-16)"]: classe = "bola-b"; letra = "B"
-        elif bicho in SETORES["ALTO (17-24)"]: classe = "bola-a"; letra = "A"
-        elif bicho == 25: classe = "bola-v"; letra = "V"
-        html += f"<div class='{classe}'>{letra}</div>"
-    html += "</div>"
-    return html
-
 # =============================================================================
 # --- 3. DASHBOARD GERAL ---
 # =============================================================================
 def tela_dashboard_global():
-    st.title("🛡️ CENTRO DE COMANDO (Pentágono)")
-    st.markdown("### 📡 Varredura de Oportunidades em Tempo Real")
+    st.title("🛡️ PENTÁGONO - COMMAND CENTER")
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("Bancas Monitoradas", "3", "LOTEP, CAMINHO, MONTE")
+    col1.metric("Bancas Monitoradas", "3", "Lotep, Caminho, Monte")
     
-    with st.spinner("O Robô Sniper está caçando a melhor oportunidade..."):
+    with st.spinner("Varrendo Oportunidades em Tempo Real..."):
         alertas_globais = []
-        
-        melhor_sniper = None
-        melhor_nota_sniper = -1
         
         for banca_key, config in CONFIG_BANCAS.items():
             historico = carregar_dados_top5(config['nome_aba'])
             if len(historico) > 0:
                 for idx_pos in range(5):
-                    # CALCULA DADOS ESTATÍSTICOS
+                    # SNIPER V45
                     df_stress = calcular_stress_tabela(historico, idx_pos)
                     stats_ciclo = calcular_ciclo(historico, idx_pos)
                     df_diamante = calcular_tabela_diamante(historico, idx_pos)
                     ultimo_bicho = historico[-1]['premios'][idx_pos]
                     saturados_list = identificar_saturados(historico, idx_pos)
                     
-                    # 1. SNIPER V45 (Dual)
                     sniper = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados_list)
-                    if sniper['nota'] > melhor_nota_sniper:
-                        melhor_nota_sniper = sniper['nota']
-                        melhor_sniper = {
-                            "banca": config['display_name'].split("(")[0].strip(),
-                            "premio": f"{idx_pos+1}º Prêmio",
-                            "dados": sniper,
-                            "banca_key": banca_key,
-                            "ultimo_horario": historico[-1]['horario']
-                        }
                     
-                    # --- MONITORAMENTO GLOBAL DA IA ---
+                    # 1. IA HIGH CONFIDENCE
                     if HAS_AI:
                         _, conf_ia_global = treinar_oraculo_pentagono(historico, idx_pos)
                         if conf_ia_global >= 60.0:
                             prox_hora = obter_proxima_batalha(banca_key, historico[-1]['horario'])
                             alertas_globais.append({
-                                "tipo": "IA_HIGH_CONFIDENCE",
+                                "tipo": "IA",
                                 "banca": config['display_name'].split("(")[0].strip(),
                                 "premio": f"{idx_pos+1}º Prêmio",
-                                "msg_extra": f"🤖 ALTA CONFIANÇA IA ({conf_ia_global:.1f}%)! {prox_hora}"
+                                "msg": f"🤖 IA CONFIANTE ({conf_ia_global:.1f}%) | {prox_hora}"
                             })
 
-                    # 2. VERIFICAÇÃO DE FALHAS SNIPER
+                    # 2. FALHAS SNIPER
                     bt_results = executar_backtest_sniper(historico, idx_pos)
                     if len(bt_results) >= 2:
                         if not bt_results[0]['vitoria'] and not bt_results[1]['vitoria']:
                             prox_hora = obter_proxima_batalha(banca_key, historico[-1]['horario'])
                             alertas_globais.append({
-                                "tipo": "SNIPER_OPPORTUNITY",
+                                "tipo": "SNIPER",
                                 "banca": config['display_name'].split("(")[0].strip(),
                                 "premio": f"{idx_pos+1}º Prêmio",
-                                "msg_extra": f"🎯 2 Derrotas Consecutivas! {prox_hora}"
+                                "msg": f"🎯 OPORTUNIDADE SNIPER (2 Loss) | {prox_hora}"
                             })
 
-                    for _, row in df_stress.iterrows():
-                        atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
-                        seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
-                        if "VACA" in setor: continue
-                        if (recorde - atraso) <= 1 and recorde >= 5:
-                            alertas_globais.append({"tipo": "ATRASO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": atraso, "val_rec": recorde})
-                        margem_seq = recorde_seq - seq_atual
-                        if margem_seq <= 1 and recorde_seq >= 3:
-                            alertas_globais.append({"tipo": "REPETICAO", "banca": config['display_name'].split("(")[0].strip(), "premio": f"{idx_pos+1}º Prêmio", "setor": setor, "val_atual": seq_atual, "val_rec": recorde_seq, "margem": margem_seq})
-
-        col2.metric("Base de Dados", "Conectada", "Google Sheets")
-        col3.metric("Oportunidades Críticas", f"{len(alertas_globais)}", "Zonas de Tiro")
+        col2.metric("Oportunidades", f"{len(alertas_globais)}", "Ativas")
+        col3.metric("Status", "Online", "Sem Cache")
         st.markdown("---")
         
-        cor_nota = "#ffffff"
-        
-        if melhor_sniper:
-            d = melhor_sniper['dados']
-            cor_nota = "#00ff00" if d['nota'] > 80 else "#ffcc00"
-            css_extra = "sniper-reversao" if d['modo_reversao'] else "sniper-record" if d['is_record'] else ""
-            prox_tiro = obter_proxima_batalha(melhor_sniper['banca_key'], melhor_sniper['ultimo_horario'])
-            badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if d['modo_reversao'] else ""
-            
-            st.markdown(f"""
-<div class="sniper-box {css_extra}">
-{badge_rev}
-<div class="sniper-title">🎯 SNIPER V45.1 (CLEAN)</div>
-<div class="sniper-bank">{melhor_sniper['banca']}</div>
-<div class="sniper-target">{melhor_sniper['premio']}</div>
-<div class="sniper-next">{prox_tiro}</div>
-<p style="color:{cor_nota}; font-weight:bold;">{d['meta_info']}</p>
-<div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (8 GRUPOS):</div>
-<div class="strong-nums">{', '.join(map(str, d['grupos_ataque']))}</div>
-</div>
-<div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
-<div class="weak-nums">{', '.join(map(str, d['dezenas_defesa']))}</div>
-</div>
-</div>
-""", unsafe_allow_html=True)
-        else: st.info("O Sniper está calibrando... (Sem dados suficientes).")
-
         if alertas_globais:
-            st.warning("🚨 Oportunidades Encontradas")
-            cols = st.columns(2)
-            for i, alerta in enumerate(alertas_globais):
-                if alerta['tipo'] == "SNIPER_OPPORTUNITY":
-                    with cols[i % 2]: st.markdown(f"<div class='box-sniper-hunter'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b></p><p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p></div>", unsafe_allow_html=True)
-                elif alerta['tipo'] == "IA_HIGH_CONFIDENCE":
-                    with cols[i % 2]: st.markdown(f"<div class='box-ia-alert'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b></p><p style='font-size:18px; font-weight:bold;'>{alerta['msg_extra']}</p></div>", unsafe_allow_html=True)
+            st.subheader("🚨 Radar de Oportunidades")
+            for alerta in alertas_globais:
+                if alerta['tipo'] == "SNIPER":
+                    st.warning(f"**{alerta['banca']} - {alerta['premio']}** | {alerta['msg']}")
                 else:
-                    if alerta['tipo'] == "ATRASO":
-                        classe, titulo_val, msg = "box-alerta" if alerta['val_atual'] >= alerta['val_rec'] else "box-aviso", "Atraso", "ZONA DE TIRO (Atraso)"
-                    else: 
-                        classe, msg = ("box-inverso-critico", "ESTOURADO!") if alerta['margem'] <= 0 else ("box-inverso-atencao", "Atenção")
-                        titulo_val = "Sequência"
-                    with cols[i % 2]: st.markdown(f"<div class='{classe}'><h3>{alerta['banca']}</h3><p>📍 <b>{alerta['premio']}</b> | {alerta['setor']}</p><p>{titulo_val}: {alerta['val_atual']} (Recorde: {alerta['val_rec']})</p><p><b>{msg}</b></p></div>", unsafe_allow_html=True)
-        else: st.success("✅ Tudo calmo nas 3 bancas (fora o Sniper).")
+                    st.info(f"**{alerta['banca']} - {alerta['premio']}** | {alerta['msg']}")
+        else: st.success("✅ Tudo calmo no Radar Global.")
 
 # =============================================================================
 # --- 4. FLUXO PRINCIPAL DO APP ---
 # =============================================================================
-aplicar_estilo()
 
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
-# --- BOTÃO PARA CENTURION ---
 st.sidebar.markdown("---")
-st.sidebar.link_button("🛡️ Ir para App CENTURION", "https://seu-app-centurion.streamlit.app") # COLOQUE SEU LINK AQUI
+st.sidebar.link_button("🛡️ Ir para App CENTURION", "https://seu-app-centurion.streamlit.app") 
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
@@ -646,7 +515,7 @@ else:
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    # --- MODO TURBO (EXTRAÇÃO EM MASSA) ---
+    # --- MODO EXTRAÇÃO ---
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
     if modo_extracao == "🎯 Unitária":
@@ -663,21 +532,20 @@ else:
                 if ws:
                     with st.spinner(f"Buscando {horario_busca}..."):
                         try:
+                            # Verificação limpa sem cache
                             existentes = ws.get_all_values()
                             chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
                         except: chaves = []
+                        
                         chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
+                        
                         if chave_atual in chaves:
-                            try:
-                                idx = chaves.index(chave_atual) + 2
-                                st.warning(f"Resultado já existe na Linha {idx} da planilha!")
-                            except: st.warning("Resultado já existe!")
+                            st.warning("Resultado já existe!")
                         else:
                             top5, msg = raspar_horario_especifico(banca_selecionada, data_busca, horario_busca)
                             if top5:
                                 row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + top5
                                 ws.append_row(row)
-                                st.session_state['tocar_som'] = True
                                 st.toast(f"Sucesso! {top5}", icon="✅")
                                 time.sleep(1)
                                 st.rerun()
@@ -721,176 +589,126 @@ else:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + top5)
                             sucessos += 1
                             chaves.append(chave_atual)
-                        time.sleep(1.0) # Respeita limites do site
+                        time.sleep(1.0)
                 
                 bar.progress(100)
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
 
+    # --- PÁGINA DA BANCA ---
     st.header(f"🔭 {config_banca['display_name']}")
+    
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_top5(config_banca['nome_aba'])
 
     if len(historico) > 0:
         ult = historico[-1]
-        st.caption(f"📅 Último: {ult['data']} às {ult['horario']}")
+        st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º:** G{ult['premios'][0]} | **2º:** G{ult['premios'][1]}...")
         
         prox_tiro_local = obter_proxima_batalha(banca_selecionada, ult['horario'])
-        nome_banca_clean = config_banca['display_name'].split('(')[0].strip().upper()
-        
-        st.subheader(f"🚨 Radar Local: {config_banca['display_name'].split('(')[0]}")
         nomes_posicoes = ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]
-        col_alerts = st.container()
-        alertas_locais = 0
-        for idx_pos, nome_pos in enumerate(nomes_posicoes):
-            df = calcular_stress_tabela(historico, idx_pos)
-            for index, row in df.iterrows():
-                atraso = row['ATRASO']; recorde = row['REC. ATRASO']; setor = row['SETOR']
-                seq_atual = row['SEQ. ATUAL']; recorde_seq = row['REC. SEQ. (V)']
-                if "VACA" in setor: continue 
-                if (recorde - atraso) <= 1 and recorde >= 5:
-                    alertas_locais += 1
-                    classe = "box-alerta" if atraso >= recorde else "box-aviso"
-                    msg_extra = "**ESTOURADO!**" if atraso >= recorde else "Zona de Tiro"
-                    with col_alerts: st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Atraso: {atraso} (Recorde: {recorde}) - {msg_extra}</div>", unsafe_allow_html=True)
-                margem_seq = recorde_seq - seq_atual
-                if margem_seq <= 1 and recorde_seq >= 3:
-                    alertas_locais += 1
-                    if margem_seq <= 0: classe, msg_extra = "box-inverso-critico", "🔁 REPETIÇÃO MÁXIMA (Inverso Recomendado)"
-                    else: classe, msg_extra = "box-inverso-atencao", "⚠️ Atenção: Sequência Alta (Quase no Recorde)"
-                    with col_alerts: st.markdown(f"<div class='{classe}'><b>{nome_pos} | {setor}</b><br>Sequência Atual: {seq_atual}x (Recorde: {recorde_seq})<br>{msg_extra}</div>", unsafe_allow_html=True)
-        if alertas_locais == 0: st.success("Sem alertas críticos nesta banca.")
-        st.markdown("---")
-
+        
         abas = st.tabs(nomes_posicoes)
+        
         for idx_aba, aba in enumerate(abas):
             with aba:
+                # CÁLCULOS
                 df_stress = calcular_stress_tabela(historico, idx_aba)
                 stats_ciclo = calcular_ciclo(historico, idx_aba)
                 df_diamante = calcular_tabela_diamante(historico, idx_aba)
                 ultimo_bicho = historico[-1]['premios'][idx_aba]
                 saturados = identificar_saturados(historico, idx_aba)
                 
-                # --- SNIPER V45 (AUTO) ---
                 sniper_local = gerar_sniper_v39_final(df_stress, stats_ciclo, df_diamante, ultimo_bicho, saturados)
                 
-                # --- ORÁCULO IA V43.0 (TOP 8) ---
                 if HAS_AI:
                     top_8_ia, confianca_ia = treinar_oraculo_pentagono(historico, idx_aba)
                     bt_ia = executar_backtest_ia(historico, idx_aba)
                     max_loss_ia = calcular_max_derrotas_ia_50(historico, idx_aba)
-                else:
-                    top_8_ia, confianca_ia = [], 0
-                    bt_ia = []
-                    max_loss_ia = 0
                 
                 bt_results = executar_backtest_sniper(historico, idx_aba)
                 max_loss_record = calcular_max_derrotas_50(historico, idx_aba)
                 
-                css_extra = "sniper-reversao" if sniper_local['modo_reversao'] else "sniper-record" if sniper_local['is_record'] else ""
+                # --- VISUAL NATIVO (ZERO HTML ERROS) ---
                 
-                if saturados: msg_sat = f"<br><span style='color:#ff4b4b; font-size:12px;'>🥵 Saturação: {saturados}</span>"
-                else: msg_sat = ""
-                badge_rev = "<div class='reversao-badge'>🔄 MODO REVERSÃO ATIVADO</div><br>" if sniper_local['modo_reversao'] else ""
-                
-                cor_nota = "#00ff00" 
+                if HAS_AI:
+                    with st.container(border=True):
+                        st.markdown("### 🧠 Oráculo IA (Top 8)")
+                        st.info(f"Confiança: {confianca_ia:.1f}%")
+                        st.markdown(f"**Previsão:** {', '.join(map(str, top_8_ia))}")
+                        
+                        # Super Grupos (Interseção)
+                        super_g = list(set(sniper_local['grupos_ataque']) & set(top_8_ia))
+                        if super_g:
+                            st.success(f"🌟 **SUPER GRUPOS (Sniper + IA):** {', '.join(map(str, super_g))}")
+                        
+                        st.markdown(f"**Histórico IA (50 Jogos):** Pior Sequência: {max_loss_ia} Derrotas")
+                        # Mini backtest visual IA
+                        cols_ia = st.columns(len(bt_ia))
+                        for i, res in enumerate(reversed(bt_ia)):
+                            with cols_ia[i]:
+                                if res['vitoria']: st.success(f"G{res['numero_real']}")
+                                else: st.error(f"G{res['numero_real']}")
 
-                # 1. ORÁCULO IA
-                if HAS_AI and top_8_ia:
-                    super_grupos = list(set(sniper_local['grupos_ataque']) & set(top_8_ia))
-                    html_super = ""
-                    if super_grupos:
-                        html_super = f"<div style='margin-top:5px; color:#00ff00;'>🌟 <b>SUPER GRUPOS (Sniper + IA):</b> {', '.join(map(str, super_grupos))}</div>"
+                # SNIPER CARD
+                with st.container(border=True):
+                    st.markdown(f"## 🎯 SNIPER: {nomes_posicoes[idx_aba]}")
+                    st.caption(f"Próximo: {prox_tiro_local}")
                     
-                    cards_ia_html = ""
-                    if bt_ia:
-                        for res in reversed(bt_ia):
-                            classe_res = "bt-win" if res['vitoria'] else "bt-loss"
-                            icon = "🟢" if res['vitoria'] else "❌"
-                            cards_ia_html += f"<div class='bt-card {classe_res}' style='width:70px; padding:2px;'><div class='bt-icon' style='font-size:14px;'>{icon}</div><div class='bt-num' style='font-size:12px;'>{res['numero_real']}</div></div>"
+                    if sniper_local['modo_reversao']:
+                        st.error(f"🔄 MODO REVERSÃO ATIVADO: {sniper_local['meta_info']}")
+                    else:
+                        st.info(sniper_local['meta_info'])
                     
-                    st.markdown(f"""
-                    <div class='box-ai'>
-                        <div class='ai-title'>🧠 Oráculo IA (Top 8)</div>
-                        <div class='ai-desc'>Confiança: <b>{confianca_ia:.1f}%</b> | Top 8: <b>{', '.join(map(str, top_8_ia))}</b></div>
-                        {html_super}
-                        <div style='margin-top:10px; font-size:12px; font-weight:bold; color:#ccc;'>Histórico Recente IA:</div>
-                        <div class='backtest-container' style='justify-content:flex-start;'>{cards_ia_html}</div>
-                        <div style='color:#ffaaaa; font-size:12px;'>📉 Pior Sequência IA (50 Jogos): {max_loss_ia} Derrotas</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    c1, c2 = st.columns(2)
+                    c1.metric("🟢 ATAQUE (8 Grupos)", ", ".join(map(str, sniper_local['grupos_ataque'])))
+                    c2.metric("🛡️ DEFESA (Dezenas)", ", ".join(map(str, sniper_local['dezenas_defesa'])))
+                    
+                    if saturados: st.warning(f"Saturados: {saturados}")
 
-                # 2. SNIPER LOCAL
-                st.markdown(f"""
-<div class="sniper-box {css_extra}" style="margin-top:0;">
-{badge_rev}
-<div class="sniper-title">🎯 SNIPER LOCAL V45.1 (DUAL)</div>
-<div class="sniper-bank">{nome_banca_clean}</div>
-<div class="sniper-target">{nomes_posicoes[idx_aba]}</div>
-<div class="sniper-next">{prox_tiro_local}</div>
-<p style="color:#ddd; font-size:12px;">{sniper_local['meta_info']}</p>
-
-<div class="section-strong">
-<div class="strong-label">🟢 ATAQUE (8 GRUPOS):</div>
-<div class="strong-nums">{', '.join(map(str, sniper_local['grupos_ataque']))}</div>
-</div>
-
-<div class="section-weak">
-<div class="weak-label">🛡️ DEFESA (DEZENAS):</div>
-<div class="weak-nums">{', '.join(map(str, sniper_local['dezenas_defesa']))}</div>
-</div>
-{msg_sat}
-</div>
-""", unsafe_allow_html=True)
+                st.error(f"📉 Pior Sequência Sniper (50 Jogos): {max_loss_record} Derrotas")
                 
-                st.markdown(f"<div style='text-align:center;'><span class='max-loss-info'>📉 Pior Sequência Sniper (50 Jogos): {max_loss_record} Derrotas</span></div>", unsafe_allow_html=True)
-                
+                # BACKTEST SNIPER
                 if bt_results:
-                    cards_html = ""
-                    for res in reversed(bt_results):
-                        classe_res = "bt-win" if res['vitoria'] else "bt-loss"
-                        icon = "🟢" if res['vitoria'] else "❌"
-                        cards_html += f"<div class='bt-card {classe_res}'><div class='bt-icon'>{icon}</div><div class='bt-num'>G: {res['numero_real']}</div><div class='bt-label'>-{res['index']} Jogos</div></div>"
-                    final_html = f"<div class='backtest-container'>{cards_html}</div>"
-                    st.markdown(final_html, unsafe_allow_html=True)
-                
-                # --- GRÁFICO DONUT (ADAPTADO V45) ---
-                st.markdown(f"### 📊 Raio-X: {nomes_posicoes[idx_aba]}")
-                st.markdown("**Visual Recente (⬅️ Mais Novo):**")
-                st.markdown(gerar_bolinhas_recentes(historico, idx_aba), unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("### ⏪ Performance Recente (Sniper)")
+                    cols_sn = st.columns(len(bt_results))
+                    for i, res in enumerate(reversed(bt_results)):
+                        with cols_sn[i]:
+                            val = f"G{res['numero_real']}"
+                            if res['vitoria']: st.success(f"{val} (WIN)")
+                            else: st.error(f"{val} (LOSS)")
 
-                df_chart = df_stress.copy()
-                df_chart = df_chart.rename(columns={"% PRESENÇA": "PRESENCA", "SETOR": "CATEGORIA"})
-                base = alt.Chart(df_chart).encode(theta=alt.Theta("PRESENCA", stack=True))
-                pie = base.mark_arc(outerRadius=120).encode(
-                    color=alt.Color("CATEGORIA", scale=alt.Scale(domain=['BAIXO (01-16)', 'ALTO (17-24)', 'VACA (25)'], range=['#17a2b8', '#dc3545', '#6f42c1']), legend=None),
-                    order=alt.Order("PRESENCA", sort="descending"), tooltip=["CATEGORIA", "PRESENCA"]
-                )
-                text = base.mark_text(radius=140).encode(text=alt.Text("PRESENCA", format=".1f"), order=alt.Order("PRESENCA", sort="descending"), color=alt.value("white"))
-                st.altair_chart(pie + text, use_container_width=True)
+                st.markdown("---")
                 
-                st.markdown("**📉 Tabela de Stress:**")
-                df_visual = df_stress.drop(columns=['SEQ. ATUAL'])
-                st.table(df_visual)
+                # GRÁFICO E TABELAS
+                st.markdown("### 📊 Raio-X Estatístico")
+                
+                # Gráfico
+                df_chart = df_stress.copy()
+                base = alt.Chart(df_chart).encode(theta=alt.Theta("% PRESENÇA", stack=True))
+                pie = base.mark_arc(outerRadius=80).encode(
+                    color=alt.Color("SETOR"),
+                    order=alt.Order("% PRESENÇA", sort="descending"),
+                    tooltip=["SETOR", "% PRESENÇA"]
+                )
+                st.altair_chart(pie, use_container_width=True)
+                
+                st.markdown("**Tabela de Stress:**")
+                st.dataframe(df_stress.drop(columns=['SEQ. ATUAL']), use_container_width=True)
+                
                 st.markdown("---")
-                st.subheader("🔄 Monitor de Ciclos")
-                prog_val = stats_ciclo['vistos'] / 25.0
-                st.progress(prog_val)
-                st.caption(f"Status: {stats_ciclo['vistos']}/25 bichos já saíram.")
-                c1, c2 = st.columns(2)
-                with c1: st.metric("Jogos no Ciclo Atual", f"{stats_ciclo['jogos_atual']}")
-                with c2: st.metric("Média para Fechar", f"{stats_ciclo['media_historica']:.1f}")
-                if stats_ciclo['faltam']: st.markdown("**Faltam Sair (Sugestão):**"); st.code(", ".join(map(str, stats_ciclo['faltam'])), language="text")
-                else: st.success("Ciclo Fechado! Próximo sorteio abre novo ciclo.")
+                st.markdown(f"**Ciclo (Vistos: {stats_ciclo['vistos']}/25):**")
+                st.progress(stats_ciclo['vistos'] / 25.0)
+                if stats_ciclo['faltam']:
+                    st.markdown(f"**Faltam Sair:** {', '.join(map(str, stats_ciclo['faltam']))}")
+                else: st.success("Ciclo Fechado!")
+                
                 st.markdown("---")
-                st.subheader("💎 DIAMANTES (Elite 3x - Últimos 30 Jogos)")
-                if not df_diamante.empty: st.table(df_diamante)
-                else: st.info("Nenhum grupo de Alta Frequência (3x ou mais) encontrado recentemente.")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if "VACA (25)" in df_stress['SETOR'].values:
-                    row_vaca = df_stress[df_stress['SETOR'] == "VACA (25)"].iloc[0]
-                    if row_vaca['ATRASO'] > 15: st.info(f"ℹ️ **Vaca (25):** Atraso Atual: {row_vaca['ATRASO']} | Recorde: {row_vaca['REC. ATRASO']}")
+                st.markdown("**💎 Diamantes (Frequência Alta):**")
+                if not df_diamante.empty:
+                    st.dataframe(df_diamante, use_container_width=True)
+                else: st.info("Sem destaques no momento.")
+
     else:
         st.warning("⚠️ Base vazia.")
