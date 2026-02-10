@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V46.0 Native", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V47.0 Native", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -47,18 +47,12 @@ for g in range(1, 26):
 
 if 'tocar_som' not in st.session_state: st.session_state['tocar_som'] = False
 
-def reproduzir_som():
-    # Som simplificado ou removido para evitar problemas de carregamento, 
-    # mantendo apenas a lógica se necessário futuramente.
-    pass
-
-# Estilo Mínimo (Apenas para tabelas ficarem legíveis no Dark Mode)
+# Ajuste visual mínimo para tabelas no modo dark
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
-    h1, h2, h3 { color: #00ff00 !important; }
 </style>
 """, unsafe_allow_html=True)
 
