@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V49.1 Matrix", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V50.0 Deep Stats", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -48,7 +48,8 @@ st.markdown("""
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #00ff00 !important; }
-    div[data-testid="stMetricValue"] { font-size: 24px; }
+    div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; }
+    .css-1wivap2 { font-size: 14px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -164,6 +165,25 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
 # --- 3. CÉREBRO: IA MATRIX DEZENAS ---
 # =============================================================================
 
+def analisar_sequencias_profundas(lista_wins):
+    """Analisa histórico de vitórias/derrotas para extrair stats profundos."""
+    if not lista_wins: return 0, 0, 0
+    sequencias = []
+    atual = 0
+    for w in lista_wins:
+        if w: # Se é o evento que estamos contando
+            atual += 1
+        else:
+            if atual > 0: sequencias.append(atual)
+            atual = 0
+    if atual > 0: sequencias.append(atual)
+    if not sequencias: return 0, 0, 0
+    maximo = max(sequencias)
+    ocorrencias = sequencias.count(maximo)
+    total_jogos = len(lista_wins)
+    ciclo = int(total_jogos / ocorrencias) if ocorrencias > 0 else 0
+    return maximo, ocorrencias, ciclo
+
 def analisar_filtros_avancados(historico, indice_premio):
     if len(historico) < 2: return [], [], []
     
@@ -201,7 +221,7 @@ def analisar_filtros_avancados(historico, indice_premio):
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: 
-        return {f"{i:02}": 0.5 for i in range(100)} 
+        return {f"{i:02}": 0.01 for i in range(100)} 
 
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
@@ -211,7 +231,7 @@ def treinar_probabilidade_global(historico, indice_premio):
     df['hora_code'] = le_hora.fit_transform(df['horario'])
     
     try:
-        dezenas_alvo = [j['premios'][indice_premio] for j in historico if 'data_dt' in df.columns]
+        dezenas_alvo = [str(j['premios'][indice_premio]).zfill(2) for j in historico if 'data_dt' in df.columns]
     except: return {}
     
     df = df.iloc[:len(dezenas_alvo)]
@@ -222,9 +242,9 @@ def treinar_probabilidade_global(historico, indice_premio):
     if len(df_treino) < 20: return {}
     
     X = df_treino[['dia_semana', 'hora_code', 'target']]
-    y = df_treino['target_futuro']
+    y = df_treino['target_futuro'].astype(str)
     
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
     
     ultimo = df.iloc[-1]
@@ -234,7 +254,8 @@ def treinar_probabilidade_global(historico, indice_premio):
     
     mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        mapa_probs[classes[i]] = prob
+        chave = str(classes[i]).zfill(2)
+        mapa_probs[chave] = prob
         
     return mapa_probs
 
@@ -252,19 +273,24 @@ def gerar_estrategia_matrix_50(historico, indice_premio):
         dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
         for d in dezenas_candidatas:
-            score = mapa_ia.get(d, 0.0)
-            if int(d[-1]) in unis_proibidas: score -= 0.5
-            if block_gemeas and d in GEMEAS: score -= 0.8
-            if block_linha and d.startswith(block_linha): score -= 0.6
-            ranking_grupo.append((d, score))
+            score = mapa_ia.get(d, 0.01)
+            
+            score_ajustado = score
+            if int(d[-1]) in unis_proibidas: score_ajustado -= 0.5
+            if block_gemeas and d in GEMEAS: score_ajustado -= 0.8
+            if block_linha and d.startswith(block_linha): score_ajustado -= 0.6
+            
+            ranking_grupo.append((d, score_ajustado, score))
         
         ranking_grupo.sort(key=lambda x: x[1], reverse=True)
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
         
-    # --- CORREÇÃO DA MÉTRICA (Soma das Probabilidades) ---
-    prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
+    # Soma Acumulada (Correção V50)
+    prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
+    
+    if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
     
     info_filtros = {
@@ -276,47 +302,41 @@ def gerar_estrategia_matrix_50(historico, indice_premio):
     return sorted(palpite_matrix), conf_media, info_filtros
 
 # =============================================================================
-# --- 4. BACKTESTS ---
+# --- 4. BACKTESTS COM DEEP STATS ---
 # =============================================================================
 
-def calcular_metricas_matrix(historico, indice_premio):
-    if len(historico) < 20: return 0, 0, 0, 0
+def calcular_metricas_matrix_detalhado(historico, indice_premio):
+    if len(historico) < 20: return {}, {}
     total = len(historico)
     inicio = max(20, total - 50)
-    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    
+    historico_wins = []
     
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
         palpite, _, _ = gerar_estrategia_matrix_50(hist_p, indice_premio)
+        win = target in palpite
+        historico_wins.append(win)
         
-        if target in palpite:
-            seq_loss = 0; seq_win += 1
-            if seq_win > max_win: max_win = seq_win
+    seq_atual_loss = 0; seq_atual_win = 0
+    if historico_wins:
+        if historico_wins[-1]:
+            for w in reversed(historico_wins):
+                if w: seq_atual_win += 1
+                else: break
         else:
-            seq_win = 0; seq_loss += 1
-            if seq_loss > max_loss: max_loss = seq_loss
-            
-    idx = -1; atual_loss = 0; atual_win = 0
-    target = historico[idx]['premios'][indice_premio]
-    palpite, _, _ = gerar_estrategia_matrix_50(historico[:idx], indice_premio)
+            for w in reversed(historico_wins):
+                if not w: seq_atual_loss += 1
+                else: break
+                
+    max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
+    max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
     
-    if target in palpite:
-        atual_win = 1
-        for k in range(2, 10):
-            t = historico[-k]['premios'][indice_premio]
-            p, _, _ = gerar_estrategia_matrix_50(historico[:-k], indice_premio)
-            if t in p: atual_win += 1
-            else: break
-    else:
-        atual_loss = 1
-        for k in range(2, 10):
-            t = historico[-k]['premios'][indice_premio]
-            p, _, _ = gerar_estrategia_matrix_50(historico[:-k], indice_premio)
-            if t not in p: atual_loss += 1
-            else: break
-            
-    return atual_loss, max_loss, atual_win, max_win
+    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
+    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
+    
+    return stats_loss, stats_win
 
 def executar_backtest_recente_matrix(historico, indice_premio):
     results = []
@@ -340,7 +360,7 @@ def rastreador_padroes(historico, indice_premio):
     return label, encontrados
 
 # =============================================================================
-# --- 5. INTERFACE ---
+# --- 5. INTERFACE (MATRIX MULTI-BANCA) ---
 # =============================================================================
 
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
@@ -366,7 +386,7 @@ else:
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    # --- MODO EXTRAÇÃO ---
+    # --- MODO EXTRAÇÃO (DEZENAS) ---
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
     if modo_extracao == "🎯 Unitária":
@@ -459,11 +479,12 @@ else:
         
         for idx_aba, aba in enumerate(abas):
             with aba:
+                # --- ANÁLISE MATRIX (POR PRÊMIO) ---
                 lista_matrix, conf_dez, info_filtros = gerar_estrategia_matrix_50(historico, idx_aba)
-                loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico, idx_aba)
+                stats_loss, stats_win = calcular_metricas_matrix_detalhado(historico, idx_aba)
                 
                 if HAS_AI:
-                    st.info(f"🧠 Força da Cobertura (IA): {conf_dez:.1f}%")
+                    st.info(f"🛡️ Força da Cobertura (Probabilidade Acumulada): {conf_dez:.1f}%")
                     filtros_ativos = []
                     if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
                     if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea")
@@ -474,16 +495,20 @@ else:
                     else:
                         st.success("✅ Nenhum filtro de bloqueio acionado. IA Pura.")
                 
-                if loss_d >= max_loss_d and max_loss_d > 0:
-                    st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
+                if stats_loss['atual'] >= stats_loss['max'] and stats_loss['max'] > 0:
+                    st.error(f"🚨 ALERTA: {stats_loss['atual']} Derrotas (Recorde!)")
                 
                 with st.container(border=True):
                     st.markdown("### 50 Dezenas Selecionadas (Matrix Filter)")
                     st.code(", ".join(lista_matrix), language="text")
                     
                 c1, c2 = st.columns(2)
-                c1.metric("Derrotas", f"{loss_d}", f"Max: {max_loss_d}", delta_color="inverse")
-                c2.metric("Vitórias", f"{win_d}", f"Max: {max_win_d}")
+                # NOVAS MÉTRICAS DETALHADAS (DEEP STATS)
+                c1.metric("Derrotas", f"{stats_loss['atual']}", 
+                          f"Recorde: {stats_loss['max']} (Ocorreu {stats_loss['freq']}x | Média: 1 a cada {stats_loss['ciclo']} jogos)", 
+                          delta_color="inverse")
+                c2.metric("Vitórias", f"{stats_win['atual']}", 
+                          f"Recorde: {stats_win['max']} (Ocorreu {stats_win['freq']}x | Média: 1 a cada {stats_win['ciclo']} jogos)")
                 
                 st.markdown("**Histórico Recente (Matrix):**")
                 bt_dez = executar_backtest_recente_matrix(historico, idx_aba)
