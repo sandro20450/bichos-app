@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V25.0 Dynamic", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V25.1 Full", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -35,6 +35,7 @@ st.markdown("""
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #00ff00 !important; }
+    div[data-testid="stMetricValue"] { font-size: 24px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,7 +208,7 @@ def gerar_estrategia_dezenas(historico):
     return sorted(final), cortadas, conf
 
 # =============================================================================
-# --- 4. BACKTESTS ---
+# --- 4. BACKTESTS (COM MÉTRICAS COMPLETAS) ---
 # =============================================================================
 
 def calcular_metricas_dezenas(historico):
@@ -245,19 +246,50 @@ def calcular_metricas_dezenas(historico):
             else: break
     return atual_loss, max_loss, atual_win, max_win
 
-def calcular_sequencia_derrotas_atual_unidades(historico):
-    """Calcula quantas derrotas seguidas o TOP 5 teve até agora."""
-    derrotas = 0
-    for i in range(1, 15):
-        idx = -i
-        target = int(historico[idx]['dezenas'][0][-1])
-        rank, _ = treinar_oraculo_unidades(historico[:idx])
+def calcular_metricas_unidades_full(historico):
+    """Calcula histórico completo de vitórias/derrotas do Top 5 base."""
+    if len(historico) < 20: return 0, 0, 0, 0
+    total = len(historico)
+    inicio = max(20, total - 50)
+    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    
+    for i in range(inicio, total):
+        target = int(historico[i]['dezenas'][0][-1])
+        hist_p = historico[:i]
+        rank, _ = treinar_oraculo_unidades(hist_p)
         top5 = [u for u, p in rank[:5]]
-        if target not in top5:
-            derrotas += 1
+        
+        if target in top5:
+            seq_loss = 0; seq_win += 1
+            if seq_win > max_win: max_win = seq_win
         else:
-            break
-    return derrotas
+            seq_win = 0; seq_loss += 1
+            if seq_loss > max_loss: max_loss = seq_loss
+            
+    # Atual
+    idx = -1; atual_loss = 0; atual_win = 0
+    target = int(historico[idx]['dezenas'][0][-1])
+    rank, _ = treinar_oraculo_unidades(historico[:idx])
+    top5 = [u for u, p in rank[:5]]
+    
+    if target in top5:
+        atual_win = 1
+        for k in range(2, 10):
+            t = int(historico[-k]['dezenas'][0][-1])
+            r, _ = treinar_oraculo_unidades(historico[:-k])
+            t5 = [u for u, p in r[:5]]
+            if t in t5: atual_win += 1
+            else: break
+    else:
+        atual_loss = 1
+        for k in range(2, 10):
+            t = int(historico[-k]['dezenas'][0][-1])
+            r, _ = treinar_oraculo_unidades(historico[:-k])
+            t5 = [u for u, p in r[:5]]
+            if t not in t5: atual_loss += 1
+            else: break
+            
+    return atual_loss, max_loss, atual_win, max_win
 
 def executar_backtest_recente(historico, tipo="DEZENA"):
     results = []
@@ -409,25 +441,26 @@ if len(historico) > 0:
         
         # 1. Analisa Situação Atual
         rank_uni, conf_uni = treinar_oraculo_unidades(historico)
-        sequencia_derrotas = calcular_sequencia_derrotas_atual_unidades(historico)
         
-        # 2. Define Estratégia Baseada no Histórico
+        # Cálculo de métricas completas (incluindo Max)
+        u_loss, u_max_loss, u_win, u_max_win = calcular_metricas_unidades_full(historico)
+        
+        # Lógica Dinâmica (Baseada na sequência atual de derrotas)
         top_base = [str(u) for u, p in rank_uni[:5]] # Top 5 Padrão
         
-        if sequencia_derrotas >= 2:
+        if u_loss >= 2:
             # --- MODO DEFESA / CORREÇÃO ---
             modo = "DEFESA"
-            # Pega +2 unidades extras (as próximas do ranking: 6ª e 7ª posição)
             extras = [str(u) for u, p in rank_uni[5:7]]
             lista_final_uni = top_base + extras
-            msg_status = f"🛡️ MODO CORREÇÃO ATIVO! (Vindo de {sequencia_derrotas} Derrotas)"
-            cor_alerta = "error" # Vermelho
+            msg_status = f"🛡️ MODO CORREÇÃO ATIVO! (Vindo de {u_loss} Derrotas)"
+            cor_alerta = "error"
         else:
             # --- MODO ATAQUE ---
             modo = "ATAQUE"
             lista_final_uni = top_base
             msg_status = "⚔️ MODO ATAQUE (Top 5)"
-            cor_alerta = "info" # Azul
+            cor_alerta = "info"
             
         if HAS_AI:
             with st.container(border=True):
@@ -443,9 +476,10 @@ if len(historico) > 0:
         with st.container(border=True):
             st.markdown(f"### Finais Sugeridos: {', '.join(lista_final_uni)}")
             
-        # Métricas visuais da sequência
+        # Métricas Completas (Agora com Max visível)
         c3, c4 = st.columns(2)
-        c3.metric("Seq. Derrotas Atual", f"{sequencia_derrotas}", delta_color="inverse")
+        c3.metric("Derrotas", f"{u_loss}", f"Max: {u_max_loss}", delta_color="inverse")
+        c4.metric("Vitórias", f"{u_win}", f"Max: {u_max_win}")
         
         st.markdown("**Histórico Recente:**")
         bt_uni = executar_backtest_recente(historico, "UNIDADE")
