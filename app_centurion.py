@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V27.2 Corrected", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.3 Matrix Fix", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -233,9 +233,11 @@ def gerar_estrategia_matrix_50(historico):
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
     
-    # --- CORREÇÃO DA MÉTRICA: SOMA DAS PROBABILIDADES ---
+    # --- CORREÇÃO DA PORCENTAGEM (SOMA ACUMULADA) ---
+    # Soma as probabilidades para refletir a "Força da Cobertura"
     prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
     conf_media = prob_total * 100 
+    # Trava em 99.9% para não dar 100% (nada é certo)
     if conf_media > 99.9: conf_media = 99.9
     
     info_filtros = {
