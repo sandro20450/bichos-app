@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V49.0 Matrix Dezenas", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V49.1 Matrix", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -75,14 +75,13 @@ def carregar_dados_dezenas_top5(nome_aba):
             for row in raw[1:]:
                 # Espera formato: DATA | HORA | P1 | P2 | P3 | P4 | P5
                 if len(row) >= 7:
-                    # Tenta extrair as dezenas (últimos 2 dígitos)
                     dezenas = []
                     for p in row[2:7]:
                         p_str = str(p).strip()
                         if p_str.isdigit():
                             dezenas.append(p_str.zfill(2)[-2:]) # Garante 2 dígitos
                         else:
-                            dezenas.append("00") # Fallback
+                            dezenas.append("00")
                     
                     if len(dezenas) == 5:
                         dados.append({"data": row[0], "horario": row[1], "premios": dezenas})
@@ -124,9 +123,7 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
         
         for tabela in tabelas:
-            # Verifica se é tabela de prêmios
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # Evita Federal misturada
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
                 
@@ -135,7 +132,6 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
                     m = re.search(padrao_hora, prev)
                     if m:
                         raw = m.group(1).strip()
-                        # Normaliza hora
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
@@ -149,12 +145,10 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
                                     premio_txt = cols[0].get_text().strip()
                                     numero_txt = cols[1].get_text().strip()
                                     
-                                    # Extrai numero (milhar/centena)
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio:
                                         p_idx = int(nums_premio[0])
                                         if 1 <= p_idx <= 5:
-                                            # Limpa e pega dezena
                                             clean_num = re.sub(r'\D', '', numero_txt)
                                             if len(clean_num) >= 2:
                                                 dezenas_encontradas.append(clean_num[-2:])
@@ -167,7 +161,7 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA MATRIX DEZENAS (IGUAL CENTURION V27) ---
+# --- 3. CÉREBRO: IA MATRIX DEZENAS ---
 # =============================================================================
 
 def analisar_filtros_avancados(historico, indice_premio):
@@ -268,7 +262,10 @@ def gerar_estrategia_matrix_50(historico, indice_premio):
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
         
-    conf_media = sum([mapa_ia.get(d, 0) for d in palpite_matrix]) / len(palpite_matrix) * 100 if palpite_matrix else 0
+    # --- CORREÇÃO DA MÉTRICA (Soma das Probabilidades) ---
+    prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
+    conf_media = prob_total * 100 
+    if conf_media > 99.9: conf_media = 99.9
     
     info_filtros = {
         "uni": unis_proibidas,
@@ -279,7 +276,7 @@ def gerar_estrategia_matrix_50(historico, indice_premio):
     return sorted(palpite_matrix), conf_media, info_filtros
 
 # =============================================================================
-# --- 4. BACKTESTS (MATRIX) ---
+# --- 4. BACKTESTS ---
 # =============================================================================
 
 def calcular_metricas_matrix(historico, indice_premio):
@@ -343,7 +340,7 @@ def rastreador_padroes(historico, indice_premio):
     return label, encontrados
 
 # =============================================================================
-# --- 5. INTERFACE (REPLICA CENTURION) ---
+# --- 5. INTERFACE ---
 # =============================================================================
 
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
@@ -369,7 +366,7 @@ else:
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    # --- MODO EXTRAÇÃO (DEZENAS) ---
+    # --- MODO EXTRAÇÃO ---
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
     if modo_extracao == "🎯 Unitária":
@@ -462,12 +459,11 @@ else:
         
         for idx_aba, aba in enumerate(abas):
             with aba:
-                # --- ANÁLISE MATRIX (POR PRÊMIO) ---
                 lista_matrix, conf_dez, info_filtros = gerar_estrategia_matrix_50(historico, idx_aba)
                 loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico, idx_aba)
                 
                 if HAS_AI:
-                    st.info(f"🧠 Confiança Média IA: {conf_dez:.1f}%")
+                    st.info(f"🧠 Força da Cobertura (IA): {conf_dez:.1f}%")
                     filtros_ativos = []
                     if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
                     if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea")
