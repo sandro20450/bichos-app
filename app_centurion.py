@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V26.0 Matrix", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.0 Filters", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -29,7 +29,7 @@ CONFIG_TRADICIONAL = {
     "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
 }
 
-# MAPEAMENTO DE GRUPOS (Para a estratégia Matrix)
+# MAPEAMENTO DE GRUPOS E GÊMEAS
 GRUPO_TO_DEZENAS = {}
 for g in range(1, 26):
     fim = g * 4
@@ -39,6 +39,8 @@ for g in range(1, 26):
         d_str = "00" if n == 100 else f"{n:02}"
         dezenas_do_grupo.append(d_str)
     GRUPO_TO_DEZENAS[g] = dezenas_do_grupo
+
+GEMEAS = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
 
 st.markdown("""
 <style>
@@ -130,44 +132,51 @@ def raspar_site(data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA MATRIX (NOVA LÓGICA) ---
+# --- 3. CÉREBRO: IA MATRIX + FILTROS ---
 # =============================================================================
 
-def get_unidades_improvaveis(historico):
+def analisar_filtros_avancados(historico):
     """
-    Detecta a 'Trinca Proibida' sugerida pelo usuário.
-    Ex: Se veio final 6, depois final 7 -> O final 8 é improvável (sequência crescente).
-    Ex: Se veio final 8, depois final 7 -> O final 6 é improvável (sequência decrescente).
+    Retorna listas de bloqueio baseadas em padrões recentes.
     """
-    if len(historico) < 2: return []
+    if len(historico) < 2: return [], [], []
+    
+    bloqueio_unidade = []
+    bloqueio_gemeas = False
+    bloqueio_linha = None # Ex: '4' para bloquear 40-49
     
     try:
-        # Pega as duas últimas dezenas REAIS
-        u_atual = int(historico[-1]['dezenas'][0][-1]) # Penúltimo (referência atual)
-        u_anterior = int(historico[-2]['dezenas'][0][-1]) # Antepenúltimo
+        # Últimos resultados
+        d_atual = historico[-1]['dezenas'][0]
+        d_anterior = historico[-2]['dezenas'][0]
         
-        proibidas = []
+        u_atual = int(d_atual[-1])
+        u_anterior = int(d_anterior[-1])
         
-        # Sequência Crescente (ex: 6 -> 7 -> [8 proibido])
+        # 1. Filtro Sequência Unidade (6->7->Block 8)
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
             prox = (u_atual + 1) % 10
-            proibidas.append(prox)
-            
-        # Sequência Decrescente (ex: 8 -> 7 -> [6 proibido])
+            bloqueio_unidade.append(prox)
         if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
             prox = (u_atual - 1)
             if prox < 0: prox = 9
-            proibidas.append(prox)
+            bloqueio_unidade.append(prox)
             
-        return list(set(proibidas))
-    except:
-        return []
+        # 2. Filtro Anti-Trinca Gêmea (Se 33 e 55, proibir gêmeas)
+        if d_atual in GEMEAS and d_anterior in GEMEAS:
+            bloqueio_gemeas = True
+            
+        # 3. Filtro Fadiga de Linha (Se 41 e 48, proibir 40-49)
+        if d_atual[0] == d_anterior[0]:
+            bloqueio_linha = d_atual[0]
+            
+    except: pass
+    
+    return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico):
-    """Retorna um dicionário {dezena: probabilidade} para TODAS as 100 dezenas."""
     if not HAS_AI or len(historico) < 30: 
-        # Fallback sem IA: Retorna probabilidade igual para todas ou baseada em frequência
-        return {f"{i:02}": 0.5 for i in range(100)} # Simplificado
+        return {f"{i:02}": 0.5 for i in range(100)} 
 
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
@@ -183,7 +192,6 @@ def treinar_probabilidade_global(historico):
     df = df.iloc[:len(dezenas_alvo)]
     df['target'] = dezenas_alvo
     df['target_futuro'] = df['target'].shift(-1)
-    
     df_treino = df.dropna().tail(150)
     
     if len(df_treino) < 20: return {}
@@ -196,8 +204,6 @@ def treinar_probabilidade_global(historico):
     
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
-    
-    # Probabilidades para todas as classes conhecidas
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
     
@@ -208,48 +214,51 @@ def treinar_probabilidade_global(historico):
     return mapa_probs
 
 def gerar_estrategia_matrix_50(historico):
-    """
-    Gera 50 dezenas cobrindo TODOS os 25 grupos (2 dezenas por grupo).
-    Usa IA + Filtro de Unidade Proibida para escolher as 2 melhores.
-    """
-    if not historico: return [], 0
+    if not historico: return [], 0, {}
     
-    # 1. Pega probabilidades da IA para tudo
+    # 1. IA Score
     mapa_ia = treinar_probabilidade_global(historico)
-    if not mapa_ia: return [], 0
+    if not mapa_ia: return [], 0, {}
     
-    # 2. Detecta unidades "proibidas" pela lógica de sequência
-    unidades_ruins = get_unidades_improvaveis(historico)
+    # 2. Filtros
+    unis_proibidas, block_gemeas, block_linha = analisar_filtros_avancados(historico)
     
     palpite_matrix = []
     
-    # 3. Itera sobre cada grupo (1 a 25)
     for g in range(1, 26):
-        dezenas_candidatas = GRUPO_TO_DEZENAS[g] # As 4 dezenas do grupo
-        
-        # Rankeia as 4 dezenas do grupo
+        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
+        
         for d in dezenas_candidatas:
             score = mapa_ia.get(d, 0.0)
             
-            # APLICA O FILTRO DO USUÁRIO
-            uni_d = int(d[-1])
-            if uni_d in unidades_ruins:
-                score -= 0.5 # Penalidade pesada para evitar essa dezena
+            # Penalidades
+            # A. Unidade proibida
+            if int(d[-1]) in unis_proibidas: score -= 0.5
+            
+            # B. Gêmeas (se ativado)
+            if block_gemeas and d in GEMEAS: score -= 0.8
+            
+            # C. Linha (se ativado)
+            if block_linha and d.startswith(block_linha): score -= 0.6
             
             ranking_grupo.append((d, score))
         
-        # Pega as 2 melhores deste grupo
         ranking_grupo.sort(key=lambda x: x[1], reverse=True)
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
         
-    # Confiança média das escolhidas
     conf_media = sum([mapa_ia.get(d, 0) for d in palpite_matrix]) / len(palpite_matrix) * 100 if palpite_matrix else 0
     
-    return sorted(palpite_matrix), conf_media
+    info_filtros = {
+        "uni": unis_proibidas,
+        "gemeas": block_gemeas,
+        "linha": block_linha
+    }
+    
+    return sorted(palpite_matrix), conf_media, info_filtros
 
-# --- IA UNIDADES (Mantida a lógica V25.2 para esta aba) ---
+# --- IA UNIDADES ---
 def treinar_oraculo_unidades(historico):
     if not HAS_AI or len(historico) < 30: return [], 0
     df = pd.DataFrame(historico)
@@ -281,11 +290,10 @@ def treinar_oraculo_unidades(historico):
     return ranking, (ranking[0][1] * 100)
 
 # =============================================================================
-# --- 4. BACKTESTS (ADAPTADO PARA MATRIX 50) ---
+# --- 4. BACKTESTS ---
 # =============================================================================
 
 def calcular_metricas_matrix(historico):
-    """Backtest da estratégia Matrix (2 dezenas por grupo)."""
     if len(historico) < 20: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(20, total - 50)
@@ -294,39 +302,31 @@ def calcular_metricas_matrix(historico):
     for i in range(inicio, total):
         target = historico[i]['dezenas'][0]
         hist_p = historico[:i]
+        palpite, _, _ = gerar_estrategia_matrix_50(hist_p)
         
-        # Gera a lista de 50 dezenas usando a lógica Matrix
-        palpite, _ = gerar_estrategia_matrix_50(hist_p)
-        
-        win = target in palpite
-        if win:
+        if target in palpite:
             seq_loss = 0; seq_win += 1
             if seq_win > max_win: max_win = seq_win
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
             
-    # Atual (Próximo jogo não sorteado ou último sorteado se for apenas checagem)
-    # Como não temos o futuro, vamos ver o estado atual baseado no ultimo jogo conhecido
-    # Se o ultimo jogo (idx=-1) foi win, estamos em win streak.
-    
-    # Recalcula apenas os streaks atuais
     idx = -1; atual_loss = 0; atual_win = 0
     target = historico[idx]['dezenas'][0]
-    palpite, _ = gerar_estrategia_matrix_50(historico[:idx])
+    palpite, _, _ = gerar_estrategia_matrix_50(historico[:idx])
     
     if target in palpite:
         atual_win = 1
         for k in range(2, 10):
             t = historico[-k]['dezenas'][0]
-            p, _ = gerar_estrategia_matrix_50(historico[:-k])
+            p, _, _ = gerar_estrategia_matrix_50(historico[:-k])
             if t in p: atual_win += 1
             else: break
     else:
         atual_loss = 1
         for k in range(2, 10):
             t = historico[-k]['dezenas'][0]
-            p, _ = gerar_estrategia_matrix_50(historico[:-k])
+            p, _, _ = gerar_estrategia_matrix_50(historico[:-k])
             if t not in p: atual_loss += 1
             else: break
             
@@ -360,7 +360,7 @@ def executar_backtest_recente_matrix(historico):
     for i in range(1, 6):
         idx = -i
         target = historico[idx]['dezenas'][0]
-        palp, _ = gerar_estrategia_matrix_50(historico[:idx])
+        palp, _, _ = gerar_estrategia_matrix_50(historico[:idx])
         win = target in palp
         results.append({"val": target, "win": win})
     return results
@@ -399,7 +399,6 @@ def rastreador_padroes(historico, tipo="DEZENA"):
 # --- 5. INTERFACE ---
 # =============================================================================
 
-# --- SIDEBAR ---
 st.sidebar.header("🔧 Extração de Dados")
 modo_extracao = st.sidebar.radio("Modo:", ["Unitária", "Turbo (Massa)"])
 
@@ -413,9 +412,8 @@ if modo_extracao == "Unitária":
             with st.spinner("Buscando..."):
                 chaves = obter_chaves_existentes(ws)
                 key = f"{d_data.strftime('%Y-%m-%d')}|{d_hora}"
-                
                 if key in chaves:
-                    st.sidebar.warning("Resultado já existe na planilha!")
+                    st.sidebar.warning("Resultado já existe!")
                 else:
                     dez, msg = raspar_site(d_data, d_hora)
                     if dez:
@@ -428,7 +426,6 @@ if modo_extracao == "Unitária":
 else:
     d_ini = st.sidebar.date_input("Início:", date.today())
     d_fim = st.sidebar.date_input("Fim:", date.today())
-    
     if st.sidebar.button("🚀 INICIAR TURBO"):
         ws = conectar_planilha()
         if ws:
@@ -438,7 +435,6 @@ else:
             dias = [d_ini + timedelta(days=i) for i in range(delta.days + 1)]
             total = len(dias) * len(CONFIG_TRADICIONAL['horarios'])
             count = 0; success = 0
-            
             for dia in dias:
                 for hora in CONFIG_TRADICIONAL['horarios']:
                     count += 1
@@ -459,7 +455,6 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.link_button("🛡️ Ir para PENTÁGONO", "https://seu-app-pentagono.streamlit.app")
 
-# --- MAIN PAGE ---
 st.title("🎯 CENTURION (Tradicional Exclusive)")
 
 historico = carregar_historico()
@@ -470,29 +465,31 @@ if len(historico) > 0:
     
     aba_dez, aba_uni = st.tabs(["🎲 Matrix 50 (2/Grupo)", "🎯 IA Unidades (Dinâmico)"])
     
-    # --- ABA MATRIX 50 (NOVA ESTRATÉGIA) ---
     with aba_dez:
         st.subheader("Análise: Matrix 50 (Cobertura Total 2x25)")
         
-        # Gera lista com a nova lógica
-        lista_matrix, conf_dez = gerar_estrategia_matrix_50(historico)
+        lista_matrix, conf_dez, info_filtros = gerar_estrategia_matrix_50(historico)
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico)
-        
-        # Verifica se há unidade proibida ativa
-        unidades_proibidas = get_unidades_improvaveis(historico)
         
         if HAS_AI:
             st.info(f"🧠 Confiança Média IA: {conf_dez:.1f}%")
-            if unidades_proibidas:
-                st.warning(f"🚫 **Filtro de Sequência Ativo:** Dezenas com final **{unidades_proibidas}** foram penalizadas (Padrão 3-step).")
+            
+            # Display dos filtros ativos
+            filtros_ativos = []
+            if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
+            if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea ATIVO")
+            if info_filtros['linha']: filtros_ativos.append(f"Anti-Fadiga de Linha ({info_filtros['linha']}X) ATIVO")
+            
+            if filtros_ativos:
+                st.warning(f"🚫 **Filtros de Bloqueio:** {', '.join(filtros_ativos)}")
             else:
-                st.success("✅ Nenhuma sequência de bloqueio detectada. IA pura.")
+                st.success("✅ Nenhum filtro de bloqueio acionado. IA Pura.")
         
         if loss_d >= max_loss_d and max_loss_d > 0:
             st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
         
         with st.container(border=True):
-            st.markdown("### 50 Dezenas Selecionadas (2 Melhores de cada Grupo)")
+            st.markdown("### 50 Dezenas Selecionadas (Matrix Filter)")
             st.code(", ".join(lista_matrix), language="text")
             
         c1, c2 = st.columns(2)
@@ -512,7 +509,6 @@ if len(historico) > 0:
             st.caption(f"Padrões após a dezena **{lbl_d}**:")
             st.table(pd.DataFrame(padroes_d))
 
-    # --- ABA UNIDADES (Dinâmica) ---
     with aba_uni:
         st.subheader("Análise: Unidades Finais (0-9)")
         rank_uni, conf_uni = treinar_oraculo_unidades(historico)
