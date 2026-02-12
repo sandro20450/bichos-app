@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V52.0 Super App", page_icon="💎", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V52.1 Super App", page_icon="💎", layout="wide")
 
 # CONFIGURAÇÃO HÍBRIDA (TRADICIONAL + BANCAS NORDESTE)
 CONFIG_BANCAS = {
@@ -57,7 +57,8 @@ CONFIG_BANCAS = {
 # MAPA DE GRUPOS E GÊMEAS
 GRUPO_TO_DEZENAS = {}
 for g in range(1, 26):
-    fim = g * 4; inicio = fim - 3
+    fim = g * 4
+    inicio = fim - 3
     dezenas_do_grupo = []
     for n in range(inicio, fim + 1):
         d_str = "00" if n == 100 else f"{n:02}"
@@ -206,7 +207,8 @@ def analisar_sequencias_profundas(lista_wins):
     sequencias = []
     atual = 0
     for w in lista_wins:
-        if w: atual += 1
+        if w: # Se é o evento que estamos contando
+            atual += 1
         else:
             if atual > 0: sequencias.append(atual)
             atual = 0
@@ -220,68 +222,109 @@ def analisar_sequencias_profundas(lista_wins):
 
 def analisar_filtros_avancados(historico, indice_premio):
     if len(historico) < 2: return [], [], []
-    bloqueio_unidade = []; bloqueio_gemeas = False; bloqueio_linha = None 
+    bloqueio_unidade = []
+    bloqueio_gemeas = False
+    bloqueio_linha = None 
     try:
         d_atual = historico[-1]['premios'][indice_premio]
         d_anterior = historico[-2]['premios'][indice_premio]
-        u_atual = int(d_atual[-1]); u_anterior = int(d_anterior[-1])
+        
+        u_atual = int(d_atual[-1])
+        u_anterior = int(d_anterior[-1])
+        
+        # Filtro Sequência Unidade (Corrigido o erro de sintaxe aqui)
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
-            prox = (u_atual + 1) % 10; bloqueio_unidade.append(prox)
+            prox = (u_atual + 1) % 10
+            bloqueio_unidade.append(prox)
+            
         if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
-            prox = (u_atual - 1); if prox < 0: prox = 9; bloqueio_unidade.append(prox)
-        if d_atual in GEMEAS and d_anterior in GEMEAS: bloqueio_gemeas = True
-        if d_atual[0] == d_anterior[0]: bloqueio_linha = d_atual[0]
+            prox = (u_atual - 1)
+            if prox < 0: 
+                prox = 9
+            bloqueio_unidade.append(prox)
+            
+        if d_atual in GEMEAS and d_anterior in GEMEAS:
+            bloqueio_gemeas = True
+            
+        if d_atual[0] == d_anterior[0]:
+            bloqueio_linha = d_atual[0]
     except: pass
+    
     return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico, indice_premio):
-    if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
+    if not HAS_AI or len(historico) < 30: 
+        return {f"{i:02}": 0.01 for i in range(100)} 
+
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
     df = df.dropna(subset=['data_dt'])
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder(); df['hora_code'] = le_hora.fit_transform(df['horario'])
-    try: dezenas_alvo = [str(j['premios'][indice_premio]).zfill(2) for j in historico if 'data_dt' in df.columns]
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['horario'])
+    
+    try:
+        dezenas_alvo = [str(j['premios'][indice_premio]).zfill(2) for j in historico if 'data_dt' in df.columns]
     except: return {}
-    df = df.iloc[:len(dezenas_alvo)]; df['target'] = dezenas_alvo; df['target_futuro'] = df['target'].shift(-1)
+    
+    df = df.iloc[:len(dezenas_alvo)]
+    df['target'] = dezenas_alvo
+    df['target_futuro'] = df['target'].shift(-1)
     df_treino = df.dropna().tail(150)
+    
     if len(df_treino) < 20: return {}
+    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro'].astype(str)
+    
     modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
+    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
+    
     mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        chave = str(classes[i]).zfill(2); mapa_probs[chave] = prob
+        chave = str(classes[i]).zfill(2)
+        mapa_probs[chave] = prob
+        
     return mapa_probs
 
 def gerar_estrategia_matrix_50(historico, indice_premio):
     if not historico: return [], 0, {}
+    
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     if not mapa_ia: return [], 0, {}
+    
     unis_proibidas, block_gemeas, block_linha = analisar_filtros_avancados(historico, indice_premio)
+    
     palpite_matrix = []
+    
     for g in range(1, 26):
         dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
         for d in dezenas_candidatas:
             score = mapa_ia.get(d, 0.01)
+            
             score_ajustado = score
             if int(d[-1]) in unis_proibidas: score_ajustado -= 0.5
             if block_gemeas and d in GEMEAS: score_ajustado -= 0.8
             if block_linha and d.startswith(block_linha): score_ajustado -= 0.6
+            
             ranking_grupo.append((d, score_ajustado, score))
+        
         ranking_grupo.sort(key=lambda x: x[1], reverse=True)
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
+        
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
+    
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
+    
     info_filtros = { "uni": unis_proibidas, "gemeas": block_gemeas, "linha": block_linha }
     return sorted(palpite_matrix), conf_media, info_filtros
 
@@ -292,22 +335,33 @@ def treinar_oraculo_unidades(historico, indice_premio):
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
     df = df.dropna(subset=['data_dt'])
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder(); df['hora_code'] = le_hora.fit_transform(df['horario'])
-    try: unis_alvo = [int(j['premios'][indice_premio][-1]) for j in historico if 'data_dt' in df.columns]
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['horario'])
+    
+    try:
+        unis_alvo = [int(j['premios'][indice_premio][-1]) for j in historico if 'data_dt' in df.columns]
     except: return [], 0
-    df = df.iloc[:len(unis_alvo)]; df['target'] = unis_alvo; df['target_futuro'] = df['target'].shift(-1)
+    
+    df = df.iloc[:len(unis_alvo)]
+    df['target'] = unis_alvo
+    df['target_futuro'] = df['target'].shift(-1)
     df_treino = df.dropna().tail(150)
+    
     if len(df_treino) < 20: return [], 0
+    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
+    
     modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
+    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
     ranking = []
-    for i, prob in enumerate(probs): ranking.append((int(classes[i]), prob))
+    for i, prob in enumerate(probs):
+        ranking.append((int(classes[i]), prob))
     ranking.sort(key=lambda x: x[1], reverse=True)
     return ranking, (ranking[0][1] * 100)
 
@@ -317,14 +371,18 @@ def treinar_oraculo_unidades(historico, indice_premio):
 
 def calcular_metricas_matrix_detalhado(historico, indice_premio):
     if len(historico) < 20: return {}, {}, False
-    total = len(historico); inicio = max(20, total - 50)
+    total = len(historico)
+    inicio = max(20, total - 50)
+    
     historico_wins = []
+    
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
         palpite, _, _ = gerar_estrategia_matrix_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
+        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -335,42 +393,57 @@ def calcular_metricas_matrix_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
+                
     max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
     max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
+    
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
+    
     gatilho_sequencia = seq_atual_loss >= 2
     gatilho_seguranca = seq_atual_loss < max_l
     sinal_diamante = gatilho_sequencia and gatilho_seguranca
+    
     return stats_loss, stats_win, sinal_diamante
 
 def calcular_metricas_unidades_detalhado(historico, indice_premio):
     if len(historico) < 30: return {}, {}
-    total = len(historico); inicio = max(30, total - 50)
+    total = len(historico)
+    inicio = max(30, total - 50)
+    
     historico_wins = []
     streak_no_momento = 0
+    
     for i in range(inicio, total):
         target = int(historico[i]['premios'][indice_premio][-1])
         hist_parcial = historico[:i]
         rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]
-        else: palpite = [u for u, p in rank[:5]]
+        
+        if streak_no_momento >= 2:
+            palpite = [u for u, p in rank[:7]]
+        else:
+            palpite = [u for u, p in rank[:5]]
+            
         if target in palpite:
             historico_wins.append(True)
             streak_no_momento = 0
         else:
             historico_wins.append(False)
             streak_no_momento += 1
+            
     seq_atual_loss = streak_no_momento
     seq_atual_win = 0
     if historico_wins and historico_wins[-1]:
         for w in reversed(historico_wins):
             if w: seq_atual_win += 1
             else: break
+            
     max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
     max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
+    
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
+    
     return stats_loss, stats_win
 
 def executar_backtest_recente_matrix(historico, indice_premio):
@@ -384,22 +457,32 @@ def executar_backtest_recente_matrix(historico, indice_premio):
     return results
 
 def executar_backtest_recente_uni_preciso(historico, indice_premio):
-    total = len(historico); start = max(30, total - 60)
-    streak_no_momento = 0; resultados_reais = []
+    total = len(historico)
+    start = max(30, total - 60)
+    streak_no_momento = 0
+    resultados_reais = []
+    
     for i in range(start, total):
         target = int(historico[i]['premios'][indice_premio][-1])
         hist_parcial = historico[:i]
         rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
+        
         is_defense = False
         if streak_no_momento >= 2:
-            palpite = [u for u, p in rank[:7]]; is_defense = True
-        else: palpite = [u for u, p in rank[:5]]
+            palpite = [u for u, p in rank[:7]]
+            is_defense = True
+        else:
+            palpite = [u for u, p in rank[:5]]
+            
         win = target in palpite
+        
         if i >= total - 5:
             modo_str = "🛡️(7)" if is_defense else "⚔️(5)"
             resultados_reais.append({ "val": f"Final {target}", "win": win, "modo": modo_str })
+            
         if win: streak_no_momento = 0
         else: streak_no_momento += 1
+        
     return reversed(resultados_reais)
 
 def rastreador_padroes(historico, indice_premio):
@@ -529,7 +612,7 @@ else:
             
             # ABA 1: MATRIX (Igual ao Centurion)
             with aba_dez:
-                lista_matrix, conf_total, info_filtros = gerar_estrategia_matrix_50(historico, 0) # Indice 0 = 1º Premio
+                lista_matrix, conf_total, info_filtros = gerar_estrategia_matrix_50(historico, 0)
                 stats_loss, stats_win, sinal_diamante = calcular_metricas_matrix_detalhado(historico, 0)
                 
                 if HAS_AI:
