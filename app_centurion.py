@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V27.1 Corrected", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.2 Corrected", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -233,7 +233,7 @@ def gerar_estrategia_matrix_50(historico):
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
     
-    # --- CORREÇÃO: Soma das probabilidades para refletir a força do grupo ---
+    # --- CORREÇÃO DA MÉTRICA: SOMA DAS PROBABILIDADES ---
     prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media > 99.9: conf_media = 99.9
