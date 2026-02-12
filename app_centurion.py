@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V25.2 True Dynamic", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V26.0 Matrix", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -28,6 +28,17 @@ CONFIG_TRADICIONAL = {
     "slug": "loteria-tradicional", 
     "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
 }
+
+# MAPEAMENTO DE GRUPOS (Para a estratégia Matrix)
+GRUPO_TO_DEZENAS = {}
+for g in range(1, 26):
+    fim = g * 4
+    inicio = fim - 3
+    dezenas_do_grupo = []
+    for n in range(inicio, fim + 1):
+        d_str = "00" if n == 100 else f"{n:02}"
+        dezenas_do_grupo.append(d_str)
+    GRUPO_TO_DEZENAS[g] = dezenas_do_grupo
 
 st.markdown("""
 <style>
@@ -119,39 +130,126 @@ def raspar_site(data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE ---
+# --- 3. CÉREBRO: IA MATRIX (NOVA LÓGICA) ---
 # =============================================================================
 
-def treinar_oraculo_dezenas(historico):
-    if not HAS_AI or len(historico) < 30: return [], 0
+def get_unidades_improvaveis(historico):
+    """
+    Detecta a 'Trinca Proibida' sugerida pelo usuário.
+    Ex: Se veio final 6, depois final 7 -> O final 8 é improvável (sequência crescente).
+    Ex: Se veio final 8, depois final 7 -> O final 6 é improvável (sequência decrescente).
+    """
+    if len(historico) < 2: return []
+    
+    try:
+        # Pega as duas últimas dezenas REAIS
+        u_atual = int(historico[-1]['dezenas'][0][-1]) # Penúltimo (referência atual)
+        u_anterior = int(historico[-2]['dezenas'][0][-1]) # Antepenúltimo
+        
+        proibidas = []
+        
+        # Sequência Crescente (ex: 6 -> 7 -> [8 proibido])
+        if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
+            prox = (u_atual + 1) % 10
+            proibidas.append(prox)
+            
+        # Sequência Decrescente (ex: 8 -> 7 -> [6 proibido])
+        if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
+            prox = (u_atual - 1)
+            if prox < 0: prox = 9
+            proibidas.append(prox)
+            
+        return list(set(proibidas))
+    except:
+        return []
+
+def treinar_probabilidade_global(historico):
+    """Retorna um dicionário {dezena: probabilidade} para TODAS as 100 dezenas."""
+    if not HAS_AI or len(historico) < 30: 
+        # Fallback sem IA: Retorna probabilidade igual para todas ou baseada em frequência
+        return {f"{i:02}": 0.5 for i in range(100)} # Simplificado
+
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
     df = df.dropna(subset=['data_dt'])
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
     le_hora = LabelEncoder()
     df['hora_code'] = le_hora.fit_transform(df['hora'])
+    
     try:
         dezenas_alvo = [j['dezenas'][0] for j in historico if 'data_dt' in df.columns]
-    except: return [], 0
+    except: return {}
+    
     df = df.iloc[:len(dezenas_alvo)]
     df['target'] = dezenas_alvo
     df['target_futuro'] = df['target'].shift(-1)
+    
     df_treino = df.dropna().tail(150)
-    if len(df_treino) < 20: return [], 0
+    
+    if len(df_treino) < 20: return {}
+    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+    
+    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
+    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
+    
+    # Probabilidades para todas as classes conhecidas
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    ranking = []
+    
+    mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        ranking.append((classes[i], prob))
-    ranking.sort(key=lambda x: x[1], reverse=True)
-    return ranking, (ranking[0][1] * 100)
+        mapa_probs[classes[i]] = prob
+        
+    return mapa_probs
 
+def gerar_estrategia_matrix_50(historico):
+    """
+    Gera 50 dezenas cobrindo TODOS os 25 grupos (2 dezenas por grupo).
+    Usa IA + Filtro de Unidade Proibida para escolher as 2 melhores.
+    """
+    if not historico: return [], 0
+    
+    # 1. Pega probabilidades da IA para tudo
+    mapa_ia = treinar_probabilidade_global(historico)
+    if not mapa_ia: return [], 0
+    
+    # 2. Detecta unidades "proibidas" pela lógica de sequência
+    unidades_ruins = get_unidades_improvaveis(historico)
+    
+    palpite_matrix = []
+    
+    # 3. Itera sobre cada grupo (1 a 25)
+    for g in range(1, 26):
+        dezenas_candidatas = GRUPO_TO_DEZENAS[g] # As 4 dezenas do grupo
+        
+        # Rankeia as 4 dezenas do grupo
+        ranking_grupo = []
+        for d in dezenas_candidatas:
+            score = mapa_ia.get(d, 0.0)
+            
+            # APLICA O FILTRO DO USUÁRIO
+            uni_d = int(d[-1])
+            if uni_d in unidades_ruins:
+                score -= 0.5 # Penalidade pesada para evitar essa dezena
+            
+            ranking_grupo.append((d, score))
+        
+        # Pega as 2 melhores deste grupo
+        ranking_grupo.sort(key=lambda x: x[1], reverse=True)
+        top_2 = [x[0] for x in ranking_grupo[:2]]
+        palpite_matrix.extend(top_2)
+        
+    # Confiança média das escolhidas
+    conf_media = sum([mapa_ia.get(d, 0) for d in palpite_matrix]) / len(palpite_matrix) * 100 if palpite_matrix else 0
+    
+    return sorted(palpite_matrix), conf_media
+
+# --- IA UNIDADES (Mantida a lógica V25.2 para esta aba) ---
 def treinar_oraculo_unidades(historico):
     if not HAS_AI or len(historico) < 30: return [], 0
     df = pd.DataFrame(historico)
@@ -182,99 +280,24 @@ def treinar_oraculo_unidades(historico):
     ranking.sort(key=lambda x: x[1], reverse=True)
     return ranking, (ranking[0][1] * 100)
 
-def identificar_saturadas(historico):
-    if len(historico) < 40: return []
-    recorte = historico[-40:]
-    dezenas = [j['dezenas'][0] for j in recorte]
-    contagem = Counter(dezenas)
-    return [d for d, qtd in contagem.items() if qtd >= 4]
-
-def gerar_estrategia_dezenas(historico):
-    if not historico: return [], [], 0
-    ranking, conf = treinar_oraculo_dezenas(historico)
-    if not ranking: return [], [], 0
-    saturadas = identificar_saturadas(historico)
-    final = []; cortadas = []
-    for dezena, prob in ranking:
-        if len(final) >= 46: break
-        if dezena in saturadas:
-            cortadas.append(dezena)
-            continue
-        final.append(dezena)
-    if len(final) < 46:
-        for dezena, prob in ranking:
-            if len(final) >= 46: break
-            if dezena not in final: final.append(dezena)
-    return sorted(final), cortadas, conf
-
 # =============================================================================
-# --- 4. BACKTESTS REALMENTE DINÂMICOS ---
+# --- 4. BACKTESTS (ADAPTADO PARA MATRIX 50) ---
 # =============================================================================
 
-def calcular_metricas_unidades_dinamicas_reais(historico):
-    """
-    Simula o jogo DIA A DIA.
-    Se a derrota acumulada no dia anterior era >= 2, o backtest joga com 7 números.
-    Se era < 2, joga com 5 números.
-    Isso mostra a eficiência REAL da estratégia de defesa.
-    """
-    if len(historico) < 30: return 0, 0, 0, 0
-    
-    total = len(historico)
-    # Analisa últimos 50 jogos para não ficar lento (simulação passo a passo é pesada)
-    inicio = max(30, total - 50)
-    
-    max_loss = 0
-    max_win = 0
-    
-    current_loss_streak = 0
-    current_win_streak = 0
-    
-    # Simulação cronológica
-    for i in range(inicio, total):
-        # 1. Define o alvo real deste dia
-        target = int(historico[i]['dezenas'][0][-1])
-        
-        # 2. Pega o histórico ATÉ o momento anterior para treinar a IA (sem ver o futuro)
-        hist_parcial = historico[:i]
-        
-        # 3. Treina a IA com o passado
-        rank, _ = treinar_oraculo_unidades(hist_parcial)
-        
-        # 4. DECISÃO DINÂMICA (A MÁGICA ACONTECE AQUI)
-        # Se eu vinha de 2 ou mais derrotas, eu jogo com 7 números (Defesa)
-        # Se não, jogo com 5 números (Ataque)
-        if current_loss_streak >= 2:
-            palpite = [u for u, p in rank[:7]] # Top 7
-        else:
-            palpite = [u for u, p in rank[:5]] # Top 5
-            
-        # 5. Verifica Vitória ou Derrota
-        if target in palpite:
-            # VITÓRIA!
-            current_loss_streak = 0 # Zera o contador de derrota (Defesa funcionou!)
-            current_win_streak += 1
-            if current_win_streak > max_win: max_win = current_win_streak
-        else:
-            # DERROTA
-            current_win_streak = 0
-            current_loss_streak += 1
-            if current_loss_streak > max_loss: max_loss = current_loss_streak
-            
-    # O valor final de 'current_loss_streak' é a sequência ATUAL de derrotas usando a defesa.
-    # O valor 'max_loss' é o pior cenário que aconteceu usando a defesa.
-    
-    return current_loss_streak, max_loss, current_win_streak, max_win
-
-def calcular_metricas_dezenas(historico):
+def calcular_metricas_matrix(historico):
+    """Backtest da estratégia Matrix (2 dezenas por grupo)."""
     if len(historico) < 20: return 0, 0, 0, 0
     total = len(historico)
     inicio = max(20, total - 50)
     max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
+    
     for i in range(inicio, total):
         target = historico[i]['dezenas'][0]
         hist_p = historico[:i]
-        palpite, _, _ = gerar_estrategia_dezenas(hist_p)
+        
+        # Gera a lista de 50 dezenas usando a lógica Matrix
+        palpite, _ = gerar_estrategia_matrix_50(hist_p)
+        
         win = target in palpite
         if win:
             seq_loss = 0; seq_win += 1
@@ -282,49 +305,75 @@ def calcular_metricas_dezenas(historico):
         else:
             seq_win = 0; seq_loss += 1
             if seq_loss > max_loss: max_loss = seq_loss
+            
+    # Atual (Próximo jogo não sorteado ou último sorteado se for apenas checagem)
+    # Como não temos o futuro, vamos ver o estado atual baseado no ultimo jogo conhecido
+    # Se o ultimo jogo (idx=-1) foi win, estamos em win streak.
+    
+    # Recalcula apenas os streaks atuais
     idx = -1; atual_loss = 0; atual_win = 0
     target = historico[idx]['dezenas'][0]
-    palpite, _, _ = gerar_estrategia_dezenas(historico[:idx])
+    palpite, _ = gerar_estrategia_matrix_50(historico[:idx])
+    
     if target in palpite:
         atual_win = 1
         for k in range(2, 10):
             t = historico[-k]['dezenas'][0]
-            p, _, _ = gerar_estrategia_dezenas(historico[:-k])
+            p, _ = gerar_estrategia_matrix_50(historico[:-k])
             if t in p: atual_win += 1
             else: break
     else:
         atual_loss = 1
         for k in range(2, 10):
             t = historico[-k]['dezenas'][0]
-            p, _, _ = gerar_estrategia_dezenas(historico[:-k])
+            p, _ = gerar_estrategia_matrix_50(historico[:-k])
             if t not in p: atual_loss += 1
             else: break
+            
     return atual_loss, max_loss, atual_win, max_win
 
-def executar_backtest_recente(historico, tipo="DEZENA"):
-    results = []
-    # Simula os últimos 5 jogos
-    # Precisamos saber o streak de CADA jogo passado para saber se jogou com 5 ou 7
-    # Isso é complexo para exibir em 1 linha, então aqui mostraremos
-    # se o número estava no Top 7 (visão otimista) ou Top 5 dependendo da IA
+def calcular_metricas_unidades_dinamicas_reais(historico):
+    if len(historico) < 30: return 0, 0, 0, 0
+    total = len(historico)
+    inicio = max(30, total - 50)
+    max_loss = 0; max_win = 0; current_loss_streak = 0; current_win_streak = 0
     
-    for i in range(1, 6): # Últimos 5
-        idx = -i
-        hist_treino = historico[:idx]
+    for i in range(inicio, total):
+        target = int(historico[i]['dezenas'][0][-1])
+        hist_parcial = historico[:i]
+        rank, _ = treinar_oraculo_unidades(hist_parcial)
         
-        if tipo == "DEZENA":
-            target = historico[idx]['dezenas'][0]
-            palp, _, _ = gerar_estrategia_dezenas(hist_treino)
-            win = target in palp
-            results.append({"val": target, "win": win})
+        if current_loss_streak >= 2: palpite = [u for u, p in rank[:7]]
+        else: palpite = [u for u, p in rank[:5]]
+            
+        if target in palpite:
+            current_loss_streak = 0; current_win_streak += 1
+            if current_win_streak > max_win: max_win = current_win_streak
         else:
-            target = int(historico[idx]['dezenas'][0][-1])
-            rank, _ = treinar_oraculo_unidades(hist_treino)
-            # Para o backtest visual rápido, vamos considerar o Top 7 como "Win de Defesa"
-            # e Top 5 como "Win Limpo".
-            top7 = [u for u, p in rank[:7]]
-            win = target in top7
-            results.append({"val": f"Final {target}", "win": win})
+            current_win_streak = 0; current_loss_streak += 1
+            if current_loss_streak > max_loss: max_loss = current_loss_streak
+            
+    return current_loss_streak, max_loss, current_win_streak, max_win
+
+def executar_backtest_recente_matrix(historico):
+    results = []
+    for i in range(1, 6):
+        idx = -i
+        target = historico[idx]['dezenas'][0]
+        palp, _ = gerar_estrategia_matrix_50(historico[:idx])
+        win = target in palp
+        results.append({"val": target, "win": win})
+    return results
+
+def executar_backtest_recente_uni(historico):
+    results = []
+    for i in range(1, 6):
+        idx = -i
+        target = int(historico[idx]['dezenas'][0][-1])
+        rank, _ = treinar_oraculo_unidades(historico[:idx])
+        top7 = [u for u, p in rank[:7]]
+        win = target in top7
+        results.append({"val": f"Final {target}", "win": win})
     return results
 
 def rastreador_padroes(historico, tipo="DEZENA"):
@@ -419,30 +468,39 @@ if len(historico) > 0:
     ult = historico[-1]
     st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['hora']} | **Resultado:** {ult['dezenas'][0]}")
     
-    aba_dez, aba_uni = st.tabs(["🎲 IA Dezenas (Legião 46)", "🎯 IA Unidades (Dinâmico)"])
+    aba_dez, aba_uni = st.tabs(["🎲 Matrix 50 (2/Grupo)", "🎯 IA Unidades (Dinâmico)"])
     
-    # --- ABA DEZENAS ---
+    # --- ABA MATRIX 50 (NOVA ESTRATÉGIA) ---
     with aba_dez:
-        st.subheader("Análise: Legião 46 (00-99)")
-        lista_46, cortadas, conf_dez = gerar_estrategia_dezenas(historico)
-        loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_dezenas(historico)
+        st.subheader("Análise: Matrix 50 (Cobertura Total 2x25)")
+        
+        # Gera lista com a nova lógica
+        lista_matrix, conf_dez = gerar_estrategia_matrix_50(historico)
+        loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico)
+        
+        # Verifica se há unidade proibida ativa
+        unidades_proibidas = get_unidades_improvaveis(historico)
         
         if HAS_AI:
-            st.info(f"🧠 Confiança do Modelo: {conf_dez:.1f}%")
+            st.info(f"🧠 Confiança Média IA: {conf_dez:.1f}%")
+            if unidades_proibidas:
+                st.warning(f"🚫 **Filtro de Sequência Ativo:** Dezenas com final **{unidades_proibidas}** foram penalizadas (Padrão 3-step).")
+            else:
+                st.success("✅ Nenhuma sequência de bloqueio detectada. IA pura.")
         
         if loss_d >= max_loss_d and max_loss_d > 0:
             st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
         
         with st.container(border=True):
-            if cortadas: st.warning(f"🚫 {len(cortadas)} Saturadas Cortadas")
-            st.code(", ".join(lista_46), language="text")
+            st.markdown("### 50 Dezenas Selecionadas (2 Melhores de cada Grupo)")
+            st.code(", ".join(lista_matrix), language="text")
             
         c1, c2 = st.columns(2)
         c1.metric("Derrotas", f"{loss_d}", f"Max: {max_loss_d}", delta_color="inverse")
         c2.metric("Vitórias", f"{win_d}", f"Max: {max_win_d}")
         
-        st.markdown("**Histórico Recente:**")
-        bt_dez = executar_backtest_recente(historico, "DEZENA")
+        st.markdown("**Histórico Recente (Matrix):**")
+        bt_dez = executar_backtest_recente_matrix(historico)
         cols_bt = st.columns(5)
         for i, res in enumerate(reversed(bt_dez)):
             with cols_bt[i]:
@@ -454,29 +512,21 @@ if len(historico) > 0:
             st.caption(f"Padrões após a dezena **{lbl_d}**:")
             st.table(pd.DataFrame(padroes_d))
 
-    # --- ABA UNIDADES (COM LÓGICA DINÂMICA REAL) ---
+    # --- ABA UNIDADES (Dinâmica) ---
     with aba_uni:
         st.subheader("Análise: Unidades Finais (0-9)")
-        
-        # 1. Treinamento Base
         rank_uni, conf_uni = treinar_oraculo_unidades(historico)
-        
-        # 2. CÁLCULO REAL DA PERFORMANCE DINÂMICA (Backtest inteligente)
-        # O sistema agora simula se a defesa funcionou no passado
         u_loss_real, u_max_loss_real, u_win_real, u_max_win_real = calcular_metricas_unidades_dinamicas_reais(historico)
         
-        # 3. Decide Estratégia ATUAL baseada na DERROTA REAL
         top_base = [str(u) for u, p in rank_uni[:5]]
         
         if u_loss_real >= 2:
-            # --- MODO DEFESA ---
             modo = "DEFESA"
             extras = [str(u) for u, p in rank_uni[5:7]]
             lista_final_uni = top_base + extras
             msg_status = f"🛡️ MODO CORREÇÃO ATIVO! (Sequência: {u_loss_real} Losses)"
             cor_alerta = "error"
         else:
-            # --- MODO ATAQUE ---
             modo = "ATAQUE"
             lista_final_uni = top_base
             msg_status = "⚔️ MODO ATAQUE (Top 5)"
@@ -485,10 +535,9 @@ if len(historico) > 0:
         if HAS_AI:
             with st.container(border=True):
                 st.markdown(f"### 🧠 Confiança IA: {conf_uni:.1f}%")
-                
                 if modo == "DEFESA":
                     st.error(msg_status)
-                    st.markdown("**Estratégia:** Expandimos para **Top 7**. O Backtest confirma que isso quebra sequências longas.")
+                    st.markdown("**Estratégia:** Expandimos para **Top 7**.")
                 else:
                     st.success(msg_status)
                     st.markdown("**Estratégia:** Mantemos **Top 5**.")
@@ -496,13 +545,12 @@ if len(historico) > 0:
         with st.container(border=True):
             st.markdown(f"### Finais Sugeridos: {', '.join(lista_final_uni)}")
             
-        # Métricas Dinâmicas (Corrigidas)
         c3, c4 = st.columns(2)
         c3.metric("Derrotas (Dinâmicas)", f"{u_loss_real}", f"Max: {u_max_loss_real}", delta_color="inverse")
         c4.metric("Vitórias", f"{u_win_real}", f"Max: {u_max_win_real}")
         
-        st.markdown("**Histórico Recente (Visão Geral):**")
-        bt_uni = executar_backtest_recente(historico, "UNIDADE")
+        st.markdown("**Histórico Recente:**")
+        bt_uni = executar_backtest_recente_uni(historico)
         cols_bt_u = st.columns(5)
         for i, res in enumerate(reversed(bt_uni)):
             with cols_bt_u[i]:
