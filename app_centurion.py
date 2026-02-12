@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V27.5 Final", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.6 Translator", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -179,8 +179,6 @@ def treinar_probabilidade_global(historico):
     df['hora_code'] = le_hora.fit_transform(df['hora'])
     
     try:
-        # AQUI ESTAVA O ERRO: Forçamos que o alvo seja STRING ("05") e não INT (5)
-        # Isso garante que a IA treine com classes iguais às do dicionário GRUPO_TO_DEZENAS
         dezenas_alvo = [str(j['dezenas'][0]).zfill(2) for j in historico if 'data_dt' in df.columns]
     except: return {}
     
@@ -192,7 +190,7 @@ def treinar_probabilidade_global(historico):
     if len(df_treino) < 20: return {}
     
     X = df_treino[['dia_semana', 'hora_code', 'target']]
-    y = df_treino['target_futuro'].astype(str) # Força string no treinamento
+    y = df_treino['target_futuro'].astype(str)
     
     modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
@@ -204,7 +202,6 @@ def treinar_probabilidade_global(historico):
     
     mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        # Garante que a chave seja string formatada
         chave = str(classes[i]).zfill(2)
         mapa_probs[chave] = prob
         
@@ -224,9 +221,7 @@ def gerar_estrategia_matrix_50(historico):
         dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
         for d in dezenas_candidatas:
-            # Aqui 'd' é string "01", "02". Agora mapa_ia também tem chaves string.
-            score = mapa_ia.get(d, 0.0) 
-            
+            score = mapa_ia.get(d, 0.0)
             if int(d[-1]) in unis_proibidas: score -= 0.5
             if block_gemeas and d in GEMEAS: score -= 0.8
             if block_linha and d.startswith(block_linha): score -= 0.6
@@ -236,16 +231,9 @@ def gerar_estrategia_matrix_50(historico):
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
     
-    # SOMA ACUMULADA (CORRIGIDA)
+    # SOMA ACUMULADA (Raw Sum)
     prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
-    
-    # Se a soma ainda der algo estranho (menor que 30%), é erro de dados, então mostramos base estatística
-    if prob_total < 0.3:
-        conf_media = 50.0 + (prob_total * 100) # Fallback suave
-    else:
-        conf_media = prob_total * 100 
-        
-    if conf_media > 99.9: conf_media = 99.9
+    conf_raw = prob_total * 100 
     
     info_filtros = {
         "uni": unis_proibidas,
@@ -253,7 +241,7 @@ def gerar_estrategia_matrix_50(historico):
         "linha": block_linha
     }
     
-    return sorted(palpite_matrix), conf_media, info_filtros
+    return sorted(palpite_matrix), conf_raw, info_filtros
 
 # --- IA UNIDADES ---
 def treinar_oraculo_unidades(historico):
@@ -465,12 +453,21 @@ if len(historico) > 0:
     with aba_dez:
         st.subheader("Análise: Matrix 50 (Cobertura Total 2x25)")
         
-        lista_matrix, conf_dez, info_filtros = gerar_estrategia_matrix_50(historico)
+        lista_matrix, conf_raw, info_filtros = gerar_estrategia_matrix_50(historico)
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico)
         
         if HAS_AI:
-            # DISPLAY AGORA MOSTRA POTÊNCIA (SOMA)
-            st.info(f"🔥 Potência da Matrix (Acumulada): {conf_dez:.1f}%")
+            # --- CÁLCULO DA TRADUÇÃO REAL BASEADO NA SUA REGRA DE TRÊS ---
+            # Se 2.0 = 90%, então fator é 45.
+            # Se 2.1 = 94.5%, fator é 45.
+            fator_conversao = 45.0
+            chance_real = conf_raw * fator_conversao
+            if chance_real > 99.9: chance_real = 99.9
+            
+            st.info(f"🧠 Índice Técnico IA: {conf_raw:.1f}%")
+            
+            # MENSAGEM DE TRADUÇÃO ADICIONADA ABAIXO
+            st.caption(f"🎯 **Tradução:** Esse índice indica **{chance_real:.1f}%** de chance real de prêmio.")
             
             filtros_ativos = []
             if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
