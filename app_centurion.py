@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V27.0 Filters", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.1 Corrected", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -136,24 +136,20 @@ def raspar_site(data_alvo, horario_alvo):
 # =============================================================================
 
 def analisar_filtros_avancados(historico):
-    """
-    Retorna listas de bloqueio baseadas em padrões recentes.
-    """
     if len(historico) < 2: return [], [], []
     
     bloqueio_unidade = []
     bloqueio_gemeas = False
-    bloqueio_linha = None # Ex: '4' para bloquear 40-49
+    bloqueio_linha = None 
     
     try:
-        # Últimos resultados
         d_atual = historico[-1]['dezenas'][0]
         d_anterior = historico[-2]['dezenas'][0]
         
         u_atual = int(d_atual[-1])
         u_anterior = int(d_anterior[-1])
         
-        # 1. Filtro Sequência Unidade (6->7->Block 8)
+        # 1. Filtro Sequência Unidade
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
             prox = (u_atual + 1) % 10
             bloqueio_unidade.append(prox)
@@ -162,11 +158,11 @@ def analisar_filtros_avancados(historico):
             if prox < 0: prox = 9
             bloqueio_unidade.append(prox)
             
-        # 2. Filtro Anti-Trinca Gêmea (Se 33 e 55, proibir gêmeas)
+        # 2. Filtro Gêmeas
         if d_atual in GEMEAS and d_anterior in GEMEAS:
             bloqueio_gemeas = True
             
-        # 3. Filtro Fadiga de Linha (Se 41 e 48, proibir 40-49)
+        # 3. Filtro Linha
         if d_atual[0] == d_anterior[0]:
             bloqueio_linha = d_atual[0]
             
@@ -216,11 +212,9 @@ def treinar_probabilidade_global(historico):
 def gerar_estrategia_matrix_50(historico):
     if not historico: return [], 0, {}
     
-    # 1. IA Score
     mapa_ia = treinar_probabilidade_global(historico)
     if not mapa_ia: return [], 0, {}
     
-    # 2. Filtros
     unis_proibidas, block_gemeas, block_linha = analisar_filtros_avancados(historico)
     
     palpite_matrix = []
@@ -228,27 +222,21 @@ def gerar_estrategia_matrix_50(historico):
     for g in range(1, 26):
         dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
-        
         for d in dezenas_candidatas:
             score = mapa_ia.get(d, 0.0)
-            
-            # Penalidades
-            # A. Unidade proibida
             if int(d[-1]) in unis_proibidas: score -= 0.5
-            
-            # B. Gêmeas (se ativado)
             if block_gemeas and d in GEMEAS: score -= 0.8
-            
-            # C. Linha (se ativado)
             if block_linha and d.startswith(block_linha): score -= 0.6
-            
             ranking_grupo.append((d, score))
         
         ranking_grupo.sort(key=lambda x: x[1], reverse=True)
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
-        
-    conf_media = sum([mapa_ia.get(d, 0) for d in palpite_matrix]) / len(palpite_matrix) * 100 if palpite_matrix else 0
+    
+    # --- CORREÇÃO: Soma das probabilidades para refletir a força do grupo ---
+    prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
+    conf_media = prob_total * 100 
+    if conf_media > 99.9: conf_media = 99.9
     
     info_filtros = {
         "uni": unis_proibidas,
@@ -472,16 +460,15 @@ if len(historico) > 0:
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico)
         
         if HAS_AI:
-            st.info(f"🧠 Confiança Média IA: {conf_dez:.1f}%")
+            st.info(f"🧠 Força da Cobertura (IA): {conf_dez:.1f}%")
             
-            # Display dos filtros ativos
             filtros_ativos = []
             if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
-            if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea ATIVO")
-            if info_filtros['linha']: filtros_ativos.append(f"Anti-Fadiga de Linha ({info_filtros['linha']}X) ATIVO")
+            if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea")
+            if info_filtros['linha']: filtros_ativos.append(f"Anti-Fadiga Linha ({info_filtros['linha']}X)")
             
             if filtros_ativos:
-                st.warning(f"🚫 **Filtros de Bloqueio:** {', '.join(filtros_ativos)}")
+                st.warning(f"🚫 **Filtros Ativos:** {', '.join(filtros_ativos)}")
             else:
                 st.success("✅ Nenhum filtro de bloqueio acionado. IA Pura.")
         
