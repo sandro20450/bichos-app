@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V50.0 Deep Stats", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V51.0 Sniper Elite", page_icon="💎", layout="wide")
 
 CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
@@ -48,8 +48,9 @@ st.markdown("""
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #00ff00 !important; }
-    div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; }
+    div[data-testid="stMetricValue"] { font-size: 22px; font-weight: bold; }
     .css-1wivap2 { font-size: 14px !important; }
+    .stAlert { font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,16 +75,14 @@ def carregar_dados_dezenas_top5(nome_aba):
             if len(raw) < 2: return []
             dados = []
             for row in raw[1:]:
-                # Espera formato: DATA | HORA | P1 | P2 | P3 | P4 | P5
                 if len(row) >= 7:
                     dezenas = []
                     for p in row[2:7]:
                         p_str = str(p).strip()
                         if p_str.isdigit():
-                            dezenas.append(p_str.zfill(2)[-2:]) # Garante 2 dígitos
+                            dezenas.append(p_str.zfill(2)[-2:]) 
                         else:
                             dezenas.append("00")
-                    
                     if len(dezenas) == 5:
                         dados.append({"data": row[0], "horario": row[1], "premios": dezenas})
             return dados
@@ -113,21 +112,17 @@ def montar_url_correta(slug, data_alvo):
 def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
     url = montar_url_correta(config['slug'], data_alvo)
-    
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200: return None, "Erro Site"
         soup = BeautifulSoup(r.text, 'html.parser')
-        
         tabelas = soup.find_all('table')
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-        
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
-                
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -136,7 +131,6 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
-                        
                         if h_detect == horario_alvo:
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
@@ -145,7 +139,6 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
                                 if len(cols) >= 2:
                                     premio_txt = cols[0].get_text().strip()
                                     numero_txt = cols[1].get_text().strip()
-                                    
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio:
                                         p_idx = int(nums_premio[0])
@@ -153,11 +146,8 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
                                             clean_num = re.sub(r'\D', '', numero_txt)
                                             if len(clean_num) >= 2:
                                                 dezenas_encontradas.append(clean_num[-2:])
-                                                
-                            if len(dezenas_encontradas) >= 5: 
-                                return dezenas_encontradas[:5], "Sucesso"
-                            else: 
-                                return None, "Incompleto"
+                            if len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
+                            else: return None, "Incompleto"
         return None, "Horário não encontrado"
     except Exception as e: return None, f"Erro: {e}"
 
@@ -166,13 +156,11 @@ def raspar_dezenas_top5(banca_key, data_alvo, horario_alvo):
 # =============================================================================
 
 def analisar_sequencias_profundas(lista_wins):
-    """Analisa histórico de vitórias/derrotas para extrair stats profundos."""
     if not lista_wins: return 0, 0, 0
     sequencias = []
     atual = 0
     for w in lista_wins:
-        if w: # Se é o evento que estamos contando
-            atual += 1
+        if w: atual += 1
         else:
             if atual > 0: sequencias.append(atual)
             atual = 0
@@ -186,19 +174,14 @@ def analisar_sequencias_profundas(lista_wins):
 
 def analisar_filtros_avancados(historico, indice_premio):
     if len(historico) < 2: return [], [], []
-    
     bloqueio_unidade = []
     bloqueio_gemeas = False
     bloqueio_linha = None 
-    
     try:
         d_atual = historico[-1]['premios'][indice_premio]
         d_anterior = historico[-2]['premios'][indice_premio]
-        
         u_atual = int(d_atual[-1])
         u_anterior = int(d_anterior[-1])
-        
-        # 1. Filtro Sequência Unidade
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
             prox = (u_atual + 1) % 10
             bloqueio_unidade.append(prox)
@@ -206,17 +189,11 @@ def analisar_filtros_avancados(historico, indice_premio):
             prox = (u_atual - 1)
             if prox < 0: prox = 9
             bloqueio_unidade.append(prox)
-            
-        # 2. Filtro Gêmeas
         if d_atual in GEMEAS and d_anterior in GEMEAS:
             bloqueio_gemeas = True
-            
-        # 3. Filtro Linha
         if d_atual[0] == d_anterior[0]:
             bloqueio_linha = d_atual[0]
-            
     except: pass
-    
     return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico, indice_premio):
@@ -261,7 +238,6 @@ def treinar_probabilidade_global(historico, indice_premio):
 
 def gerar_estrategia_matrix_50(historico, indice_premio):
     if not historico: return [], 0, {}
-    
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     if not mapa_ia: return [], 0, {}
     
@@ -274,39 +250,31 @@ def gerar_estrategia_matrix_50(historico, indice_premio):
         ranking_grupo = []
         for d in dezenas_candidatas:
             score = mapa_ia.get(d, 0.01)
-            
             score_ajustado = score
             if int(d[-1]) in unis_proibidas: score_ajustado -= 0.5
             if block_gemeas and d in GEMEAS: score_ajustado -= 0.8
             if block_linha and d.startswith(block_linha): score_ajustado -= 0.6
-            
             ranking_grupo.append((d, score_ajustado, score))
         
         ranking_grupo.sort(key=lambda x: x[1], reverse=True)
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
         
-    # Soma Acumulada (Correção V50)
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
     
-    info_filtros = {
-        "uni": unis_proibidas,
-        "gemeas": block_gemeas,
-        "linha": block_linha
-    }
-    
+    info_filtros = { "uni": unis_proibidas, "gemeas": block_gemeas, "linha": block_linha }
     return sorted(palpite_matrix), conf_media, info_filtros
 
 # =============================================================================
-# --- 4. BACKTESTS COM DEEP STATS ---
+# --- 4. BACKTESTS & ANÁLISE SNIPER (COMBINAÇÃO DE FATORES) ---
 # =============================================================================
 
 def calcular_metricas_matrix_detalhado(historico, indice_premio):
-    if len(historico) < 20: return {}, {}
+    if len(historico) < 20: return {}, {}, False
     total = len(historico)
     inicio = max(20, total - 50)
     
@@ -336,7 +304,17 @@ def calcular_metricas_matrix_detalhado(historico, indice_premio):
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
     
-    return stats_loss, stats_win
+    # --- LÓGICA SNIPER (Gatilho de Diamante) ---
+    # 1. Vem de derrota? (Idealmente >= 2 derrotas)
+    gatilho_sequencia = seq_atual_loss >= 2
+    
+    # 2. Está dentro de um padrão seguro? (Não estourou o recorde ainda)
+    gatilho_seguranca = seq_atual_loss < max_l
+    
+    # 3. Combinação
+    sinal_diamante = gatilho_sequencia and gatilho_seguranca
+    
+    return stats_loss, stats_win, sinal_diamante
 
 def executar_backtest_recente_matrix(historico, indice_premio):
     results = []
@@ -360,7 +338,7 @@ def rastreador_padroes(historico, indice_premio):
     return label, encontrados
 
 # =============================================================================
-# --- 5. INTERFACE (MATRIX MULTI-BANCA) ---
+# --- 5. INTERFACE (SNIPER) ---
 # =============================================================================
 
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
@@ -371,11 +349,11 @@ st.sidebar.link_button("🛡️ Ir para App CENTURION", "https://seu-app-centuri
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - MATRIX COMMAND")
+    st.title("🛡️ PENTÁGONO - SNIPER COMMAND")
+    st.info("O sistema agora busca a CONFLUÊNCIA de fatores para gerar o sinal 'Diamante'.")
     col1, col2 = st.columns(2)
-    col1.metric("Estratégia", "Matrix 50 (Dezenas)")
-    col2.metric("Status", "Online")
-    st.info("Selecione uma banca no menu lateral para iniciar a análise Matrix.")
+    col1.metric("Estratégia", "Matrix 50 + Deep Stats")
+    col2.metric("Modo", "Sniper Elite")
 
 else:
     banca_selecionada = escolha_menu
@@ -386,7 +364,7 @@ else:
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
     st.sidebar.markdown("---")
     
-    # --- MODO EXTRAÇÃO (DEZENAS) ---
+    # --- MODO EXTRAÇÃO ---
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
     if modo_extracao == "🎯 Unitária":
@@ -395,9 +373,7 @@ else:
             if opcao_data == "Hoje": data_busca = date.today()
             elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
             else: data_busca = st.sidebar.date_input("Escolha:", date.today())
-            
             horario_busca = st.selectbox("Horário:", config_banca['horarios'])
-            
             if st.button("🚀 Baixar & Salvar"):
                 ws = conectar_planilha(config_banca['nome_aba'])
                 if ws:
@@ -407,7 +383,6 @@ else:
                             chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
                         except: chaves = []
                         chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
-                        
                         if chave_atual in chaves:
                             st.warning("Resultado já existe!")
                         else:
@@ -425,7 +400,6 @@ else:
         col1, col2 = st.sidebar.columns(2)
         with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
         with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
-        
         if st.sidebar.button("🚀 INICIAR TURBO"):
             ws = conectar_planilha(config_banca['nome_aba'])
             if ws:
@@ -435,37 +409,32 @@ else:
                     existentes = ws.get_all_values()
                     chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
                 except: chaves = []
-                
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
                 total_ops = len(lista_datas) * len(config_banca['horarios'])
                 op_atual = 0; sucessos = 0
-                
                 for dia in lista_datas:
                     for hora in config_banca['horarios']:
                         op_atual += 1
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
-                        
                         if chave_atual in chaves: continue
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
-
                         dezenas, msg = raspar_dezenas_top5(banca_selecionada, dia, hora)
                         if dezenas:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + dezenas)
                             sucessos += 1
                             chaves.append(chave_atual)
                         time.sleep(1.0)
-                
                 bar.progress(100)
                 status.success(f"🏁 Concluído! {sucessos} novos sorteios.")
                 time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
-    st.header(f"🔭 {config_banca['display_name']} - Matrix 50")
+    st.header(f"🔭 {config_banca['display_name']} - Matrix Sniper")
     
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_dezenas_top5(config_banca['nome_aba'])
@@ -479,36 +448,45 @@ else:
         
         for idx_aba, aba in enumerate(abas):
             with aba:
-                # --- ANÁLISE MATRIX (POR PRÊMIO) ---
-                lista_matrix, conf_dez, info_filtros = gerar_estrategia_matrix_50(historico, idx_aba)
-                stats_loss, stats_win = calcular_metricas_matrix_detalhado(historico, idx_aba)
+                # --- ANÁLISE COMPLETA ---
+                lista_matrix, conf_total, info_filtros = gerar_estrategia_matrix_50(historico, idx_aba)
+                stats_loss, stats_win, sinal_diamante = calcular_metricas_matrix_detalhado(historico, idx_aba)
                 
+                # --- SINALIZADOR DE ELITE (DIAMANTE) ---
                 if HAS_AI:
-                    st.info(f"🛡️ Força da Cobertura (Probabilidade Acumulada): {conf_dez:.1f}%")
-                    filtros_ativos = []
-                    if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
-                    if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea")
-                    if info_filtros['linha']: filtros_ativos.append(f"Anti-Fadiga Linha ({info_filtros['linha']}X)")
+                    st.info(f"🛡️ Força da Cobertura: {conf_total:.1f}%")
                     
-                    if filtros_ativos:
-                        st.warning(f"🚫 **Filtros Ativos:** {', '.join(filtros_ativos)}")
+                    if sinal_diamante:
+                        st.success(f"💎 **OPORTUNIDADE DIAMANTE DETECTADA!**\n\n"
+                                   f"1. Cobertura Alta ({conf_total:.1f}%)\n"
+                                   f"2. Sequência de {stats_loss['atual']} Derrotas (Correção iminente)\n"
+                                   f"3. Dentro da margem de segurança do recorde ({stats_loss['max']}).")
                     else:
-                        st.success("✅ Nenhum filtro de bloqueio acionado. IA Pura.")
-                
-                if stats_loss['atual'] >= stats_loss['max'] and stats_loss['max'] > 0:
-                    st.error(f"🚨 ALERTA: {stats_loss['atual']} Derrotas (Recorde!)")
+                        if stats_loss['atual'] < 2:
+                            st.warning("⏳ **AGUARDE:** Mercado em zona de Vitórias ou Início de ciclo. Espere acumular 2 derrotas para maior segurança.")
+                        elif stats_loss['atual'] >= stats_loss['max']:
+                            st.error("🛑 **ALERTA MÁXIMO:** Zona de Quebra de Recorde! Risco elevado.")
+                        else:
+                            st.info("🔎 Monitorando... Condições ainda não ideais para entrada Sniper.")
+
+                # Filtros Ativos
+                filtros_ativos = []
+                if info_filtros['uni']: filtros_ativos.append(f"Unidades Proibidas: {info_filtros['uni']}")
+                if info_filtros['gemeas']: filtros_ativos.append("Anti-Trinca Gêmea")
+                if info_filtros['linha']: filtros_ativos.append(f"Anti-Fadiga Linha ({info_filtros['linha']}X)")
+                if filtros_ativos and HAS_AI:
+                    st.warning(f"🚫 **Filtros Ativos:** {', '.join(filtros_ativos)}")
                 
                 with st.container(border=True):
                     st.markdown("### 50 Dezenas Selecionadas (Matrix Filter)")
                     st.code(", ".join(lista_matrix), language="text")
                     
                 c1, c2 = st.columns(2)
-                # NOVAS MÉTRICAS DETALHADAS (DEEP STATS)
                 c1.metric("Derrotas", f"{stats_loss['atual']}", 
-                          f"Recorde: {stats_loss['max']} (Ocorreu {stats_loss['freq']}x | Média: 1 a cada {stats_loss['ciclo']} jogos)", 
+                          f"Recorde: {stats_loss['max']} (Freq: {stats_loss['freq']}x | Ciclo Médio: {stats_loss['ciclo']})", 
                           delta_color="inverse")
                 c2.metric("Vitórias", f"{stats_win['atual']}", 
-                          f"Recorde: {stats_win['max']} (Ocorreu {stats_win['freq']}x | Média: 1 a cada {stats_win['ciclo']} jogos)")
+                          f"Recorde: {stats_win['max']} (Freq: {stats_win['freq']}x | Ciclo Médio: {stats_win['ciclo']})")
                 
                 st.markdown("**Histórico Recente (Matrix):**")
                 bt_dez = executar_backtest_recente_matrix(historico, idx_aba)
