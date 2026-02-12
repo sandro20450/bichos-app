@@ -20,9 +20,8 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V24.2 Calibration", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V25.0 Dynamic", page_icon="🎯", layout="wide")
 
-# Configuração Única: TRADICIONAL
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
     "aba": "BASE_TRADICIONAL_DEZ", 
@@ -30,23 +29,20 @@ CONFIG_TRADICIONAL = {
     "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] 
 }
 
-# Estilo Visual Nativo (Dark & Clean)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #00ff00 !important; }
-    .css-1aumxhk { background-color: #0e1117; }
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (LIVE - SEM CACHE) ---
+# --- 2. CONEXÃO E RASPAGEM (LIVE) ---
 # =============================================================================
 
 def conectar_planilha():
-    """Conecta ao Google Sheets (Conexão Direta/Live)."""
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
@@ -60,7 +56,6 @@ def conectar_planilha():
     return None
 
 def carregar_historico():
-    """Baixa o histórico da Tradicional em tempo real."""
     ws = conectar_planilha()
     if ws:
         try:
@@ -123,7 +118,7 @@ def raspar_site(data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro Técnico: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PURE (CORE) ---
+# --- 3. CÉREBRO: IA PURE ---
 # =============================================================================
 
 def treinar_oraculo_dezenas(historico):
@@ -212,44 +207,8 @@ def gerar_estrategia_dezenas(historico):
     return sorted(final), cortadas, conf
 
 # =============================================================================
-# --- 4. BACKTESTS E CALIBRAÇÃO (NOVIDADE) ---
+# --- 4. BACKTESTS ---
 # =============================================================================
-
-def verificar_precisao_confianca(historico, tipo="DEZENA", threshold=60.0):
-    """
-    Analisa os últimos 15 jogos.
-    Conta quantas vezes a IA teve confiança >= threshold.
-    Dessas vezes, quantas ela acertou.
-    """
-    if len(historico) < 20: return 0, 0, 0
-    
-    total_high_conf = 0
-    total_hits = 0
-    
-    # Loop curto (15 jogos) para não travar
-    for i in range(1, 16):
-        idx = -i
-        hist_treino = historico[:idx]
-        target_real = historico[idx]['dezenas'][0]
-        
-        if tipo == "DEZENA":
-            # Gera estratégia e pega confiança
-            palpite, _, conf = gerar_estrategia_dezenas(hist_treino)
-            if conf >= threshold:
-                total_high_conf += 1
-                if target_real in palpite:
-                    total_hits += 1
-        else: # UNIDADE
-            target_uni = int(target_real[-1])
-            rank, conf = treinar_oraculo_unidades(hist_treino)
-            if conf >= threshold:
-                total_high_conf += 1
-                top5 = [u for u, p in rank[:5]]
-                if target_uni in top5:
-                    total_hits += 1
-                    
-    perc_acerto = (total_hits / total_high_conf * 100) if total_high_conf > 0 else 0
-    return total_hits, total_high_conf, perc_acerto
 
 def calcular_metricas_dezenas(historico):
     if len(historico) < 20: return 0, 0, 0, 0
@@ -286,43 +245,19 @@ def calcular_metricas_dezenas(historico):
             else: break
     return atual_loss, max_loss, atual_win, max_win
 
-def calcular_metricas_unidades(historico):
-    if len(historico) < 20: return 0, 0, 0, 0
-    total = len(historico)
-    inicio = max(20, total - 50)
-    max_loss = 0; seq_loss = 0; max_win = 0; seq_win = 0
-    for i in range(inicio, total):
-        target = int(historico[i]['dezenas'][0][-1])
-        hist_p = historico[:i]
-        rank, _ = treinar_oraculo_unidades(hist_p)
+def calcular_sequencia_derrotas_atual_unidades(historico):
+    """Calcula quantas derrotas seguidas o TOP 5 teve até agora."""
+    derrotas = 0
+    for i in range(1, 15):
+        idx = -i
+        target = int(historico[idx]['dezenas'][0][-1])
+        rank, _ = treinar_oraculo_unidades(historico[:idx])
         top5 = [u for u, p in rank[:5]]
-        if target in top5:
-            seq_loss = 0; seq_win += 1
-            if seq_win > max_win: max_win = seq_win
+        if target not in top5:
+            derrotas += 1
         else:
-            seq_win = 0; seq_loss += 1
-            if seq_loss > max_loss: max_loss = seq_loss
-    idx = -1; atual_loss = 0; atual_win = 0
-    target = int(historico[idx]['dezenas'][0][-1])
-    rank, _ = treinar_oraculo_unidades(historico[:idx])
-    top5 = [u for u, p in rank[:5]]
-    if target in top5:
-        atual_win = 1
-        for k in range(2, 10):
-            t = int(historico[-k]['dezenas'][0][-1])
-            r, _ = treinar_oraculo_unidades(historico[:-k])
-            t5 = [u for u, p in r[:5]]
-            if t in t5: atual_win += 1
-            else: break
-    else:
-        atual_loss = 1
-        for k in range(2, 10):
-            t = int(historico[-k]['dezenas'][0][-1])
-            r, _ = treinar_oraculo_unidades(historico[:-k])
-            t5 = [u for u, p in r[:5]]
-            if t not in t5: atual_loss += 1
-            else: break
-    return atual_loss, max_loss, atual_win, max_win
+            break
+    return derrotas
 
 def executar_backtest_recente(historico, tipo="DEZENA"):
     results = []
@@ -433,7 +368,7 @@ if len(historico) > 0:
     ult = historico[-1]
     st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['hora']} | **Resultado:** {ult['dezenas'][0]}")
     
-    aba_dez, aba_uni = st.tabs(["🎲 IA Dezenas (Legião 46)", "🎯 IA Unidades (Top 5)"])
+    aba_dez, aba_uni = st.tabs(["🎲 IA Dezenas (Legião 46)", "🎯 IA Unidades (Dinâmico)"])
     
     # --- ABA DEZENAS ---
     with aba_dez:
@@ -442,19 +377,7 @@ if len(historico) > 0:
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_dezenas(historico)
         
         if HAS_AI:
-            with st.container(border=True):
-                st.markdown(f"### 🧠 Confiança do Modelo: {conf_dez:.1f}%")
-                
-                # VERIFICAÇÃO DE CALIBRAÇÃO (NOVIDADE)
-                if conf_dez >= 60.0:
-                    hits, total_h, perc_h = verificar_precisao_confianca(historico, "DEZENA", 60.0)
-                    if total_h > 0:
-                        msg_calib = f"Histórico dessa Confiança (>60%): Acertou {hits} de {total_h} vezes ({perc_h:.0f}%)"
-                        if perc_h >= 80: st.success(f"✅ {msg_calib} - Alta Confiabilidade")
-                        elif perc_h >= 50: st.info(f"ℹ️ {msg_calib} - Confiabilidade Moderada")
-                        else: st.warning(f"⚠️ {msg_calib} - Cuidado: Confiança costuma falhar")
-                    else:
-                        st.caption("Sem dados históricos suficientes para essa faixa de confiança.")
+            st.info(f"🧠 Confiança do Modelo: {conf_dez:.1f}%")
         
         if loss_d >= max_loss_d and max_loss_d > 0:
             st.error(f"🚨 ALERTA: {loss_d} Derrotas (Recorde!)")
@@ -480,35 +403,49 @@ if len(historico) > 0:
             st.caption(f"Padrões após a dezena **{lbl_d}**:")
             st.table(pd.DataFrame(padroes_d))
 
-    # --- ABA UNIDADES ---
+    # --- ABA UNIDADES (COM LÓGICA DINÂMICA) ---
     with aba_uni:
         st.subheader("Análise: Unidades Finais (0-9)")
-        rank_uni, conf_uni = treinar_oraculo_unidades(historico)
-        top5_uni = [str(u) for u, p in rank_uni[:5]]
-        loss_u, max_loss_u, win_u, max_win_u = calcular_metricas_unidades(historico)
         
+        # 1. Analisa Situação Atual
+        rank_uni, conf_uni = treinar_oraculo_unidades(historico)
+        sequencia_derrotas = calcular_sequencia_derrotas_atual_unidades(historico)
+        
+        # 2. Define Estratégia Baseada no Histórico
+        top_base = [str(u) for u, p in rank_uni[:5]] # Top 5 Padrão
+        
+        if sequencia_derrotas >= 2:
+            # --- MODO DEFESA / CORREÇÃO ---
+            modo = "DEFESA"
+            # Pega +2 unidades extras (as próximas do ranking: 6ª e 7ª posição)
+            extras = [str(u) for u, p in rank_uni[5:7]]
+            lista_final_uni = top_base + extras
+            msg_status = f"🛡️ MODO CORREÇÃO ATIVO! (Vindo de {sequencia_derrotas} Derrotas)"
+            cor_alerta = "error" # Vermelho
+        else:
+            # --- MODO ATAQUE ---
+            modo = "ATAQUE"
+            lista_final_uni = top_base
+            msg_status = "⚔️ MODO ATAQUE (Top 5)"
+            cor_alerta = "info" # Azul
+            
         if HAS_AI:
             with st.container(border=True):
-                st.markdown(f"### 🧠 Confiança do Modelo: {conf_uni:.1f}%")
+                st.markdown(f"### 🧠 Confiança IA: {conf_uni:.1f}%")
                 
-                # VERIFICAÇÃO DE CALIBRAÇÃO (UNIDADE)
-                if conf_uni >= 60.0:
-                    hits_u, total_hu, perc_hu = verificar_precisao_confianca(historico, "UNIDADE", 60.0)
-                    if total_hu > 0:
-                        msg_calib_u = f"Histórico (>60%): Acertou {hits_u}/{total_hu} ({perc_hu:.0f}%)"
-                        if perc_hu >= 80: st.success(f"✅ {msg_calib_u}")
-                        elif perc_hu >= 50: st.info(f"ℹ️ {msg_calib_u}")
-                        else: st.warning(f"⚠️ {msg_calib_u}")
-            
-        if loss_u >= max_loss_u and max_loss_u > 0:
-            st.error(f"🚨 ALERTA: {loss_u} Derrotas (Recorde!)")
+                if modo == "DEFESA":
+                    st.error(msg_status)
+                    st.markdown("**Estratégia:** Expandimos para **Top 7** para garantir a quebra da sequência negativa.")
+                else:
+                    st.success(msg_status)
+                    st.markdown("**Estratégia:** Mantemos **Top 5** para lucro máximo.")
             
         with st.container(border=True):
-            st.markdown(f"### Finais: {', '.join(top5_uni)}")
+            st.markdown(f"### Finais Sugeridos: {', '.join(lista_final_uni)}")
             
+        # Métricas visuais da sequência
         c3, c4 = st.columns(2)
-        c3.metric("Derrotas", f"{loss_u}", f"Max: {max_loss_u}", delta_color="inverse")
-        c4.metric("Vitórias", f"{win_u}", f"Max: {max_win_u}")
+        c3.metric("Seq. Derrotas Atual", f"{sequencia_derrotas}", delta_color="inverse")
         
         st.markdown("**Histórico Recente:**")
         bt_uni = executar_backtest_recente(historico, "UNIDADE")
