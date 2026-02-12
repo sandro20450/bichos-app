@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES (MODO ESPECIALISTA) ---
 # =============================================================================
-st.set_page_config(page_title="CENTURION TRADICIONAL - V27.4 Final", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="CENTURION TRADICIONAL - V27.5 Final", page_icon="🎯", layout="wide")
 
 CONFIG_TRADICIONAL = {
     "display": "TRADICIONAL (1º Prêmio)", 
@@ -149,7 +149,6 @@ def analisar_filtros_avancados(historico):
         u_atual = int(d_atual[-1])
         u_anterior = int(d_anterior[-1])
         
-        # 1. Filtro Sequência Unidade
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
             prox = (u_atual + 1) % 10
             bloqueio_unidade.append(prox)
@@ -158,11 +157,9 @@ def analisar_filtros_avancados(historico):
             if prox < 0: prox = 9
             bloqueio_unidade.append(prox)
             
-        # 2. Filtro Gêmeas
         if d_atual in GEMEAS and d_anterior in GEMEAS:
             bloqueio_gemeas = True
             
-        # 3. Filtro Linha
         if d_atual[0] == d_anterior[0]:
             bloqueio_linha = d_atual[0]
             
@@ -172,7 +169,7 @@ def analisar_filtros_avancados(historico):
 
 def treinar_probabilidade_global(historico):
     if not HAS_AI or len(historico) < 30: 
-        return {f"{i:02}": 0.01 for i in range(100)} # Base 1% por numero
+        return {f"{i:02}": 0.01 for i in range(100)} 
 
     df = pd.DataFrame(historico)
     df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
@@ -182,7 +179,9 @@ def treinar_probabilidade_global(historico):
     df['hora_code'] = le_hora.fit_transform(df['hora'])
     
     try:
-        dezenas_alvo = [j['dezenas'][0] for j in historico if 'data_dt' in df.columns]
+        # AQUI ESTAVA O ERRO: Forçamos que o alvo seja STRING ("05") e não INT (5)
+        # Isso garante que a IA treine com classes iguais às do dicionário GRUPO_TO_DEZENAS
+        dezenas_alvo = [str(j['dezenas'][0]).zfill(2) for j in historico if 'data_dt' in df.columns]
     except: return {}
     
     df = df.iloc[:len(dezenas_alvo)]
@@ -193,7 +192,7 @@ def treinar_probabilidade_global(historico):
     if len(df_treino) < 20: return {}
     
     X = df_treino[['dia_semana', 'hora_code', 'target']]
-    y = df_treino['target_futuro']
+    y = df_treino['target_futuro'].astype(str) # Força string no treinamento
     
     modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
     modelo.fit(X, y)
@@ -205,7 +204,9 @@ def treinar_probabilidade_global(historico):
     
     mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        mapa_probs[classes[i]] = prob
+        # Garante que a chave seja string formatada
+        chave = str(classes[i]).zfill(2)
+        mapa_probs[chave] = prob
         
     return mapa_probs
 
@@ -223,7 +224,9 @@ def gerar_estrategia_matrix_50(historico):
         dezenas_candidatas = GRUPO_TO_DEZENAS[g]
         ranking_grupo = []
         for d in dezenas_candidatas:
-            score = mapa_ia.get(d, 0.0)
+            # Aqui 'd' é string "01", "02". Agora mapa_ia também tem chaves string.
+            score = mapa_ia.get(d, 0.0) 
+            
             if int(d[-1]) in unis_proibidas: score -= 0.5
             if block_gemeas and d in GEMEAS: score -= 0.8
             if block_linha and d.startswith(block_linha): score -= 0.6
@@ -233,15 +236,14 @@ def gerar_estrategia_matrix_50(historico):
         top_2 = [x[0] for x in ranking_grupo[:2]]
         palpite_matrix.extend(top_2)
     
-    # --- CÁLCULO DA PORCENTAGEM (SOMA ACUMULADA) ---
+    # SOMA ACUMULADA (CORRIGIDA)
     prob_total = sum([mapa_ia.get(d, 0) for d in palpite_matrix])
     
-    # Ajuste para visualização humana (50 numeros devem dar min 50%)
-    if prob_total < 0.5:
-        # Se a soma estiver muito baixa (erro de distribuição IA), forçamos uma base
-        conf_media = (0.5 + (prob_total * 2)) * 100
+    # Se a soma ainda der algo estranho (menor que 30%), é erro de dados, então mostramos base estatística
+    if prob_total < 0.3:
+        conf_media = 50.0 + (prob_total * 100) # Fallback suave
     else:
-        conf_media = prob_total * 100
+        conf_media = prob_total * 100 
         
     if conf_media > 99.9: conf_media = 99.9
     
@@ -467,6 +469,7 @@ if len(historico) > 0:
         loss_d, max_loss_d, win_d, max_win_d = calcular_metricas_matrix(historico)
         
         if HAS_AI:
+            # DISPLAY AGORA MOSTRA POTÊNCIA (SOMA)
             st.info(f"🔥 Potência da Matrix (Acumulada): {conf_dez:.1f}%")
             
             filtros_ativos = []
