@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V57.1 Oracle Full", page_icon="🔮", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V57.2 Fix", page_icon="🔮", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -139,7 +139,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA ORACLE (TRANSITION MATRIX) ---
+# --- 3. CÉREBRO: IA ORACLE ---
 # =============================================================================
 
 def get_grupo(dezena):
@@ -158,7 +158,6 @@ def analisar_efeito_ima(historico, indice_premio):
         ult_grupo = get_grupo(ult_dezena)
         nome_ult = NOME_BICHOS.get(ult_grupo, str(ult_grupo))
     except: return [], [], "Erro Leitura"
-    
     contagem_seguinte = Counter()
     total_ocorrencias = 0
     for i in range(len(historico) - 1):
@@ -203,16 +202,12 @@ def analisar_filtros_avancados(historico, indice_premio):
         d_atual = historico[-1]['premios'][indice_premio]
         d_anterior = historico[-2]['premios'][indice_premio]
         u_atual = int(d_atual[-1]); u_anterior = int(d_anterior[-1])
-        
-        # Filtro Sequência Unidade
         if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
             prox = (u_atual + 1) % 10; bloqueio_unidade.append(prox)
-            
         if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
-            prox = (u_atual - 1)
+            prox = (u_atual - 1); 
             if prox < 0: prox = 9
             bloqueio_unidade.append(prox)
-            
         if d_atual in GEMEAS and d_anterior in GEMEAS: bloqueio_gemeas = True
         if d_atual[0] == d_anterior[0]: bloqueio_linha = d_atual[0]
     except: pass
@@ -255,11 +250,9 @@ def gerar_estrategia_oracle_50(historico, indice_premio):
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     ranking_grupos = rankear_grupos(mapa_ia)
     grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
-    
     ranking_final = []
     grupos_ima_set = set(grupos_ima)
     grupos_rep_set = set(grupos_repelidos)
-    
     for g, score in ranking_grupos:
         score_final = score
         if g in grupos_ima_set: score_final *= 1.5 
@@ -316,7 +309,7 @@ def treinar_oraculo_unidades(historico, indice_premio):
     return ranking, (ranking[0][1] * 100)
 
 # =============================================================================
-# --- 4. BACKTESTS (PATTERN SNIPER + DEEP STATS) ---
+# --- 4. BACKTESTS ---
 # =============================================================================
 
 def analisar_padrao_reversao(lista_wins):
@@ -365,57 +358,14 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
-    
-    # Restaura as Métricas Profundas (Recorde, Freq, Ciclo)
+                
     max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
     max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
-    
-    # Pattern Matching
     prob_rev, amostra = analisar_padrao_reversao(historico_wins)
-    
-    stats_loss = { 
-        "atual": seq_atual_loss, 
-        "max": max_l, 
-        "freq": count_l, 
-        "ciclo": ciclo_l 
-    }
-    stats_win = { 
-        "atual": seq_atual_win, 
-        "max": max_w, 
-        "freq": count_w, 
-        "ciclo": ciclo_w 
-    }
-    
-    return stats_loss, stats_win, prob_rev, amostra
-
-def calcular_metricas_unidades_detalhado(historico, indice_premio):
-    if len(historico) < 30: return {}, {}
-    total = len(historico); inicio = max(30, total - 50)
-    historico_wins = []
-    streak_no_momento = 0
-    for i in range(inicio, total):
-        target = int(historico[i]['premios'][indice_premio][-1])
-        hist_parcial = historico[:i]
-        rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]
-        else: palpite = [u for u, p in rank[:5]]
-        if target in palpite:
-            historico_wins.append(True); streak_no_momento = 0
-        else:
-            historico_wins.append(False); streak_no_momento += 1
-            
-    seq_atual_loss = streak_no_momento; seq_atual_win = 0
-    if historico_wins and historico_wins[-1]:
-        for w in reversed(historico_wins):
-            if w: seq_atual_win += 1
-            else: break
-            
-    max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
-    max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
     
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
-    return stats_loss, stats_win
+    return stats_loss, stats_win, prob_rev, amostra
 
 def executar_backtest_recente_oracle(historico, indice_premio):
     results = []
@@ -435,7 +385,8 @@ def executar_backtest_recente_uni_preciso(historico, indice_premio):
         hist_parcial = historico[:i]
         rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
         is_defense = False
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]; is_defense = True
+        if streak_no_momento >= 2:
+            palpite = [u for u, p in rank[:7]]; is_defense = True
         else: palpite = [u for u, p in rank[:5]]
         win = target in palpite
         if i >= total - 5:
@@ -549,27 +500,14 @@ else:
         if config['tipo'] == "SOLO": abas = st.tabs(["🔮 Oracle 50", "🎯 Unidades"])
         else: abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
         
-        range_abas = [0] if config['tipo'] == "SOLO" else range(5)
+        range_abas = [0, 1] if config['tipo'] == "SOLO" else range(5)
         
         for idx_aba in range_abas:
             with abas[idx_aba]:
                 if config['tipo'] == "SOLO" and idx_aba == 1:
                     rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
-                    stats_loss_u, stats_win_u = calcular_metricas_unidades_detalhado(historico, 0)
-                    
                     top_base = [str(u) for u, p in rank_uni[:5]]
-                    
-                    if stats_loss_u['atual'] >= 2:
-                        st.error(f"🛡️ MODO DEFESA (Top 7)")
-                    else:
-                        st.info("⚔️ MODO ATAQUE (Top 5)")
-                        
                     with st.container(border=True): st.markdown(f"### Finais: {', '.join(top_base)}")
-                    
-                    c3, c4 = st.columns(2)
-                    c3.metric("Derrotas", f"{stats_loss_u['atual']}", f"Rec: {stats_loss_u['max']} (Freq: {stats_loss_u['freq']}x | Ciclo: {stats_loss_u['ciclo']})", delta_color="inverse")
-                    c4.metric("Vitórias", f"{stats_win_u['atual']}", f"Rec: {stats_win_u['max']} (Freq: {stats_win_u['freq']}x | Ciclo: {stats_win_u['ciclo']})")
-                    
                     bt_uni = executar_backtest_recente_uni_preciso(historico, 0)
                     cols_bt_u = st.columns(5)
                     for i, res in enumerate(bt_uni):
@@ -582,32 +520,20 @@ else:
                     stats_loss, stats_win, prob_rev, amostra_rev = calcular_metricas_oracle_detalhado(historico, idx_aba)
                     
                     if HAS_AI:
-                        # --- DISPLAY ORACLE ---
                         st.info(f"🔮 {dados_oracle['info']}")
-                        
                         c_ima, c_rep = st.columns(2)
-                        with c_ima:
-                            st.success(f"🧲 **ÍMÃS (Puxadores):**\nGrupos: {dados_oracle['imas']}")
-                        with c_rep:
-                            st.error(f"⛔ **REPELIDOS (Bloqueados):**\nGrupos: {dados_oracle['repelidos']}")
-                        
+                        with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
+                        with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
                         st.markdown("---")
-                        
                         if stats_loss['atual'] > 0:
-                            st.markdown(f"### 📊 Pattern Matching (Reversão)")
-                            st.caption(f"Em {amostra_rev} vezes que tivemos {stats_loss['atual']} derrotas seguidas:")
-                            
+                            st.markdown(f"### 📊 Pattern Matching (Análise de Reversão)")
+                            st.caption(f"Analisando {amostra_rev} vezes que tivemos {stats_loss['atual']} derrotas seguidas:")
                             col_prob, col_msg = st.columns([1, 3])
                             col_prob.metric("Chance Histórica", f"{prob_rev:.1f}%")
-                            
-                            if prob_rev >= 80:
-                                col_msg.success(f"💎 **ENTRADA CONFIRMADA!** Em {prob_rev:.0f}% das vezes, a vitória veio AGORA.")
-                            elif prob_rev >= 60:
-                                col_msg.warning(f"⚠️ **RISCO MÉDIO.** Chance de {prob_rev:.0f}%. Se for jogar, vá leve.")
-                            else:
-                                col_msg.error(f"🛑 **NÃO JOGUE.** A tendência histórica é continuar perdendo.")
-                        else:
-                            st.success("🎉 Estamos em sequência de VITÓRIA.")
+                            if prob_rev >= 80: col_msg.success(f"💎 **ENTRADA CONFIRMADA!** Em {prob_rev:.0f}% das vezes, a vitória veio AGORA.")
+                            elif prob_rev >= 60: col_msg.warning(f"⚠️ **RISCO MÉDIO.** Chance de {prob_rev:.0f}%.")
+                            else: col_msg.error(f"🛑 **NÃO JOGUE.** Tendência de perda.")
+                        else: st.success("🎉 Estamos em sequência de VITÓRIA.")
 
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
