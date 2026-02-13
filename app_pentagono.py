@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V53.0 Bunker", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V55.0 Predator", page_icon="🦖", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -88,16 +88,14 @@ def carregar_dados_hibridos(nome_aba):
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
-    url_base = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    if data_alvo == date.today(): url_base = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
-    
+    url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    if data_alvo == date.today(): url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url_base, headers=headers, timeout=10)
+        r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
-        
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
@@ -110,7 +108,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
-                        
                         if h_detect == horario_alvo:
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
@@ -135,7 +132,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA MATRIX (MODO BUNKER) ---
+# --- 3. CÉREBRO: IA PREDATOR (MERITOCRACIA) ---
 # =============================================================================
 
 def analisar_sequencias_profundas(lista_wins):
@@ -154,24 +151,6 @@ def analisar_sequencias_profundas(lista_wins):
     total = len(lista_wins)
     ciclo = int(total / ocorrencias) if ocorrencias > 0 else 0
     return maximo, ocorrencias, ciclo
-
-def analisar_filtros_avancados(historico, indice_premio):
-    if len(historico) < 2: return [], [], []
-    bloqueio_unidade = []; bloqueio_gemeas = False; bloqueio_linha = None 
-    try:
-        d_atual = historico[-1]['premios'][indice_premio]
-        d_anterior = historico[-2]['premios'][indice_premio]
-        u_atual = int(d_atual[-1]); u_anterior = int(d_anterior[-1])
-        if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
-            prox = (u_atual + 1) % 10; bloqueio_unidade.append(prox)
-        if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
-            prox = (u_atual - 1); 
-            if prox < 0: prox = 9
-            bloqueio_unidade.append(prox)
-        if d_atual in GEMEAS and d_anterior in GEMEAS: bloqueio_gemeas = True
-        if d_atual[0] == d_anterior[0]: bloqueio_linha = d_atual[0]
-    except: pass
-    return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
@@ -198,33 +177,66 @@ def treinar_probabilidade_global(historico, indice_premio):
         chave = str(classes[i]).zfill(2); mapa_probs[chave] = prob
     return mapa_probs
 
-def gerar_estrategia_matrix_50(historico, indice_premio):
+def get_grupo_dezena(dezena):
+    d = int(dezena)
+    if d == 0: return 25
+    g = (d - 1) // 4 + 1
+    return g
+
+def rankear_grupos(mapa_probs):
+    """Soma a probabilidade das dezenas de cada grupo para ver qual grupo está mais forte."""
+    score_grupos = {g: 0.0 for g in range(1, 26)}
+    for g in range(1, 26):
+        dezenas = GRUPO_TO_DEZENAS[g]
+        for d in dezenas:
+            score_grupos[g] += mapa_probs.get(d, 0.0)
+    
+    # Ordena grupos do mais forte pro mais fraco
+    ranking = sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
+    return ranking
+
+def gerar_estrategia_predator_50(historico, indice_premio):
     if not historico: return [], 0, {}
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     if not mapa_ia: return [], 0, {}
-    unis_proibidas, block_gemeas, block_linha = analisar_filtros_avancados(historico, indice_premio)
-    palpite_matrix = []
-    for g in range(1, 26):
-        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
-        ranking_grupo = []
-        for d in dezenas_candidatas:
-            score = mapa_ia.get(d, 0.01)
-            score_ajustado = score
-            if int(d[-1]) in unis_proibidas: score_ajustado -= 0.5
-            if block_gemeas and d in GEMEAS: score_ajustado -= 0.8
-            if block_linha and d.startswith(block_linha): score_ajustado -= 0.6
-            ranking_grupo.append((d, score_ajustado, score))
-        ranking_grupo.sort(key=lambda x: x[1], reverse=True)
-        top_2 = [x[0] for x in ranking_grupo[:2]]
-        palpite_matrix.extend(top_2)
     
-    # Soma Acumulada da Força
+    # 1. Rankear Grupos (Quem manda no jogo?)
+    ranking_grupos = rankear_grupos(mapa_ia)
+    
+    # 2. Distribuição Predator (Meritocracia)
+    top_10_elite = [g for g, s in ranking_grupos[:10]]
+    mid_10_normais = [g for g, s in ranking_grupos[10:20]]
+    last_5_mortos = [g for g, s in ranking_grupos[20:]]
+    
+    palpite_matrix = []
+    
+    # ELITE: Pega 3 melhores dezenas de cada (30 dezenas)
+    for g in top_10_elite:
+        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
+        # Ordena dezenas do grupo pela prob da IA
+        dezenas_candidatas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
+        palpite_matrix.extend(dezenas_candidatas[:3])
+        
+    # NORMAIS: Pega 2 melhores dezenas de cada (20 dezenas)
+    for g in mid_10_normais:
+        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
+        dezenas_candidatas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
+        palpite_matrix.extend(dezenas_candidatas[:2])
+        
+    # MORTOS: Pega 0 (Abate)
+    
+    # Soma Acumulada
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
-    info_filtros = { "uni": unis_proibidas, "gemeas": block_gemeas, "linha": block_linha }
-    return sorted(palpite_matrix), conf_media, info_filtros
+    
+    info_predator = {
+        "elite": top_10_elite,
+        "abate": last_5_mortos
+    }
+    
+    return sorted(palpite_matrix), conf_media, info_predator
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
@@ -252,20 +264,19 @@ def treinar_oraculo_unidades(historico, indice_premio):
     return ranking, (ranking[0][1] * 100)
 
 # =============================================================================
-# --- 4. BACKTESTS (MODO BUNKER - CALIBRAGEM CONSERVADORA) ---
+# --- 4. BACKTESTS ---
 # =============================================================================
 
-def calcular_metricas_matrix_detalhado(historico, indice_premio):
-    if len(historico) < 20: return {}, {}, False
+def calcular_metricas_predator_detalhado(historico, indice_premio):
+    if len(historico) < 20: return {}, {}
     total = len(historico); inicio = max(20, total - 50)
     historico_wins = []
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
-        palpite, _, _ = gerar_estrategia_matrix_50(hist_p, indice_premio)
+        palpite, _, _ = gerar_estrategia_predator_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
-        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -276,26 +287,11 @@ def calcular_metricas_matrix_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
-                
     max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
     max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
-    
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
-    
-    # --- PROTOCOLO BUNKER (GATILHO RIGOROSO) ---
-    # Só aciona Diamante se:
-    # 1. Sequência de Derrotas Atual >= 3 (Filtro de Ruído)
-    # 2. OU se Sequência Atual estiver a 1 do Recorde (Zona de Exaustão)
-    # 3. E se não tiver estourado o recorde ainda.
-    
-    gatilho_sequencia = seq_atual_loss >= 3
-    gatilho_exaustao = (seq_atual_loss >= max_l - 1) and (max_l > 3)
-    gatilho_seguranca = seq_atual_loss <= max_l # Ainda não rompeu o teto
-    
-    sinal_diamante = (gatilho_sequencia or gatilho_exaustao) and gatilho_seguranca
-    
-    return stats_loss, stats_win, sinal_diamante
+    return stats_loss, stats_win
 
 def calcular_metricas_unidades_detalhado(historico, indice_premio):
     if len(historico) < 30: return {}, {}
@@ -306,7 +302,6 @@ def calcular_metricas_unidades_detalhado(historico, indice_premio):
         target = int(historico[i]['premios'][indice_premio][-1])
         hist_parcial = historico[:i]
         rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        # Lógica de aposta simulada
         if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]
         else: palpite = [u for u, p in rank[:5]]
         if target in palpite:
@@ -327,12 +322,12 @@ def calcular_metricas_unidades_detalhado(historico, indice_premio):
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
     return stats_loss, stats_win
 
-def executar_backtest_recente_matrix(historico, indice_premio):
+def executar_backtest_recente_predator(historico, indice_premio):
     results = []
     for i in range(1, 6):
         idx = -i
         target = historico[idx]['premios'][indice_premio]
-        palp, _, _ = gerar_estrategia_matrix_50(historico[:idx], indice_premio)
+        palp, _, _ = gerar_estrategia_predator_50(historico[:idx], indice_premio)
         win = target in palp
         results.append({"val": target, "win": win})
     return results
@@ -377,11 +372,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - BUNKER MODE")
+    st.title("🛡️ PENTÁGONO - PREDATOR LOGIC")
     col1, col2 = st.columns(2)
-    col1.metric("Segurança", "Alta (Protocolo 3 Loss)", "Redução de Entradas")
-    col2.metric("Estratégia", "Matrix 50 + Deep Stats")
-    st.info("O sistema agora é mais rigoroso. O sinal Diamante aparecerá com menos frequência, mas com maior assertividade.")
+    col1.metric("Estratégia", "Predator (3-2-0)")
+    col2.metric("Alvo", "Densidade de Elite")
+    st.info("O sistema agora ELIMINA grupos fracos e sobrecarrega grupos fortes para aumentar a chance de dezena exata.")
 
 else:
     banca_selecionada = escolha_menu
@@ -405,9 +400,7 @@ else:
                 ws = conectar_planilha(config['nome_aba'])
                 if ws:
                     with st.spinner(f"Buscando {horario_busca}..."):
-                        try:
-                            existentes = ws.get_all_values()
-                            chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
+                        try: existentes = ws.get_all_values(); chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
                         except: chaves = []
                         chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
                         if chave_atual in chaves: st.warning("Resultado já existe!")
@@ -450,41 +443,26 @@ else:
             else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
-    st.header(f"🔭 {config['display_name']} - Bunker")
+    st.header(f"🔭 {config['display_name']} - PREDATOR")
     
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_hibridos(config['nome_aba'])
 
     if len(historico) > 0:
         ult = historico[-1]
-        if config['tipo'] == "SOLO":
-            st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
-        else:
-            st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
+        if config['tipo'] == "SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
+        else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
         
         if config['tipo'] == "SOLO":
-            aba_dez, aba_uni = st.tabs(["🎲 Matrix 50 (1º Prêmio)", "🎯 Unidades (Deep Stats)"])
+            aba_dez, aba_uni = st.tabs(["🦖 Predator 50 (1º Prêmio)", "🎯 Unidades"])
             with aba_dez:
-                lista_matrix, conf_total, info_filtros = gerar_estrategia_matrix_50(historico, 0)
-                stats_loss, stats_win, sinal_diamante = calcular_metricas_matrix_detalhado(historico, 0)
+                lista_matrix, conf_total, info_predator = gerar_estrategia_predator_50(historico, 0)
+                stats_loss, stats_win = calcular_metricas_predator_detalhado(historico, 0)
                 
                 if HAS_AI:
-                    st.info(f"🛡️ Força da Cobertura: {conf_total:.1f}%")
-                    if sinal_diamante:
-                        st.success(f"💎 **OPORTUNIDADE DIAMANTE (BUNKER)!**\n\nRequisito Atingido: {stats_loss['atual']} Derrotas Acumuladas.")
-                    else:
-                        if stats_loss['atual'] < 3: # GATILHO DE 3 DERROTAS
-                            st.warning(f"⏳ **AGUARDE (Protocolo Bunker):** Estamos com {stats_loss['atual']} derrotas. Entrada segura apenas após 3 derrotas.")
-                        elif stats_loss['atual'] > stats_loss['max']:
-                            st.error("🛑 **ABORTAR:** O mercado quebrou o recorde histórico. Caos total.")
-                        else:
-                            st.info("🔎 Monitorando...")
-                            
-                    filtros_ativos = []
-                    if info_filtros['uni']: filtros_ativos.append(f"Unid: {info_filtros['uni']}")
-                    if info_filtros['gemeas']: filtros_ativos.append("Anti-Gêmea")
-                    if info_filtros['linha']: filtros_ativos.append(f"Fadiga Linha {info_filtros['linha']}")
-                    if filtros_ativos: st.warning(f"🚫 Filtros: {', '.join(filtros_ativos)}")
+                    st.info(f"🛡️ Força da Cobertura (Predator): {conf_total:.1f}%")
+                    st.success(f"🔥 **GRUPOS ELITE (3 Dezenas):** {info_predator['elite']}")
+                    st.error(f"☠️ **GRUPOS ABATIDOS (0 Dezenas):** {info_predator['abate']}")
                 
                 if stats_loss['atual'] >= stats_loss['max'] and stats_loss['max'] > 0:
                     st.error(f"🚨 ALERTA: {stats_loss['atual']} Derrotas (Igualou Recorde!)")
@@ -496,7 +474,7 @@ else:
                 c1.metric("Derrotas", f"{stats_loss['atual']}", f"Rec: {stats_loss['max']} (Freq: {stats_loss['freq']}x | Ciclo: {stats_loss['ciclo']})", delta_color="inverse")
                 c2.metric("Vitórias", f"{stats_win['atual']}", f"Rec: {stats_win['max']} (Freq: {stats_win['freq']}x | Ciclo: {stats_win['ciclo']})")
                 
-                bt_dez = executar_backtest_recente_matrix(historico, 0)
+                bt_dez = executar_backtest_recente_predator(historico, 0)
                 cols_bt = st.columns(5)
                 for i, res in enumerate(reversed(bt_dez)):
                     with cols_bt[i]:
@@ -536,32 +514,19 @@ else:
             abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
             for idx_aba, aba in enumerate(abas):
                 with aba:
-                    lista_matrix, conf_total, info_filtros = gerar_estrategia_matrix_50(historico, idx_aba)
-                    stats_loss, stats_win, sinal_diamante = calcular_metricas_matrix_detalhado(historico, idx_aba)
+                    lista_matrix, conf_total, info_predator = gerar_estrategia_predator_50(historico, idx_aba)
+                    stats_loss, stats_win = calcular_metricas_predator_detalhado(historico, idx_aba)
                     if HAS_AI:
                         st.info(f"🛡️ Força da Cobertura: {conf_total:.1f}%")
-                        if sinal_diamante:
-                            st.success(f"💎 **OPORTUNIDADE DIAMANTE (BUNKER)!**\n\nRequisito Atingido: {stats_loss['atual']} Derrotas.")
-                        else:
-                            if stats_loss['atual'] < 3:
-                                st.warning(f"⏳ **AGUARDE:** {stats_loss['atual']} Derrotas. Entrada apenas após 3.")
-                            elif stats_loss['atual'] > stats_loss['max']:
-                                st.error("🛑 **MERCADO CAÓTICO:** Evite apostar.")
-                            else:
-                                st.info("🔎 Monitorando...")
-                        
-                        filtros_ativos = []
-                        if info_filtros['uni']: filtros_ativos.append(f"Unid: {info_filtros['uni']}")
-                        if info_filtros['gemeas']: filtros_ativos.append("Anti-Gêmea")
-                        if info_filtros['linha']: filtros_ativos.append(f"Fadiga Linha {info_filtros['linha']}")
-                        if filtros_ativos: st.warning(f"🚫 Filtros: {', '.join(filtros_ativos)}")
+                        st.success(f"🔥 **ELITE:** {info_predator['elite']}")
+                        st.error(f"☠️ **ABATIDOS:** {info_predator['abate']}")
                     
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
                     c1, c2 = st.columns(2)
                     c1.metric("Derrotas", f"{stats_loss['atual']}", f"Rec: {stats_loss['max']} (Freq: {stats_loss['freq']}x | Ciclo: {stats_loss['ciclo']})", delta_color="inverse")
                     c2.metric("Vitórias", f"{stats_win['atual']}", f"Rec: {stats_win['max']} (Freq: {stats_win['freq']}x | Ciclo: {stats_win['ciclo']})")
-                    bt_dez = executar_backtest_recente_matrix(historico, idx_aba)
+                    bt_dez = executar_backtest_recente_predator(historico, idx_aba)
                     cols_bt = st.columns(5)
                     for i, res in enumerate(reversed(bt_dez)):
                         with cols_bt[i]:
