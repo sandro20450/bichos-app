@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V56.0 Pattern Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V57.0 Oracle", page_icon="🔮", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -39,6 +39,14 @@ for g in range(1, 26):
     GRUPO_TO_DEZENAS[g] = dezenas_do_grupo
 
 GEMEAS = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
+
+NOME_BICHOS = {
+    1: "Avestruz", 2: "Águia", 3: "Burro", 4: "Borboleta", 5: "Cachorro",
+    6: "Cabra", 7: "Carneiro", 8: "Camelo", 9: "Cobra", 10: "Coelho",
+    11: "Cavalo", 12: "Elefante", 13: "Galo", 14: "Gato", 15: "Jacaré",
+    16: "Leão", 17: "Macaco", 18: "Porco", 19: "Pavão", 20: "Peru",
+    21: "Touro", 22: "Tigre", 23: "Urso", 24: "Veado", 25: "Vaca"
+}
 
 st.markdown("""
 <style>
@@ -131,57 +139,61 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PREDATOR + ANALISE DE REVERSÃO ---
+# --- 3. CÉREBRO: IA ORACLE (TRANSITION MATRIX) ---
 # =============================================================================
 
-def analisar_padrao_reversao(lista_wins):
-    """
-    Analisa a probabilidade histórica de reversão da sequência atual.
-    Retorna: (Probabilidade %, Total Ocorrências, Confiança Estatística)
-    """
-    if not lista_wins or len(lista_wins) < 10: return 0, 0, "Insuficiente"
-    
-    # 1. Determinar o status atual (Quantas derrotas seguidas?)
-    atual_loss_streak = 0
-    if not lista_wins[-1]: # Se o último foi derrota
-        for w in reversed(lista_wins):
-            if not w: atual_loss_streak += 1
-            else: break
-    
-    # Se viemos de vitória, a reversão seria para derrota (irrelevante para entrada)
-    if atual_loss_streak == 0:
-        return 0, 0, "Modo Vitória"
+def get_grupo(dezena):
+    try:
+        d = int(dezena)
+        if d == 0: return 25
+        if d > 99: return 25 # Protecao
+        val = (d - 1) // 4 + 1
+        return val
+    except: return 1
 
-    # 2. Varrer o histórico procurando essa mesma sequência
-    ocorrencias_padrao = 0
-    reversoes_win = 0
+def analisar_efeito_ima(historico, indice_premio):
+    """
+    Analisa: Dado o bicho anterior, o que costuma vir depois?
+    Retorna: (Grupos Imã, Grupos Repelidos, Info do Último)
+    """
+    if len(historico) < 10: return [], [], "Dados Insuficientes"
     
-    # Percorre a lista até o penúltimo item
-    i = 0
-    while i < len(lista_wins) - atual_loss_streak:
-        # Verifica se achou uma sequência de perdas do tamanho atual
-        match = True
-        for k in range(atual_loss_streak):
-            if lista_wins[i+k] == True: # Se achou vitoria no meio, não é o padrão
-                match = False
-                break
-        
-        if match:
-            # Temos uma sequencia de perdas. O que veio depois?
-            # Verifica se o item anterior a sequencia era vitoria (para isolar o grupo)
-            if i > 0 and lista_wins[i-1] == True:
-                # Agora olhamos o resultado IMEDIATAMENTE após a sequencia
-                idx_pos = i + atual_loss_streak
-                if idx_pos < len(lista_wins):
-                    ocorrencias_padrao += 1
-                    if lista_wins[idx_pos] == True:
-                        reversoes_win += 1
-        i += 1
-        
-    if ocorrencias_padrao == 0: return 0, 0, "Inédito"
+    # 1. Identificar o "Gatilho" (O último bicho que saiu)
+    try:
+        ult_dezena = historico[-1]['premios'][indice_premio]
+        ult_grupo = get_grupo(ult_dezena)
+        nome_ult = NOME_BICHOS.get(ult_grupo, str(ult_grupo))
+    except: return [], [], "Erro Leitura"
     
-    probabilidade = (reversoes_win / ocorrencias_padrao) * 100
-    return probabilidade, ocorrencias_padrao, "Calculada"
+    # 2. Varrer histórico
+    contagem_seguinte = Counter()
+    total_ocorrencias = 0
+    
+    for i in range(len(historico) - 1):
+        try:
+            d_atual = historico[i]['premios'][indice_premio]
+            g_atual = get_grupo(d_atual)
+            
+            if g_atual == ult_grupo:
+                # Achamos o gatilho! O que veio depois?
+                d_prox = historico[i+1]['premios'][indice_premio]
+                g_prox = get_grupo(d_prox)
+                contagem_seguinte[g_prox] += 1
+                total_ocorrencias += 1
+        except: continue
+        
+    if total_ocorrencias == 0: return [], [], f"Bicho {nome_ult} é Inédito!"
+    
+    # 3. Classificar Ímãs (Mais frequentes)
+    imas = [g for g, c in contagem_seguinte.most_common(5)]
+    
+    # 4. Classificar Repelidos (Nunca saíram)
+    todos_grupos = set(range(1, 26))
+    sairam = set(contagem_seguinte.keys())
+    repelidos = list(todos_grupos - sairam)
+    
+    info_str = f"Último: {nome_ult} (Saiu {total_ocorrencias}x no passado)"
+    return imas, repelidos, info_str
 
 def analisar_filtros_avancados(historico, indice_premio):
     if len(historico) < 2: return [], [], []
@@ -233,35 +245,67 @@ def rankear_grupos(mapa_probs):
         for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
     return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
 
-def gerar_estrategia_predator_50(historico, indice_premio):
-    if not historico: return [], 0, {}
-    mapa_ia = treinar_probabilidade_global(historico, indice_premio)
-    if not mapa_ia: return [], 0, {}
+def gerar_estrategia_oracle_50(historico, indice_premio):
+    if not historico: return [], 0, {}, {}
     
+    # 1. Inteligência Padrão (Random Forest)
+    mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     ranking_grupos = rankear_grupos(mapa_ia)
-    top_10 = [g for g, s in ranking_grupos[:10]]
-    mid_10 = [g for g, s in ranking_grupos[10:20]]
-    last_5 = [g for g, s in ranking_grupos[20:]]
+    
+    # 2. Inteligência Oracle (Efeito Ímã)
+    grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
+    
+    # 3. Fusão das Inteligências (Predator Refinado)
+    # Aumentamos artificialmente o score dos Ímãs no ranking
+    # Zeramos os Repelidos
+    
+    ranking_final = []
+    grupos_ima_set = set(grupos_ima)
+    grupos_rep_set = set(grupos_repelidos)
+    
+    for g, score in ranking_grupos:
+        score_final = score
+        if g in grupos_ima_set: score_final *= 1.5 # Boost de 50% nos Ímãs
+        if g in grupos_rep_set: score_final = -1.0 # Penalidade Morte nos Repelidos
+        ranking_final.append((g, score_final))
+        
+    ranking_final.sort(key=lambda x: x[1], reverse=True)
+    
+    # 4. Seleção Predator (Elite 3, Mid 2, Dead 0)
+    # Ignora os scores negativos (-1) para a seleção
+    validos = [x for x in ranking_final if x[1] >= 0]
+    
+    # Se a lista de validos for curta (muitos repelidos), preenche com o resto
+    if len(validos) < 20: validos = ranking_final 
+    
+    top_10 = [g for g, s in validos[:10]]
+    mid_10 = [g for g, s in validos[10:20]]
+    dead = [g for g, s in validos[20:]]
     
     palpite_matrix = []
-    # ELITE (3 dezenas)
     for g in top_10:
         dezenas = GRUPO_TO_DEZENAS[g]
         dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         palpite_matrix.extend(dezenas[:3])
-    # MID (2 dezenas)
+        
     for g in mid_10:
         dezenas = GRUPO_TO_DEZENAS[g]
         dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         palpite_matrix.extend(dezenas[:2])
+    
+    # Garante 50 números
+    palpite_matrix = list(set(palpite_matrix))
+    if len(palpite_matrix) > 50: palpite_matrix = palpite_matrix[:50]
     
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
     
-    info_predator = { "elite": top_10, "abate": last_5 }
-    return sorted(palpite_matrix), conf_media, info_predator
+    info_predator = { "elite": top_10, "abate": dead }
+    dados_oracle = { "info": info_oracle, "imas": grupos_ima[:3], "repelidos": grupos_repelidos[:5] }
+    
+    return sorted(palpite_matrix), conf_media, info_predator, dados_oracle
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
@@ -289,21 +333,44 @@ def treinar_oraculo_unidades(historico, indice_premio):
     return ranking, (ranking[0][1] * 100)
 
 # =============================================================================
-# --- 4. BACKTESTS (PATTERN MATCHING) ---
+# --- 4. BACKTESTS (PATTERN SNIPER) ---
 # =============================================================================
 
-def calcular_metricas_predator_avancado(historico, indice_premio):
-    if len(historico) < 20: return {}, {}, (0,0,"N/A")
+def analisar_padrao_reversao(lista_wins):
+    if not lista_wins or len(lista_wins) < 10: return 0, 0
+    atual_loss_streak = 0
+    if not lista_wins[-1]:
+        for w in reversed(lista_wins):
+            if not w: atual_loss_streak += 1
+            else: break
+    if atual_loss_streak == 0: return 0, 0
+    ocorrencias_padrao = 0; reversoes_win = 0; i = 0
+    while i < len(lista_wins) - atual_loss_streak:
+        match = True
+        for k in range(atual_loss_streak):
+            if lista_wins[i+k] == True:
+                match = False; break
+        if match:
+            if i > 0 and lista_wins[i-1] == True:
+                idx_pos = i + atual_loss_streak
+                if idx_pos < len(lista_wins):
+                    ocorrencias_padrao += 1
+                    if lista_wins[idx_pos] == True: reversoes_win += 1
+        i += 1
+    if ocorrencias_padrao == 0: return 0, 0
+    probabilidade = (reversoes_win / ocorrencias_padrao) * 100
+    return probabilidade, ocorrencias_padrao
+
+def calcular_metricas_oracle_detalhado(historico, indice_premio):
+    if len(historico) < 20: return {}, {}, 0, 0
     total = len(historico); inicio = max(20, total - 50)
     historico_wins = []
-    
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
-        palpite, _, _ = gerar_estrategia_predator_50(hist_p, indice_premio)
+        palpite, _, _, _ = gerar_estrategia_oracle_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
-        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -315,21 +382,15 @@ def calcular_metricas_predator_avancado(historico, indice_premio):
                 if not w: seq_atual_loss += 1
                 else: break
                 
-    # --- ANÁLISE DE REVERSÃO ---
-    # Aqui a mágica acontece: Calculamos a chance baseada em PADRÕES PASSADOS
-    prob_rev, ocorrencias, status_calc = analisar_padrao_reversao(historico_wins)
-    
-    stats_loss = { "atual": seq_atual_loss, "prob_reversao": prob_rev, "amostra": ocorrencias }
-    stats_win = { "atual": seq_atual_win }
-    
-    return stats_loss, stats_win
+    prob_rev, amostra = analisar_padrao_reversao(historico_wins)
+    return { "atual": seq_atual_loss }, { "atual": seq_atual_win }, prob_rev, amostra
 
-def executar_backtest_recente_predator(historico, indice_premio):
+def executar_backtest_recente_oracle(historico, indice_premio):
     results = []
     for i in range(1, 6):
         idx = -i
         target = historico[idx]['premios'][indice_premio]
-        palp, _, _ = gerar_estrategia_predator_50(historico[:idx], indice_premio)
+        palp, _, _, _ = gerar_estrategia_oracle_50(historico[:idx], indice_premio)
         win = target in palp
         results.append({"val": target, "win": win})
     return results
@@ -374,11 +435,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - SNIPER DE PADRÕES")
+    st.title("🛡️ PENTÁGONO - ORACLE VISION")
     col1, col2 = st.columns(2)
-    col1.metric("Estratégia", "Predator (Grupos)")
+    col1.metric("Estratégia", "Efeito Ímã (Transição)")
     col2.metric("Timing", "Pattern Matching")
-    st.info("A IA agora analisa o passado para prever a exata hora da reversão.")
+    st.info("Sistema focado em identificar O QUE VEM DEPOIS DO ÚLTIMO BICHO.")
 
 else:
     banca_selecionada = escolha_menu
@@ -444,7 +505,7 @@ else:
             else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
-    st.header(f"🔭 {config['display_name']} - Pattern Sniper")
+    st.header(f"🔭 {config['display_name']} - Oracle Vision")
     
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_hibridos(config['nome_aba'])
@@ -454,17 +515,14 @@ else:
         if config['tipo'] == "SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
         else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
         
-        # DEFINIÇÃO DAS ABAS
-        if config['tipo'] == "SOLO": abas = st.tabs(["🦖 Predator 50", "🎯 Unidades"])
+        if config['tipo'] == "SOLO": abas = st.tabs(["🔮 Oracle 50", "🎯 Unidades"])
         else: abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
         
-        # LOOP DE RENDERIZAÇÃO
         range_abas = [0] if config['tipo'] == "SOLO" else range(5)
         
         for idx_aba in range_abas:
             with abas[idx_aba]:
                 if config['tipo'] == "SOLO" and idx_aba == 1:
-                    # ABA UNIDADES (SOLO)
                     rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
                     top_base = [str(u) for u, p in rank_uni[:5]]
                     with st.container(border=True): st.markdown(f"### Finais: {', '.join(top_base)}")
@@ -476,33 +534,37 @@ else:
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
                 else:
-                    # ABA PREDATOR (PADRÃO)
-                    lista_matrix, conf_total, info_predator = gerar_estrategia_predator_50(historico, idx_aba)
-                    stats_loss, stats_win = calcular_metricas_predator_avancado(historico, idx_aba)
+                    lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_50(historico, idx_aba)
+                    stats_loss, stats_win, prob_rev, amostra_rev = calcular_metricas_oracle_detalhado(historico, idx_aba)
                     
                     if HAS_AI:
-                        # DISPLAY DE DECISÃO INTELIGENTE
-                        prob_rev = stats_loss['prob_reversao']
+                        # --- DISPLAY ORACLE (O PULO DO GATO) ---
+                        st.info(f"🔮 {dados_oracle['info']}")
                         
-                        st.info(f"🛡️ Força Predator: {conf_total:.1f}%")
+                        c_ima, c_rep = st.columns(2)
+                        with c_ima:
+                            st.success(f"🧲 **ÍMÃS (Puxadores):**\nGrupos: {dados_oracle['imas']}")
+                        with c_rep:
+                            st.error(f"⛔ **REPELIDOS (Bloqueados):**\nGrupos: {dados_oracle['repelidos']}")
+                        
+                        st.markdown("---")
                         
                         if stats_loss['atual'] > 0:
-                            st.markdown(f"### 📊 Análise de Entrada (Histórico de {stats_loss['atual']} Derrotas)")
+                            st.markdown(f"### 📊 Pattern Matching (Análise de Reversão)")
+                            st.caption(f"Analisando {amostra_rev} vezes que tivemos {stats_loss['atual']} derrotas seguidas:")
+                            
                             col_prob, col_msg = st.columns([1, 3])
-                            col_prob.metric("Chance Reversão", f"{prob_rev:.1f}%", f"Base: {stats_loss['amostra']} casos")
+                            col_prob.metric("Chance Histórica", f"{prob_rev:.1f}%")
                             
                             if prob_rev >= 80:
-                                col_msg.success(f"💎 **ENTRADA CONFIRMADA!** Historicamente, quando chega a {stats_loss['atual']} derrotas, a vitória ocorre em {prob_rev:.0f}% das vezes. Jogue para pegar de 1ª ou dobre.")
+                                col_msg.success(f"💎 **ENTRADA CONFIRMADA!** Em {prob_rev:.0f}% das vezes, a vitória veio AGORA.")
                             elif prob_rev >= 60:
-                                col_msg.warning(f"⚠️ **ENTRADA DE RISCO.** Chance favorável ({prob_rev:.0f}%), mas considere aguardar mais um ciclo.")
+                                col_msg.warning(f"⚠️ **RISCO MÉDIO.** Chance de {prob_rev:.0f}%. Se for jogar, vá leve.")
                             else:
-                                col_msg.error(f"🛑 **NÃO ENTRE.** Historicamente, a tendência é continuar perdendo (Chance de Win só {prob_rev:.0f}%).")
+                                col_msg.error(f"🛑 **NÃO JOGUE.** A tendência histórica é continuar perdendo.")
                         else:
-                            st.success("🎉 Estamos em sequência de VITÓRIA. Aguarde o ciclo de derrotas iniciar para buscar a reversão.")
+                            st.success("🎉 Estamos em sequência de VITÓRIA.")
 
-                        st.success(f"🔥 **ELITE (3 Dezenas):** {info_predator['elite']}")
-                        st.error(f"☠️ **ABATIDOS (0 Dezenas):** {info_predator['abate']}")
-                    
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
                     
@@ -510,7 +572,7 @@ else:
                     c1.metric("Derrotas Seguidas", f"{stats_loss['atual']}", delta_color="inverse")
                     c2.metric("Vitórias Seguidas", f"{stats_win['atual']}")
                     
-                    bt_dez = executar_backtest_recente_predator(historico, idx_aba)
+                    bt_dez = executar_backtest_recente_oracle(historico, idx_aba)
                     cols_bt = st.columns(5)
                     for i, res in enumerate(reversed(bt_dez)):
                         with cols_bt[i]:
