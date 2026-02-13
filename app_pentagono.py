@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V60.0 Integrity", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V61.0 Unique Core", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -60,7 +60,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (COM LIMPEZA DE DADOS) ---
+# --- 2. CONEXÃO E RASPAGEM (LIMPEZA RIGOROSA V61) ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -78,9 +78,19 @@ def carregar_dados_hibridos(nome_aba):
         try:
             raw = ws.get_all_values()
             if len(raw) < 2: return []
-            dados = []
+            
+            # --- LIMPEZA V61: DICIONÁRIO DE CHAVES ÚNICAS ---
+            dados_unicos = {}
+            
             for row in raw[1:]:
                 if len(row) >= 3:
+                    # Normalização agressiva (strip + lower)
+                    d_clean = str(row[0]).strip()
+                    h_clean = str(row[1]).strip()
+                    
+                    # Chave Única: "DATA|HORA"
+                    chave_unica = f"{d_clean}|{h_clean}"
+                    
                     premios = []
                     for i in range(2, 7):
                         if i < len(row):
@@ -88,25 +98,32 @@ def carregar_dados_hibridos(nome_aba):
                             if p_str.isdigit(): premios.append(p_str.zfill(2)[-2:])
                             else: premios.append("00")
                         else: premios.append("00")
-                    # Normaliza data e hora para remover espaços
-                    d_clean = str(row[0]).strip()
-                    h_clean = str(row[1]).strip()
-                    dados.append({"data": d_clean, "horario": h_clean, "premios": premios})
+                    
+                    # Sobrescreve se existir (mantém a última versão ou a única)
+                    dados_unicos[chave_unica] = {
+                        "data": d_clean,
+                        "horario": h_clean,
+                        "premios": premios
+                    }
             
-            # --- FAXINA AUTOMÁTICA DE DUPLICATAS ---
-            if dados:
-                df = pd.DataFrame(dados)
-                # Remove linhas onde Data e Hora são iguais, mantendo a última ocorrência
-                df.drop_duplicates(subset=['data', 'horario'], keep='last', inplace=True)
-                # Garante ordenação cronológica se possível (assumindo formato YYYY-MM-DD)
+            # Converte de volta para lista
+            lista_final = list(dados_unicos.values())
+            
+            # Ordenação Cronológica Segura
+            def sort_key(x):
                 try:
-                    df['dt_temp'] = pd.to_datetime(df['data'] + ' ' + df['horario'], errors='coerce')
-                    df = df.sort_values('dt_temp').drop(columns=['dt_temp'])
-                except: pass
-                
-                return df.to_dict('records')
-            return []
-        except: return [] 
+                    # Tenta converter para datetime para ordenar corretamente
+                    # Assume formato YYYY-MM-DD ou DD/MM/YYYY
+                    d_str = x['data']
+                    if '-' in d_str: return datetime.strptime(f"{d_str} {x['horario']}", "%Y-%m-%d %H:%M")
+                    elif '/' in d_str: return datetime.strptime(f"{d_str} {x['horario']}", "%d/%m/%Y %H:%M")
+                    else: return datetime.min
+                except: return datetime.min
+            
+            lista_final.sort(key=sort_key)
+            return lista_final
+            
+        except Exception as e: return [] 
     return []
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -381,7 +398,6 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
                 
     max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
     max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
-    
     prob_win_futura, amostra, em_streak_vitoria = analisar_padrao_futuro(historico_wins)
     
     stats_loss = { 
@@ -504,10 +520,22 @@ else:
                 ws = conectar_planilha(config['nome_aba'])
                 if ws:
                     with st.spinner(f"Buscando {horario_busca}..."):
-                        try: existentes = ws.get_all_values(); chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
+                        try: 
+                            existentes = ws.get_all_values()
+                            # Normaliza chaves da planilha para comparação
+                            chaves = []
+                            for row in existentes:
+                                if len(row) >= 2:
+                                    d = str(row[0]).strip()
+                                    h = str(row[1]).strip()
+                                    chaves.append(f"{d}|{h}")
                         except: chaves = []
-                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca}"
-                        if chave_atual in chaves: st.warning("Resultado já existe!")
+                        
+                        # Normaliza chave de busca
+                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca.strip()}"
+                        
+                        if chave_atual in chaves:
+                            st.warning("Resultado já existe!")
                         else:
                             premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                             if premios:
@@ -525,8 +553,16 @@ else:
             ws = conectar_planilha(config['nome_aba'])
             if ws:
                 status = st.sidebar.empty(); bar = st.sidebar.progress(0)
-                try: existentes = ws.get_all_values(); chaves = [f"{str(row[0]).strip()}|{str(row[1]).strip()}" for row in existentes if len(row)>1]
+                try: 
+                    existentes = ws.get_all_values()
+                    chaves = []
+                    for row in existentes:
+                        if len(row) >= 2:
+                            d = str(row[0]).strip()
+                            h = str(row[1]).strip()
+                            chaves.append(f"{d}|{h}")
                 except: chaves = []
+                
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
                 total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
@@ -535,10 +571,13 @@ else:
                         op_atual += 1; 
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora}"
+                        
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora.strip()}"
                         if chave_atual in chaves: continue
+                        
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
+                        
                         premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
                         if premios:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + premios); sucessos += 1; chaves.append(chave_atual)
@@ -550,6 +589,7 @@ else:
     st.header(f"🔭 {config['display_name']} - Oracle Full")
     
     with st.spinner("Carregando e Limpando dados..."):
+        # CARREGAMENTO AGORA USA A LIMPEZA AUTOMATICA V61
         historico = carregar_dados_hibridos(config['nome_aba'])
 
     if len(historico) > 0:
