@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V59.0 Stability", page_icon="💎", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V60.0 Integrity", page_icon="🛡️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -60,7 +60,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (COM LIMPEZA DE DADOS) ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -88,8 +88,24 @@ def carregar_dados_hibridos(nome_aba):
                             if p_str.isdigit(): premios.append(p_str.zfill(2)[-2:])
                             else: premios.append("00")
                         else: premios.append("00")
-                    dados.append({"data": row[0], "horario": row[1], "premios": premios})
-            return dados
+                    # Normaliza data e hora para remover espaços
+                    d_clean = str(row[0]).strip()
+                    h_clean = str(row[1]).strip()
+                    dados.append({"data": d_clean, "horario": h_clean, "premios": premios})
+            
+            # --- FAXINA AUTOMÁTICA DE DUPLICATAS ---
+            if dados:
+                df = pd.DataFrame(dados)
+                # Remove linhas onde Data e Hora são iguais, mantendo a última ocorrência
+                df.drop_duplicates(subset=['data', 'horario'], keep='last', inplace=True)
+                # Garante ordenação cronológica se possível (assumindo formato YYYY-MM-DD)
+                try:
+                    df['dt_temp'] = pd.to_datetime(df['data'] + ' ' + df['horario'], errors='coerce')
+                    df = df.sort_values('dt_temp').drop(columns=['dt_temp'])
+                except: pass
+                
+                return df.to_dict('records')
+            return []
         except: return [] 
     return []
 
@@ -179,9 +195,6 @@ def analisar_efeito_ima(historico, indice_premio):
     return imas, repelidos, info_str
 
 def analisar_sequencias_profundas_com_moda(lista_wins):
-    """
-    Analisa Rec, Freq, Ciclo e agora MODA (Constância).
-    """
     if not lista_wins: return 0, 0, 0, 0, 0
     sequencias = []
     atual = 0
@@ -191,23 +204,17 @@ def analisar_sequencias_profundas_com_moda(lista_wins):
             if atual > 0: sequencias.append(atual)
             atual = 0
     if atual > 0: sequencias.append(atual)
-    
     if not sequencias: return 0, 0, 0, 0, 0
-    
-    # Recorde e Ciclo
     maximo = max(sequencias)
     ocorrencias_max = sequencias.count(maximo)
     total_ops = len(lista_wins)
     ciclo = int(total_ops / ocorrencias_max) if ocorrencias_max > 0 else 0
-    
-    # Nova Métrica: Constância (Moda)
     c = Counter(sequencias)
-    moda_dados = c.most_common(1)[0] # Pega o mais comum: (valor, freq)
+    moda_dados = c.most_common(1)[0]
     moda_valor = moda_dados[0]
     moda_freq = moda_dados[1]
     total_seqs = len(sequencias)
     moda_porc = (moda_freq / total_seqs) * 100
-    
     return maximo, ocorrencias_max, ciclo, moda_valor, moda_porc
 
 def analisar_filtros_avancados(historico, indice_premio):
@@ -360,6 +367,7 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
         palpite, _, _, _ = gerar_estrategia_oracle_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
+        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -371,7 +379,6 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
                 if not w: seq_atual_loss += 1
                 else: break
                 
-    # --- NOVA LÓGICA DE CONSTÂNCIA ---
     max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
     max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
     
@@ -415,10 +422,8 @@ def calcular_metricas_unidades_detalhado(historico, indice_premio):
         for w in reversed(historico_wins):
             if w: seq_atual_win += 1
             else: break
-            
     max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
     max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
-    
     stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l, "moda": moda_l, "moda_porc": porc_l }
     stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w, "moda": moda_w, "moda_porc": porc_w }
     return stats_loss, stats_win
@@ -472,11 +477,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - STABILITY ANALYSIS")
+    st.title("🛡️ PENTÁGONO - INTEGRITY GUARD")
     col1, col2 = st.columns(2)
-    col1.metric("Estratégia", "Oracle Vision")
-    col2.metric("Métrica Nova", "Constância (Moda)")
-    st.info("Sistema focado em encontrar o ponto de equilíbrio e padrões repetitivos.")
+    col1.metric("Status", "Monitoramento Ativo")
+    col2.metric("Proteção", "Anti-Duplicidade")
+    st.info("Sistema agora limpa automaticamente dados repetidos para evitar erros de estatística.")
 
 else:
     banca_selecionada = escolha_menu
@@ -544,7 +549,7 @@ else:
     # --- PÁGINA DA BANCA ---
     st.header(f"🔭 {config['display_name']} - Oracle Full")
     
-    with st.spinner("Carregando dados..."):
+    with st.spinner("Carregando e Limpando dados..."):
         historico = carregar_dados_hibridos(config['nome_aba'])
 
     if len(historico) > 0:
@@ -552,10 +557,8 @@ else:
         if config['tipo'] == "SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
         else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
         
-        if config['tipo'] == "SOLO": abas = st.tabs(["🔮 Oracle 50", "🎯 Unidades"])
-        else: abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
-        
         range_abas = [0, 1] if config['tipo'] == "SOLO" else range(5)
+        abas = st.tabs(["🔮 Oracle 50", "🎯 Unidades"] if config['tipo'] == "SOLO" else [f"{i+1}º Prêmio" for i in range(5)])
         
         for idx_aba in range_abas:
             with abas[idx_aba]:
@@ -599,10 +602,8 @@ else:
                         if prob_win_futura >= 80:
                             if em_streak_vitoria: col_msg.success(f"💎 **DIAMANTE (SURFER)!** Tendência forte de CONTINUAR ganhando.")
                             else: col_msg.success(f"💎 **DIAMANTE (SNIPER)!** Tendência forte de REVERTER derrota.")
-                        elif prob_win_futura <= 40:
-                            col_msg.error("🛑 **NÃO JOGUE.** Probabilidade baixa.")
-                        else:
-                            col_msg.warning("⚠️ **NEUTRO.** Mercado indefinido.")
+                        elif prob_win_futura <= 40: col_msg.error("🛑 **NÃO JOGUE.** Probabilidade baixa.")
+                        else: col_msg.warning("⚠️ **NEUTRO.** Mercado indefinido.")
 
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
