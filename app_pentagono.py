@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V55.0 Predator", page_icon="🦖", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V56.0 Pattern Sniper", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -46,9 +46,8 @@ st.markdown("""
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #00ff00 !important; }
-    div[data-testid="stMetricValue"] { font-size: 22px; font-weight: bold; }
+    div[data-testid="stMetricValue"] { font-size: 20px; font-weight: bold; }
     .css-1wivap2 { font-size: 14px !important; }
-    .stAlert { font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,25 +131,75 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA PREDATOR (MERITOCRACIA) ---
+# --- 3. CÉREBRO: IA PREDATOR + ANALISE DE REVERSÃO ---
 # =============================================================================
 
-def analisar_sequencias_profundas(lista_wins):
-    if not lista_wins: return 0, 0, 0
-    sequencias = []
-    atual = 0
-    for w in lista_wins:
-        if w: atual += 1
-        else:
-            if atual > 0: sequencias.append(atual)
-            atual = 0
-    if atual > 0: sequencias.append(atual)
-    if not sequencias: return 0, 0, 0
-    maximo = max(sequencias)
-    ocorrencias = sequencias.count(maximo)
-    total = len(lista_wins)
-    ciclo = int(total / ocorrencias) if ocorrencias > 0 else 0
-    return maximo, ocorrencias, ciclo
+def analisar_padrao_reversao(lista_wins):
+    """
+    Analisa a probabilidade histórica de reversão da sequência atual.
+    Retorna: (Probabilidade %, Total Ocorrências, Confiança Estatística)
+    """
+    if not lista_wins or len(lista_wins) < 10: return 0, 0, "Insuficiente"
+    
+    # 1. Determinar o status atual (Quantas derrotas seguidas?)
+    atual_loss_streak = 0
+    if not lista_wins[-1]: # Se o último foi derrota
+        for w in reversed(lista_wins):
+            if not w: atual_loss_streak += 1
+            else: break
+    
+    # Se viemos de vitória, a reversão seria para derrota (irrelevante para entrada)
+    if atual_loss_streak == 0:
+        return 0, 0, "Modo Vitória"
+
+    # 2. Varrer o histórico procurando essa mesma sequência
+    ocorrencias_padrao = 0
+    reversoes_win = 0
+    
+    # Percorre a lista até o penúltimo item
+    i = 0
+    while i < len(lista_wins) - atual_loss_streak:
+        # Verifica se achou uma sequência de perdas do tamanho atual
+        match = True
+        for k in range(atual_loss_streak):
+            if lista_wins[i+k] == True: # Se achou vitoria no meio, não é o padrão
+                match = False
+                break
+        
+        if match:
+            # Temos uma sequencia de perdas. O que veio depois?
+            # Verifica se o item anterior a sequencia era vitoria (para isolar o grupo)
+            if i > 0 and lista_wins[i-1] == True:
+                # Agora olhamos o resultado IMEDIATAMENTE após a sequencia
+                idx_pos = i + atual_loss_streak
+                if idx_pos < len(lista_wins):
+                    ocorrencias_padrao += 1
+                    if lista_wins[idx_pos] == True:
+                        reversoes_win += 1
+        i += 1
+        
+    if ocorrencias_padrao == 0: return 0, 0, "Inédito"
+    
+    probabilidade = (reversoes_win / ocorrencias_padrao) * 100
+    return probabilidade, ocorrencias_padrao, "Calculada"
+
+def analisar_filtros_avancados(historico, indice_premio):
+    if len(historico) < 2: return [], [], []
+    bloqueio_unidade = []; bloqueio_gemeas = False; bloqueio_linha = None 
+    try:
+        d_atual = historico[-1]['premios'][indice_premio]
+        d_anterior = historico[-2]['premios'][indice_premio]
+        u_atual = int(d_atual[-1]); u_anterior = int(d_anterior[-1])
+        if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
+            prox = (u_atual + 1) % 10; bloqueio_unidade.append(prox)
+        if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
+            prox = (u_atual - 1); 
+            if prox < 0: prox = 9
+            bloqueio_unidade.append(prox)
+        if d_atual in GEMEAS and d_anterior in GEMEAS: bloqueio_gemeas = True
+        if d_atual[0] == d_anterior[0]: bloqueio_linha = d_atual[0]
+    except: pass
+    return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
@@ -177,65 +226,41 @@ def treinar_probabilidade_global(historico, indice_premio):
         chave = str(classes[i]).zfill(2); mapa_probs[chave] = prob
     return mapa_probs
 
-def get_grupo_dezena(dezena):
-    d = int(dezena)
-    if d == 0: return 25
-    g = (d - 1) // 4 + 1
-    return g
-
 def rankear_grupos(mapa_probs):
-    """Soma a probabilidade das dezenas de cada grupo para ver qual grupo está mais forte."""
     score_grupos = {g: 0.0 for g in range(1, 26)}
     for g in range(1, 26):
         dezenas = GRUPO_TO_DEZENAS[g]
-        for d in dezenas:
-            score_grupos[g] += mapa_probs.get(d, 0.0)
-    
-    # Ordena grupos do mais forte pro mais fraco
-    ranking = sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
-    return ranking
+        for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
+    return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
 
 def gerar_estrategia_predator_50(historico, indice_premio):
     if not historico: return [], 0, {}
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     if not mapa_ia: return [], 0, {}
     
-    # 1. Rankear Grupos (Quem manda no jogo?)
     ranking_grupos = rankear_grupos(mapa_ia)
-    
-    # 2. Distribuição Predator (Meritocracia)
-    top_10_elite = [g for g, s in ranking_grupos[:10]]
-    mid_10_normais = [g for g, s in ranking_grupos[10:20]]
-    last_5_mortos = [g for g, s in ranking_grupos[20:]]
+    top_10 = [g for g, s in ranking_grupos[:10]]
+    mid_10 = [g for g, s in ranking_grupos[10:20]]
+    last_5 = [g for g, s in ranking_grupos[20:]]
     
     palpite_matrix = []
+    # ELITE (3 dezenas)
+    for g in top_10:
+        dezenas = GRUPO_TO_DEZENAS[g]
+        dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
+        palpite_matrix.extend(dezenas[:3])
+    # MID (2 dezenas)
+    for g in mid_10:
+        dezenas = GRUPO_TO_DEZENAS[g]
+        dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
+        palpite_matrix.extend(dezenas[:2])
     
-    # ELITE: Pega 3 melhores dezenas de cada (30 dezenas)
-    for g in top_10_elite:
-        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
-        # Ordena dezenas do grupo pela prob da IA
-        dezenas_candidatas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
-        palpite_matrix.extend(dezenas_candidatas[:3])
-        
-    # NORMAIS: Pega 2 melhores dezenas de cada (20 dezenas)
-    for g in mid_10_normais:
-        dezenas_candidatas = GRUPO_TO_DEZENAS[g]
-        dezenas_candidatas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
-        palpite_matrix.extend(dezenas_candidatas[:2])
-        
-    # MORTOS: Pega 0 (Abate)
-    
-    # Soma Acumulada
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
     
-    info_predator = {
-        "elite": top_10_elite,
-        "abate": last_5_mortos
-    }
-    
+    info_predator = { "elite": top_10, "abate": last_5 }
     return sorted(palpite_matrix), conf_media, info_predator
 
 def treinar_oraculo_unidades(historico, indice_premio):
@@ -264,19 +289,21 @@ def treinar_oraculo_unidades(historico, indice_premio):
     return ranking, (ranking[0][1] * 100)
 
 # =============================================================================
-# --- 4. BACKTESTS ---
+# --- 4. BACKTESTS (PATTERN MATCHING) ---
 # =============================================================================
 
-def calcular_metricas_predator_detalhado(historico, indice_premio):
-    if len(historico) < 20: return {}, {}
+def calcular_metricas_predator_avancado(historico, indice_premio):
+    if len(historico) < 20: return {}, {}, (0,0,"N/A")
     total = len(historico); inicio = max(20, total - 50)
     historico_wins = []
+    
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
         palpite, _, _ = gerar_estrategia_predator_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
+        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -287,39 +314,14 @@ def calcular_metricas_predator_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
-    max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
-    max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
-    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
-    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
-    return stats_loss, stats_win
-
-def calcular_metricas_unidades_detalhado(historico, indice_premio):
-    if len(historico) < 30: return {}, {}
-    total = len(historico); inicio = max(30, total - 50)
-    historico_wins = []
-    streak_no_momento = 0
-    for i in range(inicio, total):
-        target = int(historico[i]['premios'][indice_premio][-1])
-        hist_parcial = historico[:i]
-        rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]
-        else: palpite = [u for u, p in rank[:5]]
-        if target in palpite:
-            historico_wins.append(True)
-            streak_no_momento = 0
-        else:
-            historico_wins.append(False)
-            streak_no_momento += 1
-    seq_atual_loss = streak_no_momento
-    seq_atual_win = 0
-    if historico_wins and historico_wins[-1]:
-        for w in reversed(historico_wins):
-            if w: seq_atual_win += 1
-            else: break
-    max_w, count_w, ciclo_w = analisar_sequencias_profundas([x for x in historico_wins])
-    max_l, count_l, ciclo_l = analisar_sequencias_profundas([not x for x in historico_wins])
-    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l }
-    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w }
+                
+    # --- ANÁLISE DE REVERSÃO ---
+    # Aqui a mágica acontece: Calculamos a chance baseada em PADRÕES PASSADOS
+    prob_rev, ocorrencias, status_calc = analisar_padrao_reversao(historico_wins)
+    
+    stats_loss = { "atual": seq_atual_loss, "prob_reversao": prob_rev, "amostra": ocorrencias }
+    stats_win = { "atual": seq_atual_win }
+    
     return stats_loss, stats_win
 
 def executar_backtest_recente_predator(historico, indice_premio):
@@ -372,16 +374,15 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - PREDATOR LOGIC")
+    st.title("🛡️ PENTÁGONO - SNIPER DE PADRÕES")
     col1, col2 = st.columns(2)
-    col1.metric("Estratégia", "Predator (3-2-0)")
-    col2.metric("Alvo", "Densidade de Elite")
-    st.info("O sistema agora ELIMINA grupos fracos e sobrecarrega grupos fortes para aumentar a chance de dezena exata.")
+    col1.metric("Estratégia", "Predator (Grupos)")
+    col2.metric("Timing", "Pattern Matching")
+    st.info("A IA agora analisa o passado para prever a exata hora da reversão.")
 
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
-    
     st.sidebar.markdown("---")
     url_site = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
@@ -412,7 +413,7 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro Planilha")
                 
-    else: # MODO TURBO
+    else: 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
         with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
@@ -443,7 +444,7 @@ else:
             else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
-    st.header(f"🔭 {config['display_name']} - PREDATOR")
+    st.header(f"🔭 {config['display_name']} - Pattern Sniper")
     
     with st.spinner("Carregando dados..."):
         historico = carregar_dados_hibridos(config['nome_aba'])
@@ -453,85 +454,69 @@ else:
         if config['tipo'] == "SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
         else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
         
-        if config['tipo'] == "SOLO":
-            aba_dez, aba_uni = st.tabs(["🦖 Predator 50 (1º Prêmio)", "🎯 Unidades"])
-            with aba_dez:
-                lista_matrix, conf_total, info_predator = gerar_estrategia_predator_50(historico, 0)
-                stats_loss, stats_win = calcular_metricas_predator_detalhado(historico, 0)
-                
-                if HAS_AI:
-                    st.info(f"🛡️ Força da Cobertura (Predator): {conf_total:.1f}%")
-                    st.success(f"🔥 **GRUPOS ELITE (3 Dezenas):** {info_predator['elite']}")
-                    st.error(f"☠️ **GRUPOS ABATIDOS (0 Dezenas):** {info_predator['abate']}")
-                
-                if stats_loss['atual'] >= stats_loss['max'] and stats_loss['max'] > 0:
-                    st.error(f"🚨 ALERTA: {stats_loss['atual']} Derrotas (Igualou Recorde!)")
-                
-                with st.container(border=True):
-                    st.code(", ".join(lista_matrix), language="text")
-                    
-                c1, c2 = st.columns(2)
-                c1.metric("Derrotas", f"{stats_loss['atual']}", f"Rec: {stats_loss['max']} (Freq: {stats_loss['freq']}x | Ciclo: {stats_loss['ciclo']})", delta_color="inverse")
-                c2.metric("Vitórias", f"{stats_win['atual']}", f"Rec: {stats_win['max']} (Freq: {stats_win['freq']}x | Ciclo: {stats_win['ciclo']})")
-                
-                bt_dez = executar_backtest_recente_predator(historico, 0)
-                cols_bt = st.columns(5)
-                for i, res in enumerate(reversed(bt_dez)):
-                    with cols_bt[i]:
-                        if res['win']: st.success(res['val'])
-                        else: st.error(res['val'])
-                
-                lbl, padroes = rastreador_padroes(historico, 0)
-                if padroes:
-                    st.caption(f"Padrões após {lbl}:")
-                    st.table(pd.DataFrame(padroes))
-
-            with aba_uni:
-                rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
-                stats_loss_u, stats_win_u = calcular_metricas_unidades_detalhado(historico, 0)
-                top_base = [str(u) for u, p in rank_uni[:5]]
-                if stats_loss_u['atual'] >= 2:
-                    extras = [str(u) for u, p in rank_uni[5:7]]; lista_final_uni = top_base + extras
-                    st.error(f"🛡️ MODO DEFESA (Top 7) | Vindo de {stats_loss_u['atual']} Losses")
+        # DEFINIÇÃO DAS ABAS
+        if config['tipo'] == "SOLO": abas = st.tabs(["🦖 Predator 50", "🎯 Unidades"])
+        else: abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
+        
+        # LOOP DE RENDERIZAÇÃO
+        range_abas = [0] if config['tipo'] == "SOLO" else range(5)
+        
+        for idx_aba in range_abas:
+            with abas[idx_aba]:
+                if config['tipo'] == "SOLO" and idx_aba == 1:
+                    # ABA UNIDADES (SOLO)
+                    rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
+                    top_base = [str(u) for u, p in rank_uni[:5]]
+                    with st.container(border=True): st.markdown(f"### Finais: {', '.join(top_base)}")
+                    bt_uni = executar_backtest_recente_uni_preciso(historico, 0)
+                    cols_bt_u = st.columns(5)
+                    for i, res in enumerate(bt_uni):
+                        with cols_bt_u[i]:
+                            st.caption(res['modo']); 
+                            if res['win']: st.success(res['val'])
+                            else: st.error(res['val'])
                 else:
-                    lista_final_uni = top_base
-                    st.info("⚔️ MODO ATAQUE (Top 5)")
-                with st.container(border=True):
-                    st.markdown(f"### Finais: {', '.join(lista_final_uni)}")
-                c3, c4 = st.columns(2)
-                c3.metric("Derrotas", f"{stats_loss_u['atual']}", f"Rec: {stats_loss_u['max']} (Freq: {stats_loss_u['freq']}x | Ciclo: {stats_loss_u['ciclo']})", delta_color="inverse")
-                c4.metric("Vitórias", f"{stats_win_u['atual']}", f"Rec: {stats_win_u['max']} (Freq: {stats_win_u['freq']}x | Ciclo: {stats_win_u['ciclo']})")
-                bt_uni = executar_backtest_recente_uni_preciso(historico, 0)
-                cols_bt_u = st.columns(5)
-                for i, res in enumerate(bt_uni):
-                    with cols_bt_u[i]:
-                        st.caption(res['modo'])
-                        if res['win']: st.success(res['val'])
-                        else: st.error(res['val'])
-
-        else:
-            # PENTA (5 PRÊMIOS)
-            abas = st.tabs(["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"])
-            for idx_aba, aba in enumerate(abas):
-                with aba:
+                    # ABA PREDATOR (PADRÃO)
                     lista_matrix, conf_total, info_predator = gerar_estrategia_predator_50(historico, idx_aba)
-                    stats_loss, stats_win = calcular_metricas_predator_detalhado(historico, idx_aba)
+                    stats_loss, stats_win = calcular_metricas_predator_avancado(historico, idx_aba)
+                    
                     if HAS_AI:
-                        st.info(f"🛡️ Força da Cobertura: {conf_total:.1f}%")
-                        st.success(f"🔥 **ELITE:** {info_predator['elite']}")
-                        st.error(f"☠️ **ABATIDOS:** {info_predator['abate']}")
+                        # DISPLAY DE DECISÃO INTELIGENTE
+                        prob_rev = stats_loss['prob_reversao']
+                        
+                        st.info(f"🛡️ Força Predator: {conf_total:.1f}%")
+                        
+                        if stats_loss['atual'] > 0:
+                            st.markdown(f"### 📊 Análise de Entrada (Histórico de {stats_loss['atual']} Derrotas)")
+                            col_prob, col_msg = st.columns([1, 3])
+                            col_prob.metric("Chance Reversão", f"{prob_rev:.1f}%", f"Base: {stats_loss['amostra']} casos")
+                            
+                            if prob_rev >= 80:
+                                col_msg.success(f"💎 **ENTRADA CONFIRMADA!** Historicamente, quando chega a {stats_loss['atual']} derrotas, a vitória ocorre em {prob_rev:.0f}% das vezes. Jogue para pegar de 1ª ou dobre.")
+                            elif prob_rev >= 60:
+                                col_msg.warning(f"⚠️ **ENTRADA DE RISCO.** Chance favorável ({prob_rev:.0f}%), mas considere aguardar mais um ciclo.")
+                            else:
+                                col_msg.error(f"🛑 **NÃO ENTRE.** Historicamente, a tendência é continuar perdendo (Chance de Win só {prob_rev:.0f}%).")
+                        else:
+                            st.success("🎉 Estamos em sequência de VITÓRIA. Aguarde o ciclo de derrotas iniciar para buscar a reversão.")
+
+                        st.success(f"🔥 **ELITE (3 Dezenas):** {info_predator['elite']}")
+                        st.error(f"☠️ **ABATIDOS (0 Dezenas):** {info_predator['abate']}")
                     
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
+                    
                     c1, c2 = st.columns(2)
-                    c1.metric("Derrotas", f"{stats_loss['atual']}", f"Rec: {stats_loss['max']} (Freq: {stats_loss['freq']}x | Ciclo: {stats_loss['ciclo']})", delta_color="inverse")
-                    c2.metric("Vitórias", f"{stats_win['atual']}", f"Rec: {stats_win['max']} (Freq: {stats_win['freq']}x | Ciclo: {stats_win['ciclo']})")
+                    c1.metric("Derrotas Seguidas", f"{stats_loss['atual']}", delta_color="inverse")
+                    c2.metric("Vitórias Seguidas", f"{stats_win['atual']}")
+                    
                     bt_dez = executar_backtest_recente_predator(historico, idx_aba)
                     cols_bt = st.columns(5)
                     for i, res in enumerate(reversed(bt_dez)):
                         with cols_bt[i]:
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
+                            
                     lbl, padroes = rastreador_padroes(historico, idx_aba)
                     if padroes:
                         st.caption(f"Padrões após {lbl}:")
