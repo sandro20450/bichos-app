@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V61.0 Unique Core", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V62.0 Cleaner", page_icon="🧹", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -56,11 +56,12 @@ st.markdown("""
     h1, h2, h3 { color: #00ff00 !important; }
     div[data-testid="stMetricValue"] { font-size: 20px; font-weight: bold; }
     .css-1wivap2 { font-size: 14px !important; }
+    .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (LIMPEZA RIGOROSA V61) ---
+# --- 2. CONEXÃO E RASPAGEM (NORMALIZAÇÃO ABSOLUTA) ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -72,6 +73,29 @@ def conectar_planilha(nome_aba):
         except: return None
     return None
 
+def normalizar_data(data_str):
+    """Converte qualquer data string para objeto date padrão."""
+    data_str = str(data_str).strip()
+    formatos = ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]
+    for fmt in formatos:
+        try: return datetime.strptime(data_str, fmt).date()
+        except: continue
+    return None
+
+def normalizar_hora(hora_str):
+    """Converte hora string para HH:MM padrão."""
+    h_str = str(hora_str).strip()
+    # Remove 'h', 'H', e segundos se houver
+    h_clean = re.sub(r'[a-zA-Z]', '', h_str).strip()
+    if len(h_clean) > 5: h_clean = h_clean[:5] # Corta segundos 14:00:00 -> 14:00
+    try:
+        if ':' in h_clean:
+            partes = h_clean.split(':')
+            return f"{int(partes[0]):02}:{int(partes[1]):02}"
+        else:
+            return f"{int(h_clean):02}:00"
+    except: return "00:00"
+
 def carregar_dados_hibridos(nome_aba):
     ws = conectar_planilha(nome_aba)
     if ws:
@@ -79,51 +103,38 @@ def carregar_dados_hibridos(nome_aba):
             raw = ws.get_all_values()
             if len(raw) < 2: return []
             
-            # --- LIMPEZA V61: DICIONÁRIO DE CHAVES ÚNICAS ---
+            # DICIONÁRIO DE UNICIDADE (CHAVE NORMALIZADA)
             dados_unicos = {}
             
             for row in raw[1:]:
                 if len(row) >= 3:
-                    # Normalização agressiva (strip + lower)
-                    d_clean = str(row[0]).strip()
-                    h_clean = str(row[1]).strip()
+                    # Normalização
+                    dt_obj = normalizar_data(row[0])
+                    hr_str = normalizar_hora(row[1])
                     
-                    # Chave Única: "DATA|HORA"
-                    chave_unica = f"{d_clean}|{h_clean}"
-                    
-                    premios = []
-                    for i in range(2, 7):
-                        if i < len(row):
-                            p_str = str(row[i]).strip()
-                            if p_str.isdigit(): premios.append(p_str.zfill(2)[-2:])
+                    if dt_obj:
+                        chave = f"{dt_obj.strftime('%Y-%m-%d')}|{hr_str}"
+                        
+                        premios = []
+                        for i in range(2, 7):
+                            if i < len(row):
+                                p_str = str(row[i]).strip()
+                                if p_str.isdigit(): premios.append(p_str.zfill(2)[-2:])
+                                else: premios.append("00")
                             else: premios.append("00")
-                        else: premios.append("00")
-                    
-                    # Sobrescreve se existir (mantém a última versão ou a única)
-                    dados_unicos[chave_unica] = {
-                        "data": d_clean,
-                        "horario": h_clean,
-                        "premios": premios
-                    }
+                        
+                        # Sobrescreve duplicatas, mantendo a mais recente da leitura
+                        dados_unicos[chave] = {
+                            "data": dt_obj.strftime('%Y-%m-%d'),
+                            "horario": hr_str,
+                            "premios": premios
+                        }
             
-            # Converte de volta para lista
             lista_final = list(dados_unicos.values())
-            
-            # Ordenação Cronológica Segura
-            def sort_key(x):
-                try:
-                    # Tenta converter para datetime para ordenar corretamente
-                    # Assume formato YYYY-MM-DD ou DD/MM/YYYY
-                    d_str = x['data']
-                    if '-' in d_str: return datetime.strptime(f"{d_str} {x['horario']}", "%Y-%m-%d %H:%M")
-                    elif '/' in d_str: return datetime.strptime(f"{d_str} {x['horario']}", "%d/%m/%Y %H:%M")
-                    else: return datetime.min
-                except: return datetime.min
-            
-            lista_final.sort(key=sort_key)
+            # Ordena por data e hora
+            lista_final.sort(key=lambda x: datetime.strptime(f"{x['data']} {x['horario']}", "%Y-%m-%d %H:%M"))
             return lista_final
-            
-        except Exception as e: return [] 
+        except: return [] 
     return []
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -148,7 +159,12 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
-                        if h_detect == horario_alvo:
+                        
+                        # Compara horas normalizadas
+                        h_alvo_norm = normalizar_hora(horario_alvo)
+                        h_detect_norm = normalizar_hora(h_detect)
+                        
+                        if h_detect_norm == h_alvo_norm:
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
                             for linha in linhas:
@@ -233,24 +249,6 @@ def analisar_sequencias_profundas_com_moda(lista_wins):
     total_seqs = len(sequencias)
     moda_porc = (moda_freq / total_seqs) * 100
     return maximo, ocorrencias_max, ciclo, moda_valor, moda_porc
-
-def analisar_filtros_avancados(historico, indice_premio):
-    if len(historico) < 2: return [], [], []
-    bloqueio_unidade = []; bloqueio_gemeas = False; bloqueio_linha = None 
-    try:
-        d_atual = historico[-1]['premios'][indice_premio]
-        d_anterior = historico[-2]['premios'][indice_premio]
-        u_atual = int(d_atual[-1]); u_anterior = int(d_anterior[-1])
-        if u_atual == (u_anterior + 1) or (u_anterior == 9 and u_atual == 0):
-            prox = (u_atual + 1) % 10; bloqueio_unidade.append(prox)
-        if u_atual == (u_anterior - 1) or (u_anterior == 0 and u_atual == 9):
-            prox = (u_atual - 1); 
-            if prox < 0: prox = 9
-            bloqueio_unidade.append(prox)
-        if d_atual in GEMEAS and d_anterior in GEMEAS: bloqueio_gemeas = True
-        if d_atual[0] == d_anterior[0]: bloqueio_linha = d_atual[0]
-    except: pass
-    return list(set(bloqueio_unidade)), bloqueio_gemeas, bloqueio_linha
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
@@ -384,7 +382,6 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
         palpite, _, _, _ = gerar_estrategia_oracle_50(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
-        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -395,27 +392,11 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
-                
     max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
     max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
     prob_win_futura, amostra, em_streak_vitoria = analisar_padrao_futuro(historico_wins)
-    
-    stats_loss = { 
-        "atual": seq_atual_loss, 
-        "max": max_l, 
-        "freq": count_l, 
-        "ciclo": ciclo_l,
-        "moda": moda_l,
-        "moda_porc": porc_l
-    }
-    stats_win = { 
-        "atual": seq_atual_win, 
-        "max": max_w, 
-        "freq": count_w, 
-        "ciclo": ciclo_w,
-        "moda": moda_w,
-        "moda_porc": porc_w
-    }
+    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l, "moda": moda_l, "moda_porc": porc_l }
+    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w, "moda": moda_w, "moda_porc": porc_w }
     return stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria
 
 def calcular_metricas_unidades_detalhado(historico, indice_premio):
@@ -487,24 +468,64 @@ def rastreador_padroes(historico, indice_premio):
 # --- 5. INTERFACE ---
 # =============================================================================
 
+def acao_limpar_banco(nome_aba):
+    ws = conectar_planilha(nome_aba)
+    if ws:
+        try:
+            # 1. Lê tudo
+            raw = ws.get_all_values()
+            if len(raw) < 2: return "Banco vazio"
+            cabecalho = raw[0]
+            
+            # 2. Processa duplicatas (com normalização)
+            dados_unicos = {}
+            for row in raw[1:]:
+                if len(row) >= 2:
+                    dt = normalizar_data(row[0])
+                    hr = normalizar_hora(row[1])
+                    if dt:
+                        chave = f"{dt.strftime('%Y-%m-%d')}|{hr}"
+                        # Reconstrói a linha com dados limpos
+                        row[0] = dt.strftime('%Y-%m-%d')
+                        row[1] = hr
+                        dados_unicos[chave] = row
+            
+            # 3. Ordena e Prepara para Re-upload
+            lista_final = list(dados_unicos.values())
+            lista_final.sort(key=lambda r: datetime.strptime(f"{r[0]} {r[1]}", "%Y-%m-%d %H:%M"))
+            
+            # 4. Limpa e Reescreve
+            ws.clear()
+            ws.append_row(cabecalho)
+            if lista_final:
+                ws.append_rows(lista_final)
+            return f"Sucesso! Reduzido de {len(raw)-1} para {len(lista_final)} registros."
+        except Exception as e: return f"Erro: {e}"
+    return "Erro Conexão"
+
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - INTEGRITY GUARD")
-    col1, col2 = st.columns(2)
-    col1.metric("Status", "Monitoramento Ativo")
-    col2.metric("Proteção", "Anti-Duplicidade")
-    st.info("Sistema agora limpa automaticamente dados repetidos para evitar erros de estatística.")
+    st.title("🛡️ PENTÁGONO - CLEANER CORE")
+    st.info("Utilize o menu lateral para selecionar a banca e executar a limpeza de dados se necessário.")
 
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     st.sidebar.markdown("---")
-    url_site = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
-    st.sidebar.link_button("🔗 Ver Site Oficial", url_site)
+    
+    # --- BOTÃO DE FAXINA ---
+    if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS"):
+        with st.spinner("Limpando e reescrevendo planilha..."):
+            res = acao_limpar_banco(config['nome_aba'])
+            if "Sucesso" in res: st.sidebar.success(res)
+            else: st.sidebar.error(res)
+            time.sleep(2)
+            st.rerun()
+            
     st.sidebar.markdown("---")
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
@@ -522,20 +543,17 @@ else:
                     with st.spinner(f"Buscando {horario_busca}..."):
                         try: 
                             existentes = ws.get_all_values()
-                            # Normaliza chaves da planilha para comparação
                             chaves = []
                             for row in existentes:
                                 if len(row) >= 2:
-                                    d = str(row[0]).strip()
-                                    h = str(row[1]).strip()
-                                    chaves.append(f"{d}|{h}")
+                                    d = normalizar_data(row[0])
+                                    h = normalizar_hora(row[1])
+                                    if d: chaves.append(f"{d.strftime('%Y-%m-%d')}|{h}")
                         except: chaves = []
                         
-                        # Normaliza chave de busca
-                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{horario_busca.strip()}"
+                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca)}"
                         
-                        if chave_atual in chaves:
-                            st.warning("Resultado já existe!")
+                        if chave_atual in chaves: st.warning("Resultado já existe!")
                         else:
                             premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                             if premios:
@@ -558,9 +576,9 @@ else:
                     chaves = []
                     for row in existentes:
                         if len(row) >= 2:
-                            d = str(row[0]).strip()
-                            h = str(row[1]).strip()
-                            chaves.append(f"{d}|{h}")
+                            d = normalizar_data(row[0])
+                            h = normalizar_hora(row[1])
+                            if d: chaves.append(f"{d.strftime('%Y-%m-%d')}|{h}")
                 except: chaves = []
                 
                 delta = data_fim - data_ini
@@ -571,13 +589,10 @@ else:
                         op_atual += 1; 
                         if op_atual <= total_ops: bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                        
-                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{hora.strip()}"
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora)}"
                         if chave_atual in chaves: continue
-                        
                         if dia > date.today(): continue
                         if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
-                        
                         premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
                         if premios:
                             ws.append_row([dia.strftime('%Y-%m-%d'), hora] + premios); sucessos += 1; chaves.append(chave_atual)
@@ -589,7 +604,6 @@ else:
     st.header(f"🔭 {config['display_name']} - Oracle Full")
     
     with st.spinner("Carregando e Limpando dados..."):
-        # CARREGAMENTO AGORA USA A LIMPEZA AUTOMATICA V61
         historico = carregar_dados_hibridos(config['nome_aba'])
 
     if len(historico) > 0:
@@ -605,18 +619,13 @@ else:
                 if config['tipo'] == "SOLO" and idx_aba == 1:
                     rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
                     stats_loss_u, stats_win_u = calcular_metricas_unidades_detalhado(historico, 0)
-                    
                     top_base = [str(u) for u, p in rank_uni[:5]]
-                    
                     if stats_loss_u['atual'] >= 2: st.error(f"🛡️ MODO DEFESA (Top 7)")
                     else: st.info("⚔️ MODO ATAQUE (Top 5)")
-                        
                     with st.container(border=True): st.markdown(f"### Finais: {', '.join(top_base)}")
-                    
                     c3, c4 = st.columns(2)
                     c3.metric("Derrotas", f"{stats_loss_u['atual']}", f"Rec: {stats_loss_u['max']} | Padrão: {stats_loss_u['moda']} ({stats_loss_u['moda_porc']:.0f}%)", delta_color="inverse")
                     c4.metric("Vitórias", f"{stats_win_u['atual']}", f"Rec: {stats_win_u['max']} | Padrão: {stats_win_u['moda']} ({stats_win_u['moda_porc']:.0f}%)")
-                    
                     bt_uni = executar_backtest_recente_uni_preciso(historico, 0)
                     cols_bt_u = st.columns(5)
                     for i, res in enumerate(bt_uni):
@@ -627,38 +636,31 @@ else:
                 else:
                     lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_50(historico, idx_aba)
                     stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria = calcular_metricas_oracle_detalhado(historico, idx_aba)
-                    
                     if HAS_AI:
                         st.info(f"🔮 {dados_oracle['info']}")
                         c_ima, c_rep = st.columns(2)
                         with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
                         with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
                         st.markdown("---")
-                        
                         st.markdown(f"### 📊 Análise de Padrão (Histórico de {amostra} casos)")
                         col_prob, col_msg = st.columns([1, 3])
                         col_prob.metric("Chance Próximo Win", f"{prob_win_futura:.1f}%")
-                        
                         if prob_win_futura >= 80:
                             if em_streak_vitoria: col_msg.success(f"💎 **DIAMANTE (SURFER)!** Tendência forte de CONTINUAR ganhando.")
                             else: col_msg.success(f"💎 **DIAMANTE (SNIPER)!** Tendência forte de REVERTER derrota.")
                         elif prob_win_futura <= 40: col_msg.error("🛑 **NÃO JOGUE.** Probabilidade baixa.")
                         else: col_msg.warning("⚠️ **NEUTRO.** Mercado indefinido.")
-
                     with st.container(border=True):
                         st.code(", ".join(lista_matrix), language="text")
-                    
                     c1, c2 = st.columns(2)
                     c1.metric("Derrotas", f"{stats_loss['atual']}", f"Rec: {stats_loss['max']} | Padrão: {stats_loss['moda']} ({stats_loss['moda_porc']:.0f}%)", delta_color="inverse")
                     c2.metric("Vitórias", f"{stats_win['atual']}", f"Rec: {stats_win['max']} | Padrão: {stats_win['moda']} ({stats_win['moda_porc']:.0f}%)")
-                    
                     bt_dez = executar_backtest_recente_oracle(historico, idx_aba)
                     cols_bt = st.columns(5)
                     for i, res in enumerate(reversed(bt_dez)):
                         with cols_bt[i]:
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
-                            
                     lbl, padroes = rastreador_padroes(historico, idx_aba)
                     if padroes:
                         st.caption(f"Padrões após {lbl}:")
