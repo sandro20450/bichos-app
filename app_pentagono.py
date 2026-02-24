@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V64.0 The Chaser", page_icon="💲", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V64.1 Cycle Lock", page_icon="🔒", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -343,48 +343,94 @@ def gerar_estrategia_oracle_46(historico, indice_premio):
     
     return palpite_matrix, conf_media, info_predator, dados_oracle
 
-# --- NOVO MÓDULO: PERSEGUIÇÃO DE UNIDADE (THE CHASER) ---
-def analisar_perseguicao_unidades(historico, indice_premio=0):
-    if len(historico) < 50: return None, 0, 0, []
-    
+# --- NOVO MÓDULO: THE CHASER (CYCLE LOCK V64.1) ---
+def rastrear_estado_chaser(historico, indice_premio=0):
+    """
+    Simula os passos do jogador no passado para saber exatamente
+    se ele está no meio de uma perseguição no momento atual.
+    """
     unidades = []
     for row in historico:
         try:
             dezena = str(row['premios'][indice_premio]).zfill(2)
-            unidades.append(int(dezena[-1]))
-        except:
-            unidades.append(-1)
+            if dezena != "00": unidades.append(int(dezena[-1]))
+        except: pass
             
-    unidades = [u for u in unidades if u != -1]
-    if not unidades: return None, 0, 0, []
+    if len(unidades) < 50: 
+        return {"status": "inativo", "target": None, "attempts": 0, "prob": 0, "occ": 0}
 
-    gatilho = unidades[-1]
-    ocorrencias_gatilho = 0
-    sucessos_em_8 = {u: 0 for u in range(10)}
+    # Helper function para calcular o melhor alvo num dado momento
+    def calc_best(hist_slice):
+        gatilho = hist_slice[-1]
+        sucessos = {u: 0 for u in range(10)}
+        ocorrencias = 0
+        for i in range(len(hist_slice) - 1):
+            if hist_slice[i] == gatilho:
+                janela = hist_slice[i+1 : i+9]
+                if not janela: continue
+                ocorrencias += 1
+                for u in set(janela): sucessos[u] += 1
+        if ocorrencias == 0: return None, 0, 0
+        rank = [(u, (sucessos[u]/ocorrencias)*100) for u in range(10)]
+        rank.sort(key=lambda x: x[1], reverse=True)
+        return rank[0][0], rank[0][1], ocorrencias
 
-    # Procura o gatilho no histórico, exceto no último que acabou de sair
-    for i in range(len(unidades) - 1):
-        if unidades[i] == gatilho:
-            janela = unidades[i+1 : i+9] # Pega os proximos 8 sorteios
-            if not janela: continue
+    # Começa a simulação há 100 sorteios atrás para sincronizar o estado
+    start_idx = max(50, len(unidades) - 100)
+    
+    chase_active = False
+    target_unit = None
+    attempts_made = 0
+    ouro_prob_saved = 0
+    occ_saved = 0
+
+    # Simula cada sorteio da história recente
+    for i in range(start_idx, len(unidades)):
+        current_unit = unidades[i]
+        
+        if chase_active:
+            # Jogador estava perseguindo. Deu certo agora?
+            attempts_made += 1
+            if current_unit == target_unit:
+                chase_active = False # WIN! Ciclo encerra.
+            elif attempts_made >= 8:
+                chase_active = False # LOSS! Atingiu limite de 8.
+        else:
+            # Jogador estava livre. Escolhe um alvo baseado no passado ATÉ i.
+            hist_slice = unidades[:i] 
+            best_u, best_prob, occ = calc_best(hist_slice)
             
-            ocorrencias_gatilho += 1
-            unidades_na_janela = set(janela) # Queremos saber se saiu pelo menos uma vez
-            
-            for u in unidades_na_janela:
-                sucessos_em_8[u] += 1
+            if best_u is not None:
+                # Inicia nova perseguição!
+                chase_active = True
+                target_unit = best_u
+                attempts_made = 1
+                ouro_prob_saved = best_prob
+                occ_saved = occ
+                
+                # E o sorteio atual (i), já foi vitória de cara?
+                if current_unit == target_unit:
+                    chase_active = False # Venceu de primeira
 
-    if ocorrencias_gatilho == 0: return None, 0, 0, []
-
-    ranking = []
-    for u in range(10):
-        prob = (sucessos_em_8[u] / ocorrencias_gatilho) * 100
-        ranking.append((u, prob))
-
-    ranking.sort(key=lambda x: x[1], reverse=True)
-    ouro_u, ouro_prob = ranking[0]
-
-    return ouro_u, ouro_prob, ocorrencias_gatilho, ranking
+    # ACABOU A HISTÓRIA. QUAL O ESTADO PARA O PRÓXIMO JOGO (O FUTURO)?
+    if chase_active:
+        return {
+            "status": "ativo",
+            "target": target_unit,
+            "attempts": attempts_made,
+            "prob": ouro_prob_saved,
+            "occ": occ_saved
+        }
+    else:
+        # Estamos livres para o próximo! Calcula um novo alvo com TODO o histórico
+        best_u, best_prob, occ = calc_best(unidades)
+        return {
+            "status": "novo",
+            "target": best_u,
+            "attempts": 0,
+            "prob": best_prob,
+            "occ": occ
+        }
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
@@ -593,11 +639,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - THE CHASER")
+    st.title("🛡️ PENTÁGONO - CYCLE LOCK")
     col1, col2 = st.columns(2)
-    col1.metric("Matriz", "46 Dezenas Exatas")
-    col2.metric("Estratégia Nova", "Perseguição de Ciclo (8 Jogos)")
-    st.info("Sistema acoplado com rastreador de unidade de ouro para alavancagem de lucro (1x9.20).")
+    col1.metric("Módulo Ativo", "The Chaser (Unidades)")
+    col2.metric("Proteção", "Travamento de Ciclo Ativo")
+    st.info("Sistema configurado para não mudar de alvo no meio de uma perseguição financeira.")
 
 else:
     banca_selecionada = escolha_menu
@@ -720,34 +766,42 @@ else:
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
                             
-                    # --- NOVO DISPLAY DE PERSEGUIÇÃO DE UNIDADE ---
+                    # --- NOVO DISPLAY: CYCLE LOCK (TRAVAMENTO DE CICLO) ---
                     st.markdown("---")
-                    st.markdown("### 🏹 Módulo de Perseguição (Ciclo de 8 Jogos)")
+                    st.markdown("### 🏹 The Chaser (Perseguição de Ciclo)")
                     
-                    ouro_u, ouro_prob, ocorrencias, rank_chase = analisar_perseguicao_unidades(historico, 0)
-                    if ouro_u is not None:
+                    estado_chaser = rastrear_estado_chaser(historico, 0)
+                    
+                    if estado_chaser['target'] is not None:
+                        ouro_u = estado_chaser['target']
+                        ouro_prob = estado_chaser['prob']
+                        ocorrencias = estado_chaser['occ']
+                        tentativa_atual = estado_chaser['attempts'] + 1
+                        
                         col_gold, col_info = st.columns([1, 2])
+                        
                         with col_gold:
-                            st.metric("🌟 Unidade de Ouro", f"Final {ouro_u}")
+                            st.metric("🌟 Alvo Principal", f"Final {ouro_u}")
+                            
                         with col_info:
-                            if ouro_prob >= 75:
-                                st.success(f"💎 **ALTA CHANCE:** Historicamente, após sair o gatilho atual, a unidade {ouro_u} sai em até 8 sorteios em **{ouro_prob:.1f}%** das vezes. (Baseado em {ocorrencias} ocorrências no passado).")
-                            elif ouro_prob >= 50:
-                                st.warning(f"⚠️ **RISCO MÉDIO:** A unidade {ouro_u} sai em **{ouro_prob:.1f}%** das vezes na janela de 8 jogos.")
+                            if estado_chaser['status'] == 'ativo':
+                                st.warning(f"🔒 **PERSEGUIÇÃO EM ANDAMENTO (TENTATIVA {tentativa_atual} DE 8)**\n\nContinue firme no **Final {ouro_u}**. Não mude a estratégia até o ciclo fechar ou zerar.")
                             else:
-                                st.error(f"🛑 **PERIGOSO:** Histórico fraco. A unidade {ouro_u} só saiu em **{ouro_prob:.1f}%** das vezes. Não recomendo perseguição.")
+                                st.success(f"🎯 **NOVO CICLO (TENTATIVA 1 DE 8)**\n\nO sistema encontrou um novo alvo ótimo. Inicie a perseguição do **Final {ouro_u}** agora.")
+                            
+                            st.caption(f"📊 Base Matemática: Em {ocorrencias} ocorrências no passado, a chance de bater em 8 jogos foi de {ouro_prob:.1f}%.")
                                 
-                        with st.expander("💸 Calculadora de Risco x Lucro (Plano de Perseguição)"):
-                            st.write(f"Se você iniciar a perseguição da Unidade {ouro_u} agora:")
-                            st.markdown("""
-                            - **Prêmio Banca:** R$ 92,00 (Para aposta de R$ 10)
-                            - **Custo Máximo Absoluto:** R$ 80,00 (Apostando R$ 10 por 8 sorteios seguidos)
-                            - **Pior Cenário de Acerto:** Acertar no 8º sorteio = Lucro Líquido de **R$ 12,00**.
-                            - **Melhor Cenário de Acerto:** Acertar no 1º sorteio = Lucro Líquido de **R$ 82,00**.
-                            - *Atenção: Se não sair até o 8º sorteio, aborte a perseguição e assuma o red (perda de R$ 80).*
+                        with st.expander("💸 Calculadora de Risco x Lucro (Plano Flat Betting)"):
+                            st.write(f"Gestão sugerida para perseguir o **Final {ouro_u}**:")
+                            st.markdown(f"""
+                            - **Prêmio da Banca:** R$ 92,00 (Para aposta de R$ 10)
+                            - **Custo Máximo:** R$ 80,00 (1x aposta por 8 sorteios)
+                            - **Pior Cenário (Acerto na 8ª):** Lucro de **R$ 12,00**
+                            - **Melhor Cenário (Acerto na 1ª):** Lucro de **R$ 82,00**
+                            - *Regra Financeira: Aposta Fixa (Flat). Não faça Martingale (não dobre a aposta).*
                             """)
                     else:
-                        st.info("Aguardando mais dados históricos para gerar estatística de perseguição.")
+                        st.info("Aguardando mais dados históricos para calcular a perseguição.")
 
                 else:
                     lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_46(historico, idx_aba)
