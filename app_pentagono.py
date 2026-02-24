@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V62.1 Sync", page_icon="💲", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V63.0 Precision", page_icon="💲", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -176,7 +176,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA ORACLE + CONSTÂNCIA ---
+# --- 3. CÉREBRO: IA ORACLE 46 DEZENAS ---
 # =============================================================================
 
 def get_grupo(dezena):
@@ -241,7 +241,6 @@ def analisar_sequencias_profundas_com_moda(lista_wins):
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
     
-    # Construção segura do DataFrame para evitar desalinhamento de tamanho
     datas = []; horas = []; targets = []
     for row in historico:
         try: 
@@ -267,7 +266,6 @@ def treinar_probabilidade_global(historico, indice_premio):
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro'].astype(str)
     
-    # REMOVIDO n_jobs=-1 para garantir determinismo absoluto do modelo!
     modelo = RandomForestClassifier(n_estimators=60, random_state=42)
     modelo.fit(X, y)
     
@@ -285,59 +283,81 @@ def treinar_probabilidade_global(historico, indice_premio):
 def rankear_grupos(mapa_probs):
     score_grupos = {g: 0.0 for g in range(1, 26)}
     for g in range(1, 26):
-        # BUG FIX: Usando list() para não alterar o dicionário original acidentalmente
         dezenas = list(GRUPO_TO_DEZENAS[g])
         for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
     return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
 
-def gerar_estrategia_oracle_50(historico, indice_premio):
+# LÓGICA REFINADA PARA 46 DEZENAS E ÍMÃS FORÇADOS
+def gerar_estrategia_oracle_46(historico, indice_premio):
     if not historico: return [], 0, {}, {}
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     ranking_grupos = rankear_grupos(mapa_ia)
     grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
     
     ranking_final = []
-    grupos_ima_set = set(grupos_ima)
-    grupos_rep_set = set(grupos_repelidos)
+    grupos_ima_selecionados = grupos_ima[:3] # Pega até 3 Ímãs
+    grupos_ima_set = set(grupos_ima_selecionados)
+    grupos_rep_set = set(grupos_repelidos[:5]) # Pega os piores repelidos
     
     for g, score in ranking_grupos:
         score_final = score
-        # BUG FIX: Soma garantida para Ímãs subirem ao topo independentemente da base da IA
         if g in grupos_ima_set: score_final += 2.0 
         if g in grupos_rep_set: score_final = -999.0 
         ranking_final.append((g, score_final))
         
     ranking_final.sort(key=lambda x: x[1], reverse=True)
-    validos = [x for x in ranking_final if x[1] >= 0]
-    if len(validos) < 20: validos = ranking_final 
     
-    top_10 = [g for g, s in validos[:10]]
-    mid_10 = [g for g, s in validos[10:20]]
-    dead = [g for g, s in validos[20:]]
+    palpite_set = set()
     
-    palpite_matrix = []
-    for g in top_10:
-        # BUG FIX: .copy() para impedir a mutação da variável global entre os loops!
-        dezenas = GRUPO_TO_DEZENAS[g].copy()
-        dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
-        palpite_matrix.extend(dezenas[:3])
+    # PASSO 1: FORÇA TOTAL NOS ÍMÃS (Coloca as 4 dezenas de cada)
+    for g in grupos_ima_selecionados:
+        dezenas_g = GRUPO_TO_DEZENAS[g].copy()
+        palpite_set.update(dezenas_g)
         
-    for g in mid_10:
-        dezenas = GRUPO_TO_DEZENAS[g].copy()
-        dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
-        palpite_matrix.extend(dezenas[:2])
+    # PASSO 2: FILTRAR OS RESTANTES 
+    # Tira os ímãs da lista para não duplicar, os repelidos ficam no fim com score -999
+    remaining_ranked = [g for g, s in ranking_final if g not in grupos_ima_set]
+    
+    # PASSO 3: PREENCHER ATÉ 46 DEZENAS EXATAS
+    idx = 0
+    while len(palpite_set) < 46 and idx < len(remaining_ranked):
+        g = remaining_ranked[idx]
+        dezenas_g = GRUPO_TO_DEZENAS[g].copy()
+        # Ordena as dezenas dentro deste grupo da melhor para a pior
+        dezenas_g.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         
-    palpite_matrix = list(set(palpite_matrix))
-    if len(palpite_matrix) > 50: palpite_matrix = palpite_matrix[:50]
+        # Estratégia de Injeção: Top 8 levam 3 dezenas, os demais levam 2 dezenas.
+        adicionar = 3 if idx < 8 else 2
+        
+        # Trava de Segurança: Não ultrapassar 46 dezenas no total
+        falta = 46 - len(palpite_set)
+        if adicionar > falta:
+            adicionar = falta
+            
+        for d in dezenas_g[:adicionar]:
+            palpite_set.add(d)
+            
+        idx += 1
+        
+    palpite_matrix = list(palpite_set)
+    palpite_matrix.sort()
+    
+    # Identificar quem ficou de fora (Abatidos)
+    grupos_utilizados = set()
+    for d in palpite_matrix:
+        grupos_utilizados.add(get_grupo(int(d)))
+        
+    abate = [g for g in range(1, 26) if g not in grupos_utilizados]
     
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
     
-    info_predator = { "elite": top_10, "abate": dead }
-    dados_oracle = { "info": info_oracle, "imas": grupos_ima[:3], "repelidos": grupos_repelidos[:5] }
-    return sorted(palpite_matrix), conf_media, info_predator, dados_oracle
+    info_predator = { "elite": grupos_ima_selecionados, "abate": abate }
+    dados_oracle = { "info": info_oracle, "imas": grupos_ima_selecionados, "repelidos": grupos_repelidos[:5] }
+    
+    return palpite_matrix, conf_media, info_predator, dados_oracle
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
@@ -361,7 +381,6 @@ def treinar_oraculo_unidades(historico, indice_premio):
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
     
-    # REMOVIDO n_jobs=-1
     modelo = RandomForestClassifier(n_estimators=50, random_state=42)
     modelo.fit(X, y)
     
@@ -408,9 +427,10 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
     for i in range(inicio, total):
         target = historico[i]['premios'][indice_premio]
         hist_p = historico[:i]
-        palpite, _, _, _ = gerar_estrategia_oracle_50(hist_p, indice_premio)
+        palpite, _, _, _ = gerar_estrategia_oracle_46(hist_p, indice_premio)
         win = target in palpite
         historico_wins.append(win)
+        
     seq_atual_loss = 0; seq_atual_win = 0
     if historico_wins:
         if historico_wins[-1]:
@@ -421,11 +441,27 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
             for w in reversed(historico_wins):
                 if not w: seq_atual_loss += 1
                 else: break
+                
     max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
     max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
     prob_win_futura, amostra, em_streak_vitoria = analisar_padrao_futuro(historico_wins)
-    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l, "moda": moda_l, "moda_porc": porc_l }
-    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w, "moda": moda_w, "moda_porc": porc_w }
+    
+    stats_loss = { 
+        "atual": seq_atual_loss, 
+        "max": max_l, 
+        "freq": count_l, 
+        "ciclo": ciclo_l,
+        "moda": moda_l,
+        "moda_porc": porc_l
+    }
+    stats_win = { 
+        "atual": seq_atual_win, 
+        "max": max_w, 
+        "freq": count_w, 
+        "ciclo": ciclo_w,
+        "moda": moda_w,
+        "moda_porc": porc_w
+    }
     return stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria
 
 def calcular_metricas_unidades_detalhado(historico, indice_premio):
@@ -459,7 +495,7 @@ def executar_backtest_recente_oracle(historico, indice_premio):
     for i in range(1, 6):
         idx = -i
         target = historico[idx]['premios'][indice_premio]
-        palp, _, _, _ = gerar_estrategia_oracle_50(historico[:idx], indice_premio)
+        palp, _, _, _ = gerar_estrategia_oracle_46(historico[:idx], indice_premio)
         win = target in palp
         results.append({"val": target, "win": win})
     return results
@@ -530,11 +566,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - INTEGRITY GUARD")
+    st.title("🛡️ PENTÁGONO - PRECISION 46")
     col1, col2 = st.columns(2)
-    col1.metric("Status", "Monitoramento Ativo")
-    col2.metric("Proteção", "Anti-Mutação de Memória")
-    st.info("Sistema agora possui travas absolutas contra falso-positivos no backtest.")
+    col1.metric("Matriz", "46 Dezenas Exatas")
+    col2.metric("Regra", "Ímãs com 4 Dezenas Forçadas")
+    st.info("Sistema agora foca em 46 dezenas, extraindo 100% da força dos grupos Ímãs e aniquilando os Repelidos.")
 
 else:
     banca_selecionada = escolha_menu
@@ -624,7 +660,7 @@ else:
             else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
-    st.header(f"🔭 {config['display_name']} - Oracle Full")
+    st.header(f"🔭 {config['display_name']} - Oracle 46")
     
     with st.spinner("Carregando e Limpando dados..."):
         historico = carregar_dados_hibridos(config['nome_aba'])
@@ -635,7 +671,7 @@ else:
         else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
         
         range_abas = [0, 1] if config['tipo'] == "SOLO" else range(5)
-        abas = st.tabs(["🔮 Oracle 50", "🎯 Unidades"] if config['tipo'] == "SOLO" else [f"{i+1}º Prêmio" for i in range(5)])
+        abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"] if config['tipo'] == "SOLO" else [f"{i+1}º Prêmio" for i in range(5)])
         
         for idx_aba in range_abas:
             with abas[idx_aba]:
@@ -657,7 +693,7 @@ else:
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
                 else:
-                    lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_50(historico, idx_aba)
+                    lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_46(historico, idx_aba)
                     stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria = calcular_metricas_oracle_detalhado(historico, idx_aba)
                     if HAS_AI:
                         st.info(f"🔮 {dados_oracle['info']}")
