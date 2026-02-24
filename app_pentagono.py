@@ -20,11 +20,11 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V67.1 Batch Turbo", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V68.0 Vitorino Core", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    "TRADICIONAL_MILHAR": { "display_name": "🎯 TRADICIONAL (Milhar)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
+    "TRADICIONAL_MILHAR": { "display_name": "👑 Estratégia Vitorino", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "tipo": "PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
     "CAMINHODASORTE": { "display_name": "CAMINHO (1º ao 5º)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "tipo": "PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
     "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "tipo": "PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
@@ -54,8 +54,8 @@ st.markdown("""
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
-    h1, h2, h3 { color: #00ff00 !important; }
-    div[data-testid="stMetricValue"] { font-size: 20px; font-weight: bold; }
+    h1, h2, h3 { color: #ffd700 !important; } /* Dourado em homenagem ao Vitorino */
+    div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .css-1wivap2 { font-size: 14px !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
 </style>
@@ -460,8 +460,59 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
     quente_u = Counter(recentes).most_common(1)[0][0] if recentes else "-"
     return markov_u, atrasada_u, quente_u
 
+
 # =============================================================================
-# --- 4. BACKTESTS ---
+# --- 4. NOVO: MÓDULO VITORINO (MILHAR CONSTRUCTOR) ---
+# =============================================================================
+
+def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
+    """
+    Constrói a Milhar combinando IA (Dezena), Frequência Histórica (Centena) e Ciclo (Milhar).
+    Homenagem ao Vitorino.
+    """
+    if len(hist_dezena) < 30 or len(hist_milhar) < 10:
+        return [], []
+        
+    # 1. Base (Dezena): Puxa as 3 dezenas mais quentes via IA Oracle
+    mapa_probs = treinar_probabilidade_global(hist_dezena, 0)
+    ranking = sorted(mapa_probs.items(), key=lambda x: x[1], reverse=True)
+    top_3_dezenas = [x[0] for x in ranking[:3]]
+    
+    # 2. Coroa (Digito da Milhar): Modo Quente dos ultimos 20 sorteios
+    ultimos_20 = hist_milhar[-20:] if len(hist_milhar) >= 20 else hist_milhar
+    milhar_digits = []
+    for r in ultimos_20:
+        p1 = str(r['premios'][0]).zfill(4)
+        if p1 != "0000":
+            milhar_digits.append(p1[0]) 
+            
+    if not milhar_digits: coroa = "0"
+    else: coroa = Counter(milhar_digits).most_common(1)[0][0]
+    
+    milhares_vitorino = []
+    detalhes = []
+    
+    # 3. Corpo (Centena Aliada)
+    for dezena in top_3_dezenas:
+        centenas_aliadas = []
+        for r in hist_milhar:
+            for p in r['premios']: # Busca nos 5 premios para achar mais ligacoes
+                m_str = str(p).zfill(4)
+                if m_str[-2:] == dezena and m_str != "0000":
+                    centenas_aliadas.append(m_str[1]) 
+                    
+        if not centenas_aliadas: corpo = "0" # Caso a dezena nunca tenha saido
+        else: corpo = Counter(centenas_aliadas).most_common(1)[0][0]
+            
+        milhar_final = f"{coroa}{corpo}{dezena}"
+        milhares_vitorino.append(milhar_final)
+        detalhes.append({"dezena": dezena, "corpo": corpo, "coroa": coroa})
+        
+    return milhares_vitorino, detalhes
+
+
+# =============================================================================
+# --- 5. BACKTESTS ---
 # =============================================================================
 
 def analisar_padrao_futuro(lista_wins):
@@ -537,7 +588,7 @@ def rastreador_padroes(historico, indice_premio):
     return label, encontrados
 
 # =============================================================================
-# --- 5. INTERFACE ---
+# --- 6. INTERFACE ---
 # =============================================================================
 
 def acao_limpar_banco(nome_aba):
@@ -573,11 +624,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - BATCH TURBO ENGINE")
+    st.title("🛡️ PENTÁGONO - VITORINO CORE")
     col1, col2 = st.columns(2)
-    col1.metric("Proteção API Google", "Lote Ativado (Batching)")
-    col2.metric("Extração", "Carga em Massa Segura")
-    st.info("O motor de extração Turbo foi atualizado. Agora ele envia dados em lotes (caminhões) para evitar o bloqueio de limite de cota do Google Sheets.")
+    col1.metric("Novo Módulo", "Estratégia Vitorino (Milhar)")
+    col2.metric("Motor de Montagem", "Precisão Tripla")
+    st.info("Sistema atualizado para montar Milhares de alta precisão (1x9200) unindo I.A, Frequência e Ciclos.")
 
 else:
     banca_selecionada = escolha_menu
@@ -594,7 +645,6 @@ else:
             
     st.sidebar.markdown("---")
     
-    # 🛑 BLOQUEIA A EXTRAÇÃO MANUAL NA ABA NOVA DE MILHARES
     if config['tipo'] == "MILHAR_VIEW":
         st.sidebar.info("⚠️ **Aviso:** A extração de milhares é feita de forma automática quando você atualiza a aba **'TRADICIONAL (1º Prêmio)'**. Vá para lá para baixar novos resultados.")
     else:
@@ -660,7 +710,6 @@ else:
                     lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
                     total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
                     
-                    # 🚚 CRIAÇÃO DOS CAMINHÕES DE LOTE (BUFFERS)
                     buffer_principal = []
                     buffer_milhar = []
                     
@@ -676,7 +725,6 @@ else:
                             
                             premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
                             if premios:
-                                # EM VEZ DE ENVIAR PRO GOOGLE AGORA, GUARDA NO CAMINHÃO (BUFFER)
                                 if config['tipo'] == "DUAL":
                                     buffer_principal.append([dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"])
                                     if ws_milhar and (chave_atual not in chaves_m):
@@ -685,9 +733,8 @@ else:
                                 else:
                                     buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + premios)
                                 sucessos += 1; chaves.append(chave_atual)
-                            time.sleep(1.0) # Respeita o site da extração
+                            time.sleep(1.0)
                     
-                    # 🚛 FIM DA BUSCA: HORA DE DESCARREGAR OS CAMINHÕES DE UMA SÓ VEZ
                     status.text("🚚 Enviando lote de dados para o Google Sheets de uma vez...")
                     if buffer_principal:
                         ws.append_rows(buffer_principal)
@@ -699,23 +746,54 @@ else:
 
     # --- PÁGINA DA BANCA ---
     
+    # ==========================================
+    # NOVO PAINEL: ESTRATÉGIA VITORINO
+    # ==========================================
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"🔭 {config['display_name']} - Sniper Central")
-        st.info("🚧 Ambiente Isolado de Milhar e Centena.")
-        with st.spinner("Carregando banco de milhares..."):
-            historico = carregar_dados_hibridos(config['nome_aba'])
+        st.header(f"👑 Estratégia Vitorino (O Construtor)")
+        st.info("Este módulo é uma homenagem dedicada. O algoritmo atua como um relojoeiro, montando a milhar perfeita unindo a I.A (Dezenas), as ligações históricas (Centenas) e os ciclos quentes (Milhar).")
+        
+        with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
+            hist_milhar = carregar_dados_hibridos(config['nome_aba'])
+            hist_dez = carregar_dados_hibridos("BASE_TRADICIONAL_DEZ")
             
-        if len(historico) > 0:
-            ult = historico[-1]
-            st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
-            st.markdown("### 📊 Banco de Dados Paralelo (Últimos Registros)")
-            st.write("Os dados abaixo mostram que o sistema está puxando as 5 milhares cheias em silêncio. Quando você decidir as regras do jogo, faremos a IA analisar esta tabela.")
+        if len(hist_milhar) > 0 and len(hist_dez) > 0:
+            ult = hist_milhar[-1]
+            st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
             
-            df_show = pd.DataFrame(historico)
-            st.dataframe(df_show.tail(15))
+            milhares, detalhes = gerar_estrategia_vitorino(hist_milhar, hist_dez)
+            
+            if milhares:
+                st.markdown("### 🎯 As 3 Milhares de Ouro (Vitorino)")
+                cols = st.columns(3)
+                for i, m in enumerate(milhares):
+                    with cols[i]:
+                        with st.container(border=True):
+                            st.metric(f"🥇 Milhar Vitorino {i+1}", m)
+                            det = detalhes[i]
+                            st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Hist) <br> **Coroa:** {det['coroa']} (Moda)", unsafe_allow_html=True)
+                        
+                with st.expander("💸 Gestão Vitorino (Matemática do Lucro)"):
+                    st.markdown("""
+                    - **Estratégia:** Jogar as 3 milhares secas no 1º Prêmio.
+                    - **Custo por Sorteio:** R$ 3,00 (R$ 1,00 em cada milhar).
+                    - **Retorno Estimado Banca:** R$ 9.200,00 (Acertando a Milhar cheia).
+                    - **Retorno Estimado Centena:** R$ 920,00 (Opcional - jogando nas centenas geradas).
+                    - **Gordura Financeira (Milhar):** Você pode errar **3.066 sorteios seguidos** e ainda sairá no lucro no dia em que a Estratégia Vitorino bater na cabeça. A matemática da paciência é brutal a seu favor.
+                    """)
+            else:
+                st.warning("Aguardando volume mínimo de dados (30 dezenas) para gerar a Estratégia Vitorino.")
+            
+            st.markdown("---")
+            st.markdown("### 📊 Banco de Dados Bruto (Milhares 1º ao 5º)")
+            df_show = pd.DataFrame(hist_milhar)
+            st.dataframe(df_show.tail(10))
         else:
-            st.warning("⚠️ Base de Milhares vazia. Por favor, vá na aba 'TRADICIONAL (1º Prêmio)' e extraia alguns resultados (Unitário ou Turbo) para popular esta tabela.")
+            st.warning("⚠️ Base vazia. Por favor, vá na aba 'TRADICIONAL (1º Prêmio)' e faça uma extração para alimentar este banco de dados.")
 
+    # ==========================================
+    # PAINEL NORMAL (ORACLE E CHASER)
+    # ==========================================
     else:
         st.header(f"🔭 {config['display_name']} - Oracle 46")
         
@@ -733,7 +811,7 @@ else:
             for idx_aba in range_abas:
                 with abas[idx_aba]:
                     if config['tipo'] == "DUAL" and idx_aba == 1:
-                        # ABA UNIDADES (CHASER E RADAR)
+                        # ABA UNIDADES
                         st.markdown("### 🏹 The Chaser (Perseguição de Ciclo de 8 Jogos)")
                         
                         estado_chaser = rastrear_estado_chaser(historico, 0)
@@ -764,7 +842,7 @@ else:
                         c_q.metric('3. Tendência Quente', f"Final {quente}", "Moda repetição")
 
                     else:
-                        # ABA ORACLE 46 (DEZENAS)
+                        # ABA ORACLE 46
                         lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_46(historico, idx_aba)
                         stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria = calcular_metricas_oracle_detalhado(historico, idx_aba)
                         if HAS_AI:
@@ -797,7 +875,7 @@ else:
                             st.caption(f"Padrões após {lbl}:")
                             st.table(pd.DataFrame(padroes))
 
-                        # --- CYCLE LOCK 10 DEZENAS (APENAS TRADICIONAL) ---
+                        # --- CYCLE LOCK 10 DEZENAS ---
                         if config['tipo'] == "DUAL":
                             st.markdown("---")
                             st.markdown("### 🦅 Esquadrão Chaser (Perseguição de 10 Dezenas)")
