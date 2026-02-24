@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V65.0 Ultimate Chaser", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V66.0 Fast Core", page_icon="⚡", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -422,7 +422,6 @@ def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
         if ocorrencias == 0: return [], 0, 0
         top_10 = [x[0] for x in sucessos.most_common(10)]
         
-        # Calcula probabilidade conjunta (quantas vezes ACERTOU PELO MENOS 1 das 10 na janela)
         hit_windows = 0
         for i in range(len(hist_slice) - 1):
             if hist_slice[i] == gatilho:
@@ -497,40 +496,6 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
     
     return markov_u, atrasada_u, quente_u
 
-def treinar_oraculo_unidades(historico, indice_premio):
-    if not HAS_AI or len(historico) < 30: return [], 0
-    datas = []; horas = []; targets = []
-    for row in historico:
-        try: 
-            dt = pd.to_datetime(row['data'], format='%Y-%m-%d', errors='coerce')
-            if pd.isna(dt): continue
-            datas.append(dt)
-            horas.append(row['horario'])
-            targets.append(int(str(row['premios'][indice_premio])[-1]))
-        except: pass
-    if len(datas) < 30: return [], 0
-    df = pd.DataFrame({'data_dt': datas, 'horario': horas, 'target': targets})
-    df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder()
-    df['hora_code'] = le_hora.fit_transform(df['horario'])
-    df['target_futuro'] = df['target'].shift(-1)
-    df_treino = df.dropna(subset=['target_futuro']).tail(150)
-    if len(df_treino) < 20: return [], 0
-    X = df_treino[['dia_semana', 'hora_code', 'target']]
-    y = df_treino['target_futuro']
-    
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42)
-    modelo.fit(X, y)
-    
-    ultimo = df.iloc[-1]
-    X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
-    probs = modelo.predict_proba(X_novo)[0]
-    classes = modelo.classes_
-    ranking = []
-    for i, prob in enumerate(probs): ranking.append((int(classes[i]), prob))
-    ranking.sort(key=lambda x: x[1], reverse=True)
-    return ranking, (ranking[0][1] * 100)
-
 # =============================================================================
 # --- 4. BACKTESTS ---
 # =============================================================================
@@ -602,32 +567,6 @@ def calcular_metricas_oracle_detalhado(historico, indice_premio):
     }
     return stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria
 
-def calcular_metricas_unidades_detalhado(historico, indice_premio):
-    if len(historico) < 30: return {}, {}
-    total = len(historico); inicio = max(30, total - 50)
-    historico_wins = []
-    streak_no_momento = 0
-    for i in range(inicio, total):
-        target = int(historico[i]['premios'][indice_premio][-1])
-        hist_parcial = historico[:i]
-        rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]
-        else: palpite = [u for u, p in rank[:5]]
-        if target in palpite:
-            historico_wins.append(True); streak_no_momento = 0
-        else:
-            historico_wins.append(False); streak_no_momento += 1
-    seq_atual_loss = streak_no_momento; seq_atual_win = 0
-    if historico_wins and historico_wins[-1]:
-        for w in reversed(historico_wins):
-            if w: seq_atual_win += 1
-            else: break
-    max_w, count_w, ciclo_w, moda_w, porc_w = analisar_sequencias_profundas_com_moda([x for x in historico_wins])
-    max_l, count_l, ciclo_l, moda_l, porc_l = analisar_sequencias_profundas_com_moda([not x for x in historico_wins])
-    stats_loss = { "atual": seq_atual_loss, "max": max_l, "freq": count_l, "ciclo": ciclo_l, "moda": moda_l, "moda_porc": porc_l }
-    stats_win = { "atual": seq_atual_win, "max": max_w, "freq": count_w, "ciclo": ciclo_w, "moda": moda_w, "moda_porc": porc_w }
-    return stats_loss, stats_win
-
 def executar_backtest_recente_oracle(historico, indice_premio):
     results = []
     for i in range(1, 6):
@@ -637,24 +576,6 @@ def executar_backtest_recente_oracle(historico, indice_premio):
         win = target in palp
         results.append({"val": target, "win": win})
     return results
-
-def executar_backtest_recente_uni_preciso(historico, indice_premio):
-    total = len(historico); start = max(30, total - 60)
-    streak_no_momento = 0; resultados_reais = []
-    for i in range(start, total):
-        target = int(historico[i]['premios'][indice_premio][-1])
-        hist_parcial = historico[:i]
-        rank, _ = treinar_oraculo_unidades(hist_parcial, indice_premio)
-        is_defense = False
-        if streak_no_momento >= 2: palpite = [u for u, p in rank[:7]]; is_defense = True
-        else: palpite = [u for u, p in rank[:5]]
-        win = target in palpite
-        if i >= total - 5:
-            modo_str = "🛡️(7)" if is_defense else "⚔️(5)"
-            resultados_reais.append({ "val": f"Final {target}", "win": win, "modo": modo_str })
-        if win: streak_no_momento = 0
-        else: streak_no_momento += 1
-    return reversed(resultados_reais)
 
 def rastreador_padroes(historico, indice_premio):
     if len(historico) < 10: return []
@@ -704,11 +625,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - ULTIMATE CHASER")
+    st.title("🛡️ PENTÁGONO - FAST CORE")
     col1, col2 = st.columns(2)
-    col1.metric("Módulo 1", "Chaser de 10 Dezenas")
-    col2.metric("Módulo 2", "Radar de 3 Estratégias (Unidades)")
-    st.info("Sistema operando com travas de ciclo e monitoramento de 3 padrões estatísticos em tempo real.")
+    col1.metric("Status do Sistema", "Otimizado ⚡")
+    col2.metric("Módulo IA de Unidades", "Desativado")
+    st.info("O sistema foi otimizado. A IA preditiva de unidades pontuais foi removida para garantir velocidade máxima no processamento de perseguição (Chaser).")
 
 else:
     banca_selecionada = escolha_menu
@@ -815,27 +736,9 @@ else:
             with abas[idx_aba]:
                 if config['tipo'] == "SOLO" and idx_aba == 1:
                     # ==========================================
-                    # ABA UNIDADES
+                    # ABA UNIDADES (AGORA APENAS CHASER E RADAR)
                     # ==========================================
-                    rank_uni, conf_uni = treinar_oraculo_unidades(historico, 0)
-                    stats_loss_u, stats_win_u = calcular_metricas_unidades_detalhado(historico, 0)
-                    top_base = [str(u) for u, p in rank_uni[:5]]
-                    if stats_loss_u['atual'] >= 2: st.error(f"🛡️ MODO DEFESA (Top 7)")
-                    else: st.info("⚔️ MODO ATAQUE (Top 5)")
-                    with st.container(border=True): st.markdown(f"### Finais: {', '.join(top_base)}")
-                    c3, c4 = st.columns(2)
-                    c3.metric("Derrotas", f"{stats_loss_u['atual']}", f"Rec: {stats_loss_u['max']} | Padrão: {stats_loss_u['moda']} ({stats_loss_u['moda_porc']:.0f}%)", delta_color="inverse")
-                    c4.metric("Vitórias", f"{stats_win_u['atual']}", f"Rec: {stats_win_u['max']} | Padrão: {stats_win_u['moda']} ({stats_win_u['moda_porc']:.0f}%)")
-                    bt_uni = executar_backtest_recente_uni_preciso(historico, 0)
-                    cols_bt_u = st.columns(5)
-                    for i, res in enumerate(bt_uni):
-                        with cols_bt_u[i]:
-                            st.caption(res['modo']); 
-                            if res['win']: st.success(res['val'])
-                            else: st.error(res['val'])
-                            
-                    # --- CYCLE LOCK UNIDADES ---
-                    st.markdown("---")
+                    
                     st.markdown("### 🏹 The Chaser (Perseguição de Ciclo de 8 Jogos)")
                     
                     estado_chaser = rastrear_estado_chaser(historico, 0)
@@ -857,7 +760,6 @@ else:
                     else:
                         st.info("Aguardando mais dados históricos para calcular a perseguição.")
 
-                    # --- RADAR DAS 3 ESTRATÉGIAS (CURIOSIDADE) ---
                     st.markdown("---")
                     st.markdown("📝 **Nota: Radar das 3 Estratégias (Curiosidade em Tempo Real)**")
                     markov, ciclo, quente = calcular_3_estrategias_unidade(historico, 0)
