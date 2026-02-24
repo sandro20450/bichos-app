@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V67.0 Dual Engine", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V67.1 Batch Turbo", page_icon="⚡", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -62,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (DUAL ENGINE) ---
+# --- 2. CONEXÃO E RASPAGEM (DUAL ENGINE + BATCHING) ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -109,7 +109,6 @@ def carregar_dados_hibridos(nome_aba):
                         for i in range(2, 7):
                             if i < len(row):
                                 p_str = str(row[i]).strip()
-                                # Adaptação para carregar tanto dezena quanto milhar sem quebrar
                                 if p_str.isdigit(): premios.append(p_str.zfill(2))
                                 else: premios.append("00")
                             else: premios.append("00")
@@ -163,7 +162,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                         if 1 <= p_idx <= limite:
                                             clean_num = re.sub(r'\D', '', numero_txt)
                                             if len(clean_num) >= 2: 
-                                                # MÁGICA DO DUAL ENGINE AQUI
                                                 if config['tipo'] in ["DUAL", "MILHAR_VIEW"]:
                                                     dezenas_encontradas.append(clean_num[-4:].zfill(4))
                                                 else:
@@ -183,7 +181,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
 # =============================================================================
 # --- 3. CÉREBRO: IA ORACLE + CHASER ENGINE ---
 # =============================================================================
-# (O Cérebro continua exatamente o mesmo, focando em dezenas/unidades)
 
 def get_grupo(dezena):
     try:
@@ -576,11 +573,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - DUAL ENGINE")
+    st.title("🛡️ PENTÁGONO - BATCH TURBO ENGINE")
     col1, col2 = st.columns(2)
-    col1.metric("Banco de Dados", "Isolamento de Milhar Ativo")
-    col2.metric("Extração", "Dupla (Dezena + Milhar)")
-    st.info("A extração da aba Tradicional agora alimenta dois bancos de dados simultaneamente para a criação do futuro Sniper de Milhar.")
+    col1.metric("Proteção API Google", "Lote Ativado (Batching)")
+    col2.metric("Extração", "Carga em Massa Segura")
+    st.info("O motor de extração Turbo foi atualizado. Agora ele envia dados em lotes (caminhões) para evitar o bloqueio de limite de cota do Google Sheets.")
 
 else:
     banca_selecionada = escolha_menu
@@ -625,7 +622,6 @@ else:
                             else:
                                 premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                                 if premios:
-                                    # MÁGICA 1: SALVA DEZENA E MILHAR AO MESMO TEMPO
                                     if config['tipo'] == "DUAL":
                                         row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios[0][-2:], "00", "00", "00", "00"]
                                         ws.append_row(row_dez)
@@ -664,6 +660,10 @@ else:
                     lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
                     total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
                     
+                    # 🚚 CRIAÇÃO DOS CAMINHÕES DE LOTE (BUFFERS)
+                    buffer_principal = []
+                    buffer_milhar = []
+                    
                     for dia in lista_datas:
                         for hora in config['horarios']:
                             op_atual += 1; bar.progress(op_atual / total_ops)
@@ -676,22 +676,29 @@ else:
                             
                             premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
                             if premios:
-                                # MÁGICA 2: TURBO DUPLO
+                                # EM VEZ DE ENVIAR PRO GOOGLE AGORA, GUARDA NO CAMINHÃO (BUFFER)
                                 if config['tipo'] == "DUAL":
-                                    ws.append_row([dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"])
+                                    buffer_principal.append([dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"])
                                     if ws_milhar and (chave_atual not in chaves_m):
-                                        ws_milhar.append_row([dia.strftime('%Y-%m-%d'), hora] + premios)
+                                        buffer_milhar.append([dia.strftime('%Y-%m-%d'), hora] + premios)
                                         chaves_m.append(chave_atual)
                                 else:
-                                    ws.append_row([dia.strftime('%Y-%m-%d'), hora] + premios)
+                                    buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + premios)
                                 sucessos += 1; chaves.append(chave_atual)
-                            time.sleep(1.0)
-                    bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos."); time.sleep(2); st.rerun()
+                            time.sleep(1.0) # Respeita o site da extração
+                    
+                    # 🚛 FIM DA BUSCA: HORA DE DESCARREGAR OS CAMINHÕES DE UMA SÓ VEZ
+                    status.text("🚚 Enviando lote de dados para o Google Sheets de uma vez...")
+                    if buffer_principal:
+                        ws.append_rows(buffer_principal)
+                    if buffer_milhar and ws_milhar:
+                        ws_milhar.append_rows(buffer_milhar)
+                        
+                    bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros injetados com sucesso."); time.sleep(2); st.rerun()
                 else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
     
-    # EXIBIÇÃO EXCLUSIVA PARA A ABA NOVA DE MILHARES
     if config['tipo'] == "MILHAR_VIEW":
         st.header(f"🔭 {config['display_name']} - Sniper Central")
         st.info("🚧 Ambiente Isolado de Milhar e Centena.")
@@ -709,7 +716,6 @@ else:
         else:
             st.warning("⚠️ Base de Milhares vazia. Por favor, vá na aba 'TRADICIONAL (1º Prêmio)' e extraia alguns resultados (Unitário ou Turbo) para popular esta tabela.")
 
-    # EXIBIÇÃO NORMAL DAS OUTRAS BANCAS
     else:
         st.header(f"🔭 {config['display_name']} - Oracle 46")
         
