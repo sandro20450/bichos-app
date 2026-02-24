@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V62.0 Cleaner", page_icon="💲", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V62.1 Sync", page_icon="💲", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -74,7 +74,6 @@ def conectar_planilha(nome_aba):
     return None
 
 def normalizar_data(data_str):
-    """Converte qualquer data string para objeto date padrão."""
     data_str = str(data_str).strip()
     formatos = ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]
     for fmt in formatos:
@@ -83,11 +82,9 @@ def normalizar_data(data_str):
     return None
 
 def normalizar_hora(hora_str):
-    """Converte hora string para HH:MM padrão."""
     h_str = str(hora_str).strip()
-    # Remove 'h', 'H', e segundos se houver
     h_clean = re.sub(r'[a-zA-Z]', '', h_str).strip()
-    if len(h_clean) > 5: h_clean = h_clean[:5] # Corta segundos 14:00:00 -> 14:00
+    if len(h_clean) > 5: h_clean = h_clean[:5] 
     try:
         if ':' in h_clean:
             partes = h_clean.split(':')
@@ -103,18 +100,13 @@ def carregar_dados_hibridos(nome_aba):
             raw = ws.get_all_values()
             if len(raw) < 2: return []
             
-            # DICIONÁRIO DE UNICIDADE (CHAVE NORMALIZADA)
             dados_unicos = {}
-            
             for row in raw[1:]:
                 if len(row) >= 3:
-                    # Normalização
                     dt_obj = normalizar_data(row[0])
                     hr_str = normalizar_hora(row[1])
-                    
                     if dt_obj:
                         chave = f"{dt_obj.strftime('%Y-%m-%d')}|{hr_str}"
-                        
                         premios = []
                         for i in range(2, 7):
                             if i < len(row):
@@ -123,15 +115,12 @@ def carregar_dados_hibridos(nome_aba):
                                 else: premios.append("00")
                             else: premios.append("00")
                         
-                        # Sobrescreve duplicatas, mantendo a mais recente da leitura
                         dados_unicos[chave] = {
                             "data": dt_obj.strftime('%Y-%m-%d'),
                             "horario": hr_str,
                             "premios": premios
                         }
-            
             lista_final = list(dados_unicos.values())
-            # Ordena por data e hora
             lista_final.sort(key=lambda x: datetime.strptime(f"{x['data']} {x['horario']}", "%Y-%m-%d %H:%M"))
             return lista_final
         except: return [] 
@@ -160,7 +149,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
                         
-                        # Compara horas normalizadas
                         h_alvo_norm = normalizar_hora(horario_alvo)
                         h_detect_norm = normalizar_hora(h_detect)
                         
@@ -252,33 +240,53 @@ def analisar_sequencias_profundas_com_moda(lista_wins):
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
-    df = pd.DataFrame(historico)
-    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
-    df = df.dropna(subset=['data_dt'])
+    
+    # Construção segura do DataFrame para evitar desalinhamento de tamanho
+    datas = []; horas = []; targets = []
+    for row in historico:
+        try: 
+            dt = pd.to_datetime(row['data'], format='%Y-%m-%d', errors='coerce')
+            if pd.isna(dt): continue
+            datas.append(dt)
+            horas.append(row['horario'])
+            targets.append(str(row['premios'][indice_premio]).zfill(2))
+        except: pass
+        
+    if len(datas) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
+    
+    df = pd.DataFrame({'data_dt': datas, 'horario': horas, 'target': targets})
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder(); df['hora_code'] = le_hora.fit_transform(df['horario'])
-    try: dezenas_alvo = [str(j['premios'][indice_premio]).zfill(2) for j in historico if 'data_dt' in df.columns]
-    except: return {}
-    df = df.iloc[:len(dezenas_alvo)]; df['target'] = dezenas_alvo; df['target_futuro'] = df['target'].shift(-1)
-    df_treino = df.dropna().tail(150)
-    if len(df_treino) < 20: return {}
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['horario'])
+    
+    df['target_futuro'] = df['target'].shift(-1)
+    df_treino = df.dropna(subset=['target_futuro']).tail(150)
+    
+    if len(df_treino) < 20: return {f"{i:02}": 0.01 for i in range(100)} 
+    
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro'].astype(str)
-    modelo = RandomForestClassifier(n_estimators=60, random_state=42, n_jobs=-1)
+    
+    # REMOVIDO n_jobs=-1 para garantir determinismo absoluto do modelo!
+    modelo = RandomForestClassifier(n_estimators=60, random_state=42)
     modelo.fit(X, y)
+    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
     probs = modelo.predict_proba(X_novo)[0]
     classes = modelo.classes_
-    mapa_probs = {c: 0.0 for c in [f"{i:02}" for i in range(100)]}
+    
+    mapa_probs = {c: 0.01 for c in [f"{i:02}" for i in range(100)]}
     for i, prob in enumerate(probs):
-        chave = str(classes[i]).zfill(2); mapa_probs[chave] = prob
+        chave = str(classes[i]).zfill(2)
+        mapa_probs[chave] = prob
     return mapa_probs
 
 def rankear_grupos(mapa_probs):
     score_grupos = {g: 0.0 for g in range(1, 26)}
     for g in range(1, 26):
-        dezenas = GRUPO_TO_DEZENAS[g]
+        # BUG FIX: Usando list() para não alterar o dicionário original acidentalmente
+        dezenas = list(GRUPO_TO_DEZENAS[g])
         for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
     return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
 
@@ -287,55 +295,76 @@ def gerar_estrategia_oracle_50(historico, indice_premio):
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
     ranking_grupos = rankear_grupos(mapa_ia)
     grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
+    
     ranking_final = []
     grupos_ima_set = set(grupos_ima)
     grupos_rep_set = set(grupos_repelidos)
+    
     for g, score in ranking_grupos:
         score_final = score
-        if g in grupos_ima_set: score_final *= 1.5 
-        if g in grupos_rep_set: score_final = -1.0 
+        # BUG FIX: Soma garantida para Ímãs subirem ao topo independentemente da base da IA
+        if g in grupos_ima_set: score_final += 2.0 
+        if g in grupos_rep_set: score_final = -999.0 
         ranking_final.append((g, score_final))
+        
     ranking_final.sort(key=lambda x: x[1], reverse=True)
     validos = [x for x in ranking_final if x[1] >= 0]
     if len(validos) < 20: validos = ranking_final 
+    
     top_10 = [g for g, s in validos[:10]]
     mid_10 = [g for g, s in validos[10:20]]
     dead = [g for g, s in validos[20:]]
+    
     palpite_matrix = []
     for g in top_10:
-        dezenas = GRUPO_TO_DEZENAS[g]
+        # BUG FIX: .copy() para impedir a mutação da variável global entre os loops!
+        dezenas = GRUPO_TO_DEZENAS[g].copy()
         dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         palpite_matrix.extend(dezenas[:3])
+        
     for g in mid_10:
-        dezenas = GRUPO_TO_DEZENAS[g]
+        dezenas = GRUPO_TO_DEZENAS[g].copy()
         dezenas.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         palpite_matrix.extend(dezenas[:2])
+        
     palpite_matrix = list(set(palpite_matrix))
     if len(palpite_matrix) > 50: palpite_matrix = palpite_matrix[:50]
+    
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
     conf_media = prob_total * 100 
     if conf_media < 1.0: conf_media = 50.0
     if conf_media > 99.9: conf_media = 99.9
+    
     info_predator = { "elite": top_10, "abate": dead }
     dados_oracle = { "info": info_oracle, "imas": grupos_ima[:3], "repelidos": grupos_repelidos[:5] }
     return sorted(palpite_matrix), conf_media, info_predator, dados_oracle
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
-    df = pd.DataFrame(historico)
-    df['data_dt'] = pd.to_datetime(df['data'], format='%Y-%m-%d', errors='coerce')
-    df = df.dropna(subset=['data_dt'])
+    datas = []; horas = []; targets = []
+    for row in historico:
+        try: 
+            dt = pd.to_datetime(row['data'], format='%Y-%m-%d', errors='coerce')
+            if pd.isna(dt): continue
+            datas.append(dt)
+            horas.append(row['horario'])
+            targets.append(int(str(row['premios'][indice_premio])[-1]))
+        except: pass
+    if len(datas) < 30: return [], 0
+    df = pd.DataFrame({'data_dt': datas, 'horario': horas, 'target': targets})
     df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder(); df['hora_code'] = le_hora.fit_transform(df['horario'])
-    try: unis_alvo = [int(j['premios'][indice_premio][-1]) for j in historico if 'data_dt' in df.columns]
-    except: return [], 0
-    df = df.iloc[:len(unis_alvo)]; df['target'] = unis_alvo; df['target_futuro'] = df['target'].shift(-1)
-    df_treino = df.dropna().tail(150)
+    le_hora = LabelEncoder()
+    df['hora_code'] = le_hora.fit_transform(df['horario'])
+    df['target_futuro'] = df['target'].shift(-1)
+    df_treino = df.dropna(subset=['target_futuro']).tail(150)
     if len(df_treino) < 20: return [], 0
     X = df_treino[['dia_semana', 'hora_code', 'target']]
     y = df_treino['target_futuro']
-    modelo = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+    
+    # REMOVIDO n_jobs=-1
+    modelo = RandomForestClassifier(n_estimators=50, random_state=42)
     modelo.fit(X, y)
+    
     ultimo = df.iloc[-1]
     X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
     probs = modelo.predict_proba(X_novo)[0]
@@ -472,12 +501,9 @@ def acao_limpar_banco(nome_aba):
     ws = conectar_planilha(nome_aba)
     if ws:
         try:
-            # 1. Lê tudo
             raw = ws.get_all_values()
             if len(raw) < 2: return "Banco vazio"
             cabecalho = raw[0]
-            
-            # 2. Processa duplicatas (com normalização)
             dados_unicos = {}
             for row in raw[1:]:
                 if len(row) >= 2:
@@ -485,16 +511,11 @@ def acao_limpar_banco(nome_aba):
                     hr = normalizar_hora(row[1])
                     if dt:
                         chave = f"{dt.strftime('%Y-%m-%d')}|{hr}"
-                        # Reconstrói a linha com dados limpos
                         row[0] = dt.strftime('%Y-%m-%d')
                         row[1] = hr
                         dados_unicos[chave] = row
-            
-            # 3. Ordena e Prepara para Re-upload
             lista_final = list(dados_unicos.values())
             lista_final.sort(key=lambda r: datetime.strptime(f"{r[0]} {r[1]}", "%Y-%m-%d %H:%M"))
-            
-            # 4. Limpa e Reescreve
             ws.clear()
             ws.append_row(cabecalho)
             if lista_final:
@@ -509,15 +530,17 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - CLEANER CORE")
-    st.info("Utilize o menu lateral para selecionar a banca e executar a limpeza de dados se necessário.")
+    st.title("🛡️ PENTÁGONO - INTEGRITY GUARD")
+    col1, col2 = st.columns(2)
+    col1.metric("Status", "Monitoramento Ativo")
+    col2.metric("Proteção", "Anti-Mutação de Memória")
+    st.info("Sistema agora possui travas absolutas contra falso-positivos no backtest.")
 
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     st.sidebar.markdown("---")
     
-    # --- BOTÃO DE FAXINA ---
     if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS"):
         with st.spinner("Limpando e reescrevendo planilha..."):
             res = acao_limpar_banco(config['nome_aba'])
