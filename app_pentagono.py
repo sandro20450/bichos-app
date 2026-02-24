@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V63.0 Precision", page_icon="💲", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V64.0 The Chaser", page_icon="💲", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -287,7 +287,6 @@ def rankear_grupos(mapa_probs):
         for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
     return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
 
-# LÓGICA REFINADA PARA 46 DEZENAS E ÍMÃS FORÇADOS
 def gerar_estrategia_oracle_46(historico, indice_premio):
     if not historico: return [], 0, {}, {}
     mapa_ia = treinar_probabilidade_global(historico, indice_premio)
@@ -295,9 +294,9 @@ def gerar_estrategia_oracle_46(historico, indice_premio):
     grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
     
     ranking_final = []
-    grupos_ima_selecionados = grupos_ima[:3] # Pega até 3 Ímãs
+    grupos_ima_selecionados = grupos_ima[:3]
     grupos_ima_set = set(grupos_ima_selecionados)
-    grupos_rep_set = set(grupos_repelidos[:5]) # Pega os piores repelidos
+    grupos_rep_set = set(grupos_repelidos[:5])
     
     for g, score in ranking_grupos:
         score_final = score
@@ -308,45 +307,30 @@ def gerar_estrategia_oracle_46(historico, indice_premio):
     ranking_final.sort(key=lambda x: x[1], reverse=True)
     
     palpite_set = set()
-    
-    # PASSO 1: FORÇA TOTAL NOS ÍMÃS (Coloca as 4 dezenas de cada)
     for g in grupos_ima_selecionados:
         dezenas_g = GRUPO_TO_DEZENAS[g].copy()
         palpite_set.update(dezenas_g)
         
-    # PASSO 2: FILTRAR OS RESTANTES 
-    # Tira os ímãs da lista para não duplicar, os repelidos ficam no fim com score -999
     remaining_ranked = [g for g, s in ranking_final if g not in grupos_ima_set]
     
-    # PASSO 3: PREENCHER ATÉ 46 DEZENAS EXATAS
     idx = 0
     while len(palpite_set) < 46 and idx < len(remaining_ranked):
         g = remaining_ranked[idx]
         dezenas_g = GRUPO_TO_DEZENAS[g].copy()
-        # Ordena as dezenas dentro deste grupo da melhor para a pior
         dezenas_g.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
         
-        # Estratégia de Injeção: Top 8 levam 3 dezenas, os demais levam 2 dezenas.
         adicionar = 3 if idx < 8 else 2
-        
-        # Trava de Segurança: Não ultrapassar 46 dezenas no total
         falta = 46 - len(palpite_set)
-        if adicionar > falta:
-            adicionar = falta
+        if adicionar > falta: adicionar = falta
             
-        for d in dezenas_g[:adicionar]:
-            palpite_set.add(d)
-            
+        for d in dezenas_g[:adicionar]: palpite_set.add(d)
         idx += 1
         
     palpite_matrix = list(palpite_set)
     palpite_matrix.sort()
     
-    # Identificar quem ficou de fora (Abatidos)
     grupos_utilizados = set()
-    for d in palpite_matrix:
-        grupos_utilizados.add(get_grupo(int(d)))
-        
+    for d in palpite_matrix: grupos_utilizados.add(get_grupo(int(d)))
     abate = [g for g in range(1, 26) if g not in grupos_utilizados]
     
     prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
@@ -358,6 +342,49 @@ def gerar_estrategia_oracle_46(historico, indice_premio):
     dados_oracle = { "info": info_oracle, "imas": grupos_ima_selecionados, "repelidos": grupos_repelidos[:5] }
     
     return palpite_matrix, conf_media, info_predator, dados_oracle
+
+# --- NOVO MÓDULO: PERSEGUIÇÃO DE UNIDADE (THE CHASER) ---
+def analisar_perseguicao_unidades(historico, indice_premio=0):
+    if len(historico) < 50: return None, 0, 0, []
+    
+    unidades = []
+    for row in historico:
+        try:
+            dezena = str(row['premios'][indice_premio]).zfill(2)
+            unidades.append(int(dezena[-1]))
+        except:
+            unidades.append(-1)
+            
+    unidades = [u for u in unidades if u != -1]
+    if not unidades: return None, 0, 0, []
+
+    gatilho = unidades[-1]
+    ocorrencias_gatilho = 0
+    sucessos_em_8 = {u: 0 for u in range(10)}
+
+    # Procura o gatilho no histórico, exceto no último que acabou de sair
+    for i in range(len(unidades) - 1):
+        if unidades[i] == gatilho:
+            janela = unidades[i+1 : i+9] # Pega os proximos 8 sorteios
+            if not janela: continue
+            
+            ocorrencias_gatilho += 1
+            unidades_na_janela = set(janela) # Queremos saber se saiu pelo menos uma vez
+            
+            for u in unidades_na_janela:
+                sucessos_em_8[u] += 1
+
+    if ocorrencias_gatilho == 0: return None, 0, 0, []
+
+    ranking = []
+    for u in range(10):
+        prob = (sucessos_em_8[u] / ocorrencias_gatilho) * 100
+        ranking.append((u, prob))
+
+    ranking.sort(key=lambda x: x[1], reverse=True)
+    ouro_u, ouro_prob = ranking[0]
+
+    return ouro_u, ouro_prob, ocorrencias_gatilho, ranking
 
 def treinar_oraculo_unidades(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return [], 0
@@ -566,11 +593,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - PRECISION 46")
+    st.title("🛡️ PENTÁGONO - THE CHASER")
     col1, col2 = st.columns(2)
     col1.metric("Matriz", "46 Dezenas Exatas")
-    col2.metric("Regra", "Ímãs com 4 Dezenas Forçadas")
-    st.info("Sistema agora foca em 46 dezenas, extraindo 100% da força dos grupos Ímãs e aniquilando os Repelidos.")
+    col2.metric("Estratégia Nova", "Perseguição de Ciclo (8 Jogos)")
+    st.info("Sistema acoplado com rastreador de unidade de ouro para alavancagem de lucro (1x9.20).")
 
 else:
     banca_selecionada = escolha_menu
@@ -692,6 +719,36 @@ else:
                             st.caption(res['modo']); 
                             if res['win']: st.success(res['val'])
                             else: st.error(res['val'])
+                            
+                    # --- NOVO DISPLAY DE PERSEGUIÇÃO DE UNIDADE ---
+                    st.markdown("---")
+                    st.markdown("### 🏹 Módulo de Perseguição (Ciclo de 8 Jogos)")
+                    
+                    ouro_u, ouro_prob, ocorrencias, rank_chase = analisar_perseguicao_unidades(historico, 0)
+                    if ouro_u is not None:
+                        col_gold, col_info = st.columns([1, 2])
+                        with col_gold:
+                            st.metric("🌟 Unidade de Ouro", f"Final {ouro_u}")
+                        with col_info:
+                            if ouro_prob >= 75:
+                                st.success(f"💎 **ALTA CHANCE:** Historicamente, após sair o gatilho atual, a unidade {ouro_u} sai em até 8 sorteios em **{ouro_prob:.1f}%** das vezes. (Baseado em {ocorrencias} ocorrências no passado).")
+                            elif ouro_prob >= 50:
+                                st.warning(f"⚠️ **RISCO MÉDIO:** A unidade {ouro_u} sai em **{ouro_prob:.1f}%** das vezes na janela de 8 jogos.")
+                            else:
+                                st.error(f"🛑 **PERIGOSO:** Histórico fraco. A unidade {ouro_u} só saiu em **{ouro_prob:.1f}%** das vezes. Não recomendo perseguição.")
+                                
+                        with st.expander("💸 Calculadora de Risco x Lucro (Plano de Perseguição)"):
+                            st.write(f"Se você iniciar a perseguição da Unidade {ouro_u} agora:")
+                            st.markdown("""
+                            - **Prêmio Banca:** R$ 92,00 (Para aposta de R$ 10)
+                            - **Custo Máximo Absoluto:** R$ 80,00 (Apostando R$ 10 por 8 sorteios seguidos)
+                            - **Pior Cenário de Acerto:** Acertar no 8º sorteio = Lucro Líquido de **R$ 12,00**.
+                            - **Melhor Cenário de Acerto:** Acertar no 1º sorteio = Lucro Líquido de **R$ 82,00**.
+                            - *Atenção: Se não sair até o 8º sorteio, aborte a perseguição e assuma o red (perda de R$ 80).*
+                            """)
+                    else:
+                        st.info("Aguardando mais dados históricos para gerar estatística de perseguição.")
+
                 else:
                     lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_46(historico, idx_aba)
                     stats_loss, stats_win, prob_win_futura, amostra, em_streak_vitoria = calcular_metricas_oracle_detalhado(historico, idx_aba)
