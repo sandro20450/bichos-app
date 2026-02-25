@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V78.0 Extrator Universal", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V79.0 Limites Duplos", page_icon="👑", layout="wide")
 
 # BANCOS LIMPOS: Apenas o que importa para a caçada tática
 CONFIG_BANCAS = {
@@ -591,14 +591,21 @@ def calcular_radar_invertidas(hist_milhar):
         
         simulacoes_disponiveis = min(25, len(centenas_do_premio) - 15)
         
+        # Variáveis 8D
         max_seq_derrotas_8 = 0
         seq_atual_derrotas_8 = 0
+        max_seq_vitorias_8 = 0
+        seq_atual_vitorias_8 = 0
         backtest_placar_8 = []
         
+        # Variáveis 9D
         max_seq_derrotas_9 = 0
         seq_atual_derrotas_9 = 0
+        max_seq_vitorias_9 = 0
+        seq_atual_vitorias_9 = 0
         backtest_placar_9 = []
         
+        # Loop viaja no tempo do mais antigo (-25) para o mais novo (-1)
         for i in range(simulacoes_disponiveis, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
             alvo_real = centenas_do_premio[-i]   
@@ -606,6 +613,7 @@ def calcular_radar_invertidas(hist_milhar):
             sim_8 = gerar_esquadrao_8_digitos(hist_corte)
             sim_9 = gerar_esquadrao_9_digitos(hist_corte)
             
+            # --- Avaliação 8 Dígitos ---
             perdeu_8 = False
             if len(set(alvo_real)) < 3: perdeu_8 = True
             elif not all(d in sim_8 for d in alvo_real): perdeu_8 = True
@@ -613,12 +621,16 @@ def calcular_radar_invertidas(hist_milhar):
             if perdeu_8:
                 seq_atual_derrotas_8 += 1
                 if seq_atual_derrotas_8 > max_seq_derrotas_8: max_seq_derrotas_8 = seq_atual_derrotas_8
+                seq_atual_vitorias_8 = 0
                 res_char_8 = "❌"
             else:
+                seq_atual_vitorias_8 += 1
+                if seq_atual_vitorias_8 > max_seq_vitorias_8: max_seq_vitorias_8 = seq_atual_vitorias_8
                 seq_atual_derrotas_8 = 0
                 res_char_8 = "✅"
             if i <= 6: backtest_placar_8.append(res_char_8)
                 
+            # --- Avaliação 9 Dígitos ---
             perdeu_9 = False
             if len(set(alvo_real)) < 3: perdeu_9 = True
             elif not all(d in sim_9 for d in alvo_real): perdeu_9 = True
@@ -626,8 +638,11 @@ def calcular_radar_invertidas(hist_milhar):
             if perdeu_9:
                 seq_atual_derrotas_9 += 1
                 if seq_atual_derrotas_9 > max_seq_derrotas_9: max_seq_derrotas_9 = seq_atual_derrotas_9
+                seq_atual_vitorias_9 = 0
                 res_char_9 = "❌"
             else:
+                seq_atual_vitorias_9 += 1
+                if seq_atual_vitorias_9 > max_seq_vitorias_9: max_seq_vitorias_9 = seq_atual_vitorias_9
                 seq_atual_derrotas_9 = 0
                 res_char_9 = "✅"
             if i <= 6: backtest_placar_9.append(res_char_9)
@@ -642,9 +657,11 @@ def calcular_radar_invertidas(hist_milhar):
             "esquadrao_8": esquadrao_8,
             "backtest_8": backtest_placar_8,
             "max_seq_derrotas_8": max_seq_derrotas_8,
+            "max_seq_vitorias_8": max_seq_vitorias_8,
             "esquadrao_9": esquadrao_9,
             "backtest_9": backtest_placar_9,
-            "max_seq_derrotas_9": max_seq_derrotas_9
+            "max_seq_derrotas_9": max_seq_derrotas_9,
+            "max_seq_vitorias_9": max_seq_vitorias_9
         })
     return resultados_radar
 
@@ -685,11 +702,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - EXTRATOR UNIVERSAL")
+    st.title("🛡️ PENTÁGONO - LIMITES DUPLOS")
     col1, col2 = st.columns(2)
-    col1.metric("Painel Dinâmico", "Comparativo 8D vs 9D")
+    col1.metric("Análise Extrema", "Teto e Fundo do Poço")
     col2.metric("Motor Embutido", "Online 100%")
-    st.info("Hotfix aplicado: A trava que escondia o menu de extração foi destruída. Agora você pode atualizar e salvar os resultados de dentro de qualquer painel VIP Vitorino.")
+    st.info("Sistema atualizado: O app agora cruza o limite máximo de derrotas com o recorde máximo de vitórias seguidas em 25 jogos. Visão cirúrgica ativada.")
 
 else:
     banca_selecionada = escolha_menu
@@ -709,7 +726,7 @@ else:
     st.sidebar.markdown("---")
     
     # ---------------------------------------------------------
-    # EXTRATOR INTEGRADO DESBLOQUEADO (Aparece em todas as telas)
+    # EXTRATOR INTEGRADO DESBLOQUEADO
     # ---------------------------------------------------------
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
@@ -865,7 +882,8 @@ else:
                             str_esquadrao_8 = " - ".join(alvo['esquadrao_8'])
                             st.code(str_esquadrao_8, language="text")
                             st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_8'])}")
-                            st.caption(f"💔 Limite de Derrotas da Estratégia (25 jg): **{alvo['max_seq_derrotas_8']}x**")
+                            st.caption(f"💔 Limite de Derrotas (25 jg): **{alvo['max_seq_derrotas_8']}x**")
+                            st.caption(f"🏆 Recorde de Vitórias (25 jg): **{alvo['max_seq_vitorias_8']}x**")
                             
                     with c_9:
                         with st.container(border=True):
@@ -873,7 +891,8 @@ else:
                             str_esquadrao_9 = " - ".join(alvo['esquadrao_9'])
                             st.code(str_esquadrao_9, language="text")
                             st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_9'])}")
-                            st.caption(f"💔 Limite de Derrotas da Estratégia (25 jg): **{alvo['max_seq_derrotas_9']}x**")
+                            st.caption(f"💔 Limite de Derrotas (25 jg): **{alvo['max_seq_derrotas_9']}x**")
+                            st.caption(f"🏆 Recorde de Vitórias (25 jg): **{alvo['max_seq_vitorias_9']}x**")
                         
             with st.expander("💸 Calculadora da Invertida (Matemática da Escolha)"):
                 c_calc1, c_calc2 = st.columns(2)
