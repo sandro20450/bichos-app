@@ -20,12 +20,15 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V70.0 Radar 8D", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V71.0 Multi-Vitorino", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
-    "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    "TRADICIONAL_MILHAR": { "display_name": "👑 Estratégia Vitorino", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    "LOTEP": { "display_name": "LOTEP (1º ao 5º)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "tipo": "PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
+    "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
+    
+    "LOTEP": { "display_name": "LOTEP (Dezenas)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "tipo": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
+    "LOTEP_MILHAR": { "display_name": "👑 LOTEP (Vitorino)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5" },
+    
     "CAMINHODASORTE": { "display_name": "CAMINHO (1º ao 5º)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "tipo": "PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
     "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "tipo": "PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
 }
@@ -126,8 +129,10 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
+                # ESCUDO ANTI-FEDERAL AQUI
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
+                
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -148,16 +153,16 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio:
                                         p_idx = int(nums_premio[0])
-                                        limite = 5 if config['tipo'] in ["DUAL", "MILHAR_VIEW", "PENTA"] else 1
+                                        limite = 5 if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
                                         if 1 <= p_idx <= limite:
                                             clean_num = re.sub(r'\D', '', numero_txt)
                                             if len(clean_num) >= 2: 
-                                                if config['tipo'] in ["DUAL", "MILHAR_VIEW"]:
+                                                if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                                     dezenas_encontradas.append(clean_num[-4:].zfill(4))
                                                 else:
                                                     dezenas_encontradas.append(clean_num[-2:])
                                                     
-                            if config['tipo'] in ["DUAL", "MILHAR_VIEW"]:
+                            if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                 if len(dezenas_encontradas) >= 1: 
                                     res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
                                     return res[:5], "Sucesso"
@@ -420,7 +425,7 @@ def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
         return {"status": "novo", "target": t10, "attempts": 0, "prob": prob, "occ": occ}
 
 
-# --- RADAR DAS 3 ESTRATÉGIAS (INTOCÁVEL) ---
+# --- RADAR DAS 3 ESTRATÉGIAS ---
 def calcular_3_estrategias_unidade(historico, indice_premio=0):
     unidades = []
     for row in historico:
@@ -490,13 +495,10 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         detalhes.append({ "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar })
     return milhares_vitorino, detalhes
 
-# --- FUNÇÃO CONSTRUTORA DE 8 DÍGITOS (BLINDADA) ---
 def gerar_esquadrao_8_digitos(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(8)]
-    
     ult_centena = hist_centenas[-1]
     
-    # Markov
     ult_digitos_set = set(ult_centena)
     markov_c = Counter()
     for i in range(len(hist_centenas) - 1):
@@ -504,37 +506,27 @@ def gerar_esquadrao_8_digitos(hist_centenas):
             for d_next in hist_centenas[i+1]: markov_c[d_next] += 1
     rank_markov = [x[0] for x in markov_c.most_common()]
     
-    # Atrasados
     last_seen = {}
     for i, c in enumerate(hist_centenas):
         for d in c: last_seen[d] = i
     rank_atrasados = sorted([str(d) for d in range(10)], key=lambda x: last_seen.get(x, -1))
     
-    # Quentes
     recentes = "".join(hist_centenas[-15:])
     rank_quentes = [x[0] for x in Counter(recentes).most_common()]
     
     esquadrao = []
-    # 1. Pega os 3 melhores Puxadores
     for d in rank_markov:
         if d not in esquadrao and len(esquadrao) < 3: esquadrao.append(d)
-        
-    # 2. Completa com Atrasados até chegar em 6
     for d in rank_atrasados:
         if d not in esquadrao and len(esquadrao) < 6: esquadrao.append(d)
-        
-    # 3. Completa com Quentes até chegar em 8
     for d in rank_quentes:
         if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
-        
-    # 4. Trava de Segurança Máxima (Se faltar número, injeta os que sobraram de 0 a 9)
     for d in [str(x) for x in range(10)]:
         if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
         
     esquadrao.sort()
     return esquadrao
 
-# --- RADAR DE CENTENA INVERTIDA (COM BACKTEST E 8 DÍGITOS) ---
 def calcular_radar_invertidas(hist_milhar):
     if len(hist_milhar) < 20: return []
     resultados_radar = []
@@ -555,7 +547,6 @@ def calcular_radar_invertidas(hist_milhar):
         rep_ult = len(set(ult_centena)) < 3
         rep_penult = len(set(penult_centena)) < 3
         
-        # Detector de Alvo
         if rep_ult and rep_penult:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
@@ -569,30 +560,18 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última centena foi normal."
             
-        # Gera o esquadrão atual para o próximo sorteio
         esquadrao_atual = gerar_esquadrao_8_digitos(centenas_do_premio)
         
-        # ==========================================
-        # MOTOR DE BACKTEST (OS ÚLTIMOS 4 SORTEIOS)
-        # ==========================================
         backtest_placar = []
-        # Volta no tempo nos índices: -4, -3, -2, -1
         for i in range(4, 0, -1):
-            hist_corte = centenas_do_premio[:-i] # Histórico até o momento ANTES do sorteio alvo
-            alvo_real = centenas_do_premio[-i]   # O resultado que realmente saiu
-            
+            hist_corte = centenas_do_premio[:-i] 
+            alvo_real = centenas_do_premio[-i]   
             esquadrao_simulado = gerar_esquadrao_8_digitos(hist_corte)
             
-            # Checa se foi Vitória ou Derrota
-            # Regra: Se a centena alvo teve número repetido (ex 344), nós perdemos automático.
-            if len(set(alvo_real)) < 3:
-                backtest_placar.append("❌")
+            if len(set(alvo_real)) < 3: backtest_placar.append("❌")
             else:
-                # Se não repetiu, confere se os 3 números sorteados estavam nos nossos 8 simulados
-                if all(d in esquadrao_simulado for d in alvo_real):
-                    backtest_placar.append("✅")
-                else:
-                    backtest_placar.append("❌")
+                if all(d in esquadrao_simulado for d in alvo_real): backtest_placar.append("✅")
+                else: backtest_placar.append("❌")
         
         resultados_radar.append({
             "premio": p_idx + 1,
@@ -642,11 +621,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - ESCUDO 8D")
+    st.title("🛡️ PENTÁGONO - MULTI-VITORINO")
     col1, col2 = st.columns(2)
-    col1.metric("Módulo Ativo", "Cerco Invertido (8 Dígitos)")
-    col2.metric("Inteligência", "Backtest 4D em Tempo Real")
-    st.info("Sistema atualizado: Aumentamos a taxa de acerto do Cerco de Centenas usando matrizes de 8 números e adicionamos um placar de vitórias recentes para cada prêmio.")
+    col1.metric("Bancas Sincronizadas", "TRADICIONAL & LOTEP")
+    col2.metric("Motor Dinâmico", "Dual Engine PENTA Ativado")
+    st.info("Sistema atualizado: A banca LOTEP agora também suporta a Estratégia Vitorino e o Radar de Invertidas de forma simultânea e independente.")
 
 else:
     banca_selecionada = escolha_menu
@@ -664,7 +643,8 @@ else:
     st.sidebar.markdown("---")
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.sidebar.info("⚠️ **Aviso:** A extração de milhares é feita na aba 'TRADICIONAL (1º Prêmio)'.")
+        nome_aba_extracao = banca_selecionada.replace("_MILHAR", "")
+        st.sidebar.info(f"⚠️ **Aviso:** A extração de milhares é feita na aba '{CONFIG_BANCAS.get(nome_aba_extracao, {}).get('display_name', 'Principal')}'.")
     else:
         modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
         
@@ -688,12 +668,18 @@ else:
                             else:
                                 premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                                 if premios:
-                                    if config['tipo'] == "DUAL":
+                                    if config['tipo'] == "DUAL_SOLO":
                                         row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios[0][-2:], "00", "00", "00", "00"]
                                         ws.append_row(row_dez)
-                                        ws_milhar = conectar_planilha("TRADICIONAL_MILHAR")
+                                        ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR")
                                         if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
                                         st.toast(f"Duplo Sucesso! Dezena e Milhar salvas.", icon="✅")
+                                    elif config['tipo'] == "DUAL_PENTA":
+                                        row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca] + [p[-2:] for p in premios]
+                                        ws.append_row(row_dez)
+                                        ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR")
+                                        if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
+                                        st.toast(f"Duplo Sucesso Penta! 5 Dezenas e Milhar salvas.", icon="✅")
                                     else:
                                         row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + premios
                                         ws.append_row(row)
@@ -709,7 +695,7 @@ else:
             with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
             if st.sidebar.button("🚀 INICIAR TURBO"):
                 ws = conectar_planilha(config['nome_aba'])
-                ws_milhar = conectar_planilha("TRADICIONAL_MILHAR") if config['tipo'] == "DUAL" else None
+                ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR") if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA"] else None
                 if ws:
                     status = st.sidebar.empty(); bar = st.sidebar.progress(0)
                     try: chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws.get_all_values() if len(r) >= 2 and normalizar_data(r[0])]
@@ -731,15 +717,20 @@ else:
                             if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
                             premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
                             if premios:
-                                if config['tipo'] == "DUAL":
+                                if config['tipo'] == "DUAL_SOLO":
                                     buffer_principal.append([dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"])
+                                    if ws_milhar and (chave_atual not in chaves_m):
+                                        buffer_milhar.append([dia.strftime('%Y-%m-%d'), hora] + premios)
+                                        chaves_m.append(chave_atual)
+                                elif config['tipo'] == "DUAL_PENTA":
+                                    buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + [p[-2:] for p in premios])
                                     if ws_milhar and (chave_atual not in chaves_m):
                                         buffer_milhar.append([dia.strftime('%Y-%m-%d'), hora] + premios)
                                         chaves_m.append(chave_atual)
                                 else: buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + premios)
                                 sucessos += 1; chaves.append(chave_atual)
                             time.sleep(1.0)
-                    status.text("🚚 Enviando lote de dados para o Google Sheets de uma vez...")
+                    status.text("🚚 Enviando lote de dados para o Google Sheets...")
                     if buffer_principal: ws.append_rows(buffer_principal)
                     if buffer_milhar and ws_milhar: ws_milhar.append_rows(buffer_milhar)
                     bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
@@ -748,11 +739,11 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Vitorino & Cerco de Invertida")
+        st.header(f"👑 Estratégia Vitorino & Cerco Invertido")
         
         with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
-            hist_dez = carregar_dados_hibridos("BASE_TRADICIONAL_DEZ")
+            hist_dez = carregar_dados_hibridos(config['base_dez'])
             
         if len(hist_milhar) > 0 and len(hist_dez) > 0:
             ult = hist_milhar[-1]
@@ -791,8 +782,6 @@ else:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']}\n\n{alvo['alerta']}")
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']}\n\n{alvo['alerta']}")
                         else: st.info(f"{alvo['status']}\n\n{alvo['alerta']}")
-                        
-                        # PLACAR BACKTEST AQUI
                         st.markdown(f"**Histórico (Últimos 4):** {' | '.join(alvo['backtest'])}")
                         
                     with c3:
@@ -809,7 +798,6 @@ else:
                 - **Lucro Líquido:** R$ 584,00 (Direto para o bolso com alta taxa de conversão).
                 """)
 
-            # --- BANCO DE DADOS BRUTO RESTAURADO ---
             st.markdown("---")
             st.markdown("### 📊 Banco de Dados Bruto (Milhares 1º ao 5º)")
             df_show = pd.DataFrame(hist_milhar)
@@ -827,15 +815,15 @@ else:
             historico = carregar_dados_hibridos(config['nome_aba'])
         if len(historico) > 0:
             ult = historico[-1]
-            if config['tipo'] == "DUAL": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {str(ult['premios'][0])[-2:]}")
+            if config['tipo'] == "DUAL_SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {str(ult['premios'][0])[-2:]}")
             else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
             
-            range_abas = [0, 1] if config['tipo'] == "DUAL" else range(5)
-            abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"] if config['tipo'] == "DUAL" else [f"{i+1}º Prêmio" for i in range(5)])
+            range_abas = [0, 1] if config['tipo'] == "DUAL_SOLO" else range(5)
+            abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"] if config['tipo'] == "DUAL_SOLO" else [f"{i+1}º Prêmio" for i in range(5)])
             
             for idx_aba in range_abas:
                 with abas[idx_aba]:
-                    if config['tipo'] == "DUAL" and idx_aba == 1:
+                    if config['tipo'] == "DUAL_SOLO" and idx_aba == 1:
                         st.markdown("### 🏹 The Chaser (Perseguição de Ciclo de 8 Jogos)")
                         estado_chaser = rastrear_estado_chaser(historico, 0)
                         if estado_chaser['target'] is not None:
@@ -858,10 +846,10 @@ else:
                             with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
                             with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
                         with st.container(border=True): st.code(", ".join(lista_matrix), language="text")
-                        if config['tipo'] == "DUAL":
+                        if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA"]:
                             st.markdown("---")
                             st.markdown("### 🦅 Esquadrão Chaser (Perseguição de 10 Dezenas)")
-                            estado_dez = rastrear_estado_chaser_dezenas(historico, 0)
+                            estado_dez = rastrear_estado_chaser_dezenas(historico, idx_aba)
                             if estado_dez['target']:
                                 st.markdown(f"**As 10 Dezenas:** `{', '.join(estado_dez['target'])}`")
                                 if estado_dez['status'] == 'ativo': st.warning(f"🔒 **EM ANDAMENTO (TENTATIVA {estado_dez['attempts']+1} DE 8)**")
