@@ -20,20 +20,19 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V74.0 Motor Guilhotina", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V76.0 Extrator Integrado", page_icon="👑", layout="wide")
 
+# BANCOS LIMPOS: Apenas o que importa para a caçada tática
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
     
-    "LOTEP": { "display_name": "LOTEP (Dezenas)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "tipo": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
-    "LOTEP_MILHAR": { "display_name": "👑 LOTEP (Vitorino)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5" },
+    "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
     
-    "CAMINHO": { "display_name": "CAMINHO (Dezenas)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "tipo": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
-    "CAMINHO_MILHAR": { "display_name": "👑 CAMINHO (Vitorino)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5" },
+    "LOTEP_MILHAR": { "display_name": "👑 LOTEP (Vitorino)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5" },
     
-    "MONTE": { "display_name": "MONTE CARLOS (Dezenas)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "tipo": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] },
-    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
+    "CAMINHO_MILHAR": { "display_name": "👑 CAMINHO (Vitorino)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5" },
+    
+    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
 GRUPO_TO_DEZENAS = {}
@@ -122,6 +121,8 @@ def carregar_dados_hibridos(nome_aba):
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
+    tipo_ext = config.get('tipo_extracao', config['tipo'])
+    
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     if data_alvo == date.today(): url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     try:
@@ -154,21 +155,21 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                     nums_premio = re.findall(r'\d+', premio_txt)
                                     if nums_premio:
                                         p_idx = int(nums_premio[0])
-                                        limite = 5 if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
+                                        limite = 5 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
                                         if 1 <= p_idx <= limite:
                                             clean_num = re.sub(r'\D', '', numero_txt)
                                             if len(clean_num) >= 2: 
-                                                if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
+                                                if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                                     dezenas_encontradas.append(clean_num[-4:].zfill(4))
                                                 else:
                                                     dezenas_encontradas.append(clean_num[-2:])
                                                     
-                            if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
+                            if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                 if len(dezenas_encontradas) >= 1: 
                                     res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
                                     return res[:5], "Sucesso"
                             else:
-                                if config['tipo'] == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
+                                if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
                                 elif len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
                             return None, "Incompleto"
         return None, "Horário não encontrado"
@@ -213,29 +214,6 @@ def analisar_efeito_ima(historico, indice_premio):
     repelidos = list(todos_grupos - sairam)
     info_str = f"Último: {nome_ult} (Saiu {total_ocorrencias}x no passado)"
     return imas, repelidos, info_str
-
-def analisar_sequencias_profundas_com_moda(lista_wins):
-    if not lista_wins: return 0, 0, 0, 0, 0
-    sequencias = []
-    atual = 0
-    for w in lista_wins:
-        if w: atual += 1
-        else:
-            if atual > 0: sequencias.append(atual)
-            atual = 0
-    if atual > 0: sequencias.append(atual)
-    if not sequencias: return 0, 0, 0, 0, 0
-    maximo = max(sequencias)
-    ocorrencias_max = sequencias.count(maximo)
-    total_ops = len(lista_wins)
-    ciclo = int(total_ops / ocorrencias_max) if ocorrencias_max > 0 else 0
-    c = Counter(sequencias)
-    moda_dados = c.most_common(1)[0]
-    moda_valor = moda_dados[0]
-    moda_freq = moda_dados[1]
-    total_seqs = len(sequencias)
-    moda_porc = (moda_freq / total_seqs) * 100
-    return maximo, ocorrencias_max, ciclo, moda_valor, moda_porc
 
 def treinar_probabilidade_global(historico, indice_premio):
     if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
@@ -494,35 +472,25 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     return milhares_vitorino, detalhes
 
 def gerar_esquadrao_8_digitos(hist_centenas):
-    """
-    Novo Motor: Pontuação Absoluta (A Guilhotina)
-    Avalia todos os 10 dígitos. O que tiver pior nota é eliminado. 
-    Protege os números "neutros" de caírem no limbo.
-    """
+    """Motor de Guilhotina: Avalia os 10 e elimina os 2 mais fracos"""
     if not hist_centenas: return [str(x) for x in range(8)]
     
     ult_centena = hist_centenas[-1]
     ult_digitos_set = set(ult_centena)
     
-    # Iniciar placar (Scorecard)
     placar = {str(d): 0 for d in range(10)}
     
-    # 1. Ponto por Atração (Markov) - Peso 2
     markov_c = Counter()
     for i in range(len(hist_centenas) - 1):
         if any(d in hist_centenas[i] for d in ult_digitos_set):
             for d_next in hist_centenas[i+1]: markov_c[d_next] += 1
     
-    for d, freq in markov_c.items():
-        placar[d] += freq * 2
+    for d, freq in markov_c.items(): placar[d] += freq * 2
         
-    # 2. Ponto por Vitalidade Recente (Moda) - Peso 1
     recentes = "".join(hist_centenas[-20:])
     freq_recentes = Counter(recentes)
-    for d, freq in freq_recentes.items():
-        placar[d] += freq * 1
+    for d, freq in freq_recentes.items(): placar[d] += freq * 1
         
-    # 3. Penalidade de Gelo (Atrasos severos)
     last_seen = {}
     for i, c in enumerate(hist_centenas):
         for d in c: last_seen[d] = i
@@ -531,21 +499,14 @@ def gerar_esquadrao_8_digitos(hist_centenas):
     for d in range(10):
         d_str = str(d)
         atraso = total_jogos - last_seen.get(d_str, 0)
-        # Penaliza apenas os que esfriaram muito (mais de 15 jogos sumidos)
-        if atraso > 15:
-            placar[d_str] -= (atraso // 5)
+        if atraso > 15: placar[d_str] -= (atraso // 5)
             
-    # A Guilhotina: Ordena do menor para o maior
     ranking_final = sorted(placar.items(), key=lambda x: x[1])
-    
-    # Identifica os 2 piores (Scores mais baixos)
     piores = [ranking_final[0][0], ranking_final[1][0]]
     
-    # O Esquadrão é formado pelos 8 sobreviventes (Quentes e Neutros)
     esquadrao = [d for d in placar.keys() if d not in piores]
     esquadrao.sort()
     
-    # Trava de Segurança (Nunca retorna menos de 8)
     while len(esquadrao) < 8:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao:
@@ -555,7 +516,7 @@ def gerar_esquadrao_8_digitos(hist_centenas):
     return esquadrao[:8]
 
 def calcular_radar_invertidas(hist_milhar):
-    if len(hist_milhar) < 30: return []
+    if len(hist_milhar) < 40: return []
     resultados_radar = []
     
     for p_idx in range(5):
@@ -566,7 +527,7 @@ def calcular_radar_invertidas(hist_milhar):
                 if m != "0000": centenas_do_premio.append(m[-3:])
             except: pass
             
-        if len(centenas_do_premio) < 30: continue
+        if len(centenas_do_premio) < 40: continue
             
         ult_centena = centenas_do_premio[-1]
         penult_centena = centenas_do_premio[-2]
@@ -590,29 +551,47 @@ def calcular_radar_invertidas(hist_milhar):
             
         # NOVA MÉTRICA: Max Sequência Repetidas (Últimos 25 Jogos)
         ultimas_25 = centenas_do_premio[-25:]
-        max_seq = 0
-        seq_atual = 0
+        max_seq_rep = 0
+        seq_atual_rep = 0
         for c in ultimas_25:
             if len(set(c)) < 3: 
-                seq_atual += 1
-                if seq_atual > max_seq: max_seq = seq_atual
+                seq_atual_rep += 1
+                if seq_atual_rep > max_seq_rep: max_seq_rep = seq_atual_rep
             else:
-                seq_atual = 0 
+                seq_atual_rep = 0 
                 
-        # Gera o esquadrão atual para o próximo sorteio (Com o Novo Motor de Guilhotina)
         esquadrao_atual = gerar_esquadrao_8_digitos(centenas_do_premio)
         
-        # BACKTEST (OS ÚLTIMOS 6 SORTEIOS)
+        # BACKTEST MÁSTER: SIMULAÇÃO DOS ÚLTIMOS 25 JOGOS
+        simulacoes_disponiveis = min(25, len(centenas_do_premio) - 15)
+        max_seq_derrotas = 0
+        seq_atual_derrotas = 0
         backtest_placar = []
-        for i in range(6, 0, -1):
+        
+        for i in range(simulacoes_disponiveis, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
             alvo_real = centenas_do_premio[-i]   
             esquadrao_simulado = gerar_esquadrao_8_digitos(hist_corte)
             
-            if len(set(alvo_real)) < 3: backtest_placar.append("❌")
+            perdeu = False
+            # Regra de Derrota: Centena repetida OU números fora do esquadrão
+            if len(set(alvo_real)) < 3: 
+                perdeu = True
             else:
-                if all(d in esquadrao_simulado for d in alvo_real): backtest_placar.append("✅")
-                else: backtest_placar.append("❌")
+                if not all(d in esquadrao_simulado for d in alvo_real):
+                    perdeu = True
+                    
+            if perdeu:
+                seq_atual_derrotas += 1
+                if seq_atual_derrotas > max_seq_derrotas:
+                    max_seq_derrotas = seq_atual_derrotas
+                res_char = "❌"
+            else:
+                seq_atual_derrotas = 0
+                res_char = "✅"
+            
+            if i <= 6:
+                backtest_placar.append(res_char)
         
         resultados_radar.append({
             "premio": p_idx + 1,
@@ -622,7 +601,8 @@ def calcular_radar_invertidas(hist_milhar):
             "ult_centena": ult_centena,
             "esquadrao": esquadrao_atual,
             "backtest": backtest_placar,
-            "max_seq_rep": max_seq
+            "max_seq_rep": max_seq_rep,
+            "max_seq_derrotas": max_seq_derrotas
         })
     return resultados_radar
 
@@ -663,11 +643,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - MOTOR GUILHOTINA")
+    st.title("🛡️ PENTÁGONO - MENU LIMPO")
     col1, col2 = st.columns(2)
-    col1.metric("Seleção de Esquadrão", "Pontuação Absoluta")
-    col2.metric("Inteligência Tática", "Tracker de Anomalias Ativo")
-    st.info("Sistema atualizado: Novo motor de seleção não escolhe mais os números individualmente, ele classifica a força de todos e elimina sumariamente os 2 mais fracos do globo.")
+    col1.metric("Painéis Reduzidos", "Foco 100% na Milhar")
+    col2.metric("Extrator Embutido", "Sincronização Invisível")
+    st.info("Sistema atualizado: O Motor de Extração foi movido para dentro das abas VIP Vitorino. Ao baixar o resultado de lá, o sistema alimenta automaticamente as milhares para você e salva as dezenas em segundo plano para a IA.")
 
 else:
     banca_selecionada = escolha_menu
@@ -676,107 +656,118 @@ else:
     
     if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS"):
         with st.spinner("Limpando e reescrevendo planilha..."):
-            res = acao_limpar_banco(config['nome_aba'])
-            if "Sucesso" in res: st.sidebar.success(res)
-            else: st.sidebar.error(res)
+            # Limpa a aba atual
+            res_principal = acao_limpar_banco(config['nome_aba'])
+            # Se for uma aba MILHAR, limpa também a aba de dezenas fantasma associada
+            if 'base_dez' in config:
+                acao_limpar_banco(config['base_dez'])
+            if "Sucesso" in res_principal: st.sidebar.success("Faxina Dupla Concluída com Sucesso!")
+            else: st.sidebar.error(res_principal)
             time.sleep(2)
             st.rerun()
             
     st.sidebar.markdown("---")
     
-    if config['tipo'] == "MILHAR_VIEW":
-        nome_aba_extracao = banca_selecionada.replace("_MILHAR", "")
-        st.sidebar.info(f"⚠️ **Aviso:** A extração de milhares é feita na aba '{CONFIG_BANCAS.get(nome_aba_extracao, {}).get('display_name', 'Principal')}'.")
-    else:
-        modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
-        
-        if modo_extracao == "🎯 Unitária":
-            with st.sidebar.expander("📥 Importar Resultado", expanded=True):
-                opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
-                if opcao_data == "Hoje": data_busca = date.today()
-                elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
-                else: data_busca = st.sidebar.date_input("Escolha:", date.today())
-                horario_busca = st.selectbox("Horário:", config['horarios'])
-                if st.button("🚀 Baixar & Salvar"):
-                    ws = conectar_planilha(config['nome_aba'])
-                    if ws:
-                        with st.spinner(f"Buscando {horario_busca}..."):
-                            try: 
-                                existentes = ws.get_all_values()
-                                chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in existentes if len(r) >= 2 and normalizar_data(r[0])]
-                            except: chaves = []
-                            chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca)}"
-                            if chave_atual in chaves: st.warning("Resultado já existe na aba principal!")
-                            else:
-                                premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
-                                if premios:
-                                    if config['tipo'] == "DUAL_SOLO":
-                                        row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios[0][-2:], "00", "00", "00", "00"]
-                                        ws.append_row(row_dez)
-                                        ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR")
-                                        if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
-                                        st.toast(f"Duplo Sucesso! Dezena e Milhar salvas.", icon="✅")
-                                    elif config['tipo'] == "DUAL_PENTA":
-                                        row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca] + [p[-2:] for p in premios]
-                                        ws.append_row(row_dez)
-                                        ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR")
-                                        if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
-                                        st.toast(f"Duplo Sucesso Penta! 5 Dezenas e Milhares salvas.", icon="✅")
-                                    else:
-                                        row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + premios
-                                        ws.append_row(row)
-                                        st.toast(f"Sucesso! {premios}", icon="✅")
-                                    time.sleep(1); st.rerun()
-                                else: st.error(msg)
-                    else: st.error("Erro Planilha")
-                    
-        else: 
-            st.sidebar.subheader("🌪️ Extração Turbo")
-            col1, col2 = st.sidebar.columns(2)
-            with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
-            with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
-            if st.sidebar.button("🚀 INICIAR TURBO"):
-                ws = conectar_planilha(config['nome_aba'])
-                ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR") if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA"] else None
-                if ws:
-                    status = st.sidebar.empty(); bar = st.sidebar.progress(0)
-                    try: chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws.get_all_values() if len(r) >= 2 and normalizar_data(r[0])]
-                    except: chaves = []
-                    try: chaves_m = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_milhar.get_all_values() if len(r) >= 2 and normalizar_data(r[0])] if ws_milhar else []
-                    except: chaves_m = []
-                    delta = data_fim - data_ini
-                    lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
-                    total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
-                    buffer_principal = []
-                    buffer_milhar = []
-                    for dia in lista_datas:
-                        for hora in config['horarios']:
-                            op_atual += 1; bar.progress(op_atual / total_ops)
-                            status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                            chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora)}"
-                            if chave_atual in chaves: continue
-                            if dia > date.today(): continue
-                            if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
-                            premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
+    # ---------------------------------------------------------
+    # NOVO EXTRATOR INTEGRADO (Funciona de dentro de qualquer aba)
+    # ---------------------------------------------------------
+    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
+    
+    if modo_extracao == "🎯 Unitária":
+        with st.sidebar.expander("📥 Importar Resultado", expanded=True):
+            opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
+            if opcao_data == "Hoje": data_busca = date.today()
+            elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
+            else: data_busca = st.sidebar.date_input("Escolha:", date.today())
+            horario_busca = st.selectbox("Horário:", config['horarios'])
+            if st.button("🚀 Baixar & Salvar"):
+                # Define os alvos de salvamento baseados na aba atual
+                aba_dez = config.get('base_dez', config['nome_aba'])
+                aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
+                tipo_ext = config.get('tipo_extracao', config['tipo'])
+                
+                ws_dez = conectar_planilha(aba_dez)
+                ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
+                
+                if ws_dez:
+                    with st.spinner(f"Buscando {horario_busca}..."):
+                        try: 
+                            existentes = ws_dez.get_all_values()
+                            chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in existentes if len(r) >= 2 and normalizar_data(r[0])]
+                        except: chaves = []
+                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca)}"
+                        
+                        if chave_atual in chaves: st.warning("Resultado já existe no banco de dados!")
+                        else:
+                            premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                             if premios:
-                                if config['tipo'] == "DUAL_SOLO":
-                                    buffer_principal.append([dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"])
-                                    if ws_milhar and (chave_atual not in chaves_m):
-                                        buffer_milhar.append([dia.strftime('%Y-%m-%d'), hora] + premios)
-                                        chaves_m.append(chave_atual)
-                                elif config['tipo'] == "DUAL_PENTA":
-                                    buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + [p[-2:] for p in premios])
-                                    if ws_milhar and (chave_atual not in chaves_m):
-                                        buffer_milhar.append([dia.strftime('%Y-%m-%d'), hora] + premios)
-                                        chaves_m.append(chave_atual)
-                                else: buffer_principal.append([dia.strftime('%Y-%m-%d'), hora] + premios)
-                                sucessos += 1; chaves.append(chave_atual)
-                            time.sleep(1.0)
-                    status.text("🚚 Enviando lote de dados para o Google Sheets...")
-                    if buffer_principal: ws.append_rows(buffer_principal)
-                    if buffer_milhar and ws_milhar: ws_milhar.append_rows(buffer_milhar)
-                    bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
-                else: st.sidebar.error("Erro Conexão")
+                                if tipo_ext == "DUAL_SOLO":
+                                    row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios[0][-2:], "00", "00", "00", "00"]
+                                    ws_dez.append_row(row_dez)
+                                    if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
+                                    st.toast(f"Duplo Sucesso! Inteligência atualizada.", icon="✅")
+                                elif tipo_ext == "DUAL_PENTA":
+                                    row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca] + [p[-2:] for p in premios]
+                                    ws_dez.append_row(row_dez)
+                                    if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
+                                    st.toast(f"Motor Duplo Acionado! Dados salvos na base e no Vitorino.", icon="✅")
+                                time.sleep(1); st.rerun()
+                            else: st.error(msg)
+                else: st.error("Erro na Planilha")
+                
+    else: 
+        st.sidebar.subheader("🌪️ Extração Turbo")
+        col1, col2 = st.sidebar.columns(2)
+        with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
+        with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
+        if st.sidebar.button("🚀 INICIAR TURBO"):
+            aba_dez = config.get('base_dez', config['nome_aba'])
+            aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
+            tipo_ext = config.get('tipo_extracao', config['tipo'])
+            
+            ws_dez = conectar_planilha(aba_dez)
+            ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
+            
+            if ws_dez:
+                status = st.sidebar.empty(); bar = st.sidebar.progress(0)
+                try: chaves_d = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_dez.get_all_values() if len(r) >= 2 and normalizar_data(r[0])]
+                except: chaves_d = []
+                try: chaves_m = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_milhar.get_all_values() if len(r) >= 2 and normalizar_data(r[0])] if ws_milhar else []
+                except: chaves_m = []
+                
+                delta = data_fim - data_ini
+                lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
+                total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
+                buffer_dez = []
+                buffer_m = []
+                
+                for dia in lista_datas:
+                    for hora in config['horarios']:
+                        op_atual += 1; bar.progress(op_atual / total_ops)
+                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora)}"
+                        
+                        if chave_atual in chaves_d: continue
+                        if dia > date.today(): continue
+                        if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
+                        
+                        premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
+                        if premios:
+                            if tipo_ext == "DUAL_SOLO":
+                                row_d = [dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"]
+                                buffer_dez.append(row_d); chaves_d.append(chave_atual)
+                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora] + premios); chaves_m.append(chave_atual)
+                            elif tipo_ext == "DUAL_PENTA":
+                                row_d = [dia.strftime('%Y-%m-%d'), hora] + [p[-2:] for p in premios]
+                                buffer_dez.append(row_d); chaves_d.append(chave_atual)
+                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora] + premios); chaves_m.append(chave_atual)
+                            sucessos += 1
+                        time.sleep(1.0)
+                status.text("🚚 Sincronizando Matrizes Fantasmas e Visuais...")
+                if buffer_dez: ws_dez.append_rows(buffer_dez)
+                if buffer_m and ws_milhar: ws_milhar.append_rows(buffer_m)
+                bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
+            else: st.sidebar.error("Erro Conexão")
 
     # --- PÁGINA DA BANCA ---
     
@@ -819,7 +810,8 @@ else:
                     with c1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio")
                         st.write(f"Última: `{alvo['ult_centena']}`")
-                        st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x**")
+                        st.caption(f"🚨 Max Repetidas (25 jg): **{alvo['max_seq_rep']}x**")
+                        st.caption(f"💔 Max Derrotas (25 jg): **{alvo['max_seq_derrotas']}x**")
                         
                     with c2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']}\n\n{alvo['alerta']}")
@@ -847,10 +839,10 @@ else:
             st.dataframe(df_show.tail(10))
 
         else:
-            st.warning("⚠️ Base vazia. Extraia os dados primeiro.")
+            st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
 
     # ==========================================
-    # PAINEL NORMAL (ORACLE E CHASER DEZENA)
+    # PAINEL NORMAL (ORACLE TRADICIONAL)
     # ==========================================
     else:
         st.header(f"🔭 {config['display_name']} - Oracle 46")
@@ -858,15 +850,14 @@ else:
             historico = carregar_dados_hibridos(config['nome_aba'])
         if len(historico) > 0:
             ult = historico[-1]
-            if config['tipo'] == "DUAL_SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {str(ult['premios'][0])[-2:]}")
-            else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
+            st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {str(ult['premios'][0])[-2:]}")
             
-            range_abas = [0, 1] if config['tipo'] == "DUAL_SOLO" else range(5)
-            abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"] if config['tipo'] == "DUAL_SOLO" else [f"{i+1}º Prêmio" for i in range(5)])
+            range_abas = [0, 1] 
+            abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"])
             
             for idx_aba in range_abas:
                 with abas[idx_aba]:
-                    if config['tipo'] == "DUAL_SOLO" and idx_aba == 1:
+                    if idx_aba == 1:
                         st.markdown("### 🏹 The Chaser (Perseguição de Ciclo de 8 Jogos)")
                         estado_chaser = rastrear_estado_chaser(historico, 0)
                         if estado_chaser['target'] is not None:
@@ -889,13 +880,12 @@ else:
                             with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
                             with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
                         with st.container(border=True): st.code(", ".join(lista_matrix), language="text")
-                        if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA"]:
-                            st.markdown("---")
-                            st.markdown("### 🦅 Esquadrão Chaser (Perseguição de 10 Dezenas)")
-                            estado_dez = rastrear_estado_chaser_dezenas(historico, idx_aba)
-                            if estado_dez['target']:
-                                st.markdown(f"**As 10 Dezenas:** `{', '.join(estado_dez['target'])}`")
-                                if estado_dez['status'] == 'ativo': st.warning(f"🔒 **EM ANDAMENTO (TENTATIVA {estado_dez['attempts']+1} DE 8)**")
-                                else: st.success(f"🎯 **NOVO CICLO (TENTATIVA 1 DE 8)**")
+                        st.markdown("---")
+                        st.markdown("### 🦅 Esquadrão Chaser (Perseguição de 10 Dezenas)")
+                        estado_dez = rastrear_estado_chaser_dezenas(historico, idx_aba)
+                        if estado_dez['target']:
+                            st.markdown(f"**As 10 Dezenas:** `{', '.join(estado_dez['target'])}`")
+                            if estado_dez['status'] == 'ativo': st.warning(f"🔒 **EM ANDAMENTO (TENTATIVA {estado_dez['attempts']+1} DE 8)**")
+                            else: st.success(f"🎯 **NOVO CICLO (TENTATIVA 1 DE 8)**")
         else:
-            st.warning("⚠️ Base vazia.")
+            st.warning("⚠️ Base vazia. Extraia os dados primeiro.")
