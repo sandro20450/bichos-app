@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V69.1 Radar Invertido", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V69.2 Radar Invertido", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -464,11 +464,7 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
 
 # --- RADAR DE CENTENA INVERTIDA (7 DÍGITOS - CORRIGIDO) ---
 def calcular_radar_invertidas(hist_milhar):
-    """
-    Gera o esquadrão de exatos 7 dígitos únicos baseado em Markov, Atrasos e Quentes.
-    """
     if len(hist_milhar) < 15: return []
-    
     resultados_radar = []
     
     for p_idx in range(5):
@@ -515,31 +511,17 @@ def calcular_radar_invertidas(hist_milhar):
         recentes = "".join(centenas_do_premio[-15:])
         rank_quentes = [x[0] for x in Counter(recentes).most_common()]
         
-        # LÓGICA BLINDADA DOS 7 DÍGITOS EXATOS
         esquadrao = []
-        
-        # Adiciona até 3 puxadores (Markov)
         for d in rank_markov:
-            if d not in esquadrao and len(esquadrao) < 3: 
-                esquadrao.append(d)
-                
-        # Adiciona atrasados até bater 5 números
+            if d not in esquadrao and len(esquadrao) < 3: esquadrao.append(d)
         for d in rank_atrasados:
-            if d not in esquadrao and len(esquadrao) < 5: 
-                esquadrao.append(d)
-                
-        # Adiciona quentes até bater 7 números
+            if d not in esquadrao and len(esquadrao) < 5: esquadrao.append(d)
         for d in rank_quentes:
-            if d not in esquadrao and len(esquadrao) < 7: 
-                esquadrao.append(d)
-                
-        # Preenchimento de segurança garantindo exatos 7 números sempre
+            if d not in esquadrao and len(esquadrao) < 7: esquadrao.append(d)
         for d in [str(x) for x in range(10)]:
-            if d not in esquadrao and len(esquadrao) < 7: 
-                esquadrao.append(d)
+            if d not in esquadrao and len(esquadrao) < 7: esquadrao.append(d)
         
         esquadrao.sort()
-        
         resultados_radar.append({
             "premio": p_idx + 1,
             "status": status,
@@ -548,7 +530,6 @@ def calcular_radar_invertidas(hist_milhar):
             "ult_centena": ult_centena,
             "esquadrao": esquadrao
         })
-        
     return resultados_radar
 
 
@@ -751,6 +732,12 @@ else:
                 - **Retorno da Banca:** R$ 920,00.
                 - **Lucro Líquido:** R$ 710,00 (Direto para o bolso).
                 """)
+
+            # --- BANCO DE DADOS BRUTO RESTAURADO ---
+            st.markdown("---")
+            st.markdown("### 📊 Banco de Dados Bruto (Milhares 1º ao 5º)")
+            df_show = pd.DataFrame(hist_milhar)
+            st.dataframe(df_show.tail(10))
 
         else:
             st.warning("⚠️ Base vazia. Extraia os dados primeiro.")
