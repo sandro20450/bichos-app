@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V72.0 Império Vitorino", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V73.0 Radar Avançado", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -320,7 +320,6 @@ def gerar_estrategia_oracle_46(historico, indice_premio):
     dados_oracle = { "info": info_oracle, "imas": grupos_ima_selecionados, "repelidos": grupos_repelidos[:5] }
     return palpite_matrix, conf_media, info_predator, dados_oracle
 
-# --- THE CHASER (UNIDADES) ---
 def rastrear_estado_chaser(historico, indice_premio=0):
     unidades = []
     for row in historico:
@@ -370,7 +369,6 @@ def rastrear_estado_chaser(historico, indice_premio=0):
         best_u, best_prob, occ = calc_best(unidades)
         return {"status": "novo", "target": best_u, "attempts": 0, "prob": best_prob, "occ": occ}
 
-# --- THE CHASER (10 DEZENAS) ---
 def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
     dezenas = []
     for row in historico:
@@ -426,7 +424,6 @@ def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
         return {"status": "novo", "target": t10, "attempts": 0, "prob": prob, "occ": occ}
 
 
-# --- RADAR DAS 3 ESTRATÉGIAS ---
 def calcular_3_estrategias_unidade(historico, indice_premio=0):
     unidades = []
     for row in historico:
@@ -529,7 +526,7 @@ def gerar_esquadrao_8_digitos(hist_centenas):
     return esquadrao
 
 def calcular_radar_invertidas(hist_milhar):
-    if len(hist_milhar) < 20: return []
+    if len(hist_milhar) < 30: return []
     resultados_radar = []
     
     for p_idx in range(5):
@@ -540,7 +537,7 @@ def calcular_radar_invertidas(hist_milhar):
                 if m != "0000": centenas_do_premio.append(m[-3:])
             except: pass
             
-        if len(centenas_do_premio) < 15: continue
+        if len(centenas_do_premio) < 30: continue
             
         ult_centena = centenas_do_premio[-1]
         penult_centena = centenas_do_premio[-2]
@@ -548,6 +545,7 @@ def calcular_radar_invertidas(hist_milhar):
         rep_ult = len(set(ult_centena)) < 3
         rep_penult = len(set(penult_centena)) < 3
         
+        # Detector de Alvo
         if rep_ult and rep_penult:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
@@ -561,10 +559,23 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última centena foi normal."
             
+        # NOVA MÉTRICA: Max Sequência Repetidas (Últimos 25 Jogos)
+        ultimas_25 = centenas_do_premio[-25:]
+        max_seq = 0
+        seq_atual = 0
+        for c in ultimas_25:
+            if len(set(c)) < 3: # É uma centena repetida
+                seq_atual += 1
+                if seq_atual > max_seq: max_seq = seq_atual
+            else:
+                seq_atual = 0 # Zerou a sequência
+                
+        # Gera o esquadrão atual para o próximo sorteio
         esquadrao_atual = gerar_esquadrao_8_digitos(centenas_do_premio)
         
+        # BACKTEST (AGORA OS ÚLTIMOS 6 SORTEIOS)
         backtest_placar = []
-        for i in range(4, 0, -1):
+        for i in range(6, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
             alvo_real = centenas_do_premio[-i]   
             esquadrao_simulado = gerar_esquadrao_8_digitos(hist_corte)
@@ -581,7 +592,8 @@ def calcular_radar_invertidas(hist_milhar):
             "alerta": alerta,
             "ult_centena": ult_centena,
             "esquadrao": esquadrao_atual,
-            "backtest": backtest_placar
+            "backtest": backtest_placar,
+            "max_seq_rep": max_seq
         })
     return resultados_radar
 
@@ -622,11 +634,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - IMPÉRIO VITORINO")
+    st.title("🛡️ PENTÁGONO - RADAR AVANÇADO")
     col1, col2 = st.columns(2)
     col1.metric("Bancas Sincronizadas", "TODAS AS BANCAS (100%)")
-    col2.metric("Motor Dinâmico", "Dual Engine Total")
-    st.info("Sistema Final Atualizado: O Motor Vitorino (Milhares e Centenas Invertidas) agora está ativo na Tradicional, Lotep, Caminho da Sorte e Monte Carlos.")
+    col2.metric("Inteligência Tática", "Tracker de Anomalias Ativo")
+    st.info("Sistema atualizado: Adicionado rastreador de Limite de Repetição (Max 25 Jogos) e Backtest estendido para 6 jogos. Informação máxima para caçar as Invertidas.")
 
 else:
     banca_selecionada = escolha_menu
@@ -778,12 +790,13 @@ else:
                     with c1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio")
                         st.write(f"Última: `{alvo['ult_centena']}`")
+                        st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x**")
                         
                     with c2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']}\n\n{alvo['alerta']}")
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']}\n\n{alvo['alerta']}")
                         else: st.info(f"{alvo['status']}\n\n{alvo['alerta']}")
-                        st.markdown(f"**Histórico (Últimos 4):** {' | '.join(alvo['backtest'])}")
+                        st.markdown(f"**Histórico (Últimos 6):** {' | '.join(alvo['backtest'])}")
                         
                     with c3:
                         st.markdown("**🛡️ Esquadrão 8 Dígitos:**")
