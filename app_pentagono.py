@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V68.1 Vitorino Engine", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V68.2 Vitorino Precision", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -462,7 +462,7 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. NOVO: MÓDULO VITORINO (MILHAR CONSTRUCTOR - DÍGITOS OCULTOS) ---
+# --- 4. NOVO: MÓDULO VITORINO (DÍGITOS OCULTOS & ESCASSEZ) ---
 # =============================================================================
 
 def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
@@ -470,7 +470,7 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     Constrói a Milhar Vitorino combinando:
     1. IA (Base: Top 3 Dezenas)
     2. Histórico (Corpo: Centena aliada)
-    3. Frequência (Coroa: Os Dígitos Ocultos do Último Sorteio)
+    3. Frequência Dinâmica (Coroa: Dígitos Ocultos ou Escassez do Último Sorteio)
     """
     if len(hist_dezena) < 30 or len(hist_milhar) < 10:
         return [], []
@@ -480,27 +480,38 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     ranking = sorted(mapa_probs.items(), key=lambda x: x[1], reverse=True)
     top_3_dezenas = [x[0] for x in ranking[:3]]
     
-    # 2. Coroa (Digito Oculto): Escaneia os 20 números do último sorteio (P1 ao P5)
+    # 2. Avaliação de Ausência/Escassez do Último Sorteio
     ultimo_sorteio_premios = hist_milhar[-1]['premios']
-    # Junta todos os dígitos sorteados (excluindo os "0000" de erro)
-    todos_digitos_ultimo = set("".join([str(p).zfill(4) for p in ultimo_sorteio_premios if str(p) != "0000"]))
+    # String contendo todos os números sorteados válidos
+    todos_digitos_ultimo = "".join([str(p).zfill(4) for p in ultimo_sorteio_premios if str(p) != "0000"])
     
-    # Descobre os dígitos de 0 a 9 que ficaram de fora
+    # Procura quem faltou
     digitos_ocultos = [str(d) for d in range(10) if str(d) not in todos_digitos_ultimo]
     
-    # Trava de Segurança: Se por um milagre todos os 10 dígitos saíram, pega o menos comum dos últimos 10 jogos
+    msg_radar = ""
+    
+    # A SOLUÇÃO GENIAL: O MODO ESCASSEZ
     if not digitos_ocultos:
-        ultimos_10 = hist_milhar[-10:]
-        todos_recentes = "".join(["".join([str(p).zfill(4) for p in r['premios']]) for r in ultimos_10])
-        c = Counter(todos_recentes)
-        digitos_ocultos = [c.most_common()[-1][0]] # Pega o mais frio
+        # Milagre estatístico: todos os dígitos de 0 a 9 saíram!
+        contagem = Counter(todos_digitos_ultimo)
+        # Qual foi a menor quantidade de vezes que um dígito apareceu? (ex: 1 vez)
+        menor_freq = min(contagem.values())
+        # Captura todos os dígitos que empataram nessa fraqueza
+        digitos_ocultos = [str(d) for d, f in contagem.items() if f == menor_freq]
+        digitos_ocultos.sort()
+        
+        msg_radar = f"🎲 **Radar Vitorino (Modo Escassez):** Todos os dígitos saíram no último sorteio! O sistema caçou os mais fracos (que só apareceram {menor_freq}x) para formar a nova Coroa: `{', '.join(digitos_ocultos)}`."
+    else:
+        # Modo Ausência Normal
+        digitos_ocultos.sort()
+        msg_radar = f"🔍 **Radar Vitorino (Modo Ausência):** Os dígitos `{', '.join(digitos_ocultos)}` não apareceram no último sorteio. Eles serão a Coroa da próxima Milhar."
     
     milhares_vitorino = []
     detalhes = []
     
-    # 3. Corpo (Centena Aliada) e Montagem da Milhar
+    # 3. Corpo (Centena Aliada) e Montagem
     for i, dezena in enumerate(top_3_dezenas):
-        # Revezamento inteligente dos dígitos ocultos para a Coroa
+        # Revezamento inteligente dos dígitos encontrados (seja oculto ou escasso)
         coroa = digitos_ocultos[i % len(digitos_ocultos)]
         
         # Caça qual centena mais andou de mãos dadas com essa dezena na história
@@ -517,8 +528,12 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         milhar_final = f"{coroa}{corpo}{dezena}"
         milhares_vitorino.append(milhar_final)
         
-        # Guardamos a lista completa de ocultos para exibir no painel
-        detalhes.append({"dezena": dezena, "corpo": corpo, "coroa": coroa, "ocultos_gerais": digitos_ocultos})
+        detalhes.append({
+            "dezena": dezena, 
+            "corpo": corpo, 
+            "coroa": coroa, 
+            "msg_radar": msg_radar
+        })
         
     return milhares_vitorino, detalhes
 
@@ -636,11 +651,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - VITORINO ENGINE")
+    st.title("🛡️ PENTÁGONO - VITORINO PRECISION")
     col1, col2 = st.columns(2)
     col1.metric("Novo Módulo", "Estratégia Vitorino (Milhar)")
-    col2.metric("Motor Dinâmico", "Captura de Dígitos Ocultos")
-    st.info("Sistema atualizado para montar Milhares caçando os dígitos que a banca escondeu no último sorteio (Lei da Compensação Matemática).")
+    col2.metric("Motor Dinâmico", "Ausência & Escassez")
+    st.info("Sistema atualizado com a Lógica de Escassez: Se todos os números saírem, a I.A caçará os dígitos mais fracos daquele sorteio para compensação matemática.")
 
 else:
     banca_selecionada = escolha_menu
@@ -762,7 +777,7 @@ else:
     # NOVO PAINEL: ESTRATÉGIA VITORINO
     # ==========================================
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Vitorino (Dígitos Ocultos)")
+        st.header(f"👑 Estratégia Vitorino")
         st.info("Este módulo é uma homenagem dedicada. O algoritmo atua como um relojoeiro, caçando os dígitos que 'dormiram' no último sorteio (Lei da Compensação) e os juntando com a IA para formar a Milhar perfeita.")
         
         with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
@@ -771,14 +786,13 @@ else:
             
         if len(hist_milhar) > 0 and len(hist_dez) > 0:
             ult = hist_milhar[-1]
-            st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {ult['premios'][0]}")
+            st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]}")
             
             milhares, detalhes = gerar_estrategia_vitorino(hist_milhar, hist_dez)
             
             if milhares:
-                # Exibe de forma elegante os dígitos ocultos capturados
-                ocultos_str = ", ".join(detalhes[0]['ocultos_gerais'])
-                st.markdown(f"**🔍 Radar Vitorino detectou Ausência no último sorteio:** Os dígitos `{ocultos_str}` não apareceram. Eles serão a Coroa da próxima Milhar.")
+                # Exibe a mensagem dinâmica (Ausência ou Escassez)
+                st.markdown(detalhes[0]['msg_radar'])
                 
                 st.markdown("### 🎯 As 3 Milhares de Ouro")
                 cols = st.columns(3)
@@ -787,7 +801,7 @@ else:
                         with st.container(border=True):
                             st.metric(f"🥇 Milhar Vitorino {i+1}", m)
                             det = detalhes[i]
-                            st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Histórico) <br> **Coroa:** {det['coroa']} (Dígito Oculto)", unsafe_allow_html=True)
+                            st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Histórico) <br> **Coroa:** {det['coroa']} (Captura)", unsafe_allow_html=True)
                         
                 with st.expander("💸 Gestão Vitorino (Matemática do Lucro)"):
                     st.markdown("""
