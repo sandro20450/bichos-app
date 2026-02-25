@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V71.0 Multi-Vitorino", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V72.0 Império Vitorino", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -29,8 +29,11 @@ CONFIG_BANCAS = {
     "LOTEP": { "display_name": "LOTEP (Dezenas)", "nome_aba": "LOTEP_TOP5", "slug": "lotep", "tipo": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"] },
     "LOTEP_MILHAR": { "display_name": "👑 LOTEP (Vitorino)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5" },
     
-    "CAMINHODASORTE": { "display_name": "CAMINHO (1º ao 5º)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "tipo": "PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
-    "MONTECAI": { "display_name": "MONTE CARLOS (1º ao 5º)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "tipo": "PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] }
+    "CAMINHO": { "display_name": "CAMINHO (Dezenas)", "nome_aba": "CAMINHO_TOP5", "slug": "caminho-da-sorte", "tipo": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"] },
+    "CAMINHO_MILHAR": { "display_name": "👑 CAMINHO (Vitorino)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5" },
+    
+    "MONTE": { "display_name": "MONTE CARLOS (Dezenas)", "nome_aba": "MONTE_TOP5", "slug": "nordeste-monte-carlos", "tipo": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"] },
+    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
 GRUPO_TO_DEZENAS = {}
@@ -129,10 +132,8 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
         for tabela in tabelas:
             if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                # ESCUDO ANTI-FEDERAL AQUI
                 cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
                 if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
-                
                 prev = tabela.find_previous(string=padrao_hora)
                 if prev:
                     m = re.search(padrao_hora, prev)
@@ -621,11 +622,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - MULTI-VITORINO")
+    st.title("🛡️ PENTÁGONO - IMPÉRIO VITORINO")
     col1, col2 = st.columns(2)
-    col1.metric("Bancas Sincronizadas", "TRADICIONAL & LOTEP")
-    col2.metric("Motor Dinâmico", "Dual Engine PENTA Ativado")
-    st.info("Sistema atualizado: A banca LOTEP agora também suporta a Estratégia Vitorino e o Radar de Invertidas de forma simultânea e independente.")
+    col1.metric("Bancas Sincronizadas", "TODAS AS BANCAS (100%)")
+    col2.metric("Motor Dinâmico", "Dual Engine Total")
+    st.info("Sistema Final Atualizado: O Motor Vitorino (Milhares e Centenas Invertidas) agora está ativo na Tradicional, Lotep, Caminho da Sorte e Monte Carlos.")
 
 else:
     banca_selecionada = escolha_menu
@@ -679,7 +680,7 @@ else:
                                         ws.append_row(row_dez)
                                         ws_milhar = conectar_planilha(f"{banca_selecionada}_MILHAR")
                                         if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
-                                        st.toast(f"Duplo Sucesso Penta! 5 Dezenas e Milhar salvas.", icon="✅")
+                                        st.toast(f"Duplo Sucesso Penta! 5 Dezenas e Milhares salvas.", icon="✅")
                                     else:
                                         row = [data_busca.strftime('%Y-%m-%d'), horario_busca] + premios
                                         ws.append_row(row)
