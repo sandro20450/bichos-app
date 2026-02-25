@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V69.2 Radar Invertido", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V69.3 Radar Invertido", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -418,6 +418,34 @@ def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
     else:
         t10, prob, occ = calc_best_10(dezenas)
         return {"status": "novo", "target": t10, "attempts": 0, "prob": prob, "occ": occ}
+
+
+# --- RADAR DAS 3 ESTRATÉGIAS (RESTAURADO) ---
+def calcular_3_estrategias_unidade(historico, indice_premio=0):
+    unidades = []
+    for row in historico:
+        try: unidades.append(int(str(row['premios'][indice_premio]).zfill(2)[-1]))
+        except: pass
+    if not unidades: return "-", "-", "-"
+    gatilho = unidades[-1]
+    sucessos = Counter()
+    for i in range(len(unidades)-1):
+        if unidades[i] == gatilho:
+            janela = set(unidades[i+1:i+9])
+            for u in janela: sucessos[u] += 1
+    markov_u = sucessos.most_common(1)[0][0] if sucessos else "-"
+    ultimas_posicoes = {}
+    for i, u in enumerate(unidades): ultimas_posicoes[u] = i
+    atrasada_u = "-"
+    min_idx = float('inf')
+    for u in range(10):
+        if u not in ultimas_posicoes:
+            atrasada_u = u; break
+        elif ultimas_posicoes[u] < min_idx:
+            min_idx = ultimas_posicoes[u]; atrasada_u = u
+    recentes = unidades[-15:] if len(unidades) >= 15 else unidades
+    quente_u = Counter(recentes).most_common(1)[0][0] if recentes else "-"
+    return markov_u, atrasada_u, quente_u
 
 
 # =============================================================================
