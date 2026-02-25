@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V69.3 Radar Invertido", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V70.0 Radar 8D", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -420,7 +420,7 @@ def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
         return {"status": "novo", "target": t10, "attempts": 0, "prob": prob, "occ": occ}
 
 
-# --- RADAR DAS 3 ESTRATÉGIAS (RESTAURADO) ---
+# --- RADAR DAS 3 ESTRATÉGIAS (INTOCÁVEL) ---
 def calcular_3_estrategias_unidade(historico, indice_premio=0):
     unidades = []
     for row in historico:
@@ -490,9 +490,53 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         detalhes.append({ "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar })
     return milhares_vitorino, detalhes
 
-# --- RADAR DE CENTENA INVERTIDA (7 DÍGITOS - CORRIGIDO) ---
+# --- FUNÇÃO CONSTRUTORA DE 8 DÍGITOS (BLINDADA) ---
+def gerar_esquadrao_8_digitos(hist_centenas):
+    if not hist_centenas: return [str(x) for x in range(8)]
+    
+    ult_centena = hist_centenas[-1]
+    
+    # Markov
+    ult_digitos_set = set(ult_centena)
+    markov_c = Counter()
+    for i in range(len(hist_centenas) - 1):
+        if any(d in hist_centenas[i] for d in ult_digitos_set):
+            for d_next in hist_centenas[i+1]: markov_c[d_next] += 1
+    rank_markov = [x[0] for x in markov_c.most_common()]
+    
+    # Atrasados
+    last_seen = {}
+    for i, c in enumerate(hist_centenas):
+        for d in c: last_seen[d] = i
+    rank_atrasados = sorted([str(d) for d in range(10)], key=lambda x: last_seen.get(x, -1))
+    
+    # Quentes
+    recentes = "".join(hist_centenas[-15:])
+    rank_quentes = [x[0] for x in Counter(recentes).most_common()]
+    
+    esquadrao = []
+    # 1. Pega os 3 melhores Puxadores
+    for d in rank_markov:
+        if d not in esquadrao and len(esquadrao) < 3: esquadrao.append(d)
+        
+    # 2. Completa com Atrasados até chegar em 6
+    for d in rank_atrasados:
+        if d not in esquadrao and len(esquadrao) < 6: esquadrao.append(d)
+        
+    # 3. Completa com Quentes até chegar em 8
+    for d in rank_quentes:
+        if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
+        
+    # 4. Trava de Segurança Máxima (Se faltar número, injeta os que sobraram de 0 a 9)
+    for d in [str(x) for x in range(10)]:
+        if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
+        
+    esquadrao.sort()
+    return esquadrao
+
+# --- RADAR DE CENTENA INVERTIDA (COM BACKTEST E 8 DÍGITOS) ---
 def calcular_radar_invertidas(hist_milhar):
-    if len(hist_milhar) < 15: return []
+    if len(hist_milhar) < 20: return []
     resultados_radar = []
     
     for p_idx in range(5):
@@ -503,7 +547,7 @@ def calcular_radar_invertidas(hist_milhar):
                 if m != "0000": centenas_do_premio.append(m[-3:])
             except: pass
             
-        if len(centenas_do_premio) < 10: continue
+        if len(centenas_do_premio) < 15: continue
             
         ult_centena = centenas_do_premio[-1]
         penult_centena = centenas_do_premio[-2]
@@ -511,6 +555,7 @@ def calcular_radar_invertidas(hist_milhar):
         rep_ult = len(set(ult_centena)) < 3
         rep_penult = len(set(penult_centena)) < 3
         
+        # Detector de Alvo
         if rep_ult and rep_penult:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
@@ -524,45 +569,45 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última centena foi normal."
             
-        ult_digitos_set = set(ult_centena)
-        markov_c = Counter()
-        for i in range(len(centenas_do_premio) - 1):
-            if any(d in centenas_do_premio[i] for d in ult_digitos_set):
-                for d_next in centenas_do_premio[i+1]: markov_c[d_next] += 1
-        rank_markov = [x[0] for x in markov_c.most_common()]
+        # Gera o esquadrão atual para o próximo sorteio
+        esquadrao_atual = gerar_esquadrao_8_digitos(centenas_do_premio)
         
-        last_seen = {}
-        for i, c in enumerate(centenas_do_premio):
-            for d in c: last_seen[d] = i
-        rank_atrasados = sorted([str(d) for d in range(10)], key=lambda x: last_seen.get(x, -1))
+        # ==========================================
+        # MOTOR DE BACKTEST (OS ÚLTIMOS 4 SORTEIOS)
+        # ==========================================
+        backtest_placar = []
+        # Volta no tempo nos índices: -4, -3, -2, -1
+        for i in range(4, 0, -1):
+            hist_corte = centenas_do_premio[:-i] # Histórico até o momento ANTES do sorteio alvo
+            alvo_real = centenas_do_premio[-i]   # O resultado que realmente saiu
+            
+            esquadrao_simulado = gerar_esquadrao_8_digitos(hist_corte)
+            
+            # Checa se foi Vitória ou Derrota
+            # Regra: Se a centena alvo teve número repetido (ex 344), nós perdemos automático.
+            if len(set(alvo_real)) < 3:
+                backtest_placar.append("❌")
+            else:
+                # Se não repetiu, confere se os 3 números sorteados estavam nos nossos 8 simulados
+                if all(d in esquadrao_simulado for d in alvo_real):
+                    backtest_placar.append("✅")
+                else:
+                    backtest_placar.append("❌")
         
-        recentes = "".join(centenas_do_premio[-15:])
-        rank_quentes = [x[0] for x in Counter(recentes).most_common()]
-        
-        esquadrao = []
-        for d in rank_markov:
-            if d not in esquadrao and len(esquadrao) < 3: esquadrao.append(d)
-        for d in rank_atrasados:
-            if d not in esquadrao and len(esquadrao) < 5: esquadrao.append(d)
-        for d in rank_quentes:
-            if d not in esquadrao and len(esquadrao) < 7: esquadrao.append(d)
-        for d in [str(x) for x in range(10)]:
-            if d not in esquadrao and len(esquadrao) < 7: esquadrao.append(d)
-        
-        esquadrao.sort()
         resultados_radar.append({
             "premio": p_idx + 1,
             "status": status,
             "cor": cor,
             "alerta": alerta,
             "ult_centena": ult_centena,
-            "esquadrao": esquadrao
+            "esquadrao": esquadrao_atual,
+            "backtest": backtest_placar
         })
     return resultados_radar
 
 
 # =============================================================================
-# --- 5. BACKTESTS E INTERFACE ---
+# --- 5. INTERFACE ---
 # =============================================================================
 
 def acao_limpar_banco(nome_aba):
@@ -597,11 +642,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - RADAR INVERTIDO")
+    st.title("🛡️ PENTÁGONO - ESCUDO 8D")
     col1, col2 = st.columns(2)
-    col1.metric("Novo Módulo", "Cerco de Centena (7 Dígitos)")
-    col2.metric("Inteligência", "Detector de Repetição Multi-Prêmio")
-    st.info("Sistema atualizado com monitoramento de Janela de Oportunidade. O app agora rastreia fraquezas da banca e te avisa quando e onde jogar a centena invertida.")
+    col1.metric("Módulo Ativo", "Cerco Invertido (8 Dígitos)")
+    col2.metric("Inteligência", "Backtest 4D em Tempo Real")
+    st.info("Sistema atualizado: Aumentamos a taxa de acerto do Cerco de Centenas usando matrizes de 8 números e adicionamos um placar de vitórias recentes para cada prêmio.")
 
 else:
     banca_selecionada = escolha_menu
@@ -728,8 +773,8 @@ else:
             
             st.markdown("---")
             
-            # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA ---
-            st.markdown("### 🎯 Radar de Centena Invertida (Cerco 7 Dígitos)")
+            # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA (8 DÍGITOS) ---
+            st.markdown("### 🎯 Radar de Centena Invertida (Cerco 8 Dígitos)")
             st.write("O sistema rastreia os 5 prêmios procurando onde a Banca soltou centenas com números repetidos para dar o bote estatístico.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
@@ -747,18 +792,21 @@ else:
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']}\n\n{alvo['alerta']}")
                         else: st.info(f"{alvo['status']}\n\n{alvo['alerta']}")
                         
+                        # PLACAR BACKTEST AQUI
+                        st.markdown(f"**Histórico (Últimos 4):** {' | '.join(alvo['backtest'])}")
+                        
                     with c3:
-                        st.markdown("**🛡️ Esquadrão 7 Dígitos:**")
+                        st.markdown("**🛡️ Esquadrão 8 Dígitos:**")
                         str_esquadrao = " - ".join(alvo['esquadrao'])
                         st.code(str_esquadrao, language="text")
                         
-            with st.expander("💸 Calculadora da Invertida"):
+            with st.expander("💸 Calculadora da Invertida (8 Dígitos)"):
                 st.markdown("""
-                - **Como Jogar:** Escolha o prêmio que está com status de ALVO (Quente ou Sniper). Marque os 7 dígitos na modalidade "Centena Invertida".
-                - **Quantidade de Combinações:** 210 centenas.
-                - **Custo Recomendado:** R$ 210,00 (R$ 1,00 por combinação).
+                - **Como Jogar:** Escolha o prêmio que está com status de ALVO (Quente ou Sniper). Marque os 8 dígitos na modalidade "Centena Invertida".
+                - **Quantidade de Combinações:** 336 centenas.
+                - **Custo Recomendado:** R$ 336,00 (R$ 1,00 por combinação).
                 - **Retorno da Banca:** R$ 920,00.
-                - **Lucro Líquido:** R$ 710,00 (Direto para o bolso).
+                - **Lucro Líquido:** R$ 584,00 (Direto para o bolso com alta taxa de conversão).
                 """)
 
             # --- BANCO DE DADOS BRUTO RESTAURADO ---
