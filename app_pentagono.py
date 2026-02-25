@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V69.0 Radar Invertido", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V69.1 Radar Invertido", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -462,18 +462,16 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         detalhes.append({ "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar })
     return milhares_vitorino, detalhes
 
-# --- NOVO: RADAR DE CENTENA INVERTIDA (7 DÍGITOS) ---
+# --- RADAR DE CENTENA INVERTIDA (7 DÍGITOS - CORRIGIDO) ---
 def calcular_radar_invertidas(hist_milhar):
     """
-    Escaneia os 5 prêmios em busca de janelas de oportunidade (centenas com dígitos repetidos).
-    Gera o esquadrão de 7 dígitos baseado em Markov, Atrasos e Quentes para CADA prêmio.
+    Gera o esquadrão de exatos 7 dígitos únicos baseado em Markov, Atrasos e Quentes.
     """
     if len(hist_milhar) < 15: return []
     
     resultados_radar = []
     
     for p_idx in range(5):
-        # 1. Isola apenas as centenas deste prêmio específico
         centenas_do_premio = []
         for row in hist_milhar:
             try:
@@ -486,7 +484,6 @@ def calcular_radar_invertidas(hist_milhar):
         ult_centena = centenas_do_premio[-1]
         penult_centena = centenas_do_premio[-2]
         
-        # 2. Avaliador de Janela (Tem repetição?)
         rep_ult = len(set(ult_centena)) < 3
         rep_penult = len(set(penult_centena)) < 3
         
@@ -503,9 +500,6 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última centena foi normal."
             
-        # 3. O Liquidificador de Estratégias (Apenas para este prêmio)
-        
-        # A) Markov (O que costuma vir DEPOIS dos dígitos que acabaram de sair?)
         ult_digitos_set = set(ult_centena)
         markov_c = Counter()
         for i in range(len(centenas_do_premio) - 1):
@@ -513,33 +507,36 @@ def calcular_radar_invertidas(hist_milhar):
                 for d_next in centenas_do_premio[i+1]: markov_c[d_next] += 1
         rank_markov = [x[0] for x in markov_c.most_common()]
         
-        # B) Atrasados (Ciclo de Centena)
         last_seen = {}
         for i, c in enumerate(centenas_do_premio):
             for d in c: last_seen[d] = i
         rank_atrasados = sorted([str(d) for d in range(10)], key=lambda x: last_seen.get(x, -1))
         
-        # C) Quentes (Moda Recente)
         recentes = "".join(centenas_do_premio[-15:])
         rank_quentes = [x[0] for x in Counter(recentes).most_common()]
         
-        # 4. Formação do Esquadrão (Exatos 7 Dígitos Únicos)
+        # LÓGICA BLINDADA DOS 7 DÍGITOS EXATOS
         esquadrao = []
-        def add_unique(source, count):
-            added = 0
-            for d in source:
-                if d not in esquadrao and added < count:
-                    esquadrao.append(d)
-                    added += 1
-                    if len(esquadrao) == 7: break
-
-        add_unique(rank_markov, 3)     # Top 3 Puxadores
-        add_unique(rank_atrasados, 2)  # Top 2 Atrasados
-        add_unique(rank_quentes, 2)    # Top 2 Quentes
         
-        # Preenchimento de segurança caso haja empate nas listas
-        todos = [str(d) for d in range(10)]
-        add_unique(rank_quentes + rank_atrasados + todos, 7)
+        # Adiciona até 3 puxadores (Markov)
+        for d in rank_markov:
+            if d not in esquadrao and len(esquadrao) < 3: 
+                esquadrao.append(d)
+                
+        # Adiciona atrasados até bater 5 números
+        for d in rank_atrasados:
+            if d not in esquadrao and len(esquadrao) < 5: 
+                esquadrao.append(d)
+                
+        # Adiciona quentes até bater 7 números
+        for d in rank_quentes:
+            if d not in esquadrao and len(esquadrao) < 7: 
+                esquadrao.append(d)
+                
+        # Preenchimento de segurança garantindo exatos 7 números sempre
+        for d in [str(x) for x in range(10)]:
+            if d not in esquadrao and len(esquadrao) < 7: 
+                esquadrao.append(d)
         
         esquadrao.sort()
         
