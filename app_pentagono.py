@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V73.0 Radar Avançado", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V74.0 Motor Guilhotina", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -452,7 +452,7 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. MÓDULOS VITORINO (MILHAR & CENTENA INVERTIDA) ---
+# --- 4. MÓDULOS VITORINO E MOTOR DE GUILHOTINA ---
 # =============================================================================
 
 def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
@@ -494,36 +494,65 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     return milhares_vitorino, detalhes
 
 def gerar_esquadrao_8_digitos(hist_centenas):
+    """
+    Novo Motor: Pontuação Absoluta (A Guilhotina)
+    Avalia todos os 10 dígitos. O que tiver pior nota é eliminado. 
+    Protege os números "neutros" de caírem no limbo.
+    """
     if not hist_centenas: return [str(x) for x in range(8)]
-    ult_centena = hist_centenas[-1]
     
+    ult_centena = hist_centenas[-1]
     ult_digitos_set = set(ult_centena)
+    
+    # Iniciar placar (Scorecard)
+    placar = {str(d): 0 for d in range(10)}
+    
+    # 1. Ponto por Atração (Markov) - Peso 2
     markov_c = Counter()
     for i in range(len(hist_centenas) - 1):
         if any(d in hist_centenas[i] for d in ult_digitos_set):
             for d_next in hist_centenas[i+1]: markov_c[d_next] += 1
-    rank_markov = [x[0] for x in markov_c.most_common()]
     
+    for d, freq in markov_c.items():
+        placar[d] += freq * 2
+        
+    # 2. Ponto por Vitalidade Recente (Moda) - Peso 1
+    recentes = "".join(hist_centenas[-20:])
+    freq_recentes = Counter(recentes)
+    for d, freq in freq_recentes.items():
+        placar[d] += freq * 1
+        
+    # 3. Penalidade de Gelo (Atrasos severos)
     last_seen = {}
     for i, c in enumerate(hist_centenas):
         for d in c: last_seen[d] = i
-    rank_atrasados = sorted([str(d) for d in range(10)], key=lambda x: last_seen.get(x, -1))
-    
-    recentes = "".join(hist_centenas[-15:])
-    rank_quentes = [x[0] for x in Counter(recentes).most_common()]
-    
-    esquadrao = []
-    for d in rank_markov:
-        if d not in esquadrao and len(esquadrao) < 3: esquadrao.append(d)
-    for d in rank_atrasados:
-        if d not in esquadrao and len(esquadrao) < 6: esquadrao.append(d)
-    for d in rank_quentes:
-        if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
-    for d in [str(x) for x in range(10)]:
-        if d not in esquadrao and len(esquadrao) < 8: esquadrao.append(d)
         
+    total_jogos = len(hist_centenas)
+    for d in range(10):
+        d_str = str(d)
+        atraso = total_jogos - last_seen.get(d_str, 0)
+        # Penaliza apenas os que esfriaram muito (mais de 15 jogos sumidos)
+        if atraso > 15:
+            placar[d_str] -= (atraso // 5)
+            
+    # A Guilhotina: Ordena do menor para o maior
+    ranking_final = sorted(placar.items(), key=lambda x: x[1])
+    
+    # Identifica os 2 piores (Scores mais baixos)
+    piores = [ranking_final[0][0], ranking_final[1][0]]
+    
+    # O Esquadrão é formado pelos 8 sobreviventes (Quentes e Neutros)
+    esquadrao = [d for d in placar.keys() if d not in piores]
     esquadrao.sort()
-    return esquadrao
+    
+    # Trava de Segurança (Nunca retorna menos de 8)
+    while len(esquadrao) < 8:
+        for d in [str(x) for x in range(10)]:
+            if d not in esquadrao:
+                esquadrao.append(d)
+                break
+                
+    return esquadrao[:8]
 
 def calcular_radar_invertidas(hist_milhar):
     if len(hist_milhar) < 30: return []
@@ -564,16 +593,16 @@ def calcular_radar_invertidas(hist_milhar):
         max_seq = 0
         seq_atual = 0
         for c in ultimas_25:
-            if len(set(c)) < 3: # É uma centena repetida
+            if len(set(c)) < 3: 
                 seq_atual += 1
                 if seq_atual > max_seq: max_seq = seq_atual
             else:
-                seq_atual = 0 # Zerou a sequência
+                seq_atual = 0 
                 
-        # Gera o esquadrão atual para o próximo sorteio
+        # Gera o esquadrão atual para o próximo sorteio (Com o Novo Motor de Guilhotina)
         esquadrao_atual = gerar_esquadrao_8_digitos(centenas_do_premio)
         
-        # BACKTEST (AGORA OS ÚLTIMOS 6 SORTEIOS)
+        # BACKTEST (OS ÚLTIMOS 6 SORTEIOS)
         backtest_placar = []
         for i in range(6, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
@@ -634,11 +663,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - RADAR AVANÇADO")
+    st.title("🛡️ PENTÁGONO - MOTOR GUILHOTINA")
     col1, col2 = st.columns(2)
-    col1.metric("Bancas Sincronizadas", "TODAS AS BANCAS (100%)")
+    col1.metric("Seleção de Esquadrão", "Pontuação Absoluta")
     col2.metric("Inteligência Tática", "Tracker de Anomalias Ativo")
-    st.info("Sistema atualizado: Adicionado rastreador de Limite de Repetição (Max 25 Jogos) e Backtest estendido para 6 jogos. Informação máxima para caçar as Invertidas.")
+    st.info("Sistema atualizado: Novo motor de seleção não escolhe mais os números individualmente, ele classifica a força de todos e elimina sumariamente os 2 mais fracos do globo.")
 
 else:
     banca_selecionada = escolha_menu
@@ -799,7 +828,7 @@ else:
                         st.markdown(f"**Histórico (Últimos 6):** {' | '.join(alvo['backtest'])}")
                         
                     with c3:
-                        st.markdown("**🛡️ Esquadrão 8 Dígitos:**")
+                        st.markdown("**🛡️ Esquadrão 8 Dígitos (Pós-Guilhotina):**")
                         str_esquadrao = " - ".join(alvo['esquadrao'])
                         st.code(str_esquadrao, language="text")
                         
