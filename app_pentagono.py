@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V68.0 Vitorino Core", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V68.1 Vitorino Engine", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (1º Prêmio)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -54,7 +54,7 @@ st.markdown("""
     .stApp { background-color: #0e1117; color: #fff; }
     div[data-testid="stTable"] table { color: white; }
     .stMetric label { color: #aaaaaa !important; }
-    h1, h2, h3 { color: #ffd700 !important; } /* Dourado em homenagem ao Vitorino */
+    h1, h2, h3 { color: #ffd700 !important; }
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .css-1wivap2 { font-size: 14px !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
@@ -462,13 +462,15 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. NOVO: MÓDULO VITORINO (MILHAR CONSTRUCTOR) ---
+# --- 4. NOVO: MÓDULO VITORINO (MILHAR CONSTRUCTOR - DÍGITOS OCULTOS) ---
 # =============================================================================
 
 def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     """
-    Constrói a Milhar combinando IA (Dezena), Frequência Histórica (Centena) e Ciclo (Milhar).
-    Homenagem ao Vitorino.
+    Constrói a Milhar Vitorino combinando:
+    1. IA (Base: Top 3 Dezenas)
+    2. Histórico (Corpo: Centena aliada)
+    3. Frequência (Coroa: Os Dígitos Ocultos do Último Sorteio)
     """
     if len(hist_dezena) < 30 or len(hist_milhar) < 10:
         return [], []
@@ -478,35 +480,45 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
     ranking = sorted(mapa_probs.items(), key=lambda x: x[1], reverse=True)
     top_3_dezenas = [x[0] for x in ranking[:3]]
     
-    # 2. Coroa (Digito da Milhar): Modo Quente dos ultimos 20 sorteios
-    ultimos_20 = hist_milhar[-20:] if len(hist_milhar) >= 20 else hist_milhar
-    milhar_digits = []
-    for r in ultimos_20:
-        p1 = str(r['premios'][0]).zfill(4)
-        if p1 != "0000":
-            milhar_digits.append(p1[0]) 
-            
-    if not milhar_digits: coroa = "0"
-    else: coroa = Counter(milhar_digits).most_common(1)[0][0]
+    # 2. Coroa (Digito Oculto): Escaneia os 20 números do último sorteio (P1 ao P5)
+    ultimo_sorteio_premios = hist_milhar[-1]['premios']
+    # Junta todos os dígitos sorteados (excluindo os "0000" de erro)
+    todos_digitos_ultimo = set("".join([str(p).zfill(4) for p in ultimo_sorteio_premios if str(p) != "0000"]))
+    
+    # Descobre os dígitos de 0 a 9 que ficaram de fora
+    digitos_ocultos = [str(d) for d in range(10) if str(d) not in todos_digitos_ultimo]
+    
+    # Trava de Segurança: Se por um milagre todos os 10 dígitos saíram, pega o menos comum dos últimos 10 jogos
+    if not digitos_ocultos:
+        ultimos_10 = hist_milhar[-10:]
+        todos_recentes = "".join(["".join([str(p).zfill(4) for p in r['premios']]) for r in ultimos_10])
+        c = Counter(todos_recentes)
+        digitos_ocultos = [c.most_common()[-1][0]] # Pega o mais frio
     
     milhares_vitorino = []
     detalhes = []
     
-    # 3. Corpo (Centena Aliada)
-    for dezena in top_3_dezenas:
+    # 3. Corpo (Centena Aliada) e Montagem da Milhar
+    for i, dezena in enumerate(top_3_dezenas):
+        # Revezamento inteligente dos dígitos ocultos para a Coroa
+        coroa = digitos_ocultos[i % len(digitos_ocultos)]
+        
+        # Caça qual centena mais andou de mãos dadas com essa dezena na história
         centenas_aliadas = []
         for r in hist_milhar:
-            for p in r['premios']: # Busca nos 5 premios para achar mais ligacoes
+            for p in r['premios']:
                 m_str = str(p).zfill(4)
                 if m_str[-2:] == dezena and m_str != "0000":
                     centenas_aliadas.append(m_str[1]) 
                     
-        if not centenas_aliadas: corpo = "0" # Caso a dezena nunca tenha saido
+        if not centenas_aliadas: corpo = "0"
         else: corpo = Counter(centenas_aliadas).most_common(1)[0][0]
             
         milhar_final = f"{coroa}{corpo}{dezena}"
         milhares_vitorino.append(milhar_final)
-        detalhes.append({"dezena": dezena, "corpo": corpo, "coroa": coroa})
+        
+        # Guardamos a lista completa de ocultos para exibir no painel
+        detalhes.append({"dezena": dezena, "corpo": corpo, "coroa": coroa, "ocultos_gerais": digitos_ocultos})
         
     return milhares_vitorino, detalhes
 
@@ -624,11 +636,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - VITORINO CORE")
+    st.title("🛡️ PENTÁGONO - VITORINO ENGINE")
     col1, col2 = st.columns(2)
     col1.metric("Novo Módulo", "Estratégia Vitorino (Milhar)")
-    col2.metric("Motor de Montagem", "Precisão Tripla")
-    st.info("Sistema atualizado para montar Milhares de alta precisão (1x9200) unindo I.A, Frequência e Ciclos.")
+    col2.metric("Motor Dinâmico", "Captura de Dígitos Ocultos")
+    st.info("Sistema atualizado para montar Milhares caçando os dígitos que a banca escondeu no último sorteio (Lei da Compensação Matemática).")
 
 else:
     banca_selecionada = escolha_menu
@@ -750,8 +762,8 @@ else:
     # NOVO PAINEL: ESTRATÉGIA VITORINO
     # ==========================================
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Vitorino (O Construtor)")
-        st.info("Este módulo é uma homenagem dedicada. O algoritmo atua como um relojoeiro, montando a milhar perfeita unindo a I.A (Dezenas), as ligações históricas (Centenas) e os ciclos quentes (Milhar).")
+        st.header(f"👑 Estratégia Vitorino (Dígitos Ocultos)")
+        st.info("Este módulo é uma homenagem dedicada. O algoritmo atua como um relojoeiro, caçando os dígitos que 'dormiram' no último sorteio (Lei da Compensação) e os juntando com a IA para formar a Milhar perfeita.")
         
         with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -764,14 +776,18 @@ else:
             milhares, detalhes = gerar_estrategia_vitorino(hist_milhar, hist_dez)
             
             if milhares:
-                st.markdown("### 🎯 As 3 Milhares de Ouro (Vitorino)")
+                # Exibe de forma elegante os dígitos ocultos capturados
+                ocultos_str = ", ".join(detalhes[0]['ocultos_gerais'])
+                st.markdown(f"**🔍 Radar Vitorino detectou Ausência no último sorteio:** Os dígitos `{ocultos_str}` não apareceram. Eles serão a Coroa da próxima Milhar.")
+                
+                st.markdown("### 🎯 As 3 Milhares de Ouro")
                 cols = st.columns(3)
                 for i, m in enumerate(milhares):
                     with cols[i]:
                         with st.container(border=True):
                             st.metric(f"🥇 Milhar Vitorino {i+1}", m)
                             det = detalhes[i]
-                            st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Hist) <br> **Coroa:** {det['coroa']} (Moda)", unsafe_allow_html=True)
+                            st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Histórico) <br> **Coroa:** {det['coroa']} (Dígito Oculto)", unsafe_allow_html=True)
                         
                 with st.expander("💸 Gestão Vitorino (Matemática do Lucro)"):
                     st.markdown("""
