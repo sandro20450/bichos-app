@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V82.0 Laboratório Quádruplo", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V83.0 Laboratório Quíntuplo", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -426,7 +426,6 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
     quente_u = Counter(recentes).most_common(1)[0][0] if recentes else "-"
     return markov_u, atrasada_u, quente_u
 
-
 # =============================================================================
 # --- 4. MÓDULOS VITORINO E RADARES DE INVERTIDAS ---
 # =============================================================================
@@ -535,42 +534,49 @@ def gerar_esquadrao_9_digitos(hist_centenas):
 def gerar_esquadrao_9_recente(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     esquadrao = []
-    # Varre a lista de trás pra frente (Do presente para o passado)
     for c in reversed(hist_centenas):
         for d in c:
             if d not in esquadrao:
                 esquadrao.append(d)
                 if len(esquadrao) == 9: break
         if len(esquadrao) == 9: break
-        
-    # Trava de segurança caso o histórico seja muito curto
     while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
-            
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 4: SEQUÊNCIA ANTIGA 9D (Do Antigo para o Novo) ---
-def gerar_esquadrao_9_antiga(hist_centenas):
+# --- MOTOR 4: SEQUÊNCIA ANTIGA 15 JOGOS (Do Passado para o Presente) ---
+def gerar_esquadrao_9_antiga_15(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     esquadrao = []
-    # Pega uma janela dos últimos 15 jogos para garantir 9 dígitos
     janela = hist_centenas[-15:] if len(hist_centenas) >= 15 else hist_centenas
-    
-    # Varre a janela de frente pra trás (Do passado para o presente)
     for c in janela:
         for d in c:
             if d not in esquadrao:
                 esquadrao.append(d)
                 if len(esquadrao) == 9: break
         if len(esquadrao) == 9: break
-        
-    # Trava de segurança
     while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
-            
+    esquadrao.sort()
+    return esquadrao
+
+# --- MOTOR 5: SEQUÊNCIA ANTIGA 10 JOGOS (Do Passado para o Presente) ---
+def gerar_esquadrao_9_antiga_10(hist_centenas):
+    if not hist_centenas: return [str(x) for x in range(9)]
+    esquadrao = []
+    janela = hist_centenas[-10:] if len(hist_centenas) >= 10 else hist_centenas
+    for c in janela:
+        for d in c:
+            if d not in esquadrao:
+                esquadrao.append(d)
+                if len(esquadrao) == 9: break
+        if len(esquadrao) == 9: break
+    while len(esquadrao) < 9:
+        for d in [str(x) for x in range(10)]:
+            if d not in esquadrao: esquadrao.append(d); break
     esquadrao.sort()
     return esquadrao
 
@@ -622,7 +628,8 @@ def calcular_radar_invertidas(hist_milhar):
         esquadrao_8 = gerar_esquadrao_8_digitos(centenas_do_premio)
         esquadrao_9 = gerar_esquadrao_9_digitos(centenas_do_premio)
         esquadrao_rec = gerar_esquadrao_9_recente(centenas_do_premio)
-        esquadrao_ant = gerar_esquadrao_9_antiga(centenas_do_premio)
+        esquadrao_ant15 = gerar_esquadrao_9_antiga_15(centenas_do_premio)
+        esquadrao_ant10 = gerar_esquadrao_9_antiga_10(centenas_do_premio)
         
         simulacoes_disponiveis = min(25, len(centenas_do_premio) - 15)
         
@@ -630,7 +637,8 @@ def calcular_radar_invertidas(hist_milhar):
         max_derrotas_8 = 0; max_vitorias_8 = 0; seq_d_8 = 0; seq_v_8 = 0; backtest_8 = []
         max_derrotas_9 = 0; max_vitorias_9 = 0; seq_d_9 = 0; seq_v_9 = 0; backtest_9 = []
         max_derrotas_rec = 0; max_vitorias_rec = 0; seq_d_rec = 0; seq_v_rec = 0; backtest_rec = []
-        max_derrotas_ant = 0; max_vitorias_ant = 0; seq_d_ant = 0; seq_v_ant = 0; backtest_ant = []
+        max_derrotas_ant15 = 0; max_vitorias_ant15 = 0; seq_d_ant15 = 0; seq_v_ant15 = 0; backtest_ant15 = []
+        max_derrotas_ant10 = 0; max_vitorias_ant10 = 0; seq_d_ant10 = 0; seq_v_ant10 = 0; backtest_ant10 = []
         
         for i in range(simulacoes_disponiveis, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
@@ -639,7 +647,8 @@ def calcular_radar_invertidas(hist_milhar):
             sim_8 = gerar_esquadrao_8_digitos(hist_corte)
             sim_9 = gerar_esquadrao_9_digitos(hist_corte)
             sim_rec = gerar_esquadrao_9_recente(hist_corte)
-            sim_ant = gerar_esquadrao_9_antiga(hist_corte)
+            sim_ant15 = gerar_esquadrao_9_antiga_15(hist_corte)
+            sim_ant10 = gerar_esquadrao_9_antiga_10(hist_corte)
             
             # --- Eval 8D ---
             perdeu = len(set(alvo_real)) < 3 or not all(d in sim_8 for d in alvo_real)
@@ -674,16 +683,27 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_rec > max_vitorias_rec: max_vitorias_rec = seq_v_rec
                 if i <= 6: backtest_rec.append("✅")
 
-            # --- Eval Antiga ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_ant for d in alvo_real)
+            # --- Eval Antiga 15 ---
+            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_ant15 for d in alvo_real)
             if perdeu:
-                seq_d_ant += 1; seq_v_ant = 0
-                if seq_d_ant > max_derrotas_ant: max_derrotas_ant = seq_d_ant
-                if i <= 6: backtest_ant.append("❌")
+                seq_d_ant15 += 1; seq_v_ant15 = 0
+                if seq_d_ant15 > max_derrotas_ant15: max_derrotas_ant15 = seq_d_ant15
+                if i <= 6: backtest_ant15.append("❌")
             else:
-                seq_v_ant += 1; seq_d_ant = 0
-                if seq_v_ant > max_vitorias_ant: max_vitorias_ant = seq_v_ant
-                if i <= 6: backtest_ant.append("✅")
+                seq_v_ant15 += 1; seq_d_ant15 = 0
+                if seq_v_ant15 > max_vitorias_ant15: max_vitorias_ant15 = seq_v_ant15
+                if i <= 6: backtest_ant15.append("✅")
+                
+            # --- Eval Antiga 10 ---
+            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_ant10 for d in alvo_real)
+            if perdeu:
+                seq_d_ant10 += 1; seq_v_ant10 = 0
+                if seq_d_ant10 > max_derrotas_ant10: max_derrotas_ant10 = seq_d_ant10
+                if i <= 6: backtest_ant10.append("❌")
+            else:
+                seq_v_ant10 += 1; seq_d_ant10 = 0
+                if seq_v_ant10 > max_vitorias_ant10: max_vitorias_ant10 = seq_v_ant10
+                if i <= 6: backtest_ant10.append("✅")
         
         resultados_radar.append({
             "premio": p_idx + 1,
@@ -692,7 +712,8 @@ def calcular_radar_invertidas(hist_milhar):
             "esquadrao_8": esquadrao_8, "backtest_8": backtest_8, "max_derrotas_8": max_derrotas_8, "max_vitorias_8": max_vitorias_8,
             "esquadrao_9": esquadrao_9, "backtest_9": backtest_9, "max_derrotas_9": max_derrotas_9, "max_vitorias_9": max_vitorias_9,
             "esquadrao_rec": esquadrao_rec, "backtest_rec": backtest_rec, "max_derrotas_rec": max_derrotas_rec, "max_vitorias_rec": max_vitorias_rec,
-            "esquadrao_ant": esquadrao_ant, "backtest_ant": backtest_ant, "max_derrotas_ant": max_derrotas_ant, "max_vitorias_ant": max_vitorias_ant
+            "esquadrao_ant15": esquadrao_ant15, "backtest_ant15": backtest_ant15, "max_derrotas_ant15": max_derrotas_ant15, "max_vitorias_ant15": max_vitorias_ant15,
+            "esquadrao_ant10": esquadrao_ant10, "backtest_ant10": backtest_ant10, "max_derrotas_ant10": max_derrotas_ant10, "max_vitorias_ant10": max_vitorias_ant10
         })
     return resultados_radar
 
@@ -733,11 +754,11 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - LABORATÓRIO QUÁDRUPLO")
+    st.title("🛡️ PENTÁGONO - LABORATÓRIO QUÍNTUPLO")
     col1, col2 = st.columns(2)
-    col1.metric("Painel Tático", "4 Estratégias Simultâneas")
-    col2.metric("Desempenho", "Alta Performance (Sem IA)")
-    st.info("Sistema atualizado: O painel agora executa 4 motores ultrarrápidos (Guilhotina 8D, Guilhotina 9D, Sequência Recente e Sequência Antiga). Compare os históricos e vença a banca.")
+    col1.metric("Painel Tático", "5 Estratégias Simultâneas")
+    col2.metric("Teste A/B/C/D/E", "Janelas de 10 e 15 Jogos")
+    st.info("Sistema atualizado: Adicionada a sua estratégia exata de janela de 10 jogos competindo diretamente com a versão de segurança de 15 jogos.")
 
 else:
     banca_selecionada = escolha_menu
@@ -885,9 +906,9 @@ else:
             
             st.markdown("---")
             
-            # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA QUÁDRUPLO ---
-            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (A/B/C/D)")
-            st.write("Laboratório de táticas: Compare a Matemática da Guilhotina contra a Leitura Cronológica Contínua.")
+            # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA QUÍNTUPLO ---
+            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Laboratório)")
+            st.write("Compare as táticas Matemáticas contra as táticas Cronológicas.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
             
@@ -903,9 +924,10 @@ else:
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
                         else: st.info(f"{alvo['status']} - {alvo['alerta']}")
                     
-                    # GRADE 2x2 (4 ESTRATÉGIAS)
+                    # GRADE 3 LINHAS (5 ESTRATÉGIAS)
                     linha1_c1, linha1_c2 = st.columns(2)
                     linha2_c1, linha2_c2 = st.columns(2)
+                    linha3_c1, linha3_c2 = st.columns(2)
                     
                     # Linha 1: Os Motores Guilhotina
                     with linha1_c1:
@@ -922,7 +944,7 @@ else:
                             st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_9'])}")
                             st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_9']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_9']}x**")
                             
-                    # Linha 2: Os Motores de Sequência (Recente vs Antiga)
+                    # Linha 2: Os Motores de Sequência (Recente vs Antiga 15)
                     with linha2_c1:
                         with st.container(border=True):
                             st.markdown("#### 🎯 Sequência Recente 9D")
@@ -932,10 +954,18 @@ else:
                             
                     with linha2_c2:
                         with st.container(border=True):
-                            st.markdown("#### 🎯 Sequência Antiga 9D")
-                            st.code(" - ".join(alvo['esquadrao_ant']), language="text")
-                            st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_ant'])}")
-                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_ant']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_ant']}x**")
+                            st.markdown("#### 🎯 Sequência Antiga (15 Jg) 9D")
+                            st.code(" - ".join(alvo['esquadrao_ant15']), language="text")
+                            st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_ant15'])}")
+                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_ant15']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_ant15']}x**")
+                            
+                    # Linha 3: O Motor de Sequência Antiga 10 (Seu laboratório)
+                    with linha3_c1:
+                        with st.container(border=True):
+                            st.markdown("#### 🎯 Sequência Antiga (10 Jg) 9D")
+                            st.code(" - ".join(alvo['esquadrao_ant10']), language="text")
+                            st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_ant10'])}")
+                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_ant10']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_ant10']}x**")
                         
             with st.expander("💸 Calculadora da Invertida (Resumo Financeiro)"):
                 c_calc1, c_calc2 = st.columns(2)
