@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V84.0 Scanner Global", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V85.0 Interceptador", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -834,7 +834,7 @@ else:
     st.sidebar.markdown("---")
     
     # ---------------------------------------------------------
-    # EXTRATOR INTEGRADO DESBLOQUEADO
+    # EXTRATOR INTEGRADO DESBLOQUEADO (Com Interceptador)
     # ---------------------------------------------------------
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
     
@@ -844,7 +844,14 @@ else:
             if opcao_data == "Hoje": data_busca = date.today()
             elif opcao_data == "Ontem": data_busca = date.today() - timedelta(days=1)
             else: data_busca = st.sidebar.date_input("Escolha:", date.today())
-            horario_busca = st.selectbox("Horário:", config['horarios'])
+            
+            # --- INTERCEPTADOR MANUAL ---
+            lista_horarios = config['horarios'].copy()
+            if "CAMINHO" in banca_selecionada and data_busca.weekday() in [2, 5]: # 2=Quarta, 5=Sábado
+                if "20:00" in lista_horarios:
+                    lista_horarios[lista_horarios.index("20:00")] = "19:30"
+                    
+            horario_busca = st.selectbox("Horário:", lista_horarios)
             
             if st.button("🚀 Baixar & Salvar"):
                 aba_dez = config.get('base_dez', config['nome_aba'])
@@ -908,25 +915,31 @@ else:
                 buffer_m = []
                 
                 for dia in lista_datas:
-                    for hora in config['horarios']:
+                    for hora_base in config['horarios']:
+                        # --- INTERCEPTADOR TURBO ---
+                        hora_efetiva = hora_base
+                        if "CAMINHO" in banca_selecionada and dia.weekday() in [2, 5]:
+                            if hora_base == "20:00":
+                                hora_efetiva = "19:30"
+                                
                         op_atual += 1; bar.progress(op_atual / total_ops)
-                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora}...")
-                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora)}"
+                        status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora_efetiva}...")
+                        chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora_efetiva)}"
                         
                         if chave_atual in chaves_d: continue
                         if dia > date.today(): continue
-                        if dia == date.today() and hora > datetime.now().strftime("%H:%M"): continue
+                        if dia == date.today() and hora_efetiva > datetime.now().strftime("%H:%M"): continue
                         
-                        premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora)
+                        premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora_efetiva)
                         if premios:
                             if tipo_ext == "DUAL_SOLO":
-                                row_d = [dia.strftime('%Y-%m-%d'), hora, premios[0][-2:], "00", "00", "00", "00"]
+                                row_d = [dia.strftime('%Y-%m-%d'), hora_efetiva, premios[0][-2:], "00", "00", "00", "00"]
                                 buffer_dez.append(row_d); chaves_d.append(chave_atual)
-                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora] + premios); chaves_m.append(chave_atual)
+                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
                             elif tipo_ext == "DUAL_PENTA":
-                                row_d = [dia.strftime('%Y-%m-%d'), hora] + [p[-2:] for p in premios]
+                                row_d = [dia.strftime('%Y-%m-%d'), hora_efetiva] + [p[-2:] for p in premios]
                                 buffer_dez.append(row_d); chaves_d.append(chave_atual)
-                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora] + premios); chaves_m.append(chave_atual)
+                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
                             sucessos += 1
                         time.sleep(1.0)
                 status.text("🚚 Sincronizando Matrizes Fantasmas e Visuais...")
@@ -964,7 +977,7 @@ else:
             st.markdown("---")
             
             # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA QUÍNTUPLO ---
-            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (A/B/C/D)")
+            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Laboratório)")
             st.write("Compare as táticas Matemática contra as táticas Cronológicas.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
