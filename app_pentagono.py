@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V83.0 Laboratório Quíntuplo", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V84.0 Scanner Global", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -468,7 +468,6 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         detalhes.append({ "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar })
     return milhares_vitorino, detalhes
 
-# --- MOTOR 1: GUILHOTINA 8D ---
 def gerar_esquadrao_8_digitos(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(8)]
     ult_centena = hist_centenas[-1]
@@ -499,7 +498,6 @@ def gerar_esquadrao_8_digitos(hist_centenas):
             if d not in esquadrao: esquadrao.append(d); break
     return esquadrao[:8]
 
-# --- MOTOR 2: GUILHOTINA 9D ---
 def gerar_esquadrao_9_digitos(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     ult_centena = hist_centenas[-1]
@@ -530,7 +528,6 @@ def gerar_esquadrao_9_digitos(hist_centenas):
             if d not in esquadrao: esquadrao.append(d); break
     return esquadrao[:9]
 
-# --- MOTOR 3: SEQUÊNCIA RECENTE 9D (Do Mais Novo para o Antigo) ---
 def gerar_esquadrao_9_recente(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     esquadrao = []
@@ -546,7 +543,6 @@ def gerar_esquadrao_9_recente(hist_centenas):
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 4: SEQUÊNCIA ANTIGA 15 JOGOS (Do Passado para o Presente) ---
 def gerar_esquadrao_9_antiga_15(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     esquadrao = []
@@ -563,7 +559,6 @@ def gerar_esquadrao_9_antiga_15(hist_centenas):
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 5: SEQUÊNCIA ANTIGA 10 JOGOS (Do Passado para o Presente) ---
 def gerar_esquadrao_9_antiga_10(hist_centenas):
     if not hist_centenas: return [str(x) for x in range(9)]
     esquadrao = []
@@ -707,13 +702,14 @@ def calcular_radar_invertidas(hist_milhar):
         
         resultados_radar.append({
             "premio": p_idx + 1,
-            "status": status, "cor": cor, "alerta": alerta, "ult_centena": ult_centena, "max_seq_rep": max_seq_rep,
+            "status": status, "cor": cor, "alerta": alerta, 
+            "ult_centena": ult_centena, "penult_centena": penult_centena, "max_seq_rep": max_seq_rep,
             
-            "esquadrao_8": esquadrao_8, "backtest_8": backtest_8, "max_derrotas_8": max_derrotas_8, "max_vitorias_8": max_vitorias_8,
-            "esquadrao_9": esquadrao_9, "backtest_9": backtest_9, "max_derrotas_9": max_derrotas_9, "max_vitorias_9": max_vitorias_9,
-            "esquadrao_rec": esquadrao_rec, "backtest_rec": backtest_rec, "max_derrotas_rec": max_derrotas_rec, "max_vitorias_rec": max_vitorias_rec,
-            "esquadrao_ant15": esquadrao_ant15, "backtest_ant15": backtest_ant15, "max_derrotas_ant15": max_derrotas_ant15, "max_vitorias_ant15": max_vitorias_ant15,
-            "esquadrao_ant10": esquadrao_ant10, "backtest_ant10": backtest_ant10, "max_derrotas_ant10": max_derrotas_ant10, "max_vitorias_ant10": max_vitorias_ant10
+            "esquadrao_8": esquadrao_8, "backtest_8": backtest_8, "max_derrotas_8": max_derrotas_8, "max_vitorias_8": max_vitorias_8, "atual_derrotas_8": seq_d_8,
+            "esquadrao_9": esquadrao_9, "backtest_9": backtest_9, "max_derrotas_9": max_derrotas_9, "max_vitorias_9": max_vitorias_9, "atual_derrotas_9": seq_d_9,
+            "esquadrao_rec": esquadrao_rec, "backtest_rec": backtest_rec, "max_derrotas_rec": max_derrotas_rec, "max_vitorias_rec": max_vitorias_rec, "atual_derrotas_rec": seq_d_rec,
+            "esquadrao_ant15": esquadrao_ant15, "backtest_ant15": backtest_ant15, "max_derrotas_ant15": max_derrotas_ant15, "max_vitorias_ant15": max_vitorias_ant15, "atual_derrotas_ant15": seq_d_ant15,
+            "esquadrao_ant10": esquadrao_ant10, "backtest_ant10": backtest_ant10, "max_derrotas_ant10": max_derrotas_ant10, "max_vitorias_ant10": max_vitorias_ant10, "atual_derrotas_ant10": seq_d_ant10
         })
     return resultados_radar
 
@@ -754,11 +750,72 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - LABORATÓRIO QUÍNTUPLO")
-    col1, col2 = st.columns(2)
-    col1.metric("Painel Tático", "5 Estratégias Simultâneas")
-    col2.metric("Teste A/B/C/D/E", "Janelas de 10 e 15 Jogos")
-    st.info("Sistema atualizado: Adicionada a sua estratégia exata de janela de 10 jogos competindo diretamente com a versão de segurança de 15 jogos.")
+    st.title("🛡️ PENTÁGONO - SCANNER GLOBAL")
+    st.markdown("O sistema está varrendo todos os globos em busca de anomalias estatísticas para a Centena Invertida.")
+    
+    alertas_sniper = []
+    alertas_quebra = []
+    
+    # ---------------------------------------------------------
+    # MOTOR DO SCANNER AUTOMÁTICO (Varre todas as Bancas)
+    # ---------------------------------------------------------
+    with st.spinner("📡 Scanner Ativo: Analisando Tradicional, Lotep, Caminho e Monte Carlos..."):
+        for banca_key, config in CONFIG_BANCAS.items():
+            if config['tipo'] == 'MILHAR_VIEW':
+                hist_milhar = carregar_dados_hibridos(config['nome_aba'])
+                if len(hist_milhar) >= 40:
+                    radar_dados = calcular_radar_invertidas(hist_milhar)
+                    
+                    for alvo in radar_dados:
+                        nome_banca_limpo = config['display_name'].replace("👑 ", "")
+                        
+                        # 1. Checa Alerta Sniper (2 Centenas Repetidas Seguidas)
+                        if alvo['status'] == "🚨 SNIPER MÁXIMO":
+                            alertas_sniper.append({
+                                "banca": nome_banca_limpo,
+                                "premio": alvo['premio'],
+                                "ultimas": f"{alvo['penult_centena']} e {alvo['ult_centena']}"
+                            })
+                            
+                        # 2. Checa Alerta de Quebra de Limite de Derrotas
+                        estrategias_para_checar = [
+                            ("Guilhotina 8D", "8"),
+                            ("Guilhotina 9D", "9"),
+                            ("Sequência Recente 9D", "rec"),
+                            ("Sequência Antiga (15) 9D", "ant15"),
+                            ("Sequência Antiga (10) 9D", "ant10")
+                        ]
+                        
+                        for nome_est, sufixo in estrategias_para_checar:
+                            max_d = alvo[f"max_derrotas_{sufixo}"]
+                            atual_d = alvo[f"atual_derrotas_{sufixo}"]
+                            
+                            # Se a derrota atual bateu ou ultrapassou o teto histórico (e o teto é > 0)
+                            if atual_d > 0 and atual_d >= max_d and max_d > 0:
+                                alertas_quebra.append({
+                                    "banca": nome_banca_limpo,
+                                    "premio": alvo['premio'],
+                                    "estrategia": nome_est,
+                                    "atual": atual_d,
+                                    "maximo": max_d
+                                })
+
+    # ---------------------------------------------------------
+    # EXIBIÇÃO DOS RESULTADOS DO SCANNER
+    # ---------------------------------------------------------
+    if not alertas_sniper and not alertas_quebra:
+        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de repetição ou teto de derrota atingido no momento. Mantenha a banca protegida.")
+    else:
+        if alertas_sniper:
+            st.markdown("### 🎯 ALERTA SNIPER (Repetições Duplas Detectadas)")
+            for a in alertas_sniper:
+                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | Soltou as centenas repetidas `{a['ultimas']}` em sequência. Oportunidade de Invertida!")
+                
+        if alertas_quebra:
+            st.markdown("### ⚡ ALERTA DE QUEBRA (Limite de Derrotas Atingido)")
+            st.markdown("As estratégias abaixo chegaram ao 'fundo do poço' histórico. A probabilidade de acerto no próximo jogo é extrema.")
+            for a in alertas_quebra:
+                st.warning(f"💔 **{a['banca']} - {a['premio']}º Prêmio** ({a['estrategia']}) | Derrotas Atuais: **{a['atual']}** (Teto Histórico: **{a['maximo']}**)")
 
 else:
     banca_selecionada = escolha_menu
@@ -907,8 +964,8 @@ else:
             st.markdown("---")
             
             # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA QUÍNTUPLO ---
-            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Laboratório)")
-            st.write("Compare as táticas Matemáticas contra as táticas Cronológicas.")
+            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (A/B/C/D)")
+            st.write("Compare as táticas Matemática contra as táticas Cronológicas.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
             
