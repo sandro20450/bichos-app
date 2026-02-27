@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V86.0 Esquadrões 8D", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V87.0 Cerco Global", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -428,7 +428,7 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. MÓDULOS VITORINO E RADARES DE INVERTIDAS (APENAS 8D) ---
+# --- 4. MÓDULOS VITORINO (SECAS E CERCO) E RADARES DE INVERTIDAS ---
 # =============================================================================
 
 def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
@@ -450,7 +450,7 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
         msg_radar = f"🎲 **Radar Vitorino (Modo Escassez):** Todos os dígitos saíram no último sorteio! O sistema caçou os mais fracos (que só apareceram {menor_freq}x) para formar a nova Coroa: `{', '.join(digitos_ocultos)}`."
     else:
         digitos_ocultos.sort()
-        msg_radar = f"🔍 **Radar Vitorino (Modo Ausência):** Os dígitos `{', '.join(digitos_ocultos)}` não apareceram no último sorteio. Eles serão a Coroa da próxima Milhar."
+        msg_radar = f"🔍 **Radar Vitorino (Modo Ausência):** Os dígitos `{', '.join(digitos_ocultos)}` não apareceram no último sorteio. Eles serão a Coroa da próxima Milhar Seca."
     
     milhares_vitorino = []
     detalhes = []
@@ -461,13 +461,69 @@ def gerar_estrategia_vitorino(hist_milhar, hist_dezena):
             for p in r['premios']:
                 m_str = str(p).zfill(4)
                 if m_str[-2:] == dezena and m_str != "0000":
-                    centenas_aliadas.append(m_str[1]) 
+                    centenas_aliadas.append(m_str[-3]) 
         if not centenas_aliadas: corpo = "0"
         else: corpo = Counter(centenas_aliadas).most_common(1)[0][0]
         milhar_final = f"{coroa}{corpo}{dezena}"
         milhares_vitorino.append(milhar_final)
         detalhes.append({ "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar })
     return milhares_vitorino, detalhes
+
+def gerar_estrategia_cerco(hist_milhar):
+    """Novo Motor: Milhar de Cerco 1º ao 5º Prêmio"""
+    if len(hist_milhar) < 10: return [], []
+    
+    # 1. Base Global (Dezenas mais quentes do globo 1 ao 5)
+    todas_dezenas = []
+    janela = hist_milhar[-50:] # Analisa os últimos 50 sorteios (250 prêmios)
+    for row in janela:
+        for p in row['premios']:
+            p_str = str(p).zfill(4)
+            if p_str != "0000":
+                todas_dezenas.append(p_str[-2:])
+                
+    contagem_dezenas = Counter(todas_dezenas)
+    top_3_dezenas = [x[0] for x in contagem_dezenas.most_common(3)]
+    while len(top_3_dezenas) < 3: top_3_dezenas.append("00")
+    
+    # 2. Coroa da Escassez Absoluta (Dígitos ausentes nos 5 prêmios do último sorteio)
+    ult_premios = hist_milhar[-1]['premios']
+    digitos_ultimo = "".join([str(p).zfill(4) for p in ult_premios if str(p) != "0000"])
+    ausentes = [str(d) for d in range(10) if str(d) not in digitos_ultimo]
+    
+    if not ausentes:
+        cont_dig = Counter(digitos_ultimo)
+        menor_freq = min(cont_dig.values())
+        ausentes = [str(d) for d, f in cont_dig.items() if f == menor_freq]
+        ausentes.sort()
+        msg_radar = f"🌪️ **Radar Cerco Global (Modo Escassez):** Todos os 10 dígitos saíram no último globo! O sistema isolou os mais fracos (saíram apenas {menor_freq}x) no globo inteiro para ser a Coroa: `{', '.join(ausentes)}`."
+    else:
+        ausentes.sort()
+        msg_radar = f"🌪️ **Radar Cerco Global (Ausência Total):** Os dígitos `{', '.join(ausentes)}` sumiram por completo de todos os 5 prêmios do último sorteio. Força máxima para a Coroa de Cerco."
+        
+    milhares_cerco = []
+    detalhes_cerco = []
+    
+    for i, dezena in enumerate(top_3_dezenas):
+        coroa = ausentes[i % len(ausentes)]
+        
+        # 3. Corpo Magnético Global
+        centenas_aliadas = []
+        for row in hist_milhar:
+            for p in row['premios']:
+                m_str = str(p).zfill(4)
+                if m_str[-2:] == dezena and m_str != "0000":
+                    centenas_aliadas.append(m_str[-3])
+        
+        corpo = Counter(centenas_aliadas).most_common(1)[0][0] if centenas_aliadas else "0"
+        
+        milhar_final = f"{coroa}{corpo}{dezena}"
+        milhares_cerco.append(milhar_final)
+        detalhes_cerco.append({
+            "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar
+        })
+        
+    return milhares_cerco, detalhes_cerco
 
 # --- MOTOR 1: GUILHOTINA 8D ---
 def gerar_esquadrao_8_digitos(hist_centenas):
@@ -919,18 +975,33 @@ else:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
             
-            # --- MÓDULO 1: MILHARES SECAS ---
-            milhares, detalhes = gerar_estrategia_vitorino(hist_milhar, hist_dez)
-            if milhares:
-                st.markdown(detalhes[0]['msg_radar'])
+            # --- MÓDULO 1: MILHARES SECAS (1º Prêmio) ---
+            milhares_secas, detalhes_secas = gerar_estrategia_vitorino(hist_milhar, hist_dez)
+            if milhares_secas:
+                st.markdown(detalhes_secas[0]['msg_radar'])
                 st.markdown("### 🎯 As 3 Milhares de Ouro (Secas 1º Prêmio)")
                 cols = st.columns(3)
-                for i, m in enumerate(milhares):
+                for i, m in enumerate(milhares_secas):
                     with cols[i]:
                         with st.container(border=True):
-                            st.metric(f"🥇 Milhar Vitorino {i+1}", m)
-                            det = detalhes[i]
+                            st.metric(f"🥇 Milhar Seca {i+1}", m)
+                            det = detalhes_secas[i]
                             st.caption(f"⚙️ **Base:** {det['dezena']} (IA) <br> **Corpo:** {det['corpo']} (Hist) <br> **Coroa:** {det['coroa']} (Captura)", unsafe_allow_html=True)
+                            
+            st.markdown("---")
+
+            # --- MÓDULO 1.5: MILHARES DE CERCO (1º ao 5º Prêmio) ---
+            milhares_cerco, detalhes_cerco = gerar_estrategia_cerco(hist_milhar)
+            if milhares_cerco:
+                st.markdown(detalhes_cerco[0]['msg_radar'])
+                st.markdown("### 🌪️ As 3 Milhares de Cerco (1º ao 5º Prêmio)")
+                cols_cerco = st.columns(3)
+                for i, m in enumerate(milhares_cerco):
+                    with cols_cerco[i]:
+                        with st.container(border=True):
+                            st.metric(f"🎯 Milhar Cerco {i+1}", m)
+                            det = detalhes_cerco[i]
+                            st.caption(f"⚙️ **Base Global:** {det['dezena']} <br> **Corpo Global:** {det['corpo']} <br> **Coroa Ausente:** {det['coroa']}", unsafe_allow_html=True)
             
             st.markdown("---")
             
