@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V89.0 Consenso", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V90.0 Milhar Invertida", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -428,7 +428,7 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. MÓDULOS VITORINO (CERCO GLOBAL) E RADARES DE INVERTIDAS ---
+# --- 4. MÓDULOS VITORINO (CERCO GLOBAL) E RADARES DE MILHARES INVERTIDAS ---
 # =============================================================================
 
 def gerar_estrategia_cerco(hist_milhar):
@@ -483,94 +483,94 @@ def gerar_estrategia_cerco(hist_milhar):
         
     return milhares_cerco, detalhes_cerco
 
-# --- MOTOR 1: GUILHOTINA 8D ---
-def gerar_esquadrao_8_digitos(hist_centenas):
-    if not hist_centenas: return [str(x) for x in range(8)]
-    ult_centena = hist_centenas[-1]
-    ult_digitos_set = set(ult_centena)
+# --- MOTOR 1: GUILHOTINA 9D ---
+def gerar_esquadrao_9_digitos(hist_milhares):
+    if not hist_milhares: return [str(x) for x in range(9)]
+    ult_milhar = hist_milhares[-1]
+    ult_digitos_set = set(ult_milhar)
     placar = {str(d): 0 for d in range(10)}
     markov_c = Counter()
-    for i in range(len(hist_centenas) - 1):
-        if any(d in hist_centenas[i] for d in ult_digitos_set):
-            for d_next in hist_centenas[i+1]: markov_c[d_next] += 1
+    for i in range(len(hist_milhares) - 1):
+        if any(d in hist_milhares[i] for d in ult_digitos_set):
+            for d_next in hist_milhares[i+1]: markov_c[d_next] += 1
     for d, freq in markov_c.items(): placar[d] += freq * 2
-    recentes = "".join(hist_centenas[-20:])
+    recentes = "".join(hist_milhares[-20:])
     freq_recentes = Counter(recentes)
     for d, freq in freq_recentes.items(): placar[d] += freq * 1
     last_seen = {}
-    for i, c in enumerate(hist_centenas):
-        for d in c: last_seen[d] = i
-    total_jogos = len(hist_centenas)
+    for i, m in enumerate(hist_milhares):
+        for d in m: last_seen[d] = i
+    total_jogos = len(hist_milhares)
     for d in range(10):
         d_str = str(d)
         atraso = total_jogos - last_seen.get(d_str, 0)
         if atraso > 15: placar[d_str] -= (atraso // 5)
     ranking_final = sorted(placar.items(), key=lambda x: x[1])
-    piores = [ranking_final[0][0], ranking_final[1][0]]
+    piores = [ranking_final[0][0]] # Elimina apenas o pior (mantém 9)
     esquadrao = [d for d in placar.keys() if d not in piores]
     esquadrao.sort()
-    while len(esquadrao) < 8:
+    while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
-    return esquadrao[:8]
+    return esquadrao[:9]
 
-# --- MOTOR 2: SEQUÊNCIA RECENTE 8D ---
-def gerar_esquadrao_8_recente(hist_centenas):
-    if not hist_centenas: return [str(x) for x in range(8)]
+# --- MOTOR 2: SEQUÊNCIA RECENTE 9D ---
+def gerar_esquadrao_9_recente(hist_milhares):
+    if not hist_milhares: return [str(x) for x in range(9)]
     esquadrao = []
-    for c in reversed(hist_centenas):
-        for d in c:
+    for m in reversed(hist_milhares):
+        for d in m:
             if d not in esquadrao:
                 esquadrao.append(d)
-                if len(esquadrao) == 8: break
-        if len(esquadrao) == 8: break
-    while len(esquadrao) < 8:
+                if len(esquadrao) == 9: break
+        if len(esquadrao) == 9: break
+    while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 3: SEQUÊNCIA ANTIGA 15 JOGOS 8D ---
-def gerar_esquadrao_8_antiga_15(hist_centenas):
-    if not hist_centenas: return [str(x) for x in range(8)]
+# --- MOTOR 3: SEQUÊNCIA ANTIGA 15 JOGOS 9D ---
+def gerar_esquadrao_9_antiga_15(hist_milhares):
+    if not hist_milhares: return [str(x) for x in range(9)]
     esquadrao = []
-    janela = hist_centenas[-15:] if len(hist_centenas) >= 15 else hist_centenas
-    for c in janela:
-        for d in c:
+    janela = hist_milhares[-15:] if len(hist_milhares) >= 15 else hist_milhares
+    for m in janela:
+        for d in m:
             if d not in esquadrao:
                 esquadrao.append(d)
-                if len(esquadrao) == 8: break
-        if len(esquadrao) == 8: break
-    while len(esquadrao) < 8:
+                if len(esquadrao) == 9: break
+        if len(esquadrao) == 9: break
+    while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 4: SEQUÊNCIA ANTIGA 10 JOGOS 8D ---
-def gerar_esquadrao_8_antiga_10(hist_centenas):
-    if not hist_centenas: return [str(x) for x in range(8)]
+# --- MOTOR 4: SEQUÊNCIA ANTIGA 10 JOGOS 9D ---
+def gerar_esquadrao_9_antiga_10(hist_milhares):
+    if not hist_milhares: return [str(x) for x in range(9)]
     esquadrao = []
-    janela = hist_centenas[-10:] if len(hist_centenas) >= 10 else hist_centenas
-    for c in janela:
-        for d in c:
+    janela = hist_milhares[-10:] if len(hist_milhares) >= 10 else hist_milhares
+    for m in janela:
+        for d in m:
             if d not in esquadrao:
                 esquadrao.append(d)
-                if len(esquadrao) == 8: break
-        if len(esquadrao) == 8: break
-    while len(esquadrao) < 8:
+                if len(esquadrao) == 9: break
+        if len(esquadrao) == 9: break
+    while len(esquadrao) < 9:
         for d in [str(x) for x in range(10)]:
             if d not in esquadrao: esquadrao.append(d); break
     esquadrao.sort()
     return esquadrao
 
-# --- MOTOR 5: CONSENSO DAS MULTIDÕES (👑 Ouro) ---
+# --- MOTOR 5: CONSENSO DAS MULTIDÕES (👑 Ouro 9D) ---
 def gerar_esquadrao_consenso(e1, e2, e3, e4):
     todos = e1 + e2 + e3 + e4
     contagem = Counter(todos)
-    # Ordena primeiro pela frequência (maior para menor), e em caso de empate, pela ordem do dígito
+    # Ordena primeiro pela frequência, depois desempata pelo menor número
     ranking = sorted(contagem.items(), key=lambda x: (-x[1], x[0]))
-    esquadrao = [str(x[0]) for x in ranking[:8]]
+    esquadrao = [str(x[0]) for x in ranking[:9]]
     return sorted(esquadrao)
 
 
@@ -579,80 +579,84 @@ def calcular_radar_invertidas(hist_milhar):
     resultados_radar = []
     
     for p_idx in range(5):
-        centenas_do_premio = []
+        milhares_do_premio = []
         for row in hist_milhar:
             try:
                 m = str(row['premios'][p_idx]).zfill(4)
-                if m != "0000": centenas_do_premio.append(m[-3:])
+                if m != "0000": milhares_do_premio.append(m[-4:]) # Foco total na Milhar (4 dígitos)
             except: pass
             
-        if len(centenas_do_premio) < 40: continue
+        if len(milhares_do_premio) < 40: continue
             
-        ult_centena = centenas_do_premio[-1]
-        penult_centena = centenas_do_premio[-2]
+        ult_milhar = milhares_do_premio[-1]
+        penult_milhar = milhares_do_premio[-2]
         
-        rep_ult = len(set(ult_centena)) < 3
-        rep_penult = len(set(penult_centena)) < 3
+        # Repetições agora olham para os 4 dígitos
+        rep_ult = len(set(ult_milhar)) < 4
+        rep_penult = len(set(penult_milhar)) < 4
         
         if rep_ult and rep_penult:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
-            alerta = "Bote agora! Vieram 2 centenas repetidas seguidas."
+            alerta = "Duas milhares seguidas vieram com dígitos repetidos. Represa cheia!"
         elif rep_ult:
             status = "🔥 ALVO QUENTE"
             cor = "warning"
-            alerta = "Atenção! A última centena veio com repetição."
+            alerta = "A última milhar veio com repetição."
         else:
             status = "⏸️ Neutro"
             cor = "info"
-            alerta = "A última centena foi normal."
+            alerta = "A última milhar foi normal (4 dígitos diferentes)."
             
-        ultimas_25 = centenas_do_premio[-25:]
+        ultimas_25 = milhares_do_premio[-25:]
         max_seq_rep = 0
         seq_atual_rep = 0
-        for c in ultimas_25:
-            if len(set(c)) < 3: 
+        for m in ultimas_25:
+            if len(set(m)) < 4: 
                 seq_atual_rep += 1
                 if seq_atual_rep > max_seq_rep: max_seq_rep = seq_atual_rep
             else:
                 seq_atual_rep = 0 
                 
         # Gera os esquadrões atuais
-        esquadrao_8 = gerar_esquadrao_8_digitos(centenas_do_premio)
-        esquadrao_rec = gerar_esquadrao_8_recente(centenas_do_premio)
-        esquadrao_ant15 = gerar_esquadrao_8_antiga_15(centenas_do_premio)
-        esquadrao_ant10 = gerar_esquadrao_8_antiga_10(centenas_do_premio)
-        esquadrao_consenso = gerar_esquadrao_consenso(esquadrao_8, esquadrao_rec, esquadrao_ant15, esquadrao_ant10)
+        esquadrao_9 = gerar_esquadrao_9_digitos(milhares_do_premio)
+        esquadrao_rec = gerar_esquadrao_9_recente(milhares_do_premio)
+        esquadrao_ant15 = gerar_esquadrao_9_antiga_15(milhares_do_premio)
+        esquadrao_ant10 = gerar_esquadrao_9_antiga_10(milhares_do_premio)
+        esquadrao_consenso = gerar_esquadrao_consenso(esquadrao_9, esquadrao_rec, esquadrao_ant15, esquadrao_ant10)
         
         # Analisa a convergência/sincronia dos 4 motores
-        esquadroes_tuples = [tuple(esquadrao_8), tuple(esquadrao_rec), tuple(esquadrao_ant15), tuple(esquadrao_ant10)]
+        esquadroes_tuples = [tuple(esquadrao_9), tuple(esquadrao_rec), tuple(esquadrao_ant15), tuple(esquadrao_ant10)]
         contagem_esq = Counter(esquadroes_tuples)
         melhor_esq, qtd_sync = contagem_esq.most_common(1)[0]
         sync_msg = None
         if qtd_sync >= 2:
-            sync_msg = f"🔥 **ALERTA DE SINCRONIA:** {qtd_sync} Motores convergiram e apontam para os mesmos números: `{'-'.join(melhor_esq)}`. Força máxima de aposta!"
+            sync_msg = f"🔥 **ALERTA DE SINCRONIA:** {qtd_sync} Motores convergiram e apontam para os mesmos 9 números: `{'-'.join(melhor_esq)}`. Aposta Máxima Autorizada!"
         
-        simulacoes_disponiveis = min(25, len(centenas_do_premio) - 15)
+        simulacoes_disponiveis = min(25, len(milhares_do_premio) - 15)
         
         # Trackers
-        max_derrotas_8 = 0; max_vitorias_8 = 0; seq_d_8 = 0; seq_v_8 = 0; backtest_8 = []
+        max_derrotas_9 = 0; max_vitorias_9 = 0; seq_d_9 = 0; seq_v_9 = 0; backtest_9 = []
         max_derrotas_rec = 0; max_vitorias_rec = 0; seq_d_rec = 0; seq_v_rec = 0; backtest_rec = []
         max_derrotas_ant15 = 0; max_vitorias_ant15 = 0; seq_d_ant15 = 0; seq_v_ant15 = 0; backtest_ant15 = []
         max_derrotas_ant10 = 0; max_vitorias_ant10 = 0; seq_d_ant10 = 0; seq_v_ant10 = 0; backtest_ant10 = []
         max_derrotas_cons = 0; max_vitorias_cons = 0; seq_d_cons = 0; seq_v_cons = 0; backtest_cons = []
         
         for i in range(simulacoes_disponiveis, 0, -1):
-            hist_corte = centenas_do_premio[:-i] 
-            alvo_real = centenas_do_premio[-i]   
+            hist_corte = milhares_do_premio[:-i] 
+            alvo_real = milhares_do_premio[-i]   # Milhar alvo (4 dígitos)
             
-            sim_8 = gerar_esquadrao_8_digitos(hist_corte)
-            sim_rec = gerar_esquadrao_8_recente(hist_corte)
-            sim_ant15 = gerar_esquadrao_8_antiga_15(hist_corte)
-            sim_ant10 = gerar_esquadrao_8_antiga_10(hist_corte)
-            sim_cons = gerar_esquadrao_consenso(sim_8, sim_rec, sim_ant15, sim_ant10)
+            sim_9 = gerar_esquadrao_9_digitos(hist_corte)
+            sim_rec = gerar_esquadrao_9_recente(hist_corte)
+            sim_ant15 = gerar_esquadrao_9_antiga_15(hist_corte)
+            sim_ant10 = gerar_esquadrao_9_antiga_10(hist_corte)
+            sim_cons = gerar_esquadrao_consenso(sim_9, sim_rec, sim_ant15, sim_ant10)
             
-            # --- Eval Consenso 8D ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_cons for d in alvo_real)
+            # --- Regra de Derrota: Milhar Invertida ---
+            # Perde se a milhar sorteada tiver dígitos repetidos OU se algum dígito estiver fora do esquadrão
+            
+            # Eval Consenso 9D
+            perdeu = len(set(alvo_real)) < 4 or not all(d in sim_cons for d in alvo_real)
             if perdeu:
                 seq_d_cons += 1; seq_v_cons = 0
                 if seq_d_cons > max_derrotas_cons: max_derrotas_cons = seq_d_cons
@@ -662,19 +666,19 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_cons > max_vitorias_cons: max_vitorias_cons = seq_v_cons
                 if i <= 6: backtest_cons.append("✅")
             
-            # --- Eval Guilhotina 8D ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_8 for d in alvo_real)
+            # Eval Guilhotina 9D
+            perdeu = len(set(alvo_real)) < 4 or not all(d in sim_9 for d in alvo_real)
             if perdeu:
-                seq_d_8 += 1; seq_v_8 = 0
-                if seq_d_8 > max_derrotas_8: max_derrotas_8 = seq_d_8
-                if i <= 6: backtest_8.append("❌")
+                seq_d_9 += 1; seq_v_9 = 0
+                if seq_d_9 > max_derrotas_9: max_derrotas_9 = seq_d_9
+                if i <= 6: backtest_9.append("❌")
             else:
-                seq_v_8 += 1; seq_d_8 = 0
-                if seq_v_8 > max_vitorias_8: max_vitorias_8 = seq_v_8
-                if i <= 6: backtest_8.append("✅")
+                seq_v_9 += 1; seq_d_9 = 0
+                if seq_v_9 > max_vitorias_9: max_vitorias_9 = seq_v_9
+                if i <= 6: backtest_9.append("✅")
 
-            # --- Eval Recente 8D ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_rec for d in alvo_real)
+            # Eval Recente 9D
+            perdeu = len(set(alvo_real)) < 4 or not all(d in sim_rec for d in alvo_real)
             if perdeu:
                 seq_d_rec += 1; seq_v_rec = 0
                 if seq_d_rec > max_derrotas_rec: max_derrotas_rec = seq_d_rec
@@ -684,8 +688,8 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_rec > max_vitorias_rec: max_vitorias_rec = seq_v_rec
                 if i <= 6: backtest_rec.append("✅")
 
-            # --- Eval Antiga 15 8D ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_ant15 for d in alvo_real)
+            # Eval Antiga 15 9D
+            perdeu = len(set(alvo_real)) < 4 or not all(d in sim_ant15 for d in alvo_real)
             if perdeu:
                 seq_d_ant15 += 1; seq_v_ant15 = 0
                 if seq_d_ant15 > max_derrotas_ant15: max_derrotas_ant15 = seq_d_ant15
@@ -695,8 +699,8 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_ant15 > max_vitorias_ant15: max_vitorias_ant15 = seq_v_ant15
                 if i <= 6: backtest_ant15.append("✅")
                 
-            # --- Eval Antiga 10 8D ---
-            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_ant10 for d in alvo_real)
+            # Eval Antiga 10 9D
+            perdeu = len(set(alvo_real)) < 4 or not all(d in sim_ant10 for d in alvo_real)
             if perdeu:
                 seq_d_ant10 += 1; seq_v_ant10 = 0
                 if seq_d_ant10 > max_derrotas_ant10: max_derrotas_ant10 = seq_d_ant10
@@ -709,10 +713,10 @@ def calcular_radar_invertidas(hist_milhar):
         resultados_radar.append({
             "premio": p_idx + 1,
             "status": status, "cor": cor, "alerta": alerta, "sync_msg": sync_msg,
-            "ult_centena": ult_centena, "penult_centena": penult_centena, "max_seq_rep": max_seq_rep,
+            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "max_seq_rep": max_seq_rep,
             
             "esquadrao_consenso": esquadrao_consenso, "backtest_consenso": backtest_cons, "max_derrotas_consenso": max_derrotas_cons, "max_vitorias_consenso": max_vitorias_cons, "atual_derrotas_consenso": seq_d_cons,
-            "esquadrao_8": esquadrao_8, "backtest_8": backtest_8, "max_derrotas_8": max_derrotas_8, "max_vitorias_8": max_vitorias_8, "atual_derrotas_8": seq_d_8,
+            "esquadrao_9": esquadrao_9, "backtest_9": backtest_9, "max_derrotas_9": max_derrotas_9, "max_vitorias_9": max_vitorias_9, "atual_derrotas_9": seq_d_9,
             "esquadrao_rec": esquadrao_rec, "backtest_rec": backtest_rec, "max_derrotas_rec": max_derrotas_rec, "max_vitorias_rec": max_vitorias_rec, "atual_derrotas_rec": seq_d_rec,
             "esquadrao_ant15": esquadrao_ant15, "backtest_ant15": backtest_ant15, "max_derrotas_ant15": max_derrotas_ant15, "max_vitorias_ant15": max_vitorias_ant15, "atual_derrotas_ant15": seq_d_ant15,
             "esquadrao_ant10": esquadrao_ant10, "backtest_ant10": backtest_ant10, "max_derrotas_ant10": max_derrotas_ant10, "max_vitorias_ant10": max_vitorias_ant10, "atual_derrotas_ant10": seq_d_ant10
@@ -756,8 +760,8 @@ escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - SCANNER GLOBAL")
-    st.markdown("O sistema está varrendo todos os globos em busca de anomalias estatísticas para a Centena Invertida.")
+    st.title("🛡️ PENTÁGONO - SCANNER GLOBAL (MILHAR)")
+    st.markdown("O sistema está varrendo todos os globos em busca de oportunidades para Milhar Invertida.")
     
     alertas_sniper = []
     alertas_quebra = []
@@ -776,15 +780,15 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                             alertas_sniper.append({
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "ultimas": f"{alvo['penult_centena']} e {alvo['ult_centena']}"
+                                "ultimas": f"{alvo['penult_milhar']} e {alvo['ult_milhar']}"
                             })
                             
                         estrategias_para_checar = [
-                            ("👑 Ouro: Consenso 8D", "consenso"),
-                            ("Guilhotina 8D", "8"),
-                            ("Sequência Recente 8D", "rec"),
-                            ("Sequência Antiga (15 Jg) 8D", "ant15"),
-                            ("Sequência Antiga (10 Jg) 8D", "ant10")
+                            ("👑 Ouro: Consenso 9D", "consenso"),
+                            ("Guilhotina 9D", "9"),
+                            ("Sequência Recente 9D", "rec"),
+                            ("Sequência Antiga (15 Jg) 9D", "ant15"),
+                            ("Sequência Antiga (10 Jg) 9D", "ant10")
                         ]
                         
                         for nome_est, sufixo in estrategias_para_checar:
@@ -806,7 +810,7 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
         if alertas_sniper:
             st.markdown("### 🎯 ALERTA SNIPER (Repetições Duplas Detectadas)")
             for a in alertas_sniper:
-                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | Soltou as centenas repetidas `{a['ultimas']}` em sequência. Oportunidade de Invertida!")
+                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | Soltou as milhares repetidas `{a['ultimas']}` em sequência. Oportunidade para Invertida!")
                 
         if alertas_quebra:
             st.markdown("### ⚡ ALERTA DE QUEBRA (Limite de Derrotas Atingido)")
@@ -943,7 +947,7 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Cerco Global & Centenas Invertidas")
+        st.header(f"👑 Estratégia Cerco Global & Milhar Invertida 9D")
         
         with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -967,9 +971,9 @@ else:
             
             st.markdown("---")
             
-            # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA ---
-            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Ensemble 8D)")
-            st.write("A inteligência coletiva: Quando vários motores independentes apontam para os mesmos números, a probabilidade de acerto é extrema.")
+            # --- MÓDULO 2: RADAR DE MILHAR INVERTIDA ---
+            st.markdown("### 🎯 Radar Comparativo de Milhar Invertida (Apenas 9D)")
+            st.write("Laboratório Ativo: Todas as estratégias abaixo agora caçam a Milhar Completa cobrindo 9 dígitos. O prêmio máximo em caso de acerto é de R$ 9.200,00.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
             
@@ -978,7 +982,7 @@ else:
                     # CABEÇALHO DO PRÊMIO
                     c_topo1, c_topo2 = st.columns([1, 2])
                     with c_topo1:
-                        st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_centena']}`")
+                        st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
                         st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x**")
                     with c_topo2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
@@ -990,7 +994,7 @@ else:
                         
                     # CARD DE OURO: CONSENSO (Destaque Topo)
                     with st.container(border=True):
-                        st.markdown("#### 👑 Ouro: Consenso dos Motores 8D")
+                        st.markdown("#### 👑 Ouro: Consenso dos Motores 9D")
                         st.markdown("Os dígitos mais votados simultaneamente por todas as estratégias abaixo:")
                         st.code(" - ".join(alvo['esquadrao_consenso']), language="text")
                         st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_consenso'])}")
@@ -998,21 +1002,21 @@ else:
                     
                     st.markdown("---")
                     
-                    # GRADE 2x2 (4 ESTRATÉGIAS 8D INDIVIDUAIS)
+                    # GRADE 2x2 (4 ESTRATÉGIAS 9D INDIVIDUAIS)
                     linha1_c1, linha1_c2 = st.columns(2)
                     linha2_c1, linha2_c2 = st.columns(2)
                     
                     # Linha 1
                     with linha1_c1:
                         with st.container(border=True):
-                            st.markdown("#### 🛡️ Guilhotina 8D")
-                            st.code(" - ".join(alvo['esquadrao_8']), language="text")
-                            st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_8'])}")
-                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_8']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_8']}x**")
+                            st.markdown("#### 🛡️ Guilhotina 9D")
+                            st.code(" - ".join(alvo['esquadrao_9']), language="text")
+                            st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_9'])}")
+                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_9']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_9']}x**")
                             
                     with linha1_c2:
                         with st.container(border=True):
-                            st.markdown("#### 🎯 Sequência Recente 8D")
+                            st.markdown("#### 🎯 Sequência Recente 9D")
                             st.code(" - ".join(alvo['esquadrao_rec']), language="text")
                             st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_rec'])}")
                             st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_rec']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_rec']}x**")
@@ -1020,26 +1024,26 @@ else:
                     # Linha 2
                     with linha2_c1:
                         with st.container(border=True):
-                            st.markdown("#### 🎯 Sequência Antiga (15 Jg) 8D")
+                            st.markdown("#### 🎯 Sequência Antiga (15 Jg) 9D")
                             st.code(" - ".join(alvo['esquadrao_ant15']), language="text")
                             st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_ant15'])}")
                             st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_ant15']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_ant15']}x**")
                             
                     with linha2_c2:
                         with st.container(border=True):
-                            st.markdown("#### 🎯 Sequência Antiga (10 Jg) 8D")
+                            st.markdown("#### 🎯 Sequência Antiga (10 Jg) 9D")
                             st.code(" - ".join(alvo['esquadrao_ant10']), language="text")
                             st.markdown(f"**Histórico:** {' | '.join(alvo['backtest_ant10'])}")
                             st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_ant10']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_ant10']}x**")
                         
-            with st.expander("💸 Calculadora da Invertida (Padrão 8 Dígitos)"):
+            with st.expander("💸 Calculadora da Invertida (Milhar Simples)"):
                 st.markdown("""
                 **Matemática Financeira Unificada:**
-                - Todas as estratégias deste painel utilizam **8 Dígitos**.
-                - **Combinações:** 336 centenas simples.
-                - **Custo Recomendado:** R$ 336,00 (R$ 1,00/cada).
-                - **Retorno Médio da Banca:** R$ 920,00.
-                - **Lucro Líquido por Acerto:** **R$ 584,00**.
+                - Todas as estratégias deste painel utilizam **9 Dígitos para buscar a Milhar (4 Dígitos)**.
+                - **Combinações:** 3.024 milhares simples (sem repetição).
+                - **Custo Recomendado:** R$ 3.024,00 (R$ 1,00 por combinação).
+                - **Retorno da Banca:** R$ 9.200,00.
+                - **Lucro Líquido por Acerto:** **R$ 6.176,00**.
                 """)
 
             st.markdown("---")
