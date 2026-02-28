@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V88.0 Foco no Cerco", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V89.0 Consenso", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -564,6 +564,15 @@ def gerar_esquadrao_8_antiga_10(hist_centenas):
     esquadrao.sort()
     return esquadrao
 
+# --- MOTOR 5: CONSENSO DAS MULTIDÕES (👑 Ouro) ---
+def gerar_esquadrao_consenso(e1, e2, e3, e4):
+    todos = e1 + e2 + e3 + e4
+    contagem = Counter(todos)
+    # Ordena primeiro pela frequência (maior para menor), e em caso de empate, pela ordem do dígito
+    ranking = sorted(contagem.items(), key=lambda x: (-x[1], x[0]))
+    esquadrao = [str(x[0]) for x in ranking[:8]]
+    return sorted(esquadrao)
+
 
 def calcular_radar_invertidas(hist_milhar):
     if len(hist_milhar) < 40: return []
@@ -613,6 +622,15 @@ def calcular_radar_invertidas(hist_milhar):
         esquadrao_rec = gerar_esquadrao_8_recente(centenas_do_premio)
         esquadrao_ant15 = gerar_esquadrao_8_antiga_15(centenas_do_premio)
         esquadrao_ant10 = gerar_esquadrao_8_antiga_10(centenas_do_premio)
+        esquadrao_consenso = gerar_esquadrao_consenso(esquadrao_8, esquadrao_rec, esquadrao_ant15, esquadrao_ant10)
+        
+        # Analisa a convergência/sincronia dos 4 motores
+        esquadroes_tuples = [tuple(esquadrao_8), tuple(esquadrao_rec), tuple(esquadrao_ant15), tuple(esquadrao_ant10)]
+        contagem_esq = Counter(esquadroes_tuples)
+        melhor_esq, qtd_sync = contagem_esq.most_common(1)[0]
+        sync_msg = None
+        if qtd_sync >= 2:
+            sync_msg = f"🔥 **ALERTA DE SINCRONIA:** {qtd_sync} Motores convergiram e apontam para os mesmos números: `{'-'.join(melhor_esq)}`. Força máxima de aposta!"
         
         simulacoes_disponiveis = min(25, len(centenas_do_premio) - 15)
         
@@ -621,6 +639,7 @@ def calcular_radar_invertidas(hist_milhar):
         max_derrotas_rec = 0; max_vitorias_rec = 0; seq_d_rec = 0; seq_v_rec = 0; backtest_rec = []
         max_derrotas_ant15 = 0; max_vitorias_ant15 = 0; seq_d_ant15 = 0; seq_v_ant15 = 0; backtest_ant15 = []
         max_derrotas_ant10 = 0; max_vitorias_ant10 = 0; seq_d_ant10 = 0; seq_v_ant10 = 0; backtest_ant10 = []
+        max_derrotas_cons = 0; max_vitorias_cons = 0; seq_d_cons = 0; seq_v_cons = 0; backtest_cons = []
         
         for i in range(simulacoes_disponiveis, 0, -1):
             hist_corte = centenas_do_premio[:-i] 
@@ -630,6 +649,18 @@ def calcular_radar_invertidas(hist_milhar):
             sim_rec = gerar_esquadrao_8_recente(hist_corte)
             sim_ant15 = gerar_esquadrao_8_antiga_15(hist_corte)
             sim_ant10 = gerar_esquadrao_8_antiga_10(hist_corte)
+            sim_cons = gerar_esquadrao_consenso(sim_8, sim_rec, sim_ant15, sim_ant10)
+            
+            # --- Eval Consenso 8D ---
+            perdeu = len(set(alvo_real)) < 3 or not all(d in sim_cons for d in alvo_real)
+            if perdeu:
+                seq_d_cons += 1; seq_v_cons = 0
+                if seq_d_cons > max_derrotas_cons: max_derrotas_cons = seq_d_cons
+                if i <= 6: backtest_cons.append("❌")
+            else:
+                seq_v_cons += 1; seq_d_cons = 0
+                if seq_v_cons > max_vitorias_cons: max_vitorias_cons = seq_v_cons
+                if i <= 6: backtest_cons.append("✅")
             
             # --- Eval Guilhotina 8D ---
             perdeu = len(set(alvo_real)) < 3 or not all(d in sim_8 for d in alvo_real)
@@ -677,9 +708,10 @@ def calcular_radar_invertidas(hist_milhar):
         
         resultados_radar.append({
             "premio": p_idx + 1,
-            "status": status, "cor": cor, "alerta": alerta, 
+            "status": status, "cor": cor, "alerta": alerta, "sync_msg": sync_msg,
             "ult_centena": ult_centena, "penult_centena": penult_centena, "max_seq_rep": max_seq_rep,
             
+            "esquadrao_consenso": esquadrao_consenso, "backtest_consenso": backtest_cons, "max_derrotas_consenso": max_derrotas_cons, "max_vitorias_consenso": max_vitorias_cons, "atual_derrotas_consenso": seq_d_cons,
             "esquadrao_8": esquadrao_8, "backtest_8": backtest_8, "max_derrotas_8": max_derrotas_8, "max_vitorias_8": max_vitorias_8, "atual_derrotas_8": seq_d_8,
             "esquadrao_rec": esquadrao_rec, "backtest_rec": backtest_rec, "max_derrotas_rec": max_derrotas_rec, "max_vitorias_rec": max_vitorias_rec, "atual_derrotas_rec": seq_d_rec,
             "esquadrao_ant15": esquadrao_ant15, "backtest_ant15": backtest_ant15, "max_derrotas_ant15": max_derrotas_ant15, "max_vitorias_ant15": max_vitorias_ant15, "atual_derrotas_ant15": seq_d_ant15,
@@ -748,6 +780,7 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                             })
                             
                         estrategias_para_checar = [
+                            ("👑 Ouro: Consenso 8D", "consenso"),
                             ("Guilhotina 8D", "8"),
                             ("Sequência Recente 8D", "rec"),
                             ("Sequência Antiga (15 Jg) 8D", "ant15"),
@@ -910,7 +943,7 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Vitorino & Cerco Invertido")
+        st.header(f"👑 Estratégia Cerco Global & Centenas Invertidas")
         
         with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -935,8 +968,8 @@ else:
             st.markdown("---")
             
             # --- MÓDULO 2: RADAR DE CENTENA INVERTIDA ---
-            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Apenas 8D)")
-            st.write("Laboratório Ativo: Todas as estratégias abaixo agora cobrem exatamente 8 dígitos. Escolha o esquadrão com o melhor histórico.")
+            st.markdown("### 🎯 Radar Comparativo de Centenas Invertidas (Ensemble 8D)")
+            st.write("A inteligência coletiva: Quando vários motores independentes apontam para os mesmos números, a probabilidade de acerto é extrema.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
             
@@ -951,8 +984,21 @@ else:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
                         else: st.info(f"{alvo['status']} - {alvo['alerta']}")
+                        
+                    if alvo['sync_msg']:
+                        st.error(alvo['sync_msg'])
+                        
+                    # CARD DE OURO: CONSENSO (Destaque Topo)
+                    with st.container(border=True):
+                        st.markdown("#### 👑 Ouro: Consenso dos Motores 8D")
+                        st.markdown("Os dígitos mais votados simultaneamente por todas as estratégias abaixo:")
+                        st.code(" - ".join(alvo['esquadrao_consenso']), language="text")
+                        st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_consenso'])}")
+                        st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_consenso']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_consenso']}x**")
                     
-                    # GRADE 2x2 (4 ESTRATÉGIAS 8D)
+                    st.markdown("---")
+                    
+                    # GRADE 2x2 (4 ESTRATÉGIAS 8D INDIVIDUAIS)
                     linha1_c1, linha1_c2 = st.columns(2)
                     linha2_c1, linha2_c2 = st.columns(2)
                     
@@ -989,7 +1035,7 @@ else:
             with st.expander("💸 Calculadora da Invertida (Padrão 8 Dígitos)"):
                 st.markdown("""
                 **Matemática Financeira Unificada:**
-                - Todas as estratégias deste painel agora utilizam **8 Dígitos**.
+                - Todas as estratégias deste painel utilizam **8 Dígitos**.
                 - **Combinações:** 336 centenas simples.
                 - **Custo Recomendado:** R$ 336,00 (R$ 1,00/cada).
                 - **Retorno Médio da Banca:** R$ 920,00.
