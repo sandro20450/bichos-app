@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V91.0 Duelo Binário", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V92.0 Sniper Elite", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -504,17 +504,23 @@ def calcular_radar_invertidas(hist_milhar):
             
         ult_milhar = milhares_do_premio[-1]
         penult_milhar = milhares_do_premio[-2]
+        antepenult_milhar = milhares_do_premio[-3]
         
-        # Repetições (4 dígitos)
+        # Repetições (4 dígitos - posição irrelevante)
         rep_ult = len(set(ult_milhar)) < 4
         rep_penult = len(set(penult_milhar)) < 4
+        rep_antepenult = len(set(antepenult_milhar)) < 4
         
-        if rep_ult and rep_penult:
+        if rep_ult and rep_penult and rep_antepenult:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
-            alerta = "Duas milhares seguidas vieram com dígitos repetidos. Represa cheia!"
+            alerta = "TRINCA DE REPETIÇÕES! As 3 últimas milhares vieram com dígitos repetidos. Bote de Elite!"
+        elif rep_ult and rep_penult:
+            status = "🔥 ALVO AQUECENDO"
+            cor = "warning"
+            alerta = "Duas milhares seguidas vieram com repetição. A represa está enchendo."
         elif rep_ult:
-            status = "🔥 ALVO QUENTE"
+            status = "⚠️ ATENÇÃO"
             cor = "warning"
             alerta = "A última milhar veio com repetição."
         else:
@@ -578,7 +584,7 @@ def calcular_radar_invertidas(hist_milhar):
         resultados_radar.append({
             "premio": p_idx + 1,
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
-            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "max_seq_rep": max_seq_rep,
+            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, "max_seq_rep": max_seq_rep,
             
             "esquadrao_0": esquadrao_corta_0, "backtest_0": backtest_0, "max_derrotas_0": max_derrotas_0, "max_vitorias_0": max_vitorias_0, "atual_derrotas_0": seq_d_0,
             "esquadrao_9": esquadrao_corta_9, "backtest_9": backtest_9, "max_derrotas_9": max_derrotas_9, "max_vitorias_9": max_vitorias_9, "atual_derrotas_9": seq_d_9
@@ -623,7 +629,7 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
     st.title("🛡️ PENTÁGONO - SCANNER GLOBAL (MILHAR 9D)")
-    st.markdown("O sistema está varrendo todos os globos monitorando o Duelo Binário (Corta 0 vs Corta 9).")
+    st.markdown("O sistema está varrendo todos os globos monitorando o Duelo Binário e Alertas Sniper de Trinca.")
     
     alertas_sniper = []
     alertas_quebra = []
@@ -638,11 +644,12 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
                         
+                        # Gatilho exclusivo para a TRINCA (3 repetidas seguidas)
                         if alvo['status'] == "🚨 SNIPER MÁXIMO":
                             alertas_sniper.append({
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "ultimas": f"{alvo['penult_milhar']} e {alvo['ult_milhar']}"
+                                "ultimas": f"{alvo['antepenult_milhar']} - {alvo['penult_milhar']} - {alvo['ult_milhar']}"
                             })
                             
                         estrategias_para_checar = [
@@ -664,12 +671,12 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                                 })
 
     if not alertas_sniper and not alertas_quebra:
-        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de repetição ou teto de derrota atingido no momento. Mantenha a banca protegida.")
+        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de Trinca ou teto de derrota atingido no momento. Mantenha a banca protegida.")
     else:
         if alertas_sniper:
-            st.markdown("### 🎯 ALERTA SNIPER (Repetições Duplas Detectadas)")
+            st.markdown("### 🎯 ALERTA SNIPER MÁXIMO (Trinca de Repetições)")
             for a in alertas_sniper:
-                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | Soltou as milhares repetidas `{a['ultimas']}` em sequência. Oportunidade para Invertida!")
+                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! As últimas 3 milhares foram: `{a['ultimas']}`. Oportunidade absurda para Invertida Simples!")
                 
         if alertas_quebra:
             st.markdown("### ⚡ ALERTA DE QUEBRA (Limite de Derrotas Atingido)")
