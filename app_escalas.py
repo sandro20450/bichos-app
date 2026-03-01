@@ -6,6 +6,7 @@ from datetime import datetime, date
 import time
 import re
 import textwrap
+import calendar  # Nova inteligência para calcular os dias do mês
 
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
@@ -22,6 +23,7 @@ st.markdown("""
     .btn-wpp { background-color: #25D366; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.9em; float: right; }
     .btn-wpp:hover { background-color: #128C7E; color: white; }
     .obs-text { color: #ffc107; font-size: 0.9em; margin-top: 5px; display: block;}
+    .funcao-text { color: #17a2b8; font-size: 0.95em; font-weight: bold; margin-top: 2px;}
     .botoes-container { margin-top: 10px; display: block; overflow: hidden; }
 </style>
 """, unsafe_allow_html=True)
@@ -132,7 +134,6 @@ else:
     st.sidebar.caption(f"Matrícula: {user.get('Matricula', '')}")
     st.sidebar.markdown("---")
     
-    # NOVAS OPÇÕES DE MENU
     menu_opcoes = ["🏠 Quadro de Hoje", "📅 Minhas Escalas", "🔑 Alterar Senha"]
     if is_admin:
         menu_opcoes.append("⚙️ Lançar Escalas (P1 Turbo)")
@@ -183,13 +184,15 @@ else:
                     telefone = str(dados_pol.get("Telefone", ""))
                     horario = pol_escala.get("Horario", "N/I")
                     obs = pol_escala.get("Observacao", "")
+                    funcao_posto = pol_escala.get("Funcao", "")
                     
                     tel_limpo = re.sub(r'\D', '', telefone)
                     if len(tel_limpo) == 10 or len(tel_limpo) == 11: tel_limpo = f"55{tel_limpo}" 
                         
                     html_obs = f"<span class='obs-text'>⚠️ <b>Obs:</b> {obs}</span>" if obs else ""
+                    html_funcao = f"<div class='funcao-text'>📌 Função/Posto: {funcao_posto}</div>" if funcao_posto else ""
                     
-                    card_html = f"<div class='card-policial'><span class='graduacao'>{grad} {nome}</span> (Mat: {mat})<br>⏰ <b>Horário:</b> {horario}{html_obs}<div class='botoes-container'><a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a><a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a></div></div>"
+                    card_html = f"<div class='card-policial'><span class='graduacao'>{grad} {nome}</span> (Mat: {mat}){html_funcao}<br>⏰ <b>Horário:</b> {horario}{html_obs}<div class='botoes-container'><a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a><a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a></div></div>"
                     
                     st.markdown(card_html, unsafe_allow_html=True)
                 st.markdown("---")
@@ -208,11 +211,13 @@ else:
             st.success("Você não possui serviços escalados lançados no sistema atualmente.")
         else:
             df_minhas = pd.DataFrame(minhas_escalas)
-            if 'Observacao' in df_minhas.columns:
-                df_minhas = df_minhas[["Data", "Servico", "Horario", "Observacao"]]
-            else:
-                df_minhas = df_minhas[["Data", "Servico", "Horario"]]
-            st.dataframe(df_minhas, hide_index=True, use_container_width=True)
+            
+            # Ordena as colunas de forma bonita
+            colunas_exibir = ["Data", "Servico", "Horario"]
+            if 'Funcao' in df_minhas.columns: colunas_exibir.append("Funcao")
+            if 'Observacao' in df_minhas.columns: colunas_exibir.append("Observacao")
+            
+            st.dataframe(df_minhas[colunas_exibir], hide_index=True, use_container_width=True)
             
             st.markdown("---")
             st.subheader("🔄 Informar Permuta / Alteração")
@@ -239,7 +244,7 @@ else:
                                         break
                                 
                                 if linha_encontrada:
-                                    ws.update_cell(linha_encontrada, 5, nova_obs)
+                                    ws.update_cell(linha_encontrada, 5, nova_obs) # Coluna E = 5
                                     st.success("✅ Permuta/Observação informada com sucesso ao Comando!")
                                     st.cache_resource.clear()
                                     time.sleep(1.5)
@@ -252,11 +257,10 @@ else:
                         st.warning("Escreva a observação antes de salvar.")
 
     # -------------------------------------------------------------------------
-    # TELA 3: ALTERAR SENHA (Para todos)
+    # TELA 3: ALTERAR SENHA
     # -------------------------------------------------------------------------
     elif escolha == "🔑 Alterar Senha":
         st.title("🔑 ALTERAR MINHA SENHA")
-        st.write("Crie uma senha secreta para garantir a segurança do seu acesso.")
         
         with st.form("form_senha"):
             senha_atual = st.text_input("Senha Atual:", type="password")
@@ -287,22 +291,19 @@ else:
                                     break
                             
                             if linha_encontrada:
-                                ws.update_cell(linha_encontrada, 2, senha_nova) # Coluna B
+                                ws.update_cell(linha_encontrada, 2, senha_nova)
                                 st.success("✅ Senha alterada com sucesso! Você será deslogado para acessar novamente.")
                                 st.cache_resource.clear()
                                 time.sleep(3)
                                 logout()
-                            else:
-                                st.error("Erro: Cadastro não encontrado na base de dados.")
                         except Exception as e:
                             st.error(f"Erro de comunicação: {e}")
 
     # -------------------------------------------------------------------------
-    # TELA 4: CADASTRAR EFETIVO (Visão do P1)
+    # TELA 4: CADASTRAR EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "➕ Cadastrar Efetivo" and is_admin:
         st.title("➕ CADASTRAR NOVO POLICIAL")
-        st.write("Adicione um membro ao banco de dados. A **Senha Inicial** será automaticamente igual à **Matrícula**.")
         
         with st.form("form_cad_pol"):
             col1, col2 = st.columns(2)
@@ -327,7 +328,6 @@ else:
                         if sh:
                             try:
                                 ws = sh.worksheet("Efetivo")
-                                # Insere: Matricula, Senha(Matricula), Grad, Nome, Tel, Nivel, Status
                                 nova_linha = [mat_str, mat_str, grad_nova, nome_novo, tel_novo, nivel_novo, status_novo]
                                 ws.append_row(nova_linha)
                                 st.success(f"✅ Policial {grad_nova} {nome_novo} cadastrado com sucesso! A senha inicial é: {mat_str}")
@@ -340,20 +340,23 @@ else:
                     st.warning("Preencha Matrícula e Nome obrigatoriamente.")
 
     # -------------------------------------------------------------------------
-    # TELA 5: LANÇAR ESCALAS EM LOTE (Visão do P1)
+    # TELA 5: LANÇAR ESCALAS EM LOTE (Visão do P1) COM FUNÇÃO E PARES/ÍMPARES
     # -------------------------------------------------------------------------
     elif escolha == "⚙️ Lançar Escalas (P1 Turbo)" and is_admin:
-        st.title("⚙️ P1 TURBO: Lançamento em Lote")
-        st.write("Lance dezenas de serviços de uma única vez para escalas repetitivas (24x72, 12x36).")
+        st.title("⚙️ P1 TURBO: Lançamento em Lote Inteligente")
+        st.write("Lance dezenas de serviços de uma única vez para escalas de Dias Pares, Ímpares ou Manuais.")
         
         with st.form("form_lancar_escala"):
             col1, col2 = st.columns(2)
             with col1:
-                mes_ref = st.date_input("Selecione qualquer data do Mês/Ano desejado:", date.today())
+                mes_ref = st.date_input("Selecione qualquer data do Mês/Ano da Escala:", date.today())
                 servico = st.selectbox("Tipo de Serviço:", TIPOS_SERVICO)
                 
                 lista_policiais = [f"{p['Matricula']} - {p['Graduacao']} {p['Nome']}" for p in efetivo_db if str(p.get("Status")).upper() == "ATIVO"]
                 policial_selecionado = st.selectbox("Selecione o Policial:", lista_policiais)
+                
+                # NOVO CAMPO DE FUNÇÃO AQUI
+                funcao_escala = st.text_input("Função / Posto (Ex: Rota 01/VT 38, Motorista, Cb de Dia):")
                 
             with col2:
                 opcao_horario = st.selectbox("Horário Padrão:", HORARIOS_PADRAO)
@@ -362,33 +365,52 @@ else:
                 else:
                     horario_final = opcao_horario
                 
-                st.markdown("🎯 **Dias do Mês:**")
-                dias_str = st.text_input("Digite os dias separados por vírgula (Ex: 1, 5, 9, 13, 21):")
+                # NOVA INTELIGÊNCIA DE DIAS
+                st.markdown("🎯 **Modo de Seleção de Dias:**")
+                modo_dias = st.radio("Selecione o Padrão do Mês:", ["Digitar Manualmente", "Todos os Dias Pares", "Todos os Dias Ímpares"])
+                
+                dias_str = ""
+                if modo_dias == "Digitar Manualmente":
+                    dias_str = st.text_input("Digite os dias separados por vírgula (Ex: 1, 5, 9, 13, 21):")
+                
                 observacao = st.text_input("Observação Geral (Opcional):")
             
-            submit = st.form_submit_button("💾 Salvar Lote Inteiro", use_container_width=True)
+            submit = st.form_submit_button("💾 Gerar e Salvar Escala", use_container_width=True)
             
             if submit:
-                if not dias_str:
-                    st.warning("⚠️ Você precisa informar pelo menos um dia do mês.")
+                if modo_dias == "Digitar Manualmente" and not dias_str:
+                    st.warning("⚠️ Você precisa informar os dias na opção manual.")
                 elif opcao_horario == "Outro (Digitar manualmente)" and not horario_final:
                     st.warning("⚠️ Você escolheu 'Outro', mas não digitou o horário.")
                 elif policial_selecionado:
                     mat_selecionada = policial_selecionado.split(" - ")[0]
-                    dias_limpos = [d.strip() for d in dias_str.split(',') if d.strip().isdigit()]
+                    
+                    mes = mes_ref.month
+                    ano = mes_ref.year
+                    # Descobre quantos dias tem o mês selecionado (Ex: Fevereiro tem 28, Março 31)
+                    _, ult_dia = calendar.monthrange(ano, mes)
+                    
+                    dias_limpos = []
+                    
+                    # Motor de Cálculo Pares/Ímpares
+                    if modo_dias == "Todos os Dias Pares":
+                        dias_limpos = [d for d in range(1, ult_dia + 1) if d % 2 == 0]
+                    elif modo_dias == "Todos os Dias Ímpares":
+                        dias_limpos = [d for d in range(1, ult_dia + 1) if d % 2 != 0]
+                    else:
+                        # Modo Manual
+                        dias_limpos = [int(d.strip()) for d in dias_str.split(',') if d.strip().isdigit()]
                     
                     if dias_limpos:
                         linhas_para_inserir = []
-                        mes = mes_ref.month
-                        ano = mes_ref.year
                         
-                        for dia_str in dias_limpos:
-                            dia = int(dia_str)
+                        for dia in dias_limpos:
                             try:
                                 data_formatada = date(ano, mes, dia).strftime("%d/%m/%Y")
-                                linhas_para_inserir.append([data_formatada, servico, horario_final, mat_selecionada, observacao])
+                                # Insere a Função na coluna 6 (Coluna F)
+                                linhas_para_inserir.append([data_formatada, servico, horario_final, mat_selecionada, observacao, funcao_escala])
                             except ValueError:
-                                st.error(f"❌ O dia {dia} não existe no mês {mes}/{ano}. Ignorado.")
+                                pass # Ignora se houver algum erro de data
                         
                         if linhas_para_inserir:
                             sh = conectar_planilha()
@@ -396,14 +418,14 @@ else:
                                 try:
                                     ws = sh.worksheet("Escalas_Lancadas")
                                     ws.append_rows(linhas_para_inserir)
-                                    st.success(f"✅ Lote de {len(linhas_para_inserir)} serviços gravado com sucesso para a Mat: {mat_selecionada}!")
+                                    st.success(f"✅ Escala Operacional de {len(linhas_para_inserir)} serviços gerada com sucesso para a Mat: {mat_selecionada}!")
                                     st.cache_resource.clear()
-                                    time.sleep(2)
+                                    time.sleep(2.5)
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao salvar na planilha: {e}")
                     else:
-                        st.warning("⚠️ Formato de dias inválido. Use apenas números separados por vírgula.")
+                        st.warning("⚠️ Nenhum dia válido encontrado para gerar a escala.")
 
     # -------------------------------------------------------------------------
     # TELA 6: RELAÇÃO DO EFETIVO
