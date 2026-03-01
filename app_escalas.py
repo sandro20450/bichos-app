@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 import re
 import calendar
@@ -135,7 +135,7 @@ else:
     
     menu_opcoes = ["🏠 Quadro de Hoje", "📅 Minhas Escalas", "🔑 Alterar Senha"]
     if is_admin:
-        menu_opcoes.append("📢 Publicar Aviso")
+        menu_opcoes.append("📢 Mural de Avisos (P1)")
         menu_opcoes.append("⚙️ Lançar Escalas (P1 Turbo)")
         menu_opcoes.append("➕ Cadastrar Efetivo")
         menu_opcoes.append("📋 Relação do Efetivo")
@@ -148,22 +148,35 @@ else:
 
     efetivo_db = carregar_dados("Efetivo")
     escalas_db = carregar_dados("Escalas_Lancadas")
-    avisos_db = carregar_dados("Avisos_Gerais") # Carrega o Mural
+    avisos_db = carregar_dados("Avisos_Gerais")
     dict_efetivo = {str(p["Matricula"]): p for p in efetivo_db}
 
     # -------------------------------------------------------------------------
-    # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS
+    # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS (COM AUTO-LIMPEZA 24H)
     # -------------------------------------------------------------------------
     if escolha == "🏠 Quadro de Hoje":
-        st.title("🛡️ QUADRO DE SERVIÇO DIÁRIO")
+        st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
         
-        # MURAL DO COMANDO VEM PRIMEIRO
+        # MURAL DO COMANDO (FILTRO DE 24 HORAS)
         if avisos_db:
-            st.markdown("### 📢 MURAL DO COMANDO (Avisos Gerais)")
-            # Inverte a lista para mostrar o aviso mais recente no topo
-            for aviso in reversed(avisos_db):
-                st.warning(f"**Mensagem:** {aviso.get('Aviso', '')}\n\n*Assinado por: **{aviso.get('Autor', '')}** em {aviso.get('Data_Hora', '')}*")
-            st.markdown("---")
+            agora = datetime.now()
+            avisos_ativos = []
+            
+            for aviso in avisos_db:
+                try:
+                    # Tenta ler a data do aviso. Se tiver menos de 24h, ele aparece.
+                    data_aviso = datetime.strptime(str(aviso.get('Data_Hora', '')), "%d/%m/%Y %H:%M")
+                    if agora - data_aviso <= timedelta(hours=24):
+                        avisos_ativos.append(aviso)
+                except:
+                    # Se houver erro na data, não exibe para evitar bugs
+                    pass 
+            
+            if avisos_ativos:
+                st.markdown("### 📢 MURAL DO COMANDO (Avisos Gerais)")
+                for aviso in reversed(avisos_ativos):
+                    st.warning(f"**Mensagem:** {aviso.get('Aviso', '')}\n\n*Assinado por: **{aviso.get('Autor', '')}** em {aviso.get('Data_Hora', '')}*")
+                st.markdown("---")
         
         data_filtro = st.date_input("Filtrar por Data da Escala:", date.today())
         data_str = data_filtro.strftime("%d/%m/%Y")
@@ -207,19 +220,19 @@ else:
                 st.markdown("---")
 
     # -------------------------------------------------------------------------
-    # TELA 2: PUBLICAR AVISO (Apenas ADMIN)
+    # TELA 2: MURAL DE AVISOS (PUBLICAR E APAGAR) - Apenas ADMIN
     # -------------------------------------------------------------------------
-    elif escolha == "📢 Publicar Aviso" and is_admin:
-        st.title("📢 PUBLICAR AVISO GERAL")
-        st.write("Atenção: Este aviso será exibido no 'Quadro de Hoje' e visto por todo o efetivo do Batalhão.")
+    elif escolha == "📢 Mural de Avisos (P1)" and is_admin:
+        st.title("📢 GESTÃO DO MURAL DE AVISOS")
         
+        st.subheader("1. Publicar Novo Aviso")
+        st.write("Atenção: Os avisos somem automaticamente da tela da tropa após 24 horas.")
         with st.form("form_aviso"):
             texto_aviso = st.text_area("Digite a mensagem da Ordem/Aviso:")
             submit_aviso = st.form_submit_button("📤 Publicar no Mural", use_container_width=True)
             
             if submit_aviso:
                 if texto_aviso:
-                    # Pega a hora exata e a assinatura de quem está logado
                     data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
                     autor_assinatura = f"{user.get('Graduacao', '')} {user.get('Nome', '')}"
                     
@@ -233,9 +246,36 @@ else:
                             time.sleep(1.5)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao publicar: Verifique se a aba 'Avisos_Gerais' foi criada na planilha. {e}")
+                            st.error(f"Erro ao publicar: {e}")
                 else:
                     st.warning("⚠️ Digite uma mensagem antes de publicar.")
+                    
+        st.markdown("---")
+        st.subheader("2. Histórico e Remoção de Avisos")
+        st.write("Abaixo estão todos os avisos registrados. Se você publicou algo errado, pode apagar imediatamente.")
+        
+        if not avisos_db:
+            st.info("Nenhum aviso no banco de dados.")
+        else:
+            for idx, aviso in enumerate(avisos_db):
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    st.write(f"📅 **{aviso.get('Data_Hora', '')}** | {aviso.get('Aviso', '')} | ✍️ *{aviso.get('Autor', '')}*")
+                with col2:
+                    if st.button("🗑️ Apagar", key=f"del_aviso_{idx}"):
+                        sh = conectar_planilha()
+                        if sh:
+                            try:
+                                ws = sh.worksheet("Avisos_Gerais")
+                                # O índice começa em 0, e a linha 1 é o cabeçalho. Então a linha a apagar é idx + 2.
+                                ws.delete_row(idx + 2) 
+                                st.success("Aviso desintegrado do banco de dados!")
+                                st.cache_resource.clear()
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao apagar: {e}")
+                st.markdown("---")
 
     # -------------------------------------------------------------------------
     # TELA 3: MINHAS ESCALAS E PERMUTAS
@@ -282,7 +322,7 @@ else:
                                         break
                                 
                                 if linha_encontrada:
-                                    ws.update_cell(linha_encontrada, 5, nova_obs) # Coluna E = 5
+                                    ws.update_cell(linha_encontrada, 5, nova_obs)
                                     st.success("✅ Permuta/Observação informada com sucesso ao Comando!")
                                     st.cache_resource.clear()
                                     time.sleep(1.5)
