@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.0 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.1 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -162,7 +162,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                                     dezenas_encontradas.append(clean_num[-4:].zfill(4))
                                                 else:
                                                     dezenas_encontradas.append(clean_num[-2:])
-                                                    
+                                                
                             if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                 if len(dezenas_encontradas) >= 1: 
                                     res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
@@ -655,14 +655,15 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
     st.title("🛡️ PENTÁGONO - SCANNER DINÂMICO (MILHAR)")
-    st.markdown("O sistema está varrendo todos os globos monitorando os Dígitos Congelados e Alertas de Trinca.")
+    st.markdown("O sistema está varrendo os globos elegíveis monitorando os Dígitos Congelados e Alertas de Trinca para Invertidas.")
     
     alertas_sniper = []
     alertas_quebra = []
     
-    with st.spinner("📡 Scanner Ativo: Analisando Tradicional, Lotep, Caminho e Monte Carlos..."):
+    # O FILTRO TÁTICO ESTÁ AQUI: IGNORAR "TRADICIONAL" NO RADAR DE INVERTIDAS
+    with st.spinner("📡 Scanner Ativo: Analisando Lotep, Caminho e Monte Carlos..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config['tipo'] == 'MILHAR_VIEW':
+            if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 40:
                     radar_dados = calcular_radar_invertidas(hist_milhar)
@@ -698,7 +699,7 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                                 })
 
     if not alertas_sniper and not alertas_quebra:
-        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de Trinca ou teto de derrota atingido no momento. Mantenha a banca protegida.")
+        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de Trinca ou teto de derrota atingido nas bancas monitoradas. Mantenha a banca protegida.")
     else:
         if alertas_sniper:
             st.markdown("### 🎯 ALERTA SNIPER MÁXIMO (Trinca de Repetições)")
