@@ -35,6 +35,7 @@ TIPOS_SERVICO = [
 # --- CONEXÃO COM GOOGLE SHEETS ---
 # =============================================================================
 @st.cache_resource(ttl=600)
+def conectar_planilha():
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
@@ -42,9 +43,11 @@ TIPOS_SERVICO = [
         )
         gc = gspread.authorize(creds)
         try:
-            return gc.open(nome_planilha)
+            # Usando a CHAVE EXATA da planilha para evitar o erro do Google Drive
+            chave_planilha = "1VyaWftpKA8V4m4SH2lX9xqkbgv4-uPIxZ27tq1FsFns"
+            return gc.open_by_key(chave_planilha)
         except Exception as e:
-            st.error(f"Erro ao abrir planilha {nome_planilha}: {e}")
+            st.error(f"Erro ao abrir planilha pela chave: {e}")
             return None
     return None
 
@@ -57,7 +60,6 @@ def carregar_dados(aba):
         except:
             return []
     return []
-
 # =============================================================================
 # --- SISTEMA DE LOGIN (SESSÃO) ---
 # =============================================================================
