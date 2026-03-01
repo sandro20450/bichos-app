@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import time
 import re
+import textwrap
 
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
@@ -42,6 +43,11 @@ HORARIOS_PADRAO = [
     "08h às 15h (Expediente)",
     "15h às 21h (Visibilidade)",
     "Outro (Digitar manualmente)"
+]
+
+GRADUACOES = [
+    "Cel PM", "Ten Cel PM", "Maj PM", "Cap PM", "1º Ten PM", "2º Ten PM", 
+    "Subten PM", "1º Sgt PM", "2º Sgt PM", "3º Sgt PM", "Cb PM", "Sd PM"
 ]
 
 # =============================================================================
@@ -104,7 +110,7 @@ def logout():
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #ffd700;'>📒 SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #ffd700;'>🦅 SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center;'>Acesso Restrito ao Efetivo</p>", unsafe_allow_html=True)
         
         with st.container(border=True):
@@ -126,9 +132,11 @@ else:
     st.sidebar.caption(f"Matrícula: {user.get('Matricula', '')}")
     st.sidebar.markdown("---")
     
-    menu_opcoes = ["🏠 Quadro de Hoje", "📅 Minhas Escalas"]
+    # NOVAS OPÇÕES DE MENU
+    menu_opcoes = ["🏠 Quadro de Hoje", "📅 Minhas Escalas", "🔑 Alterar Senha"]
     if is_admin:
         menu_opcoes.append("⚙️ Lançar Escalas (P1 Turbo)")
+        menu_opcoes.append("➕ Cadastrar Efetivo")
         menu_opcoes.append("📋 Relação do Efetivo")
         
     escolha = st.sidebar.radio("Navegação", menu_opcoes)
@@ -181,14 +189,13 @@ else:
                         
                     html_obs = f"<span class='obs-text'>⚠️ <b>Obs:</b> {obs}</span>" if obs else ""
                     
-                    # LINHA ÚNICA CEGA PARA MATAR O BUG DO MARKDOWN
                     card_html = f"<div class='card-policial'><span class='graduacao'>{grad} {nome}</span> (Mat: {mat})<br>⏰ <b>Horário:</b> {horario}{html_obs}<div class='botoes-container'><a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a><a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a></div></div>"
                     
                     st.markdown(card_html, unsafe_allow_html=True)
                 st.markdown("---")
 
     # -------------------------------------------------------------------------
-    # TELA 2: MINHAS ESCALAS E PERMUTAS (Visão do Policial)
+    # TELA 2: MINHAS ESCALAS E PERMUTAS
     # -------------------------------------------------------------------------
     elif escolha == "📅 Minhas Escalas":
         st.title("📅 MINHAS MISSÕES E PERMUTAS")
@@ -210,7 +217,6 @@ else:
             st.markdown("---")
             st.subheader("🔄 Informar Permuta / Alteração")
             with st.form("form_permuta"):
-                # Cria uma lista amigável para o policial escolher qual serviço ele quer alterar
                 opcoes_servico = [f"{e['Data']} | {e['Servico']}" for e in minhas_escalas]
                 serv_selecionado = st.selectbox("Escolha o Serviço:", opcoes_servico)
                 nova_obs = st.text_input("Descreva a alteração (Ex: Permutado com o Sd Silva, Mat 1234-5):")
@@ -224,32 +230,117 @@ else:
                         if sh:
                             try:
                                 ws = sh.worksheet("Escalas_Lancadas")
-                                # Baixa tudo para achar a linha exata
                                 records = ws.get_all_records()
                                 linha_encontrada = None
                                 
-                                # A primeira linha de dados é a linha 2 no Excel/Sheets
                                 for idx, row in enumerate(records):
                                     if str(row.get("Data")) == data_alvo and str(row.get("Servico")) == serv_alvo and str(row.get("Matricula")) == minha_mat:
                                         linha_encontrada = idx + 2 
                                         break
                                 
                                 if linha_encontrada:
-                                    # Atualiza a coluna 5 (Coluna E = Observacao)
                                     ws.update_cell(linha_encontrada, 5, nova_obs)
                                     st.success("✅ Permuta/Observação informada com sucesso ao Comando!")
                                     st.cache_resource.clear()
                                     time.sleep(1.5)
                                     st.rerun()
                                 else:
-                                    st.error("Erro: Serviço não encontrado no banco de dados para atualização.")
+                                    st.error("Erro: Serviço não encontrado no banco de dados.")
                             except Exception as e:
                                 st.error(f"Erro de comunicação: {e}")
                     else:
                         st.warning("Escreva a observação antes de salvar.")
 
     # -------------------------------------------------------------------------
-    # TELA 3: LANÇAR ESCALAS EM LOTE (Visão do P1)
+    # TELA 3: ALTERAR SENHA (Para todos)
+    # -------------------------------------------------------------------------
+    elif escolha == "🔑 Alterar Senha":
+        st.title("🔑 ALTERAR MINHA SENHA")
+        st.write("Crie uma senha secreta para garantir a segurança do seu acesso.")
+        
+        with st.form("form_senha"):
+            senha_atual = st.text_input("Senha Atual:", type="password")
+            senha_nova = st.text_input("Nova Senha:", type="password")
+            senha_conf = st.text_input("Confirme a Nova Senha:", type="password")
+            
+            submit_senha = st.form_submit_button("🔄 Atualizar Senha", use_container_width=True)
+            
+            if submit_senha:
+                if senha_atual != str(user.get("Senha")):
+                    st.error("❌ A senha atual está incorreta.")
+                elif senha_nova != senha_conf:
+                    st.error("❌ As novas senhas não coincidem.")
+                elif len(senha_nova) < 4:
+                    st.error("⚠️ A nova senha deve ter pelo menos 4 caracteres.")
+                else:
+                    sh = conectar_planilha()
+                    if sh:
+                        try:
+                            ws = sh.worksheet("Efetivo")
+                            records = ws.get_all_records()
+                            linha_encontrada = None
+                            minha_mat = str(user.get("Matricula"))
+                            
+                            for idx, row in enumerate(records):
+                                if str(row.get("Matricula")) == minha_mat:
+                                    linha_encontrada = idx + 2
+                                    break
+                            
+                            if linha_encontrada:
+                                ws.update_cell(linha_encontrada, 2, senha_nova) # Coluna B
+                                st.success("✅ Senha alterada com sucesso! Você será deslogado para acessar novamente.")
+                                st.cache_resource.clear()
+                                time.sleep(3)
+                                logout()
+                            else:
+                                st.error("Erro: Cadastro não encontrado na base de dados.")
+                        except Exception as e:
+                            st.error(f"Erro de comunicação: {e}")
+
+    # -------------------------------------------------------------------------
+    # TELA 4: CADASTRAR EFETIVO (Visão do P1)
+    # -------------------------------------------------------------------------
+    elif escolha == "➕ Cadastrar Efetivo" and is_admin:
+        st.title("➕ CADASTRAR NOVO POLICIAL")
+        st.write("Adicione um membro ao banco de dados. A **Senha Inicial** será automaticamente igual à **Matrícula**.")
+        
+        with st.form("form_cad_pol"):
+            col1, col2 = st.columns(2)
+            with col1:
+                mat_nova = st.text_input("Matrícula (Apenas Números):")
+                grad_nova = st.selectbox("Graduação:", GRADUACOES)
+                nome_novo = st.text_input("Nome de Guerra:")
+            with col2:
+                tel_novo = st.text_input("Telefone (WhatsApp) com DDD:")
+                nivel_novo = st.selectbox("Nível de Acesso:", ["Comum", "P1", "Admin", "Comando"])
+                status_novo = st.selectbox("Status Operacional:", ["Ativo", "LTS", "Férias", "Inativo"])
+                
+            submit_cad = st.form_submit_button("💾 Cadastrar Policial", use_container_width=True)
+            
+            if submit_cad:
+                if mat_nova and nome_novo:
+                    mat_str = str(mat_nova).strip()
+                    if mat_str in dict_efetivo:
+                        st.error("⚠️ Esta matrícula já está cadastrada no sistema!")
+                    else:
+                        sh = conectar_planilha()
+                        if sh:
+                            try:
+                                ws = sh.worksheet("Efetivo")
+                                # Insere: Matricula, Senha(Matricula), Grad, Nome, Tel, Nivel, Status
+                                nova_linha = [mat_str, mat_str, grad_nova, nome_novo, tel_novo, nivel_novo, status_novo]
+                                ws.append_row(nova_linha)
+                                st.success(f"✅ Policial {grad_nova} {nome_novo} cadastrado com sucesso! A senha inicial é: {mat_str}")
+                                st.cache_resource.clear()
+                                time.sleep(2)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar: {e}")
+                else:
+                    st.warning("Preencha Matrícula e Nome obrigatoriamente.")
+
+    # -------------------------------------------------------------------------
+    # TELA 5: LANÇAR ESCALAS EM LOTE (Visão do P1)
     # -------------------------------------------------------------------------
     elif escolha == "⚙️ Lançar Escalas (P1 Turbo)" and is_admin:
         st.title("⚙️ P1 TURBO: Lançamento em Lote")
@@ -265,14 +356,12 @@ else:
                 policial_selecionado = st.selectbox("Selecione o Policial:", lista_policiais)
                 
             with col2:
-                # Sistema Inteligente de Horários
                 opcao_horario = st.selectbox("Horário Padrão:", HORARIOS_PADRAO)
                 if opcao_horario == "Outro (Digitar manualmente)":
                     horario_final = st.text_input("Digite o horário customizado:")
                 else:
                     horario_final = opcao_horario
                 
-                # A MÁGICA DO LOTE ESTÁ AQUI
                 st.markdown("🎯 **Dias do Mês:**")
                 dias_str = st.text_input("Digite os dias separados por vírgula (Ex: 1, 5, 9, 13, 21):")
                 observacao = st.text_input("Observação Geral (Opcional):")
@@ -286,8 +375,6 @@ else:
                     st.warning("⚠️ Você escolheu 'Outro', mas não digitou o horário.")
                 elif policial_selecionado:
                     mat_selecionada = policial_selecionado.split(" - ")[0]
-                    
-                    # Extrai os números digitados e ignora espaços ou letras erradas
                     dias_limpos = [d.strip() for d in dias_str.split(',') if d.strip().isdigit()]
                     
                     if dias_limpos:
@@ -297,7 +384,6 @@ else:
                         
                         for dia_str in dias_limpos:
                             dia = int(dia_str)
-                            # Valida se o dia existe naquele mês
                             try:
                                 data_formatada = date(ano, mes, dia).strftime("%d/%m/%Y")
                                 linhas_para_inserir.append([data_formatada, servico, horario_final, mat_selecionada, observacao])
@@ -309,10 +395,9 @@ else:
                             if sh:
                                 try:
                                     ws = sh.worksheet("Escalas_Lancadas")
-                                    # Usa append_rows para inserir todas as datas de uma vez só!
                                     ws.append_rows(linhas_para_inserir)
                                     st.success(f"✅ Lote de {len(linhas_para_inserir)} serviços gravado com sucesso para a Mat: {mat_selecionada}!")
-                                    st.cache_resource.clear() # Limpa a memória para forçar atualização
+                                    st.cache_resource.clear()
                                     time.sleep(2)
                                     st.rerun()
                                 except Exception as e:
@@ -321,7 +406,7 @@ else:
                         st.warning("⚠️ Formato de dias inválido. Use apenas números separados por vírgula.")
 
     # -------------------------------------------------------------------------
-    # TELA 4: RELAÇÃO DO EFETIVO
+    # TELA 6: RELAÇÃO DO EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "📋 Relação do Efetivo" and is_admin:
         st.title("📋 CONTROLE DE EFETIVO")
