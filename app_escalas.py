@@ -39,7 +39,6 @@ TIPOS_SERVICO = [
 # =============================================================================
 # --- CONEXÃO COM GOOGLE SHEETS ---
 # =============================================================================
-@st.cache_resource(ttl=600)
 def conectar_planilha():
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(
