@@ -4,6 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import time
+import re
 
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
@@ -15,8 +16,12 @@ st.markdown("""
     .stApp { background-color: #0e1117; color: #ffffff; }
     .card-policial { background-color: #1e2530; padding: 15px; border-radius: 10px; border-left: 5px solid #28a745; margin-bottom: 10px; }
     .graduacao { color: #ffd700; font-weight: bold; font-size: 1.1em; }
-    .btn-ligar { background-color: #28a745; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.9em; float: right;}
+    .btn-ligar { background-color: #28a745; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.9em; float: right; margin-left: 5px;}
     .btn-ligar:hover { background-color: #218838; color: white; }
+    .btn-wpp { background-color: #25D366; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 0.9em; float: right; }
+    .btn-wpp:hover { background-color: #128C7E; color: white; }
+    .obs-text { color: #ffc107; font-size: 0.9em; margin-top: 5px; display: block;}
+    .botoes-container { margin-top: 10px; display: block; overflow: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -43,8 +48,8 @@ def conectar_planilha():
         )
         gc = gspread.authorize(creds)
         try:
-            # Usando a CHAVE EXATA da planilha para evitar o erro do Google Drive
-            chave_planilha = "1VyaWftpKA8V4m4SH2IX9xqkbgv4-uPIxZ27tq1FsFns"
+            # Substitua AQUI a chave da sua planilha se necessário
+            chave_planilha = "1VyaWftpKA8V4m4SH2lX9xqkbgv4-uPIxZ27tq1FsFns" 
             return gc.open_by_key(chave_planilha)
         except Exception as e:
             st.error(f"Erro ao abrir planilha pela chave: {e}")
@@ -60,6 +65,7 @@ def carregar_dados(aba):
         except:
             return []
     return []
+
 # =============================================================================
 # --- SISTEMA DE LOGIN (SESSÃO) ---
 # =============================================================================
@@ -86,7 +92,7 @@ def logout():
     st.rerun()
 
 # =============================================================================
-# --- TELA DE LOGIN ---
+# --- APLICATIVO PRINCIPAL (PÓS-LOGIN) ---
 # =============================================================================
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -105,9 +111,6 @@ if not st.session_state.logged_in:
                             time.sleep(1)
                             st.rerun()
 
-# =============================================================================
-# --- APLICATIVO PRINCIPAL (PÓS-LOGIN) ---
-# =============================================================================
 else:
     user = st.session_state.user_data
     is_admin = user.get("Nivel", "Comum").strip().upper() in ["ADMIN", "P1", "COMANDO"]
@@ -132,7 +135,6 @@ else:
     efetivo_db = carregar_dados("Efetivo")
     escalas_db = carregar_dados("Escalas_Lancadas")
     
-    # Dicionário rápido para buscar dados do policial pela matrícula
     dict_efetivo = {str(p["Matricula"]): p for p in efetivo_db}
 
     # -------------------------------------------------------------------------
@@ -141,19 +143,16 @@ else:
     if escolha == "🏠 Quadro de Hoje":
         st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
         
-        # Filtro de data (Padrão: Hoje, mas permite olhar amanhã)
         data_filtro = st.date_input("Filtrar por Data:", date.today())
         data_str = data_filtro.strftime("%d/%m/%Y")
         
         st.subheader(f"Efetivo Empregado em: {data_str}")
         
-        # Filtrar escalas do dia
         escalas_hoje = [e for e in escalas_db if str(e.get("Data", "")) == data_str]
         
         if not escalas_hoje:
             st.info("Nenhuma escala lançada para esta data.")
         else:
-            # Agrupar por serviço
             servicos_do_dia = {}
             for e in escalas_hoje:
                 srv = e["Servico"]
@@ -161,7 +160,6 @@ else:
                     servicos_do_dia[srv] = []
                 servicos_do_dia[srv].append(e)
             
-            # Exibir cards separados por serviço
             for srv, policiais in servicos_do_dia.items():
                 st.markdown(f"### 🎯 {srv}")
                 for pol_escala in policiais:
@@ -172,13 +170,24 @@ else:
                     grad = dados_pol.get("Graduacao", "")
                     telefone = str(dados_pol.get("Telefone", ""))
                     horario = pol_escala.get("Horario", "N/I")
+                    obs = pol_escala.get("Observacao", "")
                     
-                    # HTML Customizado para o Card e o botão de ligação
+                    # Limpeza de Telefone para o WhatsApp
+                    tel_limpo = re.sub(r'\D', '', telefone)
+                    if len(tel_limpo) == 10 or len(tel_limpo) == 11:
+                        tel_limpo = f"55{tel_limpo}" # Adiciona +55 do Brasil se não tiver
+                        
+                    html_obs = f"<span class='obs-text'>⚠️ <b>Obs:</b> {obs}</span>" if obs else ""
+                    
                     card_html = f"""
                     <div class='card-policial'>
                         <span class='graduacao'>{grad} {nome}</span> (Mat: {mat})
                         <br>⏰ <b>Horário:</b> {horario}
-                        <a href='tel:{telefone}' class='btn-ligar'>📞 Ligar Rápido</a>
+                        {html_obs}
+                        <div class='botoes-container'>
+                            <a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a>
+                            <a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a>
+                        </div>
                     </div>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
@@ -192,15 +201,17 @@ else:
         st.write("Acompanhe os seus serviços lançados no sistema.")
         
         minha_mat = str(user.get("Matricula"))
-        # Filtra e ordena (simplificado para exibição)
         minhas_escalas = [e for e in escalas_db if str(e.get("Matricula", "")) == minha_mat]
         
         if not minhas_escalas:
             st.success("Você não possui serviços escalados lançados no sistema atualmente.")
         else:
             df_minhas = pd.DataFrame(minhas_escalas)
-            # Reordenar colunas
-            df_minhas = df_minhas[["Data", "Servico", "Horario"]]
+            # Tenta ordenar para exibir Bonitinho
+            if 'Observacao' in df_minhas.columns:
+                df_minhas = df_minhas[["Data", "Servico", "Horario", "Observacao"]]
+            else:
+                df_minhas = df_minhas[["Data", "Servico", "Horario"]]
             st.dataframe(df_minhas, hide_index=True, use_container_width=True)
 
     # -------------------------------------------------------------------------
@@ -217,9 +228,11 @@ else:
                 servico = st.selectbox("Tipo de Serviço:", TIPOS_SERVICO)
             with col2:
                 horario = st.text_input("Horário (Ex: 08h as 08h, 12h as 13h):")
-                # Dropdown com os policiais ativos para evitar erro de digitação de matrícula
                 lista_policiais = [f"{p['Matricula']} - {p['Graduacao']} {p['Nome']}" for p in efetivo_db if str(p.get("Status")).upper() == "ATIVO"]
                 policial_selecionado = st.selectbox("Selecione o Policial:", lista_policiais)
+            
+            # Novo Campo de Observação na parte de baixo
+            observacao = st.text_input("Observação (Opcional - Ex: Permuta com o Sd Silva):")
             
             submit = st.form_submit_button("💾 Salvar Escala", use_container_width=True)
             
@@ -228,20 +241,21 @@ else:
                     mat_selecionada = policial_selecionado.split(" - ")[0]
                     data_formatada = data_escala.strftime("%d/%m/%Y")
                     
-                    nova_linha = [data_formatada, servico, horario, mat_selecionada]
+                    # Agora salva com 5 colunas
+                    nova_linha = [data_formatada, servico, horario, mat_selecionada, observacao]
                     
                     sh = conectar_planilha()
                     if sh:
                         try:
                             ws = sh.worksheet("Escalas_Lancadas")
                             ws.append_row(nova_linha)
-                            st.success(f"✅ Escala de {servico} para o dia {data_formatada} gravada com sucesso!")
+                            st.success(f"✅ Escala gravada com sucesso! (Policial: {mat_selecionada})")
                             time.sleep(1.5)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao salvar: {e}")
+                            st.error(f"Erro ao salvar: Ocorreu um problema de comunicação com a planilha.")
                 else:
-                    st.warning("Preencha todos os campos corretamente.")
+                    st.warning("Preencha todos os campos obrigatórios corretamente.")
 
     # -------------------------------------------------------------------------
     # TELA 4: RELAÇÃO DO EFETIVO (ADMIN)
@@ -250,7 +264,6 @@ else:
         st.title("📋 CONTROLE DE EFETIVO")
         st.write("Visualização da aba 'Efetivo' do banco de dados.")
         df_efetivo = pd.DataFrame(efetivo_db)
-        # Ocultar a senha por segurança na tela
         if 'Senha' in df_efetivo.columns:
             df_efetivo = df_efetivo.drop(columns=['Senha'])
         st.dataframe(df_efetivo, use_container_width=True)
