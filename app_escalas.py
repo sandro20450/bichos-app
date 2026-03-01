@@ -44,7 +44,7 @@ def conectar_planilha():
         gc = gspread.authorize(creds)
         try:
             # Usando a CHAVE EXATA da planilha para evitar o erro do Google Drive
-            chave_planilha = "1VyaWftpKA8V4m4SH2lX9xqkbgv4-uPIxZ27tq1FsFns"
+            chave_planilha = "1VyaWftpKA8V4m4SH2IX9xqkbgv4-uPIxZ27tq1FsFns"
             return gc.open_by_key(chave_planilha)
         except Exception as e:
             st.error(f"Erro ao abrir planilha pela chave: {e}")
