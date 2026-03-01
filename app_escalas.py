@@ -5,7 +5,6 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import time
 import re
-import textwrap
 
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
@@ -49,7 +48,6 @@ def conectar_planilha():
         )
         gc = gspread.authorize(creds)
         try:
-            # A CHAVE CORRETA QUE VOCÊ ENCONTROU ESTÁ AQUI:
             chave_planilha = "1VyaWftpKA8V4m4SH2IX9xqkbgv4-uPIxZ27tq1FsFns" 
             return gc.open_by_key(chave_planilha)
         except Exception as e:
@@ -176,22 +174,13 @@ else:
                     # Limpeza de Telefone para o WhatsApp
                     tel_limpo = re.sub(r'\D', '', telefone)
                     if len(tel_limpo) == 10 or len(tel_limpo) == 11:
-                        tel_limpo = f"55{tel_limpo}" # Adiciona +55 do Brasil
+                        tel_limpo = f"55{tel_limpo}" 
                         
                     html_obs = f"<span class='obs-text'>⚠️ <b>Obs:</b> {obs}</span>" if obs else ""
                     
-                    # HTML protegido contra bugs de formatação (textwrap)
-                    card_html = textwrap.dedent(f"""
-                        <div class='card-policial'>
-                            <span class='graduacao'>{grad} {nome}</span> (Mat: {mat})
-                            <br>⏰ <b>Horário:</b> {horario}
-                            {html_obs}
-                            <div class='botoes-container'>
-                                <a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a>
-                                <a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a>
-                            </div>
-                        </div>
-                    """)
+                    # CÓDIGO BLINDADO CONTRA BUG DO MARKDOWN (Tudo na mesma linha)
+                    card_html = f"<div class='card-policial'><span class='graduacao'>{grad} {nome}</span> (Mat: {mat})<br>⏰ <b>Horário:</b> {horario}{html_obs}<div class='botoes-container'><a href='https://api.whatsapp.com/send?phone={tel_limpo}' target='_blank' class='btn-wpp'>💬 WhatsApp</a><a href='tel:{telefone}' class='btn-ligar'>📞 Ligar</a></div></div>"
+                    
                     st.markdown(card_html, unsafe_allow_html=True)
                 st.markdown("---")
 
@@ -232,7 +221,6 @@ else:
                 lista_policiais = [f"{p['Matricula']} - {p['Graduacao']} {p['Nome']}" for p in efetivo_db if str(p.get("Status")).upper() == "ATIVO"]
                 policial_selecionado = st.selectbox("Selecione o Policial:", lista_policiais)
             
-            # Campo de Observação Adicionado
             observacao = st.text_input("Observação (Opcional - Ex: Permuta com o Sd Silva):")
             
             submit = st.form_submit_button("💾 Salvar Escala", use_container_width=True)
@@ -242,7 +230,6 @@ else:
                     mat_selecionada = policial_selecionado.split(" - ")[0]
                     data_formatada = data_escala.strftime("%d/%m/%Y")
                     
-                    # Salva as 5 colunas no Sheets (Data, Servico, Horario, Matricula, Observacao)
                     nova_linha = [data_formatada, servico, horario, mat_selecionada, observacao]
                     
                     sh = conectar_planilha()
