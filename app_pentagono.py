@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V93.0 Raio-X Dinâmico", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.0 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -428,7 +428,7 @@ def calcular_3_estrategias_unidade(historico, indice_premio=0):
 
 
 # =============================================================================
-# --- 4. MÓDULOS VITORINO (CERCO) E RASTREADOR DINÂMICO DE MILHARES ---
+# --- 4. MÓDULOS VITORINO (CERCO GLOBAL) E RASTREADOR DINÂMICO DE MILHARES ---
 # =============================================================================
 
 def gerar_estrategia_cerco(hist_milhar):
@@ -493,7 +493,7 @@ def calcular_radar_invertidas(hist_milhar):
         for row in hist_milhar:
             try:
                 m = str(row['premios'][p_idx]).zfill(4)
-                if m != "0000": milhares_do_premio.append(m[-4:]) # Foco na Milhar
+                if m != "0000": milhares_do_premio.append(m[-4:])
             except: pass
             
         if len(milhares_do_premio) < 40: continue
@@ -502,7 +502,6 @@ def calcular_radar_invertidas(hist_milhar):
         penult_milhar = milhares_do_premio[-2]
         antepenult_milhar = milhares_do_premio[-3]
         
-        # Repetições (4 dígitos - posição irrelevante)
         rep_ult = len(set(ult_milhar)) < 4
         rep_penult = len(set(penult_milhar)) < 4
         rep_antepenult = len(set(antepenult_milhar)) < 4
@@ -534,30 +533,26 @@ def calcular_radar_invertidas(hist_milhar):
             else:
                 seq_atual_rep = 0 
                 
-        # --- RASTREADOR DINÂMICO (Os 2 dígitos mais fracos do prêmio) ---
+        # --- RASTREADOR DINÂMICO (PRESENTE - Para exibição na interface) ---
         ultimas_100 = milhares_do_premio[-100:]
         todos_os_digitos = "".join(ultimas_100)
         
-        # Conta a frequência de 0 a 9 na história recente deste prêmio exato
         contagem_digitos = {str(d): todos_os_digitos.count(str(d)) for d in range(10)}
-        
-        # Ordena do menos frequente para o mais frequente
         ranking_frios = sorted(contagem_digitos.items(), key=lambda x: (x[1], x[0]))
         
-        pior_1 = ranking_frios[0][0]
+        pior_1_atual = ranking_frios[0][0]
         freq_1 = ranking_frios[0][1]
         
-        pior_2 = ranking_frios[1][0]
+        pior_2_atual = ranking_frios[1][0]
         freq_2 = ranking_frios[1][1]
         
-        # Monta os Esquadrões Dinâmicos de 9D
-        esquadrao_A = [str(d) for d in range(10) if str(d) != pior_1]
-        esquadrao_B = [str(d) for d in range(10) if str(d) != pior_2]
+        esquadrao_A_atual = [str(d) for d in range(10) if str(d) != pior_1_atual]
+        esquadrao_B_atual = [str(d) for d in range(10) if str(d) != pior_2_atual]
         
-        nome_A = f"Corta {pior_1}"
-        nome_B = f"Corta {pior_2}"
+        nome_A = f"Corta {pior_1_atual}"
+        nome_B = f"Corta {pior_2_atual}"
         
-        rec_msg = f"💡 **Raio-X do Globo:** Nos últimos {len(ultimas_100)} jogos deste prêmio, o dígito `{pior_1}` foi o mais raro (saiu apenas {freq_1}x). O segundo mais fraco é o `{pior_2}` ({freq_2}x). Esquadrões calibrados!"
+        rec_msg = f"💡 **Raio-X do Globo:** Nos últimos {len(ultimas_100)} jogos deste prêmio, o dígito `{pior_1_atual}` foi o mais raro (saiu apenas {freq_1}x). O segundo mais fraco é o `{pior_2_atual}` ({freq_2}x). Esquadrões calibrados!"
         
         simulacoes_disponiveis = min(25, len(milhares_do_premio) - 15)
         
@@ -565,11 +560,33 @@ def calcular_radar_invertidas(hist_milhar):
         max_derrotas_A = 0; max_vitorias_A = 0; seq_d_A = 0; seq_v_A = 0; backtest_A = []
         max_derrotas_B = 0; max_vitorias_B = 0; seq_d_B = 0; seq_v_B = 0; backtest_B = []
         
+        # --- O TÚNEL DO TEMPO (BACKTEST HONESTO - EVITANDO LOOK-AHEAD BIAS) ---
         for i in range(simulacoes_disponiveis, 0, -1):
-            alvo_real = milhares_do_premio[-i]   # Milhar alvo (4 dígitos)
+            alvo_real = milhares_do_premio[-i]   # Milhar sorteada que vamos tentar acertar
             
-            # --- Eval Esquadrão A (Pior 1) ---
-            perdeu_A = len(set(alvo_real)) < 4 or not all(d in esquadrao_A for d in alvo_real)
+            # Recalcula a mente do robô para aquele momento exato do passado
+            # Corta a base de dados EXATAMENTE antes do sorteio 'alvo_real' ocorrer
+            idx_fim_hist = len(milhares_do_premio) - i
+            idx_inicio_hist = max(0, idx_fim_hist - 100)
+            janela_hist = milhares_do_premio[idx_inicio_hist:idx_fim_hist]
+            
+            if not janela_hist: 
+                continue # Evita falha se não houver dados suficientes no passado profundo
+                
+            todos_hist = "".join(janela_hist)
+            cont_hist = {str(d): todos_hist.count(str(d)) for d in range(10)}
+            rank_hist = sorted(cont_hist.items(), key=lambda x: (x[1], x[0]))
+            
+            # Descobre quem era o elo fraco NAQUELA ÉPOCA
+            pior_1_hist = rank_hist[0][0]
+            pior_2_hist = rank_hist[1][0]
+            
+            # Monta os esquadrões que você teria jogado ONTEM
+            esquadrao_A_hist = [str(d) for d in range(10) if str(d) != pior_1_hist]
+            esquadrao_B_hist = [str(d) for d in range(10) if str(d) != pior_2_hist]
+            
+            # --- Eval Esquadrão A (Testa a estratégia contra o alvo real) ---
+            perdeu_A = len(set(alvo_real)) < 4 or not all(d in esquadrao_A_hist for d in alvo_real)
             if perdeu_A:
                 seq_d_A += 1; seq_v_A = 0
                 if seq_d_A > max_derrotas_A: max_derrotas_A = seq_d_A
@@ -579,8 +596,8 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_A > max_vitorias_A: max_vitorias_A = seq_v_A
                 if i <= 6: backtest_A.append("✅")
             
-            # --- Eval Esquadrão B (Pior 2) ---
-            perdeu_B = len(set(alvo_real)) < 4 or not all(d in esquadrao_B for d in alvo_real)
+            # --- Eval Esquadrão B (Testa a estratégia contra o alvo real) ---
+            perdeu_B = len(set(alvo_real)) < 4 or not all(d in esquadrao_B_hist for d in alvo_real)
             if perdeu_B:
                 seq_d_B += 1; seq_v_B = 0
                 if seq_d_B > max_derrotas_B: max_derrotas_B = seq_d_B
@@ -595,8 +612,8 @@ def calcular_radar_invertidas(hist_milhar):
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
             "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, "max_seq_rep": max_seq_rep,
             
-            "nome_A": nome_A, "esquadrao_A": esquadrao_A, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
-            "nome_B": nome_B, "esquadrao_B": esquadrao_B, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
+            "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
+            "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
         })
     return resultados_radar
 
