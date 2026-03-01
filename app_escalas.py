@@ -5,8 +5,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import time
 import re
-import textwrap
-import calendar  # Nova inteligência para calcular os dias do mês
+import calendar
 
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
@@ -136,6 +135,7 @@ else:
     
     menu_opcoes = ["🏠 Quadro de Hoje", "📅 Minhas Escalas", "🔑 Alterar Senha"]
     if is_admin:
+        menu_opcoes.append("📢 Publicar Aviso")
         menu_opcoes.append("⚙️ Lançar Escalas (P1 Turbo)")
         menu_opcoes.append("➕ Cadastrar Efetivo")
         menu_opcoes.append("📋 Relação do Efetivo")
@@ -148,15 +148,24 @@ else:
 
     efetivo_db = carregar_dados("Efetivo")
     escalas_db = carregar_dados("Escalas_Lancadas")
+    avisos_db = carregar_dados("Avisos_Gerais") # Carrega o Mural
     dict_efetivo = {str(p["Matricula"]): p for p in efetivo_db}
 
     # -------------------------------------------------------------------------
-    # TELA 1: QUADRO DE HOJE
+    # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS
     # -------------------------------------------------------------------------
     if escolha == "🏠 Quadro de Hoje":
         st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
         
-        data_filtro = st.date_input("Filtrar por Data:", date.today())
+        # MURAL DO COMANDO VEM PRIMEIRO
+        if avisos_db:
+            st.markdown("### 📢 MURAL DO COMANDO (Avisos Gerais)")
+            # Inverte a lista para mostrar o aviso mais recente no topo
+            for aviso in reversed(avisos_db):
+                st.warning(f"**Mensagem:** {aviso.get('Aviso', '')}\n\n*Assinado por: **{aviso.get('Autor', '')}** em {aviso.get('Data_Hora', '')}*")
+            st.markdown("---")
+        
+        data_filtro = st.date_input("Filtrar por Data da Escala:", date.today())
         data_str = data_filtro.strftime("%d/%m/%Y")
         
         st.subheader(f"Efetivo Empregado em: {data_str}")
@@ -198,7 +207,38 @@ else:
                 st.markdown("---")
 
     # -------------------------------------------------------------------------
-    # TELA 2: MINHAS ESCALAS E PERMUTAS
+    # TELA 2: PUBLICAR AVISO (Apenas ADMIN)
+    # -------------------------------------------------------------------------
+    elif escolha == "📢 Publicar Aviso" and is_admin:
+        st.title("📢 PUBLICAR AVISO GERAL")
+        st.write("Atenção: Este aviso será exibido no 'Quadro de Hoje' e visto por todo o efetivo do Batalhão.")
+        
+        with st.form("form_aviso"):
+            texto_aviso = st.text_area("Digite a mensagem da Ordem/Aviso:")
+            submit_aviso = st.form_submit_button("📤 Publicar no Mural", use_container_width=True)
+            
+            if submit_aviso:
+                if texto_aviso:
+                    # Pega a hora exata e a assinatura de quem está logado
+                    data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    autor_assinatura = f"{user.get('Graduacao', '')} {user.get('Nome', '')}"
+                    
+                    sh = conectar_planilha()
+                    if sh:
+                        try:
+                            ws = sh.worksheet("Avisos_Gerais")
+                            ws.append_row([data_hora, texto_aviso, autor_assinatura])
+                            st.success(f"✅ Aviso publicado com sucesso como '{autor_assinatura}'!")
+                            st.cache_resource.clear()
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao publicar: Verifique se a aba 'Avisos_Gerais' foi criada na planilha. {e}")
+                else:
+                    st.warning("⚠️ Digite uma mensagem antes de publicar.")
+
+    # -------------------------------------------------------------------------
+    # TELA 3: MINHAS ESCALAS E PERMUTAS
     # -------------------------------------------------------------------------
     elif escolha == "📅 Minhas Escalas":
         st.title("📅 MINHAS MISSÕES E PERMUTAS")
@@ -211,8 +251,6 @@ else:
             st.success("Você não possui serviços escalados lançados no sistema atualmente.")
         else:
             df_minhas = pd.DataFrame(minhas_escalas)
-            
-            # Ordena as colunas de forma bonita
             colunas_exibir = ["Data", "Servico", "Horario"]
             if 'Funcao' in df_minhas.columns: colunas_exibir.append("Funcao")
             if 'Observacao' in df_minhas.columns: colunas_exibir.append("Observacao")
@@ -257,7 +295,7 @@ else:
                         st.warning("Escreva a observação antes de salvar.")
 
     # -------------------------------------------------------------------------
-    # TELA 3: ALTERAR SENHA
+    # TELA 4: ALTERAR SENHA
     # -------------------------------------------------------------------------
     elif escolha == "🔑 Alterar Senha":
         st.title("🔑 ALTERAR MINHA SENHA")
@@ -300,7 +338,7 @@ else:
                             st.error(f"Erro de comunicação: {e}")
 
     # -------------------------------------------------------------------------
-    # TELA 4: CADASTRAR EFETIVO
+    # TELA 5: CADASTRAR EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "➕ Cadastrar Efetivo" and is_admin:
         st.title("➕ CADASTRAR NOVO POLICIAL")
@@ -340,11 +378,10 @@ else:
                     st.warning("Preencha Matrícula e Nome obrigatoriamente.")
 
     # -------------------------------------------------------------------------
-    # TELA 5: LANÇAR ESCALAS EM LOTE (Visão do P1) COM FUNÇÃO E PARES/ÍMPARES
+    # TELA 6: LANÇAR ESCALAS EM LOTE (P1 Turbo)
     # -------------------------------------------------------------------------
     elif escolha == "⚙️ Lançar Escalas (P1 Turbo)" and is_admin:
         st.title("⚙️ P1 TURBO: Lançamento em Lote Inteligente")
-        st.write("Lance dezenas de serviços de uma única vez para escalas de Dias Pares, Ímpares ou Manuais.")
         
         with st.form("form_lancar_escala"):
             col1, col2 = st.columns(2)
@@ -354,8 +391,6 @@ else:
                 
                 lista_policiais = [f"{p['Matricula']} - {p['Graduacao']} {p['Nome']}" for p in efetivo_db if str(p.get("Status")).upper() == "ATIVO"]
                 policial_selecionado = st.selectbox("Selecione o Policial:", lista_policiais)
-                
-                # NOVO CAMPO DE FUNÇÃO AQUI
                 funcao_escala = st.text_input("Função / Posto (Ex: Rota 01/VT 38, Motorista, Cb de Dia):")
                 
             with col2:
@@ -365,7 +400,6 @@ else:
                 else:
                     horario_final = opcao_horario
                 
-                # NOVA INTELIGÊNCIA DE DIAS
                 st.markdown("🎯 **Modo de Seleção de Dias:**")
                 modo_dias = st.radio("Selecione o Padrão do Mês:", ["Digitar Manualmente", "Todos os Dias Pares", "Todos os Dias Ímpares"])
                 
@@ -387,30 +421,24 @@ else:
                     
                     mes = mes_ref.month
                     ano = mes_ref.year
-                    # Descobre quantos dias tem o mês selecionado (Ex: Fevereiro tem 28, Março 31)
                     _, ult_dia = calendar.monthrange(ano, mes)
                     
                     dias_limpos = []
-                    
-                    # Motor de Cálculo Pares/Ímpares
                     if modo_dias == "Todos os Dias Pares":
                         dias_limpos = [d for d in range(1, ult_dia + 1) if d % 2 == 0]
                     elif modo_dias == "Todos os Dias Ímpares":
                         dias_limpos = [d for d in range(1, ult_dia + 1) if d % 2 != 0]
                     else:
-                        # Modo Manual
                         dias_limpos = [int(d.strip()) for d in dias_str.split(',') if d.strip().isdigit()]
                     
                     if dias_limpos:
                         linhas_para_inserir = []
-                        
                         for dia in dias_limpos:
                             try:
                                 data_formatada = date(ano, mes, dia).strftime("%d/%m/%Y")
-                                # Insere a Função na coluna 6 (Coluna F)
                                 linhas_para_inserir.append([data_formatada, servico, horario_final, mat_selecionada, observacao, funcao_escala])
                             except ValueError:
-                                pass # Ignora se houver algum erro de data
+                                pass
                         
                         if linhas_para_inserir:
                             sh = conectar_planilha()
@@ -428,7 +456,7 @@ else:
                         st.warning("⚠️ Nenhum dia válido encontrado para gerar a escala.")
 
     # -------------------------------------------------------------------------
-    # TELA 6: RELAÇÃO DO EFETIVO
+    # TELA 7: RELAÇÃO DO EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "📋 Relação do Efetivo" and is_admin:
         st.title("📋 CONTROLE DE EFETIVO")
