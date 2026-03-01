@@ -164,12 +164,10 @@ else:
             
             for aviso in avisos_db:
                 try:
-                    # Tenta ler a data do aviso. Se tiver menos de 24h, ele aparece.
                     data_aviso = datetime.strptime(str(aviso.get('Data_Hora', '')), "%d/%m/%Y %H:%M")
                     if agora - data_aviso <= timedelta(hours=24):
                         avisos_ativos.append(aviso)
                 except:
-                    # Se houver erro na data, não exibe para evitar bugs
                     pass 
             
             if avisos_ativos:
@@ -267,8 +265,9 @@ else:
                         if sh:
                             try:
                                 ws = sh.worksheet("Avisos_Gerais")
-                                # O índice começa em 0, e a linha 1 é o cabeçalho. Então a linha a apagar é idx + 2.
-                                ws.delete_row(idx + 2) 
+                                # O índice começa em 0, e a linha 1 é o cabeçalho.
+                                # CORREÇÃO: O comando mudou para 'delete_rows' no plural!
+                                ws.delete_rows(idx + 2) 
                                 st.success("Aviso desintegrado do banco de dados!")
                                 st.cache_resource.clear()
                                 time.sleep(1)
