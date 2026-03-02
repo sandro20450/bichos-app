@@ -10,7 +10,7 @@ import calendar
 # =============================================================================
 # --- CONFIGURAÇÕES DA PÁGINA E ESTILOS ---
 # =============================================================================
-st.set_page_config(page_title="ESCALAS DAS - Comando", page_icon="👮‍♂️", layout="wide")
+st.set_page_config(page_title="ESCALAS DAS - Comando", page_icon="🚔", layout="wide")
 
 st.markdown("""
 <style>
@@ -118,7 +118,7 @@ def logout():
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #ffd700;'>🦅 SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #ffd700;'>🚔 SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center;'>Acesso Restrito ao Efetivo</p>", unsafe_allow_html=True)
         
         with st.container(border=True):
@@ -164,7 +164,7 @@ else:
     # TELA 1: QUADRO DE HOJE, MURAL DE AVISOS E RELATÓRIO WHATSAPP
     # -------------------------------------------------------------------------
     if escolha == "🏠 Quadro de Hoje":
-        st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
+        st.title("🚔 QUADRO DE SERVIÇO DIÁRIO")
         
         if avisos_db:
             agora = datetime.now()
@@ -226,7 +226,7 @@ else:
                     st.markdown(card_html, unsafe_allow_html=True)
                 st.markdown("---")
 
-            # --- 2. GERAÇÃO DO RELATÓRIO DO WHATSAPP (MÓDULO NOVO) ---
+            # --- 2. GERAÇÃO DO RELATÓRIO DO WHATSAPP (FORMATO LIMPO) ---
             st.subheader("📱 Copiar Relatório para o WhatsApp")
             st.write("Clique no ícone de 'Copiar' no canto superior direito da caixa abaixo e cole no grupo do WhatsApp.")
             
@@ -257,17 +257,18 @@ else:
                     telefone = str(dados_pol.get("Telefone", ""))
                     horario_geral = pol_escala.get("Horario", "")
                     
-                    # Limpeza do Telefone para Link
+                    # Formatação bonita do telefone para o WhatsApp (Ex: (81) 98888-7777)
                     tel_limpo = re.sub(r'\D', '', telefone)
-                    if len(tel_limpo) == 10 or len(tel_limpo) == 11: 
-                        tel_limpo = f"55{tel_limpo}"
-                        link_wpp = f"wa.me/{tel_limpo}"
-                    else:
-                        link_wpp = ""
+                    tel_formatado = ""
+                    if len(tel_limpo) == 11:
+                        tel_formatado = f"({tel_limpo[0:2]}) {tel_limpo[2:7]}-{tel_limpo[7:]}"
+                    elif len(tel_limpo) == 10:
+                        tel_formatado = f"({tel_limpo[0:2]}) {tel_limpo[2:6]}-{tel_limpo[6:]}"
+                    elif tel_limpo:
+                        tel_formatado = telefone # Caso seja um número estranho, mantém como o P1 digitou
                     
-                    # Se tiver link, coloca ao lado do nome
-                    if link_wpp:
-                        lista_nomes.append(f"{grad} {nome} ({link_wpp})")
+                    if tel_formatado:
+                        lista_nomes.append(f"{grad} {nome} - {tel_formatado}")
                     else:
                         lista_nomes.append(f"{grad} {nome}")
                 
