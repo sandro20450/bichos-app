@@ -34,7 +34,9 @@ TIPOS_SERVICO = [
     "Operação Visibilidade (8h)", 
     "Vila Militar (8h)", 
     "Rendição Almoço (1h)",
-    "Guarda do Quartel (24h)"
+    "Guarda do Quartel (24h)",
+    "Núcleo de Psicologia",
+    "Serviço Administrativo"
 ]
 
 HORARIOS_PADRAO = [
@@ -48,7 +50,7 @@ HORARIOS_PADRAO = [
 
 GRADUACOES = [
     "Cel PM", "Ten Cel PM", "Maj PM", "Cap PM", "1º Ten PM", "2º Ten PM", 
-    "Subten PM", "1º Sgt PM", "2º Sgt PM", "3º Sgt PM", "Cb PM", "Sd PM"
+    "Subten PM", "1º Sgt PM", "2º Sgt PM", "3º Sgt PM", "Cb PM", "Sd PM", "Func. Civil"
 ]
 
 # =============================================================================
@@ -111,7 +113,7 @@ def logout():
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #ffd700;'>®️ SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #ffd700;'>🦅 SISTEMA ESCALAS DAS</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center;'>Acesso Restrito ao Efetivo</p>", unsafe_allow_html=True)
         
         with st.container(border=True):
@@ -137,6 +139,7 @@ else:
     if is_admin:
         menu_opcoes.append("📢 Mural de Avisos (P1)")
         menu_opcoes.append("⚙️ Lançar Escalas (P1 Turbo)")
+        menu_opcoes.append("📥 Importar Planilha (P1)") # <--- NOVO MENU
         menu_opcoes.append("➕ Cadastrar Efetivo")
         menu_opcoes.append("📋 Relação do Efetivo")
         
@@ -152,12 +155,11 @@ else:
     dict_efetivo = {str(p["Matricula"]): p for p in efetivo_db}
 
     # -------------------------------------------------------------------------
-    # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS (COM AUTO-LIMPEZA 24H)
+    # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS
     # -------------------------------------------------------------------------
     if escolha == "🏠 Quadro de Hoje":
         st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
         
-        # MURAL DO COMANDO (FILTRO DE 24 HORAS)
         if avisos_db:
             agora = datetime.now()
             avisos_ativos = []
@@ -218,7 +220,93 @@ else:
                 st.markdown("---")
 
     # -------------------------------------------------------------------------
-    # TELA 2: MURAL DE AVISOS (PUBLICAR E APAGAR) - Apenas ADMIN
+    # TELA 2: IMPORTAR PLANILHA (P1) - NOVO MÓDULO VISÃO DE ÁGUIA
+    # -------------------------------------------------------------------------
+    elif escolha == "📥 Importar Planilha (P1)" and is_admin:
+        st.title("📥 IMPORTAÇÃO TÁTICA (Excel / CSV)")
+        st.write("Lançamento em massa através de arquivo. Extraia sua escala do Excel e faça o upload.")
+        
+        st.info("""
+        ⚠️ **Regras de Engajamento para a Planilha:**
+        A sua planilha (.xlsx ou .csv) deve ter uma linha de cabeçalho com os **nomes exatos** destas 6 colunas:
+        `Data` | `Servico` | `Horario` | `Matricula` | `Observacao` | `Funcao`
+        """)
+        
+        arquivo_up = st.file_uploader("Suba a Escala Oficial (Formato .xlsx ou .csv)", type=["xlsx", "csv"])
+        
+        if arquivo_up:
+            try:
+                # Leitura Dinâmica (Excel ou CSV)
+                if arquivo_up.name.endswith('.csv'):
+                    df_import = pd.read_csv(arquivo_up)
+                else:
+                    df_import = pd.read_excel(arquivo_up)
+                
+                # Validação de Colunas Críticas
+                colunas_esperadas = ['Data', 'Servico', 'Horario', 'Matricula']
+                colunas_arquivo = df_import.columns.tolist()
+                
+                if not all(col in colunas_arquivo for col in colunas_esperadas):
+                    st.error(f"❌ Erro de Formato: A planilha não possui as colunas obrigatórias. Esperado: {colunas_esperadas}")
+                else:
+                    # Garantir que as colunas opcionais existam no DataFrame
+                    if 'Observacao' not in df_import.columns: df_import['Observacao'] = ""
+                    if 'Funcao' not in df_import.columns: df_import['Funcao'] = ""
+                    
+                    # Limpeza Visual para mostrar pro P1
+                    df_import = df_import.fillna("")
+                    st.markdown("### 🔍 Raio-X da Planilha (Pré-visualização)")
+                    st.dataframe(df_import.head(10), use_container_width=True)
+                    st.caption(f"Total de registros detectados: **{len(df_import)}** serviços.")
+                    
+                    if st.button("🚀 Confirmar e Lançar no Banco de Dados", use_container_width=True):
+                        with st.spinner("Processando dados pesados..."):
+                            linhas_para_inserir = []
+                            
+                            for index, row in df_import.iterrows():
+                                try:
+                                    # Tratamento de Data do Excel para o formato do App (DD/MM/YYYY)
+                                    data_bruta = row['Data']
+                                    if isinstance(data_bruta, datetime):
+                                        data_formatada = data_bruta.strftime("%d/%m/%Y")
+                                    else:
+                                        # Se for string, tenta forçar a barra pro padrão
+                                        data_obj = pd.to_datetime(data_bruta, dayfirst=True)
+                                        data_formatada = data_obj.strftime("%d/%m/%Y")
+                                    
+                                    # Limpeza dos outros campos
+                                    serv = str(row['Servico']).strip()
+                                    hor = str(row['Horario']).strip()
+                                    mat = str(row['Matricula']).split('.')[0].strip() # Pega apenas os números se o Excel colocar .0
+                                    obs = str(row['Observacao']).strip()
+                                    func = str(row['Funcao']).strip()
+                                    
+                                    # Ordem EXATA que o Google Sheets espera: [Data, Servico, Horario, Matricula, Observacao, Funcao]
+                                    linhas_para_inserir.append([data_formatada, serv, hor, mat, obs, func])
+                                    
+                                except Exception as e:
+                                    pass # Se a linha estiver corrompida, ignora
+                            
+                            if linhas_para_inserir:
+                                sh = conectar_planilha()
+                                if sh:
+                                    try:
+                                        ws = sh.worksheet("Escalas_Lancadas")
+                                        ws.append_rows(linhas_para_inserir)
+                                        st.success(f"✅ Bombardeio Concluído! {len(linhas_para_inserir)} serviços lançados com sucesso na Nuvem.")
+                                        st.cache_resource.clear()
+                                        time.sleep(3)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Erro ao salvar na planilha: {e}")
+                            else:
+                                st.warning("Nenhum dado válido encontrado para importar.")
+
+            except Exception as e:
+                st.error(f"Erro ao processar o arquivo. Verifique se não está corrompido. Detalhe: {e}")
+
+    # -------------------------------------------------------------------------
+    # TELA 3: MURAL DE AVISOS (PUBLICAR E APAGAR) - Apenas ADMIN
     # -------------------------------------------------------------------------
     elif escolha == "📢 Mural de Avisos (P1)" and is_admin:
         st.title("📢 GESTÃO DO MURAL DE AVISOS")
@@ -250,8 +338,6 @@ else:
                     
         st.markdown("---")
         st.subheader("2. Histórico e Remoção de Avisos")
-        st.write("Abaixo estão todos os avisos registrados. Se você publicou algo errado, pode apagar imediatamente.")
-        
         if not avisos_db:
             st.info("Nenhum aviso no banco de dados.")
         else:
@@ -265,8 +351,6 @@ else:
                         if sh:
                             try:
                                 ws = sh.worksheet("Avisos_Gerais")
-                                # O índice começa em 0, e a linha 1 é o cabeçalho.
-                                # CORREÇÃO: O comando mudou para 'delete_rows' no plural!
                                 ws.delete_rows(idx + 2) 
                                 st.success("Aviso desintegrado do banco de dados!")
                                 st.cache_resource.clear()
@@ -277,7 +361,7 @@ else:
                 st.markdown("---")
 
     # -------------------------------------------------------------------------
-    # TELA 3: MINHAS ESCALAS E PERMUTAS
+    # TELA 4: MINHAS ESCALAS E PERMUTAS
     # -------------------------------------------------------------------------
     elif escolha == "📅 Minhas Escalas":
         st.title("📅 MINHAS MISSÕES E PERMUTAS")
@@ -334,7 +418,7 @@ else:
                         st.warning("Escreva a observação antes de salvar.")
 
     # -------------------------------------------------------------------------
-    # TELA 4: ALTERAR SENHA
+    # TELA 5: ALTERAR SENHA
     # -------------------------------------------------------------------------
     elif escolha == "🔑 Alterar Senha":
         st.title("🔑 ALTERAR MINHA SENHA")
@@ -377,7 +461,7 @@ else:
                             st.error(f"Erro de comunicação: {e}")
 
     # -------------------------------------------------------------------------
-    # TELA 5: CADASTRAR EFETIVO
+    # TELA 6: CADASTRAR EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "➕ Cadastrar Efetivo" and is_admin:
         st.title("➕ CADASTRAR NOVO POLICIAL")
@@ -417,7 +501,7 @@ else:
                     st.warning("Preencha Matrícula e Nome obrigatoriamente.")
 
     # -------------------------------------------------------------------------
-    # TELA 6: LANÇAR ESCALAS EM LOTE (P1 Turbo)
+    # TELA 7: LANÇAR ESCALAS EM LOTE (P1 Turbo)
     # -------------------------------------------------------------------------
     elif escolha == "⚙️ Lançar Escalas (P1 Turbo)" and is_admin:
         st.title("⚙️ P1 TURBO: Lançamento em Lote Inteligente")
@@ -495,7 +579,7 @@ else:
                         st.warning("⚠️ Nenhum dia válido encontrado para gerar a escala.")
 
     # -------------------------------------------------------------------------
-    # TELA 7: RELAÇÃO DO EFETIVO
+    # TELA 8: RELAÇÃO DO EFETIVO
     # -------------------------------------------------------------------------
     elif escolha == "📋 Relação do Efetivo" and is_admin:
         st.title("📋 CONTROLE DE EFETIVO")
