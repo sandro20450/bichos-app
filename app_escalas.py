@@ -158,7 +158,7 @@ else:
     # TELA 1: QUADRO DE HOJE E MURAL DE AVISOS
     # -------------------------------------------------------------------------
     if escolha == "🏠 Quadro de Hoje":
-        st.title("🦅 QUADRO DE SERVIÇO DIÁRIO")
+        st.title("🪪 QUADRO DE SERVIÇO DIÁRIO")
         
         if avisos_db:
             agora = datetime.now()
