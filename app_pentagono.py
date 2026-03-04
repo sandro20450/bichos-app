@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.5 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.6 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -502,7 +502,6 @@ def calcular_radar_invertidas(hist_milhar):
         penult_milhar = milhares_do_premio[-2]
         antepenult_milhar = milhares_do_premio[-3]
         
-        # --- NOVO MOTOR: CONTAGEM DE SEQUÊNCIA EXATA INFINITA ---
         true_seq_atual = 0
         for m in reversed(milhares_do_premio):
             if len(set(m)) < 4:
@@ -529,7 +528,6 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última milhar foi normal (4 dígitos diferentes)."
             
-        # --- CÁLCULO DA ESTATÍSTICA DE 25 JOGOS PARA A INTERFACE ---
         ultimas_25 = milhares_do_premio[-25:]
         max_seq_rep = 0
         seq_temporaria = 0
@@ -543,18 +541,15 @@ def calcular_radar_invertidas(hist_milhar):
             else:
                 seq_temporaria = 0 
                 
-        # --- NOVO: CÁLCULO DE RECORDE EM BLOCOS DE 25 (ÚLTIMOS 100 JOGOS) ---
         cem_ultimos = milhares_do_premio[-100:]
         recorde_rep_25 = 0
         
-        # Divide a lista dos últimos 100 em 4 pedaços de 25
         for b_idx in range(0, len(cem_ultimos), 25):
             bloco = cem_ultimos[b_idx : b_idx+25]
             reps_no_bloco = sum(1 for m in bloco if len(set(m)) < 4)
             if reps_no_bloco > recorde_rep_25:
                 recorde_rep_25 = reps_no_bloco
                 
-        # --- RASTREADOR DINÂMICO (PRESENTE - Para exibição na interface) ---
         ultimas_100 = milhares_do_premio[-100:]
         todos_os_digitos = "".join(ultimas_100)
         
@@ -580,7 +575,6 @@ def calcular_radar_invertidas(hist_milhar):
         max_derrotas_A = 0; max_vitorias_A = 0; seq_d_A = 0; seq_v_A = 0; backtest_A = []
         max_derrotas_B = 0; max_vitorias_B = 0; seq_d_B = 0; seq_v_B = 0; backtest_B = []
         
-        # --- BACKTEST HONESTO ---
         for i in range(simulacoes_disponiveis, 0, -1):
             alvo_real = milhares_do_premio[-i]
             
@@ -625,7 +619,7 @@ def calcular_radar_invertidas(hist_milhar):
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
             "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, 
             "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, "seq_atual_rep": true_seq_atual, 
-            "recorde_rep_25": recorde_rep_25, # ESTATÍSTICA DE RECORDE
+            "recorde_rep_25": recorde_rep_25, 
             "ultimas_milhares_streak": ultimas_milhares_streak,
             "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
             "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
@@ -719,7 +713,12 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
-    st.sidebar.markdown("---")
+    
+    # -------------------------------------------------------------
+    # 🌐 BOTÃO DE AUDITORIA: VISITAR SITE DA BANCA
+    # -------------------------------------------------------------
+    url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+    st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
     if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS"):
         with st.spinner("Limpando e reescrevendo planilha..."):
@@ -732,8 +731,9 @@ else:
             
     st.sidebar.markdown("---")
     
-    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)"])
+    modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
+    # --- MODO 1: UNITÁRIA ---
     if modo_extracao == "🎯 Unitária":
         with st.sidebar.expander("📥 Importar Resultado", expanded=True):
             opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -782,7 +782,8 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro na Planilha")
                 
-    else: 
+    # --- MODO 2: TURBO ---
+    elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
         with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
@@ -841,6 +842,66 @@ else:
                 if buffer_m and ws_milhar: ws_milhar.append_rows(buffer_m)
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
+            
+    # --- MODO 3: PLANO B MANUAL ---
+    elif modo_extracao == "✍️ Manual":
+        with st.sidebar.expander("📝 Lançar Manualmente", expanded=True):
+            opcao_data_man = st.radio("Data:", ["Hoje", "Ontem", "Outra"], key="data_man")
+            if opcao_data_man == "Hoje": data_busca = date.today()
+            elif opcao_data_man == "Ontem": data_busca = date.today() - timedelta(days=1)
+            else: data_busca = st.date_input("Escolha:", date.today(), key="data_pick_man")
+            
+            lista_horarios = config['horarios'].copy()
+            if "CAMINHO" in banca_selecionada and data_busca.weekday() in [2, 5]: 
+                if "20:00" in lista_horarios:
+                    lista_horarios[lista_horarios.index("20:00")] = "19:30"
+                    
+            horario_busca = st.selectbox("Horário:", lista_horarios, key="hora_man")
+            
+            st.markdown("🎯 **Preencha as Milhares (4 dígitos):**")
+            p1 = st.text_input("1º Prêmio", max_chars=4, key="man_p1")
+            p2 = st.text_input("2º Prêmio", max_chars=4, key="man_p2")
+            p3 = st.text_input("3º Prêmio", max_chars=4, key="man_p3")
+            p4 = st.text_input("4º Prêmio", max_chars=4, key="man_p4")
+            p5 = st.text_input("5º Prêmio", max_chars=4, key="man_p5")
+            
+            if st.button("💾 Salvar Resultado", key="btn_salvar_man", use_container_width=True):
+                # Função de segurança para garantir que só entram 4 números e não letras
+                def limpar_milhar(m):
+                    num = re.sub(r'\D', '', str(m))
+                    return num.zfill(4) if num else "0000"
+                
+                premios_finais = [limpar_milhar(p1), limpar_milhar(p2), limpar_milhar(p3), limpar_milhar(p4), limpar_milhar(p5)]
+                
+                aba_dez = config.get('base_dez', config['nome_aba'])
+                aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
+                tipo_ext = config.get('tipo_extracao', config['tipo'])
+                
+                ws_dez = conectar_planilha(aba_dez)
+                ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
+                
+                if ws_dez:
+                    with st.spinner(f"Salvando {horario_busca} manualmente..."):
+                        try: 
+                            existentes = ws_dez.get_all_values()
+                            chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in existentes if len(r) >= 2 and normalizar_data(r[0])]
+                        except: chaves = []
+                        chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca)}"
+                        
+                        if chave_atual in chaves: st.warning("Resultado já existe no banco de dados!")
+                        else:
+                            if tipo_ext == "DUAL_SOLO":
+                                row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios_finais[0][-2:], "00", "00", "00", "00"]
+                                ws_dez.append_row(row_dez)
+                                if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios_finais)
+                                st.toast(f"Lançamento Manual Salvo!", icon="✅")
+                            elif tipo_ext == "DUAL_PENTA":
+                                row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca] + [p[-2:] for p in premios_finais]
+                                ws_dez.append_row(row_dez)
+                                if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios_finais)
+                                st.toast(f"Lançamento Manual Salvo com Sucesso!", icon="✅")
+                            time.sleep(1); st.rerun()
+                else: st.error("Erro na Planilha")
 
     # --- PÁGINA DA BANCA ---
     
@@ -881,7 +942,6 @@ else:
                     c_topo1, c_topo2 = st.columns([1, 2])
                     with c_topo1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
-                        # A NOVA INFORMAÇÃO ESTATÍSTICA ESTÁ AQUI:
                         st.caption(f"🚨 Max Seq Repetidas: **{alvo['max_seq_rep']}x** | 📊 Atual (25 jg): **{alvo['total_rep_25']}/25** | 🏆 Recorde (Últimos 100 jg): **{alvo['recorde_rep_25']}/25**")
                     with c_topo2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
