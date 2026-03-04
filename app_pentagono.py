@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.3 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.4 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -629,6 +629,10 @@ def calcular_radar_invertidas(hist_milhar):
 if "menu_nav" not in st.session_state:
     st.session_state.menu_nav = "🏠 RADAR GERAL (Home)"
 
+# Função de Callback Seguro (Gatilho Anti-Erro)
+def acionar_teletransporte(destino):
+    st.session_state.menu_nav = destino
+
 menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes, key="menu_nav")
 
@@ -697,10 +701,8 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                 with col_txt:
                     st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! Tivemos **{a['qtd_rep']} repetições seguidas**. Milhares: `{a['milhares_streak']}`.")
                 with col_btn:
-                    # BOTÃO MÁGICO DE INFILTRAÇÃO (Muda a variável de sessão e recarrega a página)
-                    if st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", use_container_width=True):
-                        st.session_state.menu_nav = a['banca_key']
-                        st.rerun()
+                    # BOTÃO MÁGICO DE INFILTRAÇÃO (CORRIGIDO COM CALLBACK)
+                    st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
 else:
     banca_selecionada = escolha_menu
