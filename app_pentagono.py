@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.1 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.2 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -526,9 +526,12 @@ def calcular_radar_invertidas(hist_milhar):
         ultimas_25 = milhares_do_premio[-25:]
         max_seq_rep = 0
         seq_atual_rep = 0
+        total_rep_25 = 0 # NOVO CÁLCULO DE FREQUÊNCIA
+        
         for m in ultimas_25:
             if len(set(m)) < 4: 
                 seq_atual_rep += 1
+                total_rep_25 += 1 # Conta quantas repetidas tiveram no total
                 if seq_atual_rep > max_seq_rep: max_seq_rep = seq_atual_rep
             else:
                 seq_atual_rep = 0 
@@ -610,7 +613,8 @@ def calcular_radar_invertidas(hist_milhar):
         resultados_radar.append({
             "premio": p_idx + 1,
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
-            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, "max_seq_rep": max_seq_rep,
+            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, 
+            "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, # NOVO RETORNO
             
             "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
             "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
@@ -877,7 +881,8 @@ else:
                     c_topo1, c_topo2 = st.columns([1, 2])
                     with c_topo1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
-                        st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x**")
+                        # A NOVA INFORMAÇÃO ESTATÍSTICA ESTÁ AQUI:
+                        st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x** | 📊 Qtd com Repetição (25 jg): **{alvo['total_rep_25']}/25**")
                     with c_topo2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
