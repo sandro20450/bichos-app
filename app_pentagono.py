@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.2 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.3 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -502,19 +502,25 @@ def calcular_radar_invertidas(hist_milhar):
         penult_milhar = milhares_do_premio[-2]
         antepenult_milhar = milhares_do_premio[-3]
         
-        rep_ult = len(set(ult_milhar)) < 4
-        rep_penult = len(set(penult_milhar)) < 4
-        rep_antepenult = len(set(antepenult_milhar)) < 4
-        
-        if rep_ult and rep_penult and rep_antepenult:
+        # --- NOVO MOTOR: CONTAGEM DE SEQUÊNCIA EXATA INFINITA ---
+        true_seq_atual = 0
+        for m in reversed(milhares_do_premio):
+            if len(set(m)) < 4:
+                true_seq_atual += 1
+            else:
+                break
+                
+        ultimas_milhares_streak = milhares_do_premio[-true_seq_atual:] if true_seq_atual > 0 else []
+
+        if true_seq_atual >= 3:
             status = "🚨 SNIPER MÁXIMO"
             cor = "error"
-            alerta = "TRINCA DE REPETIÇÕES! As 3 últimas milhares vieram com dígitos repetidos. Bote de Elite!"
-        elif rep_ult and rep_penult:
+            alerta = f"ALERTA! A represa vai estourar. Tivemos {true_seq_atual} milhares seguidas com dígitos repetidos!"
+        elif true_seq_atual == 2:
             status = "🔥 ALVO AQUECENDO"
             cor = "warning"
             alerta = "Duas milhares seguidas vieram com repetição. A represa está enchendo."
-        elif rep_ult:
+        elif true_seq_atual == 1:
             status = "⚠️ ATENÇÃO"
             cor = "warning"
             alerta = "A última milhar veio com repetição."
@@ -523,18 +529,19 @@ def calcular_radar_invertidas(hist_milhar):
             cor = "info"
             alerta = "A última milhar foi normal (4 dígitos diferentes)."
             
+        # --- CÁLCULO DA ESTATÍSTICA DE 25 JOGOS PARA A INTERFACE ---
         ultimas_25 = milhares_do_premio[-25:]
         max_seq_rep = 0
-        seq_atual_rep = 0
-        total_rep_25 = 0 # NOVO CÁLCULO DE FREQUÊNCIA
+        seq_temporaria = 0
+        total_rep_25 = 0 
         
         for m in ultimas_25:
             if len(set(m)) < 4: 
-                seq_atual_rep += 1
-                total_rep_25 += 1 # Conta quantas repetidas tiveram no total
-                if seq_atual_rep > max_seq_rep: max_seq_rep = seq_atual_rep
+                seq_temporaria += 1
+                total_rep_25 += 1 
+                if seq_temporaria > max_seq_rep: max_seq_rep = seq_temporaria
             else:
-                seq_atual_rep = 0 
+                seq_temporaria = 0 
                 
         # --- RASTREADOR DINÂMICO (PRESENTE - Para exibição na interface) ---
         ultimas_100 = milhares_do_premio[-100:]
@@ -559,36 +566,29 @@ def calcular_radar_invertidas(hist_milhar):
         
         simulacoes_disponiveis = min(25, len(milhares_do_premio) - 15)
         
-        # Trackers Dinâmicos
         max_derrotas_A = 0; max_vitorias_A = 0; seq_d_A = 0; seq_v_A = 0; backtest_A = []
         max_derrotas_B = 0; max_vitorias_B = 0; seq_d_B = 0; seq_v_B = 0; backtest_B = []
         
-        # --- O TÚNEL DO TEMPO (BACKTEST HONESTO - EVITANDO LOOK-AHEAD BIAS) ---
+        # --- BACKTEST HONESTO ---
         for i in range(simulacoes_disponiveis, 0, -1):
-            alvo_real = milhares_do_premio[-i]   # Milhar sorteada que vamos tentar acertar
+            alvo_real = milhares_do_premio[-i]
             
-            # Recalcula a mente do robô para aquele momento exato do passado
-            # Corta a base de dados EXATAMENTE antes do sorteio 'alvo_real' ocorrer
             idx_fim_hist = len(milhares_do_premio) - i
             idx_inicio_hist = max(0, idx_fim_hist - 100)
             janela_hist = milhares_do_premio[idx_inicio_hist:idx_fim_hist]
             
-            if not janela_hist: 
-                continue # Evita falha se não houver dados suficientes no passado profundo
+            if not janela_hist: continue
                 
             todos_hist = "".join(janela_hist)
             cont_hist = {str(d): todos_hist.count(str(d)) for d in range(10)}
             rank_hist = sorted(cont_hist.items(), key=lambda x: (x[1], x[0]))
             
-            # Descobre quem era o elo fraco NAQUELA ÉPOCA
             pior_1_hist = rank_hist[0][0]
             pior_2_hist = rank_hist[1][0]
             
-            # Monta os esquadrões que você teria jogado ONTEM
             esquadrao_A_hist = [str(d) for d in range(10) if str(d) != pior_1_hist]
             esquadrao_B_hist = [str(d) for d in range(10) if str(d) != pior_2_hist]
             
-            # --- Eval Esquadrão A (Testa a estratégia contra o alvo real) ---
             perdeu_A = len(set(alvo_real)) < 4 or not all(d in esquadrao_A_hist for d in alvo_real)
             if perdeu_A:
                 seq_d_A += 1; seq_v_A = 0
@@ -599,7 +599,6 @@ def calcular_radar_invertidas(hist_milhar):
                 if seq_v_A > max_vitorias_A: max_vitorias_A = seq_v_A
                 if i <= 6: backtest_A.append("✅")
             
-            # --- Eval Esquadrão B (Testa a estratégia contra o alvo real) ---
             perdeu_B = len(set(alvo_real)) < 4 or not all(d in esquadrao_B_hist for d in alvo_real)
             if perdeu_B:
                 seq_d_B += 1; seq_v_B = 0
@@ -614,8 +613,8 @@ def calcular_radar_invertidas(hist_milhar):
             "premio": p_idx + 1,
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
             "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, 
-            "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, # NOVO RETORNO
-            
+            "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, "seq_atual_rep": true_seq_atual, 
+            "ultimas_milhares_streak": ultimas_milhares_streak,
             "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
             "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
         })
@@ -623,8 +622,15 @@ def calcular_radar_invertidas(hist_milhar):
 
 
 # =============================================================================
-# --- 5. INTERFACE ---
+# --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
 # =============================================================================
+
+# INICIALIZA A MEMÓRIA DE NAVEGAÇÃO PARA O BOTÃO FUNCIONAR
+if "menu_nav" not in st.session_state:
+    st.session_state.menu_nav = "🏠 RADAR GERAL (Home)"
+
+menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
+escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes, key="menu_nav")
 
 def acao_limpar_banco(nome_aba):
     ws = conectar_planilha(nome_aba)
@@ -652,17 +658,13 @@ def acao_limpar_banco(nome_aba):
         except Exception as e: return f"Erro: {e}"
     return "Erro Conexão"
 
-menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
-escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes)
-
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
     st.title("🛡️ PENTÁGONO - SCANNER DINÂMICO (MILHAR)")
-    st.markdown("O sistema está varrendo os globos elegíveis monitorando os Dígitos Congelados e Alertas de Trinca para Invertidas.")
+    st.markdown("O sistema está varrendo os globos elegíveis. **O radar foca exclusivamente em apontar as grandes sequências (3 ou mais) de milhares repetidas!**")
     
     alertas_sniper = []
-    alertas_quebra = []
     
     # O FILTRO TÁTICO ESTÁ AQUI: IGNORAR "TRADICIONAL" NO RADAR DE INVERTIDAS
     with st.spinner("📡 Scanner Ativo: Analisando Lotep, Caminho e Monte Carlos..."):
@@ -675,46 +677,30 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
                         
-                        # Gatilho exclusivo para a TRINCA (3 repetidas seguidas)
+                        # Gatilho exclusivo para a SEQUÊNCIA DE REPETIDAS (3 ou mais)
                         if alvo['status'] == "🚨 SNIPER MÁXIMO":
                             alertas_sniper.append({
+                                "banca_key": banca_key,
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "ultimas": f"{alvo['antepenult_milhar']} - {alvo['penult_milhar']} - {alvo['ult_milhar']}"
+                                "qtd_rep": alvo['seq_atual_rep'],
+                                "milhares_streak": " - ".join(alvo['ultimas_milhares_streak'])
                             })
-                            
-                        # Verifica a quebra dos dois esquadrões dinâmicos calculados
-                        estrategias_para_checar = [
-                            (f"Esquadrão {alvo['nome_A']}", "A"),
-                            (f"Esquadrão {alvo['nome_B']}", "B")
-                        ]
-                        
-                        for nome_est, sufixo in estrategias_para_checar:
-                            max_d = alvo[f"max_derrotas_{sufixo}"]
-                            atual_d = alvo[f"atual_derrotas_{sufixo}"]
-                            
-                            if atual_d > 0 and atual_d >= max_d and max_d > 0:
-                                alertas_quebra.append({
-                                    "banca": nome_banca_limpo,
-                                    "premio": alvo['premio'],
-                                    "estrategia": nome_est,
-                                    "atual": atual_d,
-                                    "maximo": max_d
-                                })
 
-    if not alertas_sniper and not alertas_quebra:
-        st.success("✅ **O Globo está calmo.** Não há nenhuma anomalia de Trinca ou teto de derrota atingido nas bancas monitoradas. Mantenha a banca protegida.")
+    if not alertas_sniper:
+        st.success("✅ **O Globo está calmo.** Não há nenhuma sequência agressiva de repetições (Trinca ou superior) nas bancas monitoradas neste momento. Aguardando alvo...")
     else:
-        if alertas_sniper:
-            st.markdown("### 🎯 ALERTA SNIPER MÁXIMO (Trinca de Repetições)")
-            for a in alertas_sniper:
-                st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! As últimas 3 milhares foram: `{a['ultimas']}`. Oportunidade absurda para Invertida Simples!")
-                
-        if alertas_quebra:
-            st.markdown("### ⚡ ALERTA DE QUEBRA (Limite de Derrotas Atingido)")
-            st.markdown("As estratégias abaixo chegaram ao 'fundo do poço' histórico. A probabilidade de acerto no próximo jogo é extrema.")
-            for a in alertas_quebra:
-                st.warning(f"💔 **{a['banca']} - {a['premio']}º Prêmio** ({a['estrategia']}) | Derrotas Atuais: **{a['atual']}** (Teto Histórico: **{a['maximo']}**)")
+        st.markdown("### 🎯 ALERTA SNIPER MÁXIMO (Sequência de Repetições)")
+        for a in alertas_sniper:
+            with st.container(border=True):
+                col_txt, col_btn = st.columns([4, 1])
+                with col_txt:
+                    st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! Tivemos **{a['qtd_rep']} repetições seguidas**. Milhares: `{a['milhares_streak']}`.")
+                with col_btn:
+                    # BOTÃO MÁGICO DE INFILTRAÇÃO (Muda a variável de sessão e recarrega a página)
+                    if st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", use_container_width=True):
+                        st.session_state.menu_nav = a['banca_key']
+                        st.rerun()
 
 else:
     banca_selecionada = escolha_menu
