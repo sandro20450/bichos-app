@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.4 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.5 Backtest Honesto", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -543,6 +543,17 @@ def calcular_radar_invertidas(hist_milhar):
             else:
                 seq_temporaria = 0 
                 
+        # --- NOVO: CÁLCULO DE RECORDE EM BLOCOS DE 25 (ÚLTIMOS 100 JOGOS) ---
+        cem_ultimos = milhares_do_premio[-100:]
+        recorde_rep_25 = 0
+        
+        # Divide a lista dos últimos 100 em 4 pedaços de 25
+        for b_idx in range(0, len(cem_ultimos), 25):
+            bloco = cem_ultimos[b_idx : b_idx+25]
+            reps_no_bloco = sum(1 for m in bloco if len(set(m)) < 4)
+            if reps_no_bloco > recorde_rep_25:
+                recorde_rep_25 = reps_no_bloco
+                
         # --- RASTREADOR DINÂMICO (PRESENTE - Para exibição na interface) ---
         ultimas_100 = milhares_do_premio[-100:]
         todos_os_digitos = "".join(ultimas_100)
@@ -614,6 +625,7 @@ def calcular_radar_invertidas(hist_milhar):
             "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
             "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, 
             "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, "seq_atual_rep": true_seq_atual, 
+            "recorde_rep_25": recorde_rep_25, # ESTATÍSTICA DE RECORDE
             "ultimas_milhares_streak": ultimas_milhares_streak,
             "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
             "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
@@ -870,7 +882,7 @@ else:
                     with c_topo1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
                         # A NOVA INFORMAÇÃO ESTATÍSTICA ESTÁ AQUI:
-                        st.caption(f"🚨 Max Seq Repetidas (25 jg): **{alvo['max_seq_rep']}x** | 📊 Qtd com Repetição (25 jg): **{alvo['total_rep_25']}/25**")
+                        st.caption(f"🚨 Max Seq Repetidas: **{alvo['max_seq_rep']}x** | 📊 Atual (25 jg): **{alvo['total_rep_25']}/25** | 🏆 Recorde (Últimos 100 jg): **{alvo['recorde_rep_25']}/25**")
                     with c_topo2:
                         if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
@@ -901,7 +913,7 @@ else:
                 **Matemática Financeira Dinâmica:**
                 - O sistema usa 9 Dígitos para buscar a Milhar (4 Dígitos), eliminando apenas o "Elo Fraco" da banca.
                 - **Combinações:** 3.024 milhares simples (sem repetição).
-                - **Custo Recomendado:** R$ 3.024,00 (R$ 1,00 por combinação).
+                - **Custo Recomendado:** R$ 3.024,00 (R$ 1,00 por combination).
                 - **Retorno da Banca:** R$ 9.200,00.
                 - **Lucro Líquido por Acerto:** **R$ 6.176,00**.
                 """)
