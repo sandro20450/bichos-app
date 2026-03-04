@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.6 Backtest Honesto", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V94.7 Hedge", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -676,7 +676,6 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
     
     alertas_sniper = []
     
-    # O FILTRO TÁTICO ESTÁ AQUI: IGNORAR "TRADICIONAL" NO RADAR DE INVERTIDAS
     with st.spinner("📡 Scanner Ativo: Analisando Lotep, Caminho e Monte Carlos..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
@@ -687,7 +686,6 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
                         
-                        # Gatilho exclusivo para a SEQUÊNCIA DE REPETIDAS (3 ou mais)
                         if alvo['status'] == "🚨 SNIPER MÁXIMO":
                             alertas_sniper.append({
                                 "banca_key": banca_key,
@@ -707,16 +705,12 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                 with col_txt:
                     st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! Tivemos **{a['qtd_rep']} repetições seguidas**. Milhares: `{a['milhares_streak']}`.")
                 with col_btn:
-                    # BOTÃO MÁGICO DE INFILTRAÇÃO (CORRIGIDO COM CALLBACK)
                     st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    # -------------------------------------------------------------
-    # 🌐 BOTÃO DE AUDITORIA: VISITAR SITE DA BANCA
-    # -------------------------------------------------------------
     url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
@@ -733,7 +727,6 @@ else:
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
-    # --- MODO 1: UNITÁRIA ---
     if modo_extracao == "🎯 Unitária":
         with st.sidebar.expander("📥 Importar Resultado", expanded=True):
             opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"])
@@ -782,7 +775,6 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro na Planilha")
                 
-    # --- MODO 2: TURBO ---
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
@@ -843,7 +835,6 @@ else:
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão")
             
-    # --- MODO 3: PLANO B MANUAL ---
     elif modo_extracao == "✍️ Manual":
         with st.sidebar.expander("📝 Lançar Manualmente", expanded=True):
             opcao_data_man = st.radio("Data:", ["Hoje", "Ontem", "Outra"], key="data_man")
@@ -866,7 +857,6 @@ else:
             p5 = st.text_input("5º Prêmio", max_chars=4, key="man_p5")
             
             if st.button("💾 Salvar Resultado", key="btn_salvar_man", use_container_width=True):
-                # Função de segurança para garantir que só entram 4 números e não letras
                 def limpar_milhar(m):
                     num = re.sub(r'\D', '', str(m))
                     return num.zfill(4) if num else "0000"
@@ -932,13 +922,12 @@ else:
             
             # --- MÓDULO 2: RADAR DE MILHAR INVERTIDA (DINÂMICO) ---
             st.markdown("### 🎯 Radar de Milhar Invertida (Dígitos Congelados)")
-            st.write("Raio-X Ativo: A máquina escaneou os últimos 100 jogos para descobrir a assinatura de desgaste desta banca. Escolha o esquadrão com a maior exaustão matemática.")
+            st.write("Raio-X Ativo: A máquina escaneou os últimos 100 jogos para descobrir a assinatura de desgaste desta banca.")
             
             radar_inv = calcular_radar_invertidas(hist_milhar)
             
             for alvo in radar_inv:
                 with st.container(border=True):
-                    # CABEÇALHO DO PRÊMIO E ALERTAS
                     c_topo1, c_topo2 = st.columns([1, 2])
                     with c_topo1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
@@ -948,12 +937,9 @@ else:
                         elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
                         else: st.info(f"{alvo['status']} - {alvo['alerta']}")
                         
-                    # MENSAGEM DE RECOMENDAÇÃO (RAIO-X 100 JOGOS)
                     st.info(alvo['rec_msg'])
                     
-                    # DUELO DINÂMICO LADO A LADO
                     c_0, c_9 = st.columns(2)
-                    
                     with c_0:
                         with st.container(border=True):
                             st.markdown(f"#### 🛡️ Esquadrão: {alvo['nome_A']}")
@@ -967,15 +953,33 @@ else:
                             st.code(" - ".join(alvo['esquadrao_B']), language="text")
                             st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_B'])}")
                             st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_B']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_B']}x**")
-                        
-            with st.expander("💸 Calculadora da Invertida (Milhar Simples 9D)"):
-                st.markdown("""
-                **Matemática Financeira Dinâmica:**
-                - O sistema usa 9 Dígitos para buscar a Milhar (4 Dígitos), eliminando apenas o "Elo Fraco" da banca.
-                - **Combinações:** 3.024 milhares simples (sem repetição).
-                - **Custo Recomendado:** R$ 3.024,00 (R$ 1,00 por combination).
-                - **Retorno da Banca:** R$ 9.200,00.
-                - **Lucro Líquido por Acerto:** **R$ 6.176,00**.
+            
+            # --- NOVO MÓDULO 3: CALCULADORA DE HEDGE (SEGURO DE BANCA) ---
+            st.markdown("---")
+            st.subheader("🛡️ Calculadora de Hedge (Seguro de Banca)")
+            st.write("Calcule o 'Colete à Prova de Balas' para a sua operação. Não vá para o combate sem proteção financeira.")
+            
+            with st.container(border=True):
+                col_calc1, col_calc2 = st.columns(2)
+                with col_calc1:
+                    valor_milhar = st.number_input("💰 Valor total apostado nas Milhares (R$):", min_value=1.0, value=10.0, step=1.0)
+                
+                # Matemática Financeira (Hedge)
+                # G * 23 = G + M -> 22G = M -> G = M / 22. Usamos 21 para garantir um lucro minúsculo e cobrir taxas.
+                seguro_recomendado = valor_milhar / 21 
+                custo_total = valor_milhar + seguro_recomendado
+                retorno_seguro = seguro_recomendado * 23
+                lucro_seguro = retorno_seguro - custo_total
+                
+                with col_calc2:
+                    st.info(f"**🛡️ Aposta no Grupo (Hedge):** R$ {seguro_recomendado:.2f}")
+                    st.caption(f"Custo Total da Operação: R$ {custo_total:.2f}")
+                    
+                st.markdown(f"""
+                **🔍 Cenários de Combate Pós-Jogo:**
+                * **🎯 Tiro Perfeito (Milhar + Grupo):** Você ganha o prêmio gigante (R$ {valor_milhar * 9200:.2f}) + o Seguro (R$ {retorno_seguro:.2f}).
+                * **🛡️ Tiro de Raspão (Apenas Grupo):** Você perde a Milhar Invertida, mas o bicho dá no prêmio. O Grupo paga R$ {retorno_seguro:.2f}. Você cobre os R$ {custo_total:.2f} gastos e ainda sai com **R$ {lucro_seguro:.2f} de lucro no bolso**. Sua banca não sofreu nem um arranhão!
+                * **❌ Erro Total:** Se a milhar for outra e o grupo também, o seguro falha (Risco sempre existe).
                 """)
 
             st.markdown("---")
