@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V94.7 Hedge", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V95.0 Sniper 8D", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -56,7 +56,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (DUAL ENGINE + BATCHING) ---
+# --- 2. CONEXÃO E RASPAGEM ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -175,316 +175,10 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: IA ORACLE + CHASER ENGINE ---
+# --- 3. NOVO CÉREBRO: MARKOV SNIPER 8D ---
 # =============================================================================
 
-def get_grupo(dezena):
-    try:
-        d = int(str(dezena)[-2:])
-        if d == 0: return 25
-        if d > 99: return 25 
-        val = (d - 1) // 4 + 1
-        return val
-    except: return 1
-
-def analisar_efeito_ima(historico, indice_premio):
-    if len(historico) < 10: return [], [], "Dados Insuficientes"
-    try:
-        ult_dezena = str(historico[-1]['premios'][indice_premio])[-2:]
-        ult_grupo = get_grupo(ult_dezena)
-        nome_ult = NOME_BICHOS.get(ult_grupo, str(ult_grupo))
-    except: return [], [], "Erro Leitura"
-    contagem_seguinte = Counter()
-    total_ocorrencias = 0
-    for i in range(len(historico) - 1):
-        try:
-            d_atual = str(historico[i]['premios'][indice_premio])[-2:]
-            g_atual = get_grupo(d_atual)
-            if g_atual == ult_grupo:
-                d_prox = str(historico[i+1]['premios'][indice_premio])[-2:]
-                g_prox = get_grupo(d_prox)
-                contagem_seguinte[g_prox] += 1
-                total_ocorrencias += 1
-        except: continue
-    if total_ocorrencias == 0: return [], [], f"Bicho {nome_ult} é Inédito!"
-    imas = [g for g, c in contagem_seguinte.most_common(5)]
-    todos_grupos = set(range(1, 26))
-    sairam = set(contagem_seguinte.keys())
-    repelidos = list(todos_grupos - sairam)
-    info_str = f"Último: {nome_ult} (Saiu {total_ocorrencias}x no passado)"
-    return imas, repelidos, info_str
-
-def treinar_probabilidade_global(historico, indice_premio):
-    if not HAS_AI or len(historico) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
-    datas = []; horas = []; targets = []
-    for row in historico:
-        try: 
-            dt = pd.to_datetime(row['data'], format='%Y-%m-%d', errors='coerce')
-            if pd.isna(dt): continue
-            datas.append(dt)
-            horas.append(row['horario'])
-            targets.append(str(row['premios'][indice_premio])[-2:].zfill(2))
-        except: pass
-    if len(datas) < 30: return {f"{i:02}": 0.01 for i in range(100)} 
-    df = pd.DataFrame({'data_dt': datas, 'horario': horas, 'target': targets})
-    df['dia_semana'] = df['data_dt'].dt.dayofweek 
-    le_hora = LabelEncoder()
-    df['hora_code'] = le_hora.fit_transform(df['horario'])
-    df['target_futuro'] = df['target'].shift(-1)
-    df_treino = df.dropna(subset=['target_futuro']).tail(150)
-    if len(df_treino) < 20: return {f"{i:02}": 0.01 for i in range(100)} 
-    X = df_treino[['dia_semana', 'hora_code', 'target']]
-    y = df_treino['target_futuro'].astype(str)
-    modelo = RandomForestClassifier(n_estimators=60, random_state=42)
-    modelo.fit(X, y)
-    ultimo = df.iloc[-1]
-    X_novo = pd.DataFrame({'dia_semana': [ultimo['dia_semana']], 'hora_code': [ultimo['hora_code']], 'target': [ultimo['target']]})
-    probs = modelo.predict_proba(X_novo)[0]
-    classes = modelo.classes_
-    mapa_probs = {c: 0.01 for c in [f"{i:02}" for i in range(100)]}
-    for i, prob in enumerate(probs):
-        chave = str(classes[i]).zfill(2)
-        mapa_probs[chave] = prob
-    return mapa_probs
-
-def rankear_grupos(mapa_probs):
-    score_grupos = {g: 0.0 for g in range(1, 26)}
-    for g in range(1, 26):
-        dezenas = list(GRUPO_TO_DEZENAS[g])
-        for d in dezenas: score_grupos[g] += mapa_probs.get(d, 0.0)
-    return sorted(score_grupos.items(), key=lambda x: x[1], reverse=True)
-
-def gerar_estrategia_oracle_46(historico, indice_premio):
-    if not historico: return [], 0, {}, {}
-    mapa_ia = treinar_probabilidade_global(historico, indice_premio)
-    ranking_grupos = rankear_grupos(mapa_ia)
-    grupos_ima, grupos_repelidos, info_oracle = analisar_efeito_ima(historico, indice_premio)
-    ranking_final = []
-    grupos_ima_selecionados = grupos_ima[:3]
-    grupos_ima_set = set(grupos_ima_selecionados)
-    grupos_rep_set = set(grupos_repelidos[:5])
-    for g, score in ranking_grupos:
-        score_final = score
-        if g in grupos_ima_set: score_final += 2.0 
-        if g in grupos_rep_set: score_final = -999.0 
-        ranking_final.append((g, score_final))
-    ranking_final.sort(key=lambda x: x[1], reverse=True)
-    palpite_set = set()
-    for g in grupos_ima_selecionados:
-        dezenas_g = GRUPO_TO_DEZENAS[g].copy()
-        palpite_set.update(dezenas_g)
-    remaining_ranked = [g for g, s in ranking_final if g not in grupos_ima_set]
-    idx = 0
-    while len(palpite_set) < 46 and idx < len(remaining_ranked):
-        g = remaining_ranked[idx]
-        dezenas_g = GRUPO_TO_DEZENAS[g].copy()
-        dezenas_g.sort(key=lambda d: mapa_ia.get(d, 0), reverse=True)
-        adicionar = 3 if idx < 8 else 2
-        falta = 46 - len(palpite_set)
-        if adicionar > falta: adicionar = falta
-        for d in dezenas_g[:adicionar]: palpite_set.add(d)
-        idx += 1
-    palpite_matrix = list(palpite_set)
-    palpite_matrix.sort()
-    grupos_utilizados = set()
-    for d in palpite_matrix: grupos_utilizados.add(get_grupo(int(d)))
-    abate = [g for g in range(1, 26) if g not in grupos_utilizados]
-    prob_total = sum([mapa_ia.get(d, 0.01) for d in palpite_matrix])
-    conf_media = prob_total * 100 
-    if conf_media < 1.0: conf_media = 50.0
-    if conf_media > 99.9: conf_media = 99.9
-    info_predator = { "elite": grupos_ima_selecionados, "abate": abate }
-    dados_oracle = { "info": info_oracle, "imas": grupos_ima_selecionados, "repelidos": grupos_repelidos[:5] }
-    return palpite_matrix, conf_media, info_predator, dados_oracle
-
-def rastrear_estado_chaser(historico, indice_premio=0):
-    unidades = []
-    for row in historico:
-        try:
-            dezena = str(row['premios'][indice_premio]).zfill(2)
-            if dezena != "00": unidades.append(int(dezena[-1]))
-        except: pass
-    if len(unidades) < 50: return {"status": "inativo", "target": None, "attempts": 0, "prob": 0, "occ": 0}
-    def calc_best(hist_slice):
-        gatilho = hist_slice[-1]
-        sucessos = {u: 0 for u in range(10)}
-        ocorrencias = 0
-        for i in range(len(hist_slice) - 1):
-            if hist_slice[i] == gatilho:
-                janela = hist_slice[i+1 : i+9]
-                if not janela: continue
-                ocorrencias += 1
-                for u in set(janela): sucessos[u] += 1
-        if ocorrencias == 0: return None, 0, 0
-        rank = [(u, (sucessos[u]/ocorrencias)*100) for u in range(10)]
-        rank.sort(key=lambda x: x[1], reverse=True)
-        return rank[0][0], rank[0][1], ocorrencias
-    start_idx = max(50, len(unidades) - 100)
-    chase_active = False
-    target_unit = None
-    attempts_made = 0
-    ouro_prob_saved = 0
-    occ_saved = 0
-    for i in range(start_idx, len(unidades)):
-        current_unit = unidades[i]
-        if chase_active:
-            attempts_made += 1
-            if current_unit == target_unit: chase_active = False 
-            elif attempts_made >= 8: chase_active = False 
-        else:
-            best_u, best_prob, occ = calc_best(unidades[:i])
-            if best_u is not None:
-                chase_active = True
-                target_unit = best_u
-                attempts_made = 1
-                ouro_prob_saved = best_prob
-                occ_saved = occ
-                if current_unit == target_unit: chase_active = False 
-    if chase_active:
-        return {"status": "ativo", "target": target_unit, "attempts": attempts_made, "prob": ouro_prob_saved, "occ": occ_saved}
-    else:
-        best_u, best_prob, occ = calc_best(unidades)
-        return {"status": "novo", "target": best_u, "attempts": 0, "prob": best_prob, "occ": occ}
-
-def rastrear_estado_chaser_dezenas(historico, indice_premio=0):
-    dezenas = []
-    for row in historico:
-        try:
-            d = str(row['premios'][indice_premio])[-2:].zfill(2)
-            dezenas.append(d)
-        except: pass
-    if len(dezenas) < 50: return {"status": "inativo", "target": [], "attempts": 0, "prob": 0, "occ": 0}
-    def calc_best_10(hist_slice):
-        gatilho = hist_slice[-1]
-        sucessos = Counter()
-        ocorrencias = 0
-        for i in range(len(hist_slice) - 1):
-            if hist_slice[i] == gatilho:
-                janela = hist_slice[i+1 : i+9]
-                if not janela: continue
-                ocorrencias += 1
-                for d in set(janela): sucessos[d] += 1
-        if ocorrencias == 0: return [], 0, 0
-        top_10 = [x[0] for x in sucessos.most_common(10)]
-        hit_windows = 0
-        for i in range(len(hist_slice) - 1):
-            if hist_slice[i] == gatilho:
-                janela = set(hist_slice[i+1 : i+9])
-                if any(d in janela for d in top_10): hit_windows += 1
-        prob = (hit_windows / ocorrencias) * 100 if ocorrencias > 0 else 0
-        return top_10, prob, ocorrencias
-    start_idx = max(50, len(dezenas) - 100)
-    chase_active = False
-    target_10 = []
-    attempts_made = 0
-    saved_prob = 0
-    saved_occ = 0
-    for i in range(start_idx, len(dezenas)):
-        curr = dezenas[i]
-        if chase_active:
-            attempts_made += 1
-            if curr in target_10: chase_active = False 
-            elif attempts_made >= 8: chase_active = False 
-        else:
-            t10, prob, occ = calc_best_10(dezenas[:i])
-            if t10:
-                chase_active = True
-                target_10 = t10
-                attempts_made = 1
-                saved_prob = prob
-                saved_occ = occ
-                if curr in target_10: chase_active = False 
-    if chase_active:
-        return {"status": "ativo", "target": target_10, "attempts": attempts_made, "prob": saved_prob, "occ": saved_occ}
-    else:
-        t10, prob, occ = calc_best_10(dezenas)
-        return {"status": "novo", "target": t10, "attempts": 0, "prob": prob, "occ": occ}
-
-def calcular_3_estrategias_unidade(historico, indice_premio=0):
-    unidades = []
-    for row in historico:
-        try: unidades.append(int(str(row['premios'][indice_premio]).zfill(2)[-1]))
-        except: pass
-    if not unidades: return "-", "-", "-"
-    gatilho = unidades[-1]
-    sucessos = Counter()
-    for i in range(len(unidades)-1):
-        if unidades[i] == gatilho:
-            janela = set(unidades[i+1:i+9])
-            for u in janela: sucessos[u] += 1
-    markov_u = sucessos.most_common(1)[0][0] if sucessos else "-"
-    ultimas_posicoes = {}
-    for i, u in enumerate(unidades): ultimas_posicoes[u] = i
-    atrasada_u = "-"
-    min_idx = float('inf')
-    for u in range(10):
-        if u not in ultimas_posicoes:
-            atrasada_u = u; break
-        elif ultimas_posicoes[u] < min_idx:
-            min_idx = ultimas_posicoes[u]; atrasada_u = u
-    recentes = unidades[-15:] if len(unidades) >= 15 else unidades
-    quente_u = Counter(recentes).most_common(1)[0][0] if recentes else "-"
-    return markov_u, atrasada_u, quente_u
-
-
-# =============================================================================
-# --- 4. MÓDULOS VITORINO (CERCO GLOBAL) E RASTREADOR DINÂMICO DE MILHARES ---
-# =============================================================================
-
-def gerar_estrategia_cerco(hist_milhar):
-    if len(hist_milhar) < 10: return [], []
-    
-    todas_dezenas = []
-    janela = hist_milhar[-50:] 
-    for row in janela:
-        for p in row['premios']:
-            p_str = str(p).zfill(4)
-            if p_str != "0000":
-                todas_dezenas.append(p_str[-2:])
-                
-    contagem_dezenas = Counter(todas_dezenas)
-    top_3_dezenas = [x[0] for x in contagem_dezenas.most_common(3)]
-    while len(top_3_dezenas) < 3: top_3_dezenas.append("00")
-    
-    ult_premios = hist_milhar[-1]['premios']
-    digitos_ultimo = "".join([str(p).zfill(4) for p in ult_premios if str(p) != "0000"])
-    ausentes = [str(d) for d in range(10) if str(d) not in digitos_ultimo]
-    
-    if not ausentes:
-        cont_dig = Counter(digitos_ultimo)
-        menor_freq = min(cont_dig.values())
-        ausentes = [str(d) for d, f in cont_dig.items() if f == menor_freq]
-        ausentes.sort()
-        msg_radar = f"🌪️ **Radar Cerco Global (Modo Escassez):** Todos os 10 dígitos saíram no último globo! O sistema isolou os mais fracos (saíram apenas {menor_freq}x) no globo inteiro para ser a Coroa: `{', '.join(ausentes)}`."
-    else:
-        ausentes.sort()
-        msg_radar = f"🌪️ **Radar Cerco Global (Ausência Total):** Os dígitos `{', '.join(ausentes)}` sumiram por completo de todos os 5 prêmios do último sorteio. Força máxima para a Coroa de Cerco."
-        
-    milhares_cerco = []
-    detalhes_cerco = []
-    
-    for i, dezena in enumerate(top_3_dezenas):
-        coroa = ausentes[i % len(ausentes)]
-        
-        centenas_aliadas = []
-        for row in hist_milhar:
-            for p in row['premios']:
-                m_str = str(p).zfill(4)
-                if m_str[-2:] == dezena and m_str != "0000":
-                    centenas_aliadas.append(m_str[-3])
-        
-        corpo = Counter(centenas_aliadas).most_common(1)[0][0] if centenas_aliadas else "0"
-        
-        milhar_final = f"{coroa}{corpo}{dezena}"
-        milhares_cerco.append(milhar_final)
-        detalhes_cerco.append({
-            "dezena": dezena, "corpo": corpo, "coroa": coroa, "msg_radar": msg_radar
-        })
-        
-    return milhares_cerco, detalhes_cerco
-
-
-def calcular_radar_invertidas(hist_milhar):
+def calcular_radar_sniper_8d(hist_milhar):
     if len(hist_milhar) < 40: return []
     resultados_radar = []
     
@@ -499,130 +193,87 @@ def calcular_radar_invertidas(hist_milhar):
         if len(milhares_do_premio) < 40: continue
             
         ult_milhar = milhares_do_premio[-1]
-        penult_milhar = milhares_do_premio[-2]
-        antepenult_milhar = milhares_do_premio[-3]
+        cabeca_atual = ult_milhar[0]
         
-        true_seq_atual = 0
-        for m in reversed(milhares_do_premio):
-            if len(set(m)) < 4:
-                true_seq_atual += 1
-            else:
-                break
-                
-        ultimas_milhares_streak = milhares_do_premio[-true_seq_atual:] if true_seq_atual > 0 else []
-
-        if true_seq_atual >= 3:
-            status = "🚨 SNIPER MÁXIMO"
-            cor = "error"
-            alerta = f"ALERTA! A represa vai estourar. Tivemos {true_seq_atual} milhares seguidas com dígitos repetidos!"
-        elif true_seq_atual == 2:
-            status = "🔥 ALVO AQUECENDO"
-            cor = "warning"
-            alerta = "Duas milhares seguidas vieram com repetição. A represa está enchendo."
-        elif true_seq_atual == 1:
-            status = "⚠️ ATENÇÃO"
-            cor = "warning"
-            alerta = "A última milhar veio com repetição."
-        else:
-            status = "⏸️ Neutro"
-            cor = "info"
-            alerta = "A última milhar foi normal (4 dígitos diferentes)."
+        # --- FUNÇÃO DE CORTES MARKOV ---
+        def get_cuts_markov(history_slice):
+            if len(history_slice) < 2: return "0", "1", 0
+            last_m = history_slice[-1]
+            head = last_m[0]
+            next_milhares = []
             
-        ultimas_25 = milhares_do_premio[-25:]
-        max_seq_rep = 0
-        seq_temporaria = 0
-        total_rep_25 = 0 
-        
-        for m in ultimas_25:
-            if len(set(m)) < 4: 
-                seq_temporaria += 1
-                total_rep_25 += 1 
-                if seq_temporaria > max_seq_rep: max_seq_rep = seq_temporaria
+            for j in range(len(history_slice)-1):
+                if history_slice[j][0] == head:
+                    next_milhares.append(history_slice[j+1])
+                    
+            overall_digits = "".join(history_slice[-100:])
+            overall_counts = {str(d): overall_digits.count(str(d)) for d in range(10)}
+            
+            # Se não tiver histórico suficiente para a cabeça, olha os últimos 50 gerais
+            if len(next_milhares) < 3:
+                all_digits = "".join(history_slice[-50:])
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                occ = len(next_milhares)
             else:
-                seq_temporaria = 0 
+                all_digits = "".join(next_milhares)
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                occ = len(next_milhares)
                 
-        cem_ultimos = milhares_do_premio[-100:]
-        recorde_rep_25 = 0
+            # Ordena pelo que menos saiu. Critério de desempate: frequência global nos 100
+            sorted_digits = sorted(counts.items(), key=lambda x: (x[1], overall_counts[x[0]], x[0]))
+            return sorted_digits[0][0], sorted_digits[1][0], occ
+
+        corte1_atual, corte2_atual, ocorrencias = get_cuts_markov(milhares_do_premio)
         
-        for b_idx in range(0, len(cem_ultimos), 25):
-            bloco = cem_ultimos[b_idx : b_idx+25]
-            reps_no_bloco = sum(1 for m in bloco if len(set(m)) < 4)
-            if reps_no_bloco > recorde_rep_25:
-                recorde_rep_25 = reps_no_bloco
-                
-        ultimas_100 = milhares_do_premio[-100:]
-        todos_os_digitos = "".join(ultimas_100)
+        # Cria a array de 8 dígitos limpos
+        esquadrao_base = [str(d) for d in range(10) if str(d) not in [corte1_atual, corte2_atual]]
+        # Transforma na string duplicada pronta para colar no app da banca (Ex: 1,1,2,2)
+        esquadrao_formatado = ",".join([f"{d},{d}" for d in esquadrao_base])
         
-        contagem_digitos = {str(d): todos_os_digitos.count(str(d)) for d in range(10)}
-        ranking_frios = sorted(contagem_digitos.items(), key=lambda x: (x[1], x[0]))
+        rec_msg = f"🧠 **Inteligência de Repulsão (Markov):** A última milhar foi `{ult_milhar}` (Cabeça **{cabeca_atual}**). Analisando os últimos {ocorrencias} eventos idênticos no histórico, os dígitos `{corte1_atual}` e `{corte2_atual}` somem totalmente do globo na rodada seguinte."
         
-        pior_1_atual = ranking_frios[0][0]
-        freq_1 = ranking_frios[0][1]
+        simulacoes_disponiveis = min(30, len(milhares_do_premio) - 10)
+        backtest_hist = []
+        vitorias = 0
+        derrotas = 0
         
-        pior_2_atual = ranking_frios[1][0]
-        freq_2 = ranking_frios[1][1]
-        
-        esquadrao_A_atual = [str(d) for d in range(10) if str(d) != pior_1_atual]
-        esquadrao_B_atual = [str(d) for d in range(10) if str(d) != pior_2_atual]
-        
-        nome_A = f"Corta {pior_1_atual}"
-        nome_B = f"Corta {pior_2_atual}"
-        
-        rec_msg = f"💡 **Raio-X do Globo:** Nos últimos {len(ultimas_100)} jogos deste prêmio, o dígito `{pior_1_atual}` foi o mais raro (saiu apenas {freq_1}x). O segundo mais fraco é o `{pior_2_atual}` ({freq_2}x). Esquadrões calibrados!"
-        
-        simulacoes_disponiveis = min(25, len(milhares_do_premio) - 15)
-        
-        max_derrotas_A = 0; max_vitorias_A = 0; seq_d_A = 0; seq_v_A = 0; backtest_A = []
-        max_derrotas_B = 0; max_vitorias_B = 0; seq_d_B = 0; seq_v_B = 0; backtest_B = []
-        
+        # --- TÚNEL DO TEMPO (BACKTEST DA ESTRATÉGIA 8D) ---
         for i in range(simulacoes_disponiveis, 0, -1):
             alvo_real = milhares_do_premio[-i]
             
             idx_fim_hist = len(milhares_do_premio) - i
-            idx_inicio_hist = max(0, idx_fim_hist - 100)
-            janela_hist = milhares_do_premio[idx_inicio_hist:idx_fim_hist]
+            janela_hist = milhares_do_premio[:idx_fim_hist]
             
             if not janela_hist: continue
                 
-            todos_hist = "".join(janela_hist)
-            cont_hist = {str(d): todos_hist.count(str(d)) for d in range(10)}
-            rank_hist = sorted(cont_hist.items(), key=lambda x: (x[1], x[0]))
+            c1_hist, c2_hist, _ = get_cuts_markov(janela_hist)
+            esq_hist = [str(d) for d in range(10) if str(d) not in [c1_hist, c2_hist]]
             
-            pior_1_hist = rank_hist[0][0]
-            pior_2_hist = rank_hist[1][0]
+            # Condição de Vitória 8D Invertida: NENHUM dígito sorteado pode ser os que nós cortamos.
+            # Se os 4 dígitos do sorteio estiverem no nosso esquadrão, ganhamos os R$ 92,00.
+            venceu = all(d in esq_hist for d in alvo_real)
             
-            esquadrao_A_hist = [str(d) for d in range(10) if str(d) != pior_1_hist]
-            esquadrao_B_hist = [str(d) for d in range(10) if str(d) != pior_2_hist]
-            
-            perdeu_A = len(set(alvo_real)) < 4 or not all(d in esquadrao_A_hist for d in alvo_real)
-            if perdeu_A:
-                seq_d_A += 1; seq_v_A = 0
-                if seq_d_A > max_derrotas_A: max_derrotas_A = seq_d_A
-                if i <= 6: backtest_A.append("❌")
+            if venceu:
+                vitorias += 1
+                if i <= 5: backtest_hist.append("✅")
             else:
-                seq_v_A += 1; seq_d_A = 0
-                if seq_v_A > max_vitorias_A: max_vitorias_A = seq_v_A
-                if i <= 6: backtest_A.append("✅")
-            
-            perdeu_B = len(set(alvo_real)) < 4 or not all(d in esquadrao_B_hist for d in alvo_real)
-            if perdeu_B:
-                seq_d_B += 1; seq_v_B = 0
-                if seq_d_B > max_derrotas_B: max_derrotas_B = seq_d_B
-                if i <= 6: backtest_B.append("❌")
-            else:
-                seq_v_B += 1; seq_d_B = 0
-                if seq_v_B > max_vitorias_B: max_vitorias_B = seq_v_B
-                if i <= 6: backtest_B.append("✅")
+                derrotas += 1
+                if i <= 5: backtest_hist.append("❌")
 
+        total_simulado = vitorias + derrotas
+        taxa_acerto = (vitorias / total_simulado) * 100 if total_simulado > 0 else 0
+        
         resultados_radar.append({
             "premio": p_idx + 1,
-            "status": status, "cor": cor, "alerta": alerta, "rec_msg": rec_msg,
-            "ult_milhar": ult_milhar, "penult_milhar": penult_milhar, "antepenult_milhar": antepenult_milhar, 
-            "max_seq_rep": max_seq_rep, "total_rep_25": total_rep_25, "seq_atual_rep": true_seq_atual, 
-            "recorde_rep_25": recorde_rep_25, 
-            "ultimas_milhares_streak": ultimas_milhares_streak,
-            "nome_A": nome_A, "esquadrao_A": esquadrao_A_atual, "backtest_A": backtest_A, "max_derrotas_A": max_derrotas_A, "max_vitorias_A": max_vitorias_A, "atual_derrotas_A": seq_d_A,
-            "nome_B": nome_B, "esquadrao_B": esquadrao_B_atual, "backtest_B": backtest_B, "max_derrotas_B": max_derrotas_B, "max_vitorias_B": max_vitorias_B, "atual_derrotas_B": seq_d_B
+            "ult_milhar": ult_milhar,
+            "rec_msg": rec_msg,
+            "cortes": f"{corte1_atual} e {corte2_atual}",
+            "esquadrao": esquadrao_formatado,
+            "backtest": backtest_hist,
+            "vitorias": vitorias,
+            "derrotas": derrotas,
+            "taxa_valor": taxa_acerto,
+            "taxa": f"{taxa_acerto:.1f}%"
         })
     return resultados_radar
 
@@ -631,11 +282,9 @@ def calcular_radar_invertidas(hist_milhar):
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
 # =============================================================================
 
-# INICIALIZA A MEMÓRIA DE NAVEGAÇÃO PARA O BOTÃO FUNCIONAR
 if "menu_nav" not in st.session_state:
     st.session_state.menu_nav = "🏠 RADAR GERAL (Home)"
 
-# Função de Callback Seguro (Gatilho Anti-Erro)
 def acionar_teletransporte(destino):
     st.session_state.menu_nav = destino
 
@@ -671,39 +320,40 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - SCANNER DINÂMICO (MILHAR)")
-    st.markdown("O sistema está varrendo os globos elegíveis. **O radar foca exclusivamente em apontar as grandes sequências (3 ou mais) de milhares repetidas!**")
+    st.title("🛡️ PENTÁGONO - SCANNER DE MARKOV (8D)")
+    st.markdown("O sistema está varrendo os globos elegíveis. O foco agora é achar o prêmio que está com a maior **Vantagem Matemática (Taxa de Acerto)** usando a Estratégia de 16 números (8 Dígitos Duplos).")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Scanner Ativo: Analisando Lotep, Caminho e Monte Carlos..."):
+    with st.spinner("📡 Scanner Ativo: Analisando Efeito Sombra e Repulsões..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 40:
-                    radar_dados = calcular_radar_invertidas(hist_milhar)
+                    radar_dados = calcular_radar_sniper_8d(hist_milhar)
                     
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
                         
-                        if alvo['status'] == "🚨 SNIPER MÁXIMO":
+                        # ALERTA DE ESTATÍSTICA ALTA: Se a taxa for maior que 46% (A chance nua é 40.9%), temos uma Edge gigante.
+                        if alvo['taxa_valor'] >= 46.0:
                             alertas_sniper.append({
                                 "banca_key": banca_key,
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "qtd_rep": alvo['seq_atual_rep'],
-                                "milhares_streak": " - ".join(alvo['ultimas_milhares_streak'])
+                                "taxa": alvo['taxa'],
+                                "cortes": alvo['cortes']
                             })
 
     if not alertas_sniper:
-        st.success("✅ **O Globo está calmo.** Não há nenhuma sequência agressiva de repetições (Trinca ou superior) nas bancas monitoradas neste momento. Aguardando alvo...")
+        st.info("⚠️ O Globo está estável e imprevisível agora. Nenhuma banca apresenta uma vantagem matemática segura (acima de 46%) neste momento. Mantenha os recursos guardados.")
     else:
-        st.markdown("### 🎯 ALERTA SNIPER MÁXIMO (Sequência de Repetições)")
+        st.markdown("### 🎯 ALVOS TRAVADOS (Vantagem Matemática Detectada)")
         for a in alertas_sniper:
             with st.container(border=True):
                 col_txt, col_btn = st.columns([4, 1])
                 with col_txt:
-                    st.error(f"🚨 **{a['banca']} - {a['premio']}º Prêmio** | A represa vai estourar! Tivemos **{a['qtd_rep']} repetições seguidas**. Milhares: `{a['milhares_streak']}`.")
+                    st.success(f"🔥 **{a['banca']} - {a['premio']}º Prêmio** | Taxa de Vitória da Estratégia: **{a['taxa']}**! Os dígitos para corte são `{a['cortes']}`.")
                 with col_btn:
                     st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
@@ -896,96 +546,55 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Cerco Global & Rastreador Dinâmico 9D")
+        st.header(f"👑 Estratégia Sniper 8D (Motor de Markov)")
         
-        with st.spinner("Analisando matrizes dimensionais e construindo milhares..."):
+        with st.spinner("Lendo matrizes históricas e calculando o Efeito Sombra..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
-            # --- MÓDULO 1: MILHARES DE CERCO (1º ao 5º Prêmio) ---
-            milhares_cerco, detalhes_cerco = gerar_estrategia_cerco(hist_milhar)
-            if milhares_cerco:
-                st.markdown(detalhes_cerco[0]['msg_radar'])
-                st.markdown("### 🌪️ As 3 Milhares de Cerco (1º ao 5º Prêmio)")
-                cols_cerco = st.columns(3)
-                for i, m in enumerate(milhares_cerco):
-                    with cols_cerco[i]:
-                        with st.container(border=True):
-                            st.metric(f"🎯 Milhar Cerco {i+1}", m)
-                            det = detalhes_cerco[i]
-                            st.caption(f"⚙️ **Base Global:** {det['dezena']} <br> **Corpo Global:** {det['corpo']} <br> **Coroa Ausente:** {det['coroa']}", unsafe_allow_html=True)
+            st.markdown("### 🎯 Radar Sniper 8D (Colete de 16 Números)")
+            st.write("O algoritmo varre a história para descobrir quais **2 dígitos** desaparecem após a cabeça da milhar atual. Jogue com os **8 dígitos restantes duplicados**.")
             
-            st.markdown("---")
-            
-            # --- MÓDULO 2: RADAR DE MILHAR INVERTIDA (DINÂMICO) ---
-            st.markdown("### 🎯 Radar de Milhar Invertida (Dígitos Congelados)")
-            st.write("Raio-X Ativo: A máquina escaneou os últimos 100 jogos para descobrir a assinatura de desgaste desta banca.")
-            
-            radar_inv = calcular_radar_invertidas(hist_milhar)
+            radar_inv = calcular_radar_sniper_8d(hist_milhar)
             
             for alvo in radar_inv:
                 with st.container(border=True):
-                    c_topo1, c_topo2 = st.columns([1, 2])
+                    c_topo1, c_topo2 = st.columns([3, 1])
                     with c_topo1:
                         st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
-                        st.caption(f"🚨 Max Seq Repetidas: **{alvo['max_seq_rep']}x** | 📊 Atual (25 jg): **{alvo['total_rep_25']}/25** | 🏆 Recorde (Últimos 100 jg): **{alvo['recorde_rep_25']}/25**")
                     with c_topo2:
-                        if alvo['cor'] == "error": st.error(f"{alvo['status']} - {alvo['alerta']}")
-                        elif alvo['cor'] == "warning": st.warning(f"{alvo['status']} - {alvo['alerta']}")
-                        else: st.info(f"{alvo['status']} - {alvo['alerta']}")
+                        st.metric("Teto de Acerto (Histórico)", alvo['taxa'])
                         
                     st.info(alvo['rec_msg'])
                     
-                    c_0, c_9 = st.columns(2)
-                    with c_0:
-                        with st.container(border=True):
-                            st.markdown(f"#### 🛡️ Esquadrão: {alvo['nome_A']}")
-                            st.code(" - ".join(alvo['esquadrao_A']), language="text")
-                            st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_A'])}")
-                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_A']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_A']}x**")
-                            
-                    with c_9:
-                        with st.container(border=True):
-                            st.markdown(f"#### 🛡️ Esquadrão: {alvo['nome_B']}")
-                            st.code(" - ".join(alvo['esquadrao_B']), language="text")
-                            st.markdown(f"**Histórico (6 jg):** {' | '.join(alvo['backtest_B'])}")
-                            st.caption(f"💔 Derrotas Max: **{alvo['max_derrotas_B']}x** | 🏆 Vitórias Max: **{alvo['max_vitorias_B']}x**")
-            
-            # --- NOVO MÓDULO 3: CALCULADORA DE HEDGE (SEGURO DE BANCA) ---
+                    st.markdown(f"**✂️ O Corte:** Elimine os números `{alvo['cortes']}`")
+                    st.code(alvo['esquadrao'], language="text")
+                    st.caption("☝️ Copie a linha acima e cole no aplicativo de aposta. (Combinação 8D Duplicada = 4.096 milhares).")
+                    
+                    st.markdown("---")
+                    st.markdown(f"**🕰️ Backtest (Últimos 5 jogos testando esse corte):** {' | '.join(alvo['backtest'])}")
+                    st.caption(f"Nos últimos 30 simulados: ✅ {alvo['vitorias']} Acertos | ❌ {alvo['derrotas']} Falhas")
+
+            # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
             st.subheader("🛡️ Calculadora de Hedge (Seguro de Banca)")
-            st.write("Calcule o 'Colete à Prova de Balas' para a sua operação. Não vá para o combate sem proteção financeira.")
             
             with st.container(border=True):
                 col_calc1, col_calc2 = st.columns(2)
                 with col_calc1:
-                    valor_milhar = st.number_input("💰 Valor total apostado nas Milhares (R$):", min_value=1.0, value=10.0, step=1.0)
+                    valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
                 
-                # Matemática Financeira (Hedge)
-                # G * 23 = G + M -> 22G = M -> G = M / 22. Usamos 21 para garantir um lucro minúsculo e cobrir taxas.
+                # Hedge para R$ 41:
                 seguro_recomendado = valor_milhar / 21 
                 custo_total = valor_milhar + seguro_recomendado
                 retorno_seguro = seguro_recomendado * 23
-                lucro_seguro = retorno_seguro - custo_total
                 
                 with col_calc2:
-                    st.info(f"**🛡️ Aposta no Grupo (Hedge):** R$ {seguro_recomendado:.2f}")
-                    st.caption(f"Custo Total da Operação: R$ {custo_total:.2f}")
-                    
-                st.markdown(f"""
-                **🔍 Cenários de Combate Pós-Jogo:**
-                * **🎯 Tiro Perfeito (Milhar + Grupo):** Você ganha o prêmio gigante (R$ {valor_milhar * 9200:.2f}) + o Seguro (R$ {retorno_seguro:.2f}).
-                * **🛡️ Tiro de Raspão (Apenas Grupo):** Você perde a Milhar Invertida, mas o bicho dá no prêmio. O Grupo paga R$ {retorno_seguro:.2f}. Você cobre os R$ {custo_total:.2f} gastos e ainda sai com **R$ {lucro_seguro:.2f} de lucro no bolso**. Sua banca não sofreu nem um arranhão!
-                * **❌ Erro Total:** Se a milhar for outra e o grupo também, o seguro falha (Risco sempre existe).
-                """)
-
-            st.markdown("---")
-            st.markdown("### 📊 Banco de Dados Bruto (Milhares 1º ao 5º)")
-            df_show = pd.DataFrame(hist_milhar)
-            st.dataframe(df_show.tail(10))
+                    st.info(f"**🛡️ Jogue no Grupo da Milhar Sorteada:** R$ {seguro_recomendado:.2f}")
+                    st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
 
         else:
             st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
@@ -1031,13 +640,5 @@ else:
                             with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
                             with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
                         with st.container(border=True): st.code(", ".join(lista_matrix), language="text")
-                        if config['tipo'] in ["DUAL_SOLO", "DUAL_PENTA"]:
-                            st.markdown("---")
-                            st.markdown("### 🦅 Esquadrão Chaser (Perseguição de 10 Dezenas)")
-                            estado_dez = rastrear_estado_chaser_dezenas(historico, idx_aba)
-                            if estado_dez['target']:
-                                st.markdown(f"**As 10 Dezenas:** `{', '.join(estado_dez['target'])}`")
-                                if estado_dez['status'] == 'ativo': st.warning(f"🔒 **EM ANDAMENTO (TENTATIVA {estado_dez['attempts']+1} DE 8)**")
-                                else: st.success(f"🎯 **NOVO CICLO (TENTATIVA 1 DE 8)**")
         else:
             st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
