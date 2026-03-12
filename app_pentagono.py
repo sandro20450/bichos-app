@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V95.0 Sniper 8D", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V95.1 Sniper 8D", page_icon="👑", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -175,7 +175,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. NOVO CÉREBRO: MARKOV SNIPER 8D ---
+# --- 3. NOVO CÉREBRO: MARKOV SNIPER 8D COM RECORDES DE STREAK ---
 # =============================================================================
 
 def calcular_radar_sniper_8d(hist_milhar):
@@ -209,7 +209,6 @@ def calcular_radar_sniper_8d(hist_milhar):
             overall_digits = "".join(history_slice[-100:])
             overall_counts = {str(d): overall_digits.count(str(d)) for d in range(10)}
             
-            # Se não tiver histórico suficiente para a cabeça, olha os últimos 50 gerais
             if len(next_milhares) < 3:
                 all_digits = "".join(history_slice[-50:])
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
@@ -219,23 +218,26 @@ def calcular_radar_sniper_8d(hist_milhar):
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
                 occ = len(next_milhares)
                 
-            # Ordena pelo que menos saiu. Critério de desempate: frequência global nos 100
             sorted_digits = sorted(counts.items(), key=lambda x: (x[1], overall_counts[x[0]], x[0]))
             return sorted_digits[0][0], sorted_digits[1][0], occ
 
         corte1_atual, corte2_atual, ocorrencias = get_cuts_markov(milhares_do_premio)
         
-        # Cria a array de 8 dígitos limpos
         esquadrao_base = [str(d) for d in range(10) if str(d) not in [corte1_atual, corte2_atual]]
-        # Transforma na string duplicada pronta para colar no app da banca (Ex: 1,1,2,2)
         esquadrao_formatado = ",".join([f"{d},{d}" for d in esquadrao_base])
         
         rec_msg = f"🧠 **Inteligência de Repulsão (Markov):** A última milhar foi `{ult_milhar}` (Cabeça **{cabeca_atual}**). Analisando os últimos {ocorrencias} eventos idênticos no histórico, os dígitos `{corte1_atual}` e `{corte2_atual}` somem totalmente do globo na rodada seguinte."
         
         simulacoes_disponiveis = min(30, len(milhares_do_premio) - 10)
         backtest_hist = []
+        
+        # Variáveis de Tracking (Vitórias, Derrotas e Sequências)
         vitorias = 0
         derrotas = 0
+        max_vitorias_seguidas = 0
+        max_derrotas_seguidas = 0
+        streak_vitorias_atual = 0
+        streak_derrotas_atual = 0
         
         # --- TÚNEL DO TEMPO (BACKTEST DA ESTRATÉGIA 8D) ---
         for i in range(simulacoes_disponiveis, 0, -1):
@@ -249,15 +251,25 @@ def calcular_radar_sniper_8d(hist_milhar):
             c1_hist, c2_hist, _ = get_cuts_markov(janela_hist)
             esq_hist = [str(d) for d in range(10) if str(d) not in [c1_hist, c2_hist]]
             
-            # Condição de Vitória 8D Invertida: NENHUM dígito sorteado pode ser os que nós cortamos.
-            # Se os 4 dígitos do sorteio estiverem no nosso esquadrão, ganhamos os R$ 92,00.
             venceu = all(d in esq_hist for d in alvo_real)
             
             if venceu:
                 vitorias += 1
+                streak_vitorias_atual += 1
+                streak_derrotas_atual = 0 # Quebrou a sequência de derrotas
+                
+                if streak_vitorias_atual > max_vitorias_seguidas:
+                    max_vitorias_seguidas = streak_vitorias_atual
+                    
                 if i <= 5: backtest_hist.append("✅")
             else:
                 derrotas += 1
+                streak_derrotas_atual += 1
+                streak_vitorias_atual = 0 # Quebrou a sequência de vitórias
+                
+                if streak_derrotas_atual > max_derrotas_seguidas:
+                    max_derrotas_seguidas = streak_derrotas_atual
+                    
                 if i <= 5: backtest_hist.append("❌")
 
         total_simulado = vitorias + derrotas
@@ -272,6 +284,8 @@ def calcular_radar_sniper_8d(hist_milhar):
             "backtest": backtest_hist,
             "vitorias": vitorias,
             "derrotas": derrotas,
+            "max_vitorias_seguidas": max_vitorias_seguidas, # Novo Retorno
+            "max_derrotas_seguidas": max_derrotas_seguidas, # Novo Retorno
             "taxa_valor": taxa_acerto,
             "taxa": f"{taxa_acerto:.1f}%"
         })
@@ -577,6 +591,9 @@ else:
                     st.markdown("---")
                     st.markdown(f"**🕰️ Backtest (Últimos 5 jogos testando esse corte):** {' | '.join(alvo['backtest'])}")
                     st.caption(f"Nos últimos 30 simulados: ✅ {alvo['vitorias']} Acertos | ❌ {alvo['derrotas']} Falhas")
+                    
+                    # --- NOVO: DISPLAY DOS RECORDES DE SEQUÊNCIA ---
+                    st.caption(f"🏆 Recorde Vitórias Seguidas: **{alvo['max_vitorias_seguidas']}x** | 💔 Recorde Derrotas Seguidas (Drawdown): **{alvo['max_derrotas_seguidas']}x**")
 
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
