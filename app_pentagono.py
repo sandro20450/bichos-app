@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V95.1 Sniper 8D", page_icon="👑", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V96.0 - Padrão Oculto", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -52,6 +52,8 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .css-1wivap2 { font-size: 14px !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
+    .alerta-seguro { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
+    .alerta-perigo { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -175,122 +177,113 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. NOVO CÉREBRO: MARKOV SNIPER 8D COM RECORDES DE STREAK ---
+# --- 3. CÉREBRO AVANÇADO: PESQUISA DE PADRÕES OCULTOS COM MAX DRAWDOWN 1 ---
 # =============================================================================
 
-def calcular_radar_sniper_8d(hist_milhar):
-    if len(hist_milhar) < 40: return []
+def get_grupo(dezena):
+    try:
+        d = int(str(dezena)[-2:])
+        if d == 0: return 25
+        if d > 99: return 25 
+        val = (d - 1) // 4 + 1
+        return val
+    except: return 1
+
+def calcular_radar_padroes_ocultos(history_slice):
+    if len(history_slice) < 50: return []
     resultados_radar = []
     
     for p_idx in range(5):
-        milhares_do_premio = []
-        for row in hist_milhar:
-            try:
-                m = str(row['premios'][p_idx]).zfill(4)
-                if m != "0000": milhares_do_premio.append(m[-4:])
-            except: pass
+        # 1. Pega as informações do último sorteio (o gatilho atual)
+        last_draw = history_slice[-1]
+        ult_milhar = str(last_draw['premios'][p_idx]).zfill(4)
+        if ult_milhar == "0000": continue
             
-        if len(milhares_do_premio) < 40: continue
-            
-        ult_milhar = milhares_do_premio[-1]
-        cabeca_atual = ult_milhar[0]
+        # As 4 dimensões que o robô vai testar no passado
+        contexts_to_test = {
+            "Cabeça da Milhar": ult_milhar[0],
+            "Final da Milhar": ult_milhar[-1],
+            "Grupo do Bicho": str(get_grupo(ult_milhar[-2:])),
+            "Horário Fixo": last_draw['horario']
+        }
         
-        # --- FUNÇÃO DE CORTES MARKOV ---
-        def get_cuts_markov(history_slice):
-            if len(history_slice) < 2: return "0", "1", 0
-            last_m = history_slice[-1]
-            head = last_m[0]
-            next_milhares = []
+        best_pattern = None
+        best_score = -9999
+        
+        for ctx_name, ctx_val in contexts_to_test.items():
+            targets = []
             
-            for j in range(len(history_slice)-1):
-                if history_slice[j][0] == head:
-                    next_milhares.append(history_slice[j+1])
+            # 2. Viaja ao passado procurando esse contexto exato
+            for i in range(len(history_slice) - 1):
+                prev_m = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                if prev_m == "0000": continue
                     
-            overall_digits = "".join(history_slice[-100:])
-            overall_counts = {str(d): overall_digits.count(str(d)) for d in range(10)}
-            
-            if len(next_milhares) < 3:
-                all_digits = "".join(history_slice[-50:])
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                occ = len(next_milhares)
-            else:
-                all_digits = "".join(next_milhares)
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                occ = len(next_milhares)
+                match = False
+                if ctx_name == "Cabeça da Milhar" and prev_m[0] == ctx_val: match = True
+                elif ctx_name == "Final da Milhar" and prev_m[-1] == ctx_val: match = True
+                elif ctx_name == "Grupo do Bicho" and str(get_grupo(prev_m[-2:])) == ctx_val: match = True
+                elif ctx_name == "Horário Fixo" and history_slice[i]['horario'] == ctx_val: match = True
                 
-            sorted_digits = sorted(counts.items(), key=lambda x: (x[1], overall_counts[x[0]], x[0]))
-            return sorted_digits[0][0], sorted_digits[1][0], occ
-
-        corte1_atual, corte2_atual, ocorrencias = get_cuts_markov(milhares_do_premio)
-        
-        esquadrao_base = [str(d) for d in range(10) if str(d) not in [corte1_atual, corte2_atual]]
-        esquadrao_formatado = ",".join([f"{d},{d}" for d in esquadrao_base])
-        
-        rec_msg = f"🧠 **Inteligência de Repulsão (Markov):** A última milhar foi `{ult_milhar}` (Cabeça **{cabeca_atual}**). Analisando os últimos {ocorrencias} eventos idênticos no histórico, os dígitos `{corte1_atual}` e `{corte2_atual}` somem totalmente do globo na rodada seguinte."
-        
-        simulacoes_disponiveis = min(30, len(milhares_do_premio) - 10)
-        backtest_hist = []
-        
-        # Variáveis de Tracking (Vitórias, Derrotas e Sequências)
-        vitorias = 0
-        derrotas = 0
-        max_vitorias_seguidas = 0
-        max_derrotas_seguidas = 0
-        streak_vitorias_atual = 0
-        streak_derrotas_atual = 0
-        
-        # --- TÚNEL DO TEMPO (BACKTEST DA ESTRATÉGIA 8D) ---
-        for i in range(simulacoes_disponiveis, 0, -1):
-            alvo_real = milhares_do_premio[-i]
+                if match:
+                    next_m = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                    if next_m != "0000":
+                        targets.append(next_m)
             
-            idx_fim_hist = len(milhares_do_premio) - i
-            janela_hist = milhares_do_premio[:idx_fim_hist]
-            
-            if not janela_hist: continue
+            if len(targets) < 5: continue # Padrão fraco, poucas amostras
                 
-            c1_hist, c2_hist, _ = get_cuts_markov(janela_hist)
-            esq_hist = [str(d) for d in range(10) if str(d) not in [c1_hist, c2_hist]]
+            # 3. Descobre quais 2 dígitos sumiram quando esse padrão aconteceu
+            all_digits = "".join(targets)
+            counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+            sorted_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+            corte1, corte2 = sorted_digits[0][0], sorted_digits[1][0]
             
-            venceu = all(d in esq_hist for d in alvo_real)
+            esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
             
-            if venceu:
-                vitorias += 1
-                streak_vitorias_atual += 1
-                streak_derrotas_atual = 0 # Quebrou a sequência de derrotas
-                
-                if streak_vitorias_atual > max_vitorias_seguidas:
-                    max_vitorias_seguidas = streak_vitorias_atual
+            # 4. BACKTEST ESTRITO NESTE PADRÃO
+            vitorias = 0; derrotas = 0
+            streak_d_atual = 0; max_d = 0
+            backtest_visual = []
+            
+            for t in targets:
+                venceu = all(d in esquadrao_vivo for d in t)
+                if venceu:
+                    vitorias += 1
+                    streak_d_atual = 0
+                    backtest_visual.append("✅")
+                else:
+                    derrotas += 1
+                    streak_d_atual += 1
+                    if streak_d_atual > max_d: max_d = streak_d_atual
+                    backtest_visual.append("❌")
                     
-                if i <= 5: backtest_hist.append("✅")
-            else:
-                derrotas += 1
-                streak_derrotas_atual += 1
-                streak_vitorias_atual = 0 # Quebrou a sequência de vitórias
+            taxa_acerto = (vitorias / len(targets)) * 100
+            
+            # FÓRMULA DO COMANDO: Penaliza severamente max_d > 1
+            score = taxa_acerto - (max_d * 50) 
+            
+            if best_pattern is None or score > best_score:
+                best_score = score
+                best_pattern = {
+                    "dimensao": ctx_name,
+                    "valor_gatilho": ctx_val,
+                    "cortes": f"{corte1} e {corte2}",
+                    "esquadrao": ",".join([f"{d},{d}" for d in esquadrao_vivo]),
+                    "vitorias": vitorias,
+                    "derrotas": derrotas,
+                    "max_d": max_d,
+                    "taxa": taxa_acerto,
+                    "ocorrencias": len(targets),
+                    "backtest": backtest_visual[-7:] # Mostra as últimas 7 vezes que isso aconteceu
+                }
                 
-                if streak_derrotas_atual > max_derrotas_seguidas:
-                    max_derrotas_seguidas = streak_derrotas_atual
-                    
-                if i <= 5: backtest_hist.append("❌")
-
-        total_simulado = vitorias + derrotas
-        taxa_acerto = (vitorias / total_simulado) * 100 if total_simulado > 0 else 0
-        
-        resultados_radar.append({
-            "premio": p_idx + 1,
-            "ult_milhar": ult_milhar,
-            "rec_msg": rec_msg,
-            "cortes": f"{corte1_atual} e {corte2_atual}",
-            "esquadrao": esquadrao_formatado,
-            "backtest": backtest_hist,
-            "vitorias": vitorias,
-            "derrotas": derrotas,
-            "max_vitorias_seguidas": max_vitorias_seguidas, # Novo Retorno
-            "max_derrotas_seguidas": max_derrotas_seguidas, # Novo Retorno
-            "taxa_valor": taxa_acerto,
-            "taxa": f"{taxa_acerto:.1f}%"
-        })
+        if best_pattern:
+            resultados_radar.append({
+                "premio": p_idx + 1,
+                "ult_milhar": ult_milhar,
+                "padrao": best_pattern
+            })
+            
     return resultados_radar
-
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -334,40 +327,43 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - SCANNER DE MARKOV (8D)")
-    st.markdown("O sistema está varrendo os globos elegíveis. O foco agora é achar o prêmio que está com a maior **Vantagem Matemática (Taxa de Acerto)** usando a Estratégia de 16 números (8 Dígitos Duplos).")
+    st.title("🛡️ PENTÁGONO - GATILHOS DE ELITE")
+    st.markdown("Busca por **Padrões Ocultos**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Scanner Ativo: Analisando Efeito Sombra e Repulsões..."):
+    with st.spinner("📡 Escaneando Dimensões Ocultas (Cabeça, Finais, Grupos e Horários)..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
-                if len(hist_milhar) >= 40:
-                    radar_dados = calcular_radar_sniper_8d(hist_milhar)
+                if len(hist_milhar) >= 50:
+                    radar_dados = calcular_radar_padroes_ocultos(hist_milhar)
                     
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
+                        padrao = alvo['padrao']
                         
-                        # ALERTA DE ESTATÍSTICA ALTA: Se a taxa for maior que 46% (A chance nua é 40.9%), temos uma Edge gigante.
-                        if alvo['taxa_valor'] >= 46.0:
+                        # O FILTRO DE OURO: Teto de estresse máximo = 1 e alta taxa de acerto.
+                        if padrao['max_d'] <= 1 and padrao['taxa'] >= 65.0:
                             alertas_sniper.append({
                                 "banca_key": banca_key,
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "taxa": alvo['taxa'],
-                                "cortes": alvo['cortes']
+                                "taxa": f"{padrao['taxa']:.1f}%",
+                                "dimensao": padrao['dimensao'],
+                                "valor": padrao['valor_gatilho'],
+                                "cortes": padrao['cortes']
                             })
 
     if not alertas_sniper:
-        st.info("⚠️ O Globo está estável e imprevisível agora. Nenhuma banca apresenta uma vantagem matemática segura (acima de 46%) neste momento. Mantenha os recursos guardados.")
+        st.info("⚠️ O Globo está caótico em todas as bancas. Nenhum padrão passou no Teste de Segurança (Risco de perder 2x seguidas é alto em todos os prêmios). Mantenha as armas travadas.")
     else:
-        st.markdown("### 🎯 ALVOS TRAVADOS (Vantagem Matemática Detectada)")
+        st.markdown("### 🎯 GATILHOS CONFIRMADOS (Drawdown <= 1)")
         for a in alertas_sniper:
             with st.container(border=True):
                 col_txt, col_btn = st.columns([4, 1])
                 with col_txt:
-                    st.success(f"🔥 **{a['banca']} - {a['premio']}º Prêmio** | Taxa de Vitória da Estratégia: **{a['taxa']}**! Os dígitos para corte são `{a['cortes']}`.")
+                    st.success(f"🔥 **{a['banca']} - {a['premio']}º Prêmio** | Padrão Oculto achado no **{a['dimensao']}** ({a['valor']}). Acerto: **{a['taxa']}**! Corte os dígitos `{a['cortes']}`.")
                 with col_btn:
                     st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
@@ -560,41 +556,48 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Estratégia Sniper 8D (Motor de Markov)")
+        st.header(f"👑 Cérebro de Padrões Ocultos (Drawdown <= 1)")
         
-        with st.spinner("Lendo matrizes históricas e calculando o Efeito Sombra..."):
+        with st.spinner("Escaneando múltiplas dimensões do globo..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
-            st.markdown("### 🎯 Radar Sniper 8D (Colete de 16 Números)")
-            st.write("O algoritmo varre a história para descobrir quais **2 dígitos** desaparecem após a cabeça da milhar atual. Jogue com os **8 dígitos restantes duplicados**.")
+            st.markdown("### 🎯 Análise Dimensional e Alertas de Estresse")
+            st.write("O robô testou o histórico da Cabeça, do Final, do Grupo e do Horário para achar qual padrão oferece no **máximo 1 derrota seguida** (Drawdown).")
             
-            radar_inv = calcular_radar_sniper_8d(hist_milhar)
+            radar_inv = calcular_radar_padroes_ocultos(hist_milhar)
             
             for alvo in radar_inv:
-                with st.container(border=True):
-                    c_topo1, c_topo2 = st.columns([3, 1])
-                    with c_topo1:
-                        st.subheader(f"🏆 {alvo['premio']}º Prêmio | Última: `{alvo['ult_milhar']}`")
-                    with c_topo2:
-                        st.metric("Teto de Acerto (Histórico)", alvo['taxa'])
-                        
-                    st.info(alvo['rec_msg'])
-                    
-                    st.markdown(f"**✂️ O Corte:** Elimine os números `{alvo['cortes']}`")
-                    st.code(alvo['esquadrao'], language="text")
-                    st.caption("☝️ Copie a linha acima e cole no aplicativo de aposta. (Combinação 8D Duplicada = 4.096 milhares).")
-                    
-                    st.markdown("---")
-                    st.markdown(f"**🕰️ Backtest (Últimos 5 jogos testando esse corte):** {' | '.join(alvo['backtest'])}")
-                    st.caption(f"Nos últimos 30 simulados: ✅ {alvo['vitorias']} Acertos | ❌ {alvo['derrotas']} Falhas")
-                    
-                    # --- NOVO: DISPLAY DOS RECORDES DE SEQUÊNCIA ---
-                    st.caption(f"🏆 Recorde Vitórias Seguidas: **{alvo['max_vitorias_seguidas']}x** | 💔 Recorde Derrotas Seguidas (Drawdown): **{alvo['max_derrotas_seguidas']}x**")
+                padrao = alvo['padrao']
+                
+                # Se o padrão tiver Drawdown <= 1 e boa taxa, fica VERDE (Seguro)
+                if padrao['max_d'] <= 1 and padrao['taxa'] >= 65.0:
+                    cor_classe = "alerta-seguro"
+                    status_icone = "🟢 PADRÃO SEGURO (MÁX 1 DERROTA)"
+                else:
+                    cor_classe = "alerta-perigo"
+                    status_icone = "🚫 ALVO INSTÁVEL (ALTO RISCO DE REPETIÇÃO)"
 
+                st.markdown(f"""
+                <div class="{cor_classe}">
+                    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | Última: {alvo['ult_milhar']} | {status_icone}</h4>
+                    <p style="margin-top:5px; color:#cccccc;">
+                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado anterior tiver: <b>{padrao['valor_gatilho']}</b>).<br>
+                    Nestas condições históricas, os dígitos cortados são: <b>{padrao['cortes']}</b>.
+                    </p>
+                    <code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{padrao['esquadrao']}</code>
+                    <span style="font-size:0.9em; color:#ffd700;">
+                    <b>📊 Histórico do Padrão:</b> Taxa de Acerto: <b>{padrao['taxa']:.1f}%</b> | 
+                    💔 Pior Sequência de Derrotas (Max Drawdown): <b>{padrao['max_d']}x</b> | 
+                    🔁 Ocorrências Lidas: {padrao['ocorrencias']}
+                    <br><b>🕰️ Últimos 7 Testes Reais:</b> {' | '.join(padrao['backtest'])}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+                
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
             st.subheader("🛡️ Calculadora de Hedge (Seguro de Banca)")
@@ -604,7 +607,6 @@ else:
                 with col_calc1:
                     valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
                 
-                # Hedge para R$ 41:
                 seguro_recomendado = valor_milhar / 21 
                 custo_total = valor_milhar + seguro_recomendado
                 retorno_seguro = seguro_recomendado * 23
