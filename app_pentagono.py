@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V97.1 - Exaustão Dupla (95%)", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V97.2 - Exaustão Dupla", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -207,7 +207,6 @@ def calcular_radar_exaustao_dupla(history_slice):
                 if hist_next != "0000":
                     targets.append(hist_next)
                     
-        # Se aconteceu poucas vezes no passado, não há dados para matemática segura
         if len(targets) < 3:
             resultados_radar.append({
                 "premio": p_idx + 1,
@@ -226,7 +225,7 @@ def calcular_radar_exaustao_dupla(history_slice):
         
         esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
         
-        # 4. SIMULAÇÃO HISTÓRICA E CÁLCULO DE EFICIÊNCIA
+        # 4. SIMULAÇÃO HISTÓRICA
         vitorias = 0
         derrotas = 0
         backtest_visual = []
@@ -539,12 +538,12 @@ else:
             
             for alvo in radar_inv:
                 if alvo['status'] == "INSUFICIENTE":
-                    html_card = f"""
-<div class="alerta-cinza">
-    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio</h4>
-    <p style="margin-top:5px; color:#cccccc;">Poucos dados na história para confirmar esse padrão de repetição com segurança.</p>
-</div>
-"""
+                    html_card = (
+                        '<div class="alerta-cinza">'
+                        f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio</h4>'
+                        '<p style="margin-top:5px; color:#cccccc;">Poucos dados na história para confirmar esse padrão de repetição com segurança.</p>'
+                        '</div>'
+                    )
                     st.markdown(html_card, unsafe_allow_html=True)
                     continue
                     
@@ -560,26 +559,27 @@ else:
                     if taxa >= 95.0:
                         cor_classe = "alerta-verde"
                         status_icone = "🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
-                        msg_corpo = f"O Globo entrou em Colapso Duplo! Cortando os dígitos **{alvo['cortes']}**, a precisão histórica é brutal."
-                        codigo_display = f'<code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{alvo["esquadrao"]}</code>'
+                        msg_corpo = f"O Globo entrou em Colapso Duplo! Cortando os dígitos <b>{alvo['cortes']}</b>, a precisão histórica é brutal."
+                        codigo_display = f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
                     else:
                         cor_classe = "alerta-vermelho"
                         status_icone = f"🚫 ALVO BLOQUEADO (Risco de Falha: {100-taxa:.1f}%)"
                         msg_corpo = f"A anomalia aconteceu, mas o risco histórico desse corte falhar impede a operação tática."
-                        codigo_display = f'<code style="background-color:black; color:#ff4444; padding:5px; display:block; margin-bottom:10px;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</code>'
+                        codigo_display = f'<div style="background-color:black; color:#ff4444; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</div>'
 
-                html_card = f"""
-<div class="{cor_classe}">
-    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | {status_icone}</h4>
-    <p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>
-    {codigo_display}
-    <span style="font-size:0.9em; color:#ffd700;">
-    <b>📊 Histórico do Combo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | 
-    🔁 Ocorrências Lidas: {alvo['ocorrencias']}
-    <br><b>🕰️ Testes no Passado:</b> {' | '.join(alvo['backtest'])}
-    </span>
-</div>
-"""
+                # HTML CONSTRUÍDO EM LINHA RETA PARA EVITAR BUG DO STREAMLIT MARKDOWN
+                html_card = (
+                    f'<div class="{cor_classe}">'
+                    f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {status_icone}</h4>'
+                    f'<p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>'
+                    f'{codigo_display}'
+                    f'<div style="font-size:0.9em; color:#ffd700; margin-top:8px;">'
+                    f'<b>📊 Histórico do Combo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
+                    f'🔁 Ocorrências Lidas: {alvo["ocorrencias"]}<br>'
+                    f'<b>🕰️ Testes no Passado:</b> {" | ".join(alvo["backtest"])}'
+                    f'</div>'
+                    f'</div>'
+                )
                 st.markdown(html_card, unsafe_allow_html=True)
                 
             # --- CALCULADORA DE HEDGE ---
