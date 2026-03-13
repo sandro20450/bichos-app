@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V96.1 - Padrão Oculto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V96.2 - Anatomia", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -177,7 +177,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO AVANÇADO: PESQUISA DE PADRÕES OCULTOS COM MAX DRAWDOWN 1 ---
+# --- 3. CÉREBRO AVANÇADO: AS 5 DIMENSÕES (INCLUINDO ESTRUTURA DE REPETIÇÃO) ---
 # =============================================================================
 
 def get_grupo(dezena):
@@ -189,6 +189,20 @@ def get_grupo(dezena):
         return val
     except: return 1
 
+def get_estrutura_milhar(m_str):
+    if len(m_str) != 4: return "Desconhecida"
+    contagens = Counter(m_str).values()
+    max_rep = max(contagens)
+    unicos = len(set(m_str))
+    
+    if unicos == 4: return "Simples (Sem repetição)"
+    if unicos == 3: return "Com 1 Dupla"
+    if unicos == 2:
+        if max_rep == 3: return "Com 1 Trinca"
+        else: return "Com 2 Duplas"
+    if unicos == 1: return "Quadra (4 iguais)"
+    return "Desconhecida"
+
 def calcular_radar_padroes_ocultos(history_slice):
     if len(history_slice) < 50: return []
     resultados_radar = []
@@ -198,11 +212,13 @@ def calcular_radar_padroes_ocultos(history_slice):
         ult_milhar = str(last_draw['premios'][p_idx]).zfill(4)
         if ult_milhar == "0000": continue
             
+        # A 5ª DIMENSÃO ADICIONADA: Estrutura da Milhar
         contexts_to_test = {
             "Cabeça da Milhar": ult_milhar[0],
             "Final da Milhar": ult_milhar[-1],
             "Grupo do Bicho": str(get_grupo(ult_milhar[-2:])),
-            "Horário Fixo": last_draw['horario']
+            "Horário Fixo": last_draw['horario'],
+            "Estrutura da Milhar": get_estrutura_milhar(ult_milhar)
         }
         
         best_pattern = None
@@ -220,6 +236,7 @@ def calcular_radar_padroes_ocultos(history_slice):
                 elif ctx_name == "Final da Milhar" and prev_m[-1] == ctx_val: match = True
                 elif ctx_name == "Grupo do Bicho" and str(get_grupo(prev_m[-2:])) == ctx_val: match = True
                 elif ctx_name == "Horário Fixo" and history_slice[i]['horario'] == ctx_val: match = True
+                elif ctx_name == "Estrutura da Milhar" and get_estrutura_milhar(prev_m) == ctx_val: match = True
                 
                 if match:
                     next_m = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
@@ -322,11 +339,11 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
     st.title("🛡️ PENTÁGONO - GATILHOS DE ELITE")
-    st.markdown("Busca por **Padrões Ocultos**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
+    st.markdown("Busca por **Padrões Ocultos (Agora com 5 Dimensões)**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Escaneando Dimensões Ocultas (Cabeça, Finais, Grupos e Horários)..."):
+    with st.spinner("📡 Escaneando Dimensões (Cabeça, Finais, Grupos, Horários e Estrutura de Repetição)..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -559,7 +576,7 @@ else:
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
             st.markdown("### 🎯 Análise Dimensional e Alertas de Estresse")
-            st.write("O robô testou o histórico da Cabeça, do Final, do Grupo e do Horário para achar qual padrão oferece no **máximo 1 derrota seguida** (Drawdown).")
+            st.write("O robô testa as 5 dimensões (Cabeça, Final, Grupo, Horário e a **Estrutura de Repetição**) para achar qual padrão oferece no **máximo 1 derrota seguida**.")
             
             radar_inv = calcular_radar_padroes_ocultos(hist_milhar)
             
@@ -578,7 +595,7 @@ else:
                 <div class="{cor_classe}">
                     <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | Última: {alvo['ult_milhar']} | {status_icone}</h4>
                     <p style="margin-top:5px; color:#cccccc;">
-                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado anterior tiver: <b>{padrao['valor_gatilho']}</b>).<br>
+                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado anterior tiver a condição: <b>{padrao['valor_gatilho']}</b>).<br>
                     Nestas condições históricas, os dígitos cortados são: <b>{padrao['cortes']}</b>.
                     </p>
                     <code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{padrao['esquadrao']}</code>
