@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V97.0 - Exaustão Dupla (95%)", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V97.1 - Exaustão Dupla (95%)", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -539,12 +539,13 @@ else:
             
             for alvo in radar_inv:
                 if alvo['status'] == "INSUFICIENTE":
-                    st.markdown(f"""
-                    <div class="alerta-cinza">
-                        <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio</h4>
-                        <p style="margin-top:5px; color:#cccccc;">Poucos dados na história para confirmar esse padrão de repetição com segurança.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    html_card = f"""
+<div class="alerta-cinza">
+    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio</h4>
+    <p style="margin-top:5px; color:#cccccc;">Poucos dados na história para confirmar esse padrão de repetição com segurança.</p>
+</div>
+"""
+                    st.markdown(html_card, unsafe_allow_html=True)
                     continue
                     
                 gatilho = alvo['gatilho']
@@ -567,18 +568,19 @@ else:
                         msg_corpo = f"A anomalia aconteceu, mas o risco histórico desse corte falhar impede a operação tática."
                         codigo_display = f'<code style="background-color:black; color:#ff4444; padding:5px; display:block; margin-bottom:10px;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</code>'
 
-                st.markdown(f"""
-                <div class="{cor_classe}">
-                    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | {status_icone}</h4>
-                    <p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>
-                    {codigo_display}
-                    <span style="font-size:0.9em; color:#ffd700;">
-                    <b>📊 Histórico do Combo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | 
-                    🔁 Ocorrências Lidas: {alvo['ocorrencias']}
-                    <br><b>🕰️ Testes no Passado:</b> {' | '.join(alvo['backtest'])}
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
+                html_card = f"""
+<div class="{cor_classe}">
+    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | {status_icone}</h4>
+    <p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>
+    {codigo_display}
+    <span style="font-size:0.9em; color:#ffd700;">
+    <b>📊 Histórico do Combo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | 
+    🔁 Ocorrências Lidas: {alvo['ocorrencias']}
+    <br><b>🕰️ Testes no Passado:</b> {' | '.join(alvo['backtest'])}
+    </span>
+</div>
+"""
+                st.markdown(html_card, unsafe_allow_html=True)
                 
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
