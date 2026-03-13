@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V96.3 - Combos Ocultos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V97.0 - Exaustão Dupla (95%)", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -34,14 +34,10 @@ CONFIG_BANCAS = {
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
-GRUPO_TO_DEZENAS = {}
-for g in range(1, 26):
-    fim = g * 4; inicio = fim - 3
-    dezenas_do_grupo = []
-    for n in range(inicio, fim + 1):
-        d_str = "00" if n == 100 else f"{n:02}"
-        dezenas_do_grupo.append(d_str)
-    GRUPO_TO_DEZENAS[g] = dezenas_do_grupo
+def is_repetida(m_str):
+    """Verifica se a milhar tem números repetidos (Dupla, Trinca, Quadra)"""
+    if len(m_str) != 4: return False
+    return len(set(m_str)) < 4
 
 st.markdown("""
 <style>
@@ -50,10 +46,10 @@ st.markdown("""
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #ffd700 !important; }
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
-    .css-1wivap2 { font-size: 14px !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
-    .alerta-seguro { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
-    .alerta-perigo { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
+    .alerta-verde { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
+    .alerta-vermelho { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
+    .alerta-cinza { background-color: #2b2b2b; padding: 15px; border-radius: 8px; border-left: 5px solid #888888; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -177,136 +173,88 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO AVANÇADO: AS 6 DIMENSÕES (INCLUINDO COMBO DE ESTRUTURAS) ---
+# --- 3. CÉREBRO: FILTRO DE EXAUSTÃO DUPLA (TOLERÂNCIA 95%) ---
 # =============================================================================
 
-def get_grupo(dezena):
-    try:
-        d = int(str(dezena)[-2:])
-        if d == 0: return 25
-        if d > 99: return 25 
-        val = (d - 1) // 4 + 1
-        return val
-    except: return 1
-
-def get_estrutura_milhar(m_str):
-    if len(m_str) != 4: return "Desconhecida"
-    contagens = Counter(m_str).values()
-    max_rep = max(contagens)
-    unicos = len(set(m_str))
-    
-    if unicos == 4: return "Simples (Sem repetição)"
-    if unicos == 3: return "Com 1 Dupla"
-    if unicos == 2:
-        if max_rep == 3: return "Com 1 Trinca"
-        else: return "Com 2 Duplas"
-    if unicos == 1: return "Quadra (4 iguais)"
-    return "Desconhecida"
-
-def calcular_radar_padroes_ocultos(history_slice):
+def calcular_radar_exaustao_dupla(history_slice):
     if len(history_slice) < 50: return []
     resultados_radar = []
     
     for p_idx in range(5):
-        last_draw = history_slice[-1]
-        ult_milhar = str(last_draw['premios'][p_idx]).zfill(4)
+        if len(history_slice) < 2: continue
+            
+        ult_draw = history_slice[-1]
+        penult_draw = history_slice[-2]
         
-        if len(history_slice) >= 2:
-            penult_draw = history_slice[-2]
-            penult_milhar = str(penult_draw['premios'][p_idx]).zfill(4)
-        else:
-            penult_milhar = "0000"
+        ult_milhar = str(ult_draw['premios'][p_idx]).zfill(4)
+        penult_milhar = str(penult_draw['premios'][p_idx]).zfill(4)
+        
+        if ult_milhar == "0000" or penult_milhar == "0000": continue
 
-        if ult_milhar == "0000": continue
-            
-        # A 6ª DIMENSÃO ADICIONADA: O COMBO TÁTICO
-        contexts_to_test = {
-            "Cabeça da Milhar": ult_milhar[0],
-            "Final da Milhar": ult_milhar[-1],
-            "Grupo do Bicho": str(get_grupo(ult_milhar[-2:])),
-            "Horário Fixo": last_draw['horario'],
-            "Estrutura da Milhar": get_estrutura_milhar(ult_milhar),
-            "Combo de Estruturas (Últimas 2)": f"{get_estrutura_milhar(penult_milhar)} ➡️ {get_estrutura_milhar(ult_milhar)}"
-        }
+        # 1. VERIFICA SE O GATILHO FOI ARMADO (Ambas têm repetição)
+        gatilho_armado = is_repetida(ult_milhar) and is_repetida(penult_milhar)
         
-        best_pattern = None
-        best_score = -9999
-        
-        for ctx_name, ctx_val in contexts_to_test.items():
-            targets = []
+        # 2. VIAJA NO TEMPO PROCURANDO O MESMO GATILHO
+        targets = []
+        for i in range(1, len(history_slice) - 1):
+            hist_penult = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+            hist_ult = str(history_slice[i]['premios'][p_idx]).zfill(4)
             
-            # Começa no 1 para poder olhar o prev_prev_m com segurança
-            for i in range(1, len(history_slice) - 1):
-                prev_m = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                prev_prev_m = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+            if hist_penult == "0000" or hist_ult == "0000": continue
                 
-                if prev_m == "0000": continue
+            if is_repetida(hist_penult) and is_repetida(hist_ult):
+                hist_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                if hist_next != "0000":
+                    targets.append(hist_next)
                     
-                match = False
-                if ctx_name == "Cabeça da Milhar" and prev_m[0] == ctx_val: match = True
-                elif ctx_name == "Final da Milhar" and prev_m[-1] == ctx_val: match = True
-                elif ctx_name == "Grupo do Bicho" and str(get_grupo(prev_m[-2:])) == ctx_val: match = True
-                elif ctx_name == "Horário Fixo" and history_slice[i]['horario'] == ctx_val: match = True
-                elif ctx_name == "Estrutura da Milhar" and get_estrutura_milhar(prev_m) == ctx_val: match = True
-                elif ctx_name == "Combo de Estruturas (Últimas 2)" and f"{get_estrutura_milhar(prev_prev_m)} ➡️ {get_estrutura_milhar(prev_m)}" == ctx_val: match = True
-                
-                if match:
-                    next_m = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                    if next_m != "0000":
-                        targets.append(next_m)
-            
-            # Ajuste de Sensibilidade: Como "Combos" são mais raros, aceitamos buscar se aconteceram pelo menos 3 vezes no passado.
-            if len(targets) < 3: continue 
-                
-            all_digits = "".join(targets)
-            counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-            sorted_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-            corte1, corte2 = sorted_digits[0][0], sorted_digits[1][0]
-            
-            esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
-            
-            vitorias = 0; derrotas = 0
-            streak_d_atual = 0; max_d = 0
-            backtest_visual = []
-            
-            for t in targets:
-                venceu = all(d in esquadrao_vivo for d in t)
-                if venceu:
-                    vitorias += 1
-                    streak_d_atual = 0
-                    backtest_visual.append("✅")
-                else:
-                    derrotas += 1
-                    streak_d_atual += 1
-                    if streak_d_atual > max_d: max_d = streak_d_atual
-                    backtest_visual.append("❌")
-                    
-            taxa_acerto = (vitorias / len(targets)) * 100
-            
-            score = taxa_acerto - (max_d * 50) 
-            
-            if best_pattern is None or score > best_score:
-                best_score = score
-                best_pattern = {
-                    "dimensao": ctx_name,
-                    "valor_gatilho": ctx_val,
-                    "cortes": f"{corte1} e {corte2}",
-                    "esquadrao": ",".join([f"{d},{d}" for d in esquadrao_vivo]),
-                    "vitorias": vitorias,
-                    "derrotas": derrotas,
-                    "max_d": max_d,
-                    "taxa": taxa_acerto,
-                    "ocorrencias": len(targets),
-                    "backtest": backtest_visual[-7:] 
-                }
-                
-        if best_pattern:
+        # Se aconteceu poucas vezes no passado, não há dados para matemática segura
+        if len(targets) < 3:
             resultados_radar.append({
                 "premio": p_idx + 1,
-                "ult_milhar": ult_milhar,
-                "padrao": best_pattern
+                "status": "INSUFICIENTE",
+                "ult": ult_milhar,
+                "penult": penult_milhar,
+                "gatilho": gatilho_armado
             })
-            
+            continue
+
+        # 3. Mapeia os 2 números que mais "fogem" depois desse evento
+        all_digits = "".join(targets)
+        counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+        sorted_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+        corte1, corte2 = sorted_digits[0][0], sorted_digits[1][0]
+        
+        esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
+        
+        # 4. SIMULAÇÃO HISTÓRICA E CÁLCULO DE EFICIÊNCIA
+        vitorias = 0
+        derrotas = 0
+        backtest_visual = []
+        
+        for t in targets:
+            venceu = all(d in esquadrao_vivo for d in t)
+            if venceu:
+                vitorias += 1
+                backtest_visual.append("✅")
+            else:
+                derrotas += 1
+                backtest_visual.append("❌")
+                
+        taxa_acerto = (vitorias / len(targets)) * 100
+        
+        resultados_radar.append({
+            "premio": p_idx + 1,
+            "status": "ANALISADO",
+            "ult": ult_milhar,
+            "penult": penult_milhar,
+            "gatilho": gatilho_armado,
+            "cortes": f"{corte1} e {corte2}",
+            "esquadrao": ",".join([f"{d},{d}" for d in esquadrao_vivo]),
+            "taxa": taxa_acerto,
+            "ocorrencias": len(targets),
+            "backtest": backtest_visual[-10:] # Mostra os últimos 10 resultados
+        })
+        
     return resultados_radar
 
 # =============================================================================
@@ -351,42 +299,38 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - GATILHOS DE ELITE (6D)")
-    st.markdown("Busca por **Padrões Ocultos (Agora com 6 Dimensões, incluindo Sequência de Estruturas)**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
+    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V97)")
+    st.markdown("O sistema agora varre a **Exaustão Dupla** em todas as bancas simultaneamente com **Filtro de 95%**.")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Escaneando Dimensões (Cabeça, Finais, Grupos, Horários, Estrutura Simples e COMBO DE ESTRUTURAS)..."):
+    with st.spinner("📡 Escaneando Padrões de Repetição Tripla em todas as Operações..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 50:
-                    radar_dados = calcular_radar_padroes_ocultos(hist_milhar)
+                    radar_dados = calcular_radar_exaustao_dupla(hist_milhar)
                     
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
-                        padrao = alvo['padrao']
-                        
-                        if padrao['max_d'] <= 1 and padrao['taxa'] >= 65.0:
+                        if alvo['status'] == "ANALISADO" and alvo['gatilho'] and alvo['taxa'] >= 95.0:
                             alertas_sniper.append({
                                 "banca_key": banca_key,
                                 "banca": nome_banca_limpo,
                                 "premio": alvo['premio'],
-                                "taxa": f"{padrao['taxa']:.1f}%",
-                                "dimensao": padrao['dimensao'],
-                                "valor": padrao['valor_gatilho'],
-                                "cortes": padrao['cortes']
+                                "taxa": f"{alvo['taxa']:.1f}%",
+                                "cortes": alvo['cortes']
                             })
 
     if not alertas_sniper:
-        st.info("⚠️ O Globo está caótico em todas as bancas. Nenhum padrão passou no Teste de Segurança (Risco de perder 2x seguidas é alto em todos os prêmios). Mantenha as armas travadas.")
+        st.info("😴 **Zona Segura:** Nenhum alvo atingiu a exigência de 95% de Exaustão Dupla. O Globo não demonstrou anomalia crítica. Mantenha os recursos protegidos no cofre.")
     else:
-        st.markdown("### 🎯 GATILHOS CONFIRMADOS (Drawdown <= 1)")
+        st.markdown("### 🎯 GATILHOS DE ELITE CONFIRMADOS ( >= 95% )")
         for a in alertas_sniper:
             with st.container(border=True):
                 col_txt, col_btn = st.columns([4, 1])
                 with col_txt:
-                    st.success(f"🔥 **{a['banca']} - {a['premio']}º Prêmio** | Padrão Oculto achado no **{a['dimensao']}** ({a['valor']}). Acerto: **{a['taxa']}**! Corte os dígitos `{a['cortes']}`.")
+                    st.success(f"🔥 **{a['banca']} - {a['premio']}º Prêmio** | Anomalia Armada! Taxa: **{a['taxa']}**! Corte `{a['cortes']}`.")
                 with col_btn:
                     st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
@@ -579,51 +523,66 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Cérebro de Padrões Ocultos (Drawdown <= 1)")
+        st.header(f"👑 Filtro de Exaustão Dupla (Tolerância 95%)")
         
-        with st.spinner("Escaneando múltiplas dimensões do globo..."):
+        with st.spinner("Analisando sequências de anomalias no globo..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
-            st.markdown("### 🎯 Análise Dimensional e Alertas de Estresse")
-            st.write("O robô testa **6 dimensões**, incluindo a nova **Sequência de Combo Estrutural**. Ele vasculha o passado para te dizer o que fazer quando duas anomalias acontecem seguidas.")
+            st.markdown("### 🎯 Análise Tática de Combos (Duplas, Trincas)")
+            st.write("O robô apenas libera o tiro se a **penúltima e a última** milhar tiverem números repetidos, E se a taxa histórica desse evento for >= 95%.")
             
-            radar_inv = calcular_radar_padroes_ocultos(hist_milhar)
+            radar_inv = calcular_radar_exaustao_dupla(hist_milhar)
             
             for alvo in radar_inv:
-                padrao = alvo['padrao']
+                if alvo['status'] == "INSUFICIENTE":
+                    st.markdown(f"""
+                    <div class="alerta-cinza">
+                        <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio</h4>
+                        <p style="margin-top:5px; color:#cccccc;">Poucos dados na história para confirmar esse padrão de repetição com segurança.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    continue
+                    
+                gatilho = alvo['gatilho']
+                taxa = alvo['taxa']
                 
-                # Se o padrão tiver Drawdown <= 1 e boa taxa, fica VERDE (Seguro)
-                if padrao['max_d'] <= 1 and padrao['taxa'] >= 65.0:
-                    cor_classe = "alerta-seguro"
-                    status_icone = "🟢 PADRÃO SEGURO (MÁX 1 DERROTA)"
+                if not gatilho:
+                    cor_classe = "alerta-cinza"
+                    status_icone = "😴 REPOUSO (Aguardando Anomalia Dupla)"
+                    msg_corpo = f"A sequência atual (`{alvo['penult']}` ➡️ `{alvo['ult']}`) não ativou o combo de números repetidos. Não jogue."
+                    codigo_display = ""
                 else:
-                    cor_classe = "alerta-perigo"
-                    status_icone = "🚫 ALVO INSTÁVEL (ALTO RISCO DE REPETIÇÃO)"
+                    if taxa >= 95.0:
+                        cor_classe = "alerta-verde"
+                        status_icone = "🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
+                        msg_corpo = f"O Globo entrou em Colapso Duplo! Cortando os dígitos **{alvo['cortes']}**, a precisão histórica é brutal."
+                        codigo_display = f'<code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{alvo["esquadrao"]}</code>'
+                    else:
+                        cor_classe = "alerta-vermelho"
+                        status_icone = f"🚫 ALVO BLOQUEADO (Risco de Falha: {100-taxa:.1f}%)"
+                        msg_corpo = f"A anomalia aconteceu, mas o risco histórico desse corte falhar impede a operação tática."
+                        codigo_display = f'<code style="background-color:black; color:#ff4444; padding:5px; display:block; margin-bottom:10px;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</code>'
 
                 st.markdown(f"""
                 <div class="{cor_classe}">
-                    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | Última: {alvo['ult_milhar']} | {status_icone}</h4>
-                    <p style="margin-top:5px; color:#cccccc;">
-                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado tiver a condição: <b>{padrao['valor_gatilho']}</b>).<br>
-                    Nestas condições históricas, os dígitos cortados são: <b>{padrao['cortes']}</b>.
-                    </p>
-                    <code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{padrao['esquadrao']}</code>
+                    <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | {status_icone}</h4>
+                    <p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>
+                    {codigo_display}
                     <span style="font-size:0.9em; color:#ffd700;">
-                    <b>📊 Histórico do Padrão:</b> Taxa de Acerto: <b>{padrao['taxa']:.1f}%</b> | 
-                    💔 Pior Sequência de Derrotas (Max Drawdown): <b>{padrao['max_d']}x</b> | 
-                    🔁 Ocorrências Lidas: {padrao['ocorrencias']}
-                    <br><b>🕰️ Últimos 7 Testes Reais:</b> {' | '.join(padrao['backtest'])}
+                    <b>📊 Histórico do Combo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | 
+                    🔁 Ocorrências Lidas: {alvo['ocorrencias']}
+                    <br><b>🕰️ Testes no Passado:</b> {' | '.join(alvo['backtest'])}
                     </span>
                 </div>
                 """, unsafe_allow_html=True)
                 
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
-            st.subheader("🛡️ Calculadora de Hedge (Seguro de Banca)")
+            st.subheader("🛡️ Calculadora de Seguro de Banca (Opcional)")
             
             with st.container(border=True):
                 col_calc1, col_calc2 = st.columns(2)
@@ -635,7 +594,7 @@ else:
                 retorno_seguro = seguro_recomendado * 23
                 
                 with col_calc2:
-                    st.info(f"**🛡️ Jogue no Grupo da Milhar Sorteada:** R$ {seguro_recomendado:.2f}")
+                    st.info(f"**🛡️ Jogue no Grupo da Milhar:** R$ {seguro_recomendado:.2f}")
                     st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
                     
             # --- TABELA DO BANCO DE DADOS RESTAURADA ---
