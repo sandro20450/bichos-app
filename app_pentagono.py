@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V96.0 - Padrão Oculto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V96.1 - Padrão Oculto", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -194,12 +194,10 @@ def calcular_radar_padroes_ocultos(history_slice):
     resultados_radar = []
     
     for p_idx in range(5):
-        # 1. Pega as informações do último sorteio (o gatilho atual)
         last_draw = history_slice[-1]
         ult_milhar = str(last_draw['premios'][p_idx]).zfill(4)
         if ult_milhar == "0000": continue
             
-        # As 4 dimensões que o robô vai testar no passado
         contexts_to_test = {
             "Cabeça da Milhar": ult_milhar[0],
             "Final da Milhar": ult_milhar[-1],
@@ -213,7 +211,6 @@ def calcular_radar_padroes_ocultos(history_slice):
         for ctx_name, ctx_val in contexts_to_test.items():
             targets = []
             
-            # 2. Viaja ao passado procurando esse contexto exato
             for i in range(len(history_slice) - 1):
                 prev_m = str(history_slice[i]['premios'][p_idx]).zfill(4)
                 if prev_m == "0000": continue
@@ -229,9 +226,8 @@ def calcular_radar_padroes_ocultos(history_slice):
                     if next_m != "0000":
                         targets.append(next_m)
             
-            if len(targets) < 5: continue # Padrão fraco, poucas amostras
+            if len(targets) < 5: continue 
                 
-            # 3. Descobre quais 2 dígitos sumiram quando esse padrão aconteceu
             all_digits = "".join(targets)
             counts = {str(d): all_digits.count(str(d)) for d in range(10)}
             sorted_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
@@ -239,7 +235,6 @@ def calcular_radar_padroes_ocultos(history_slice):
             
             esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
             
-            # 4. BACKTEST ESTRITO NESTE PADRÃO
             vitorias = 0; derrotas = 0
             streak_d_atual = 0; max_d = 0
             backtest_visual = []
@@ -258,7 +253,6 @@ def calcular_radar_padroes_ocultos(history_slice):
                     
             taxa_acerto = (vitorias / len(targets)) * 100
             
-            # FÓRMULA DO COMANDO: Penaliza severamente max_d > 1
             score = taxa_acerto - (max_d * 50) 
             
             if best_pattern is None or score > best_score:
@@ -273,7 +267,7 @@ def calcular_radar_padroes_ocultos(history_slice):
                     "max_d": max_d,
                     "taxa": taxa_acerto,
                     "ocorrencias": len(targets),
-                    "backtest": backtest_visual[-7:] # Mostra as últimas 7 vezes que isso aconteceu
+                    "backtest": backtest_visual[-7:] 
                 }
                 
         if best_pattern:
@@ -343,7 +337,6 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
                         padrao = alvo['padrao']
                         
-                        # O FILTRO DE OURO: Teto de estresse máximo = 1 e alta taxa de acerto.
                         if padrao['max_d'] <= 1 and padrao['taxa'] >= 65.0:
                             alertas_sniper.append({
                                 "banca_key": banca_key,
@@ -614,6 +607,12 @@ else:
                 with col_calc2:
                     st.info(f"**🛡️ Jogue no Grupo da Milhar Sorteada:** R$ {seguro_recomendado:.2f}")
                     st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
+                    
+            # --- TABELA DO BANCO DE DADOS RESTAURADA ---
+            st.markdown("---")
+            st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
+            df_show = pd.DataFrame(hist_milhar)
+            st.dataframe(df_show.tail(15), use_container_width=True)
 
         else:
             st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
