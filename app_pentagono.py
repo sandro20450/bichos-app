@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V96.2 - Anatomia", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V96.3 - Combos Ocultos", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -177,7 +177,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO AVANÇADO: AS 5 DIMENSÕES (INCLUINDO ESTRUTURA DE REPETIÇÃO) ---
+# --- 3. CÉREBRO AVANÇADO: AS 6 DIMENSÕES (INCLUINDO COMBO DE ESTRUTURAS) ---
 # =============================================================================
 
 def get_grupo(dezena):
@@ -210,15 +210,23 @@ def calcular_radar_padroes_ocultos(history_slice):
     for p_idx in range(5):
         last_draw = history_slice[-1]
         ult_milhar = str(last_draw['premios'][p_idx]).zfill(4)
+        
+        if len(history_slice) >= 2:
+            penult_draw = history_slice[-2]
+            penult_milhar = str(penult_draw['premios'][p_idx]).zfill(4)
+        else:
+            penult_milhar = "0000"
+
         if ult_milhar == "0000": continue
             
-        # A 5ª DIMENSÃO ADICIONADA: Estrutura da Milhar
+        # A 6ª DIMENSÃO ADICIONADA: O COMBO TÁTICO
         contexts_to_test = {
             "Cabeça da Milhar": ult_milhar[0],
             "Final da Milhar": ult_milhar[-1],
             "Grupo do Bicho": str(get_grupo(ult_milhar[-2:])),
             "Horário Fixo": last_draw['horario'],
-            "Estrutura da Milhar": get_estrutura_milhar(ult_milhar)
+            "Estrutura da Milhar": get_estrutura_milhar(ult_milhar),
+            "Combo de Estruturas (Últimas 2)": f"{get_estrutura_milhar(penult_milhar)} ➡️ {get_estrutura_milhar(ult_milhar)}"
         }
         
         best_pattern = None
@@ -227,8 +235,11 @@ def calcular_radar_padroes_ocultos(history_slice):
         for ctx_name, ctx_val in contexts_to_test.items():
             targets = []
             
-            for i in range(len(history_slice) - 1):
+            # Começa no 1 para poder olhar o prev_prev_m com segurança
+            for i in range(1, len(history_slice) - 1):
                 prev_m = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                prev_prev_m = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+                
                 if prev_m == "0000": continue
                     
                 match = False
@@ -237,13 +248,15 @@ def calcular_radar_padroes_ocultos(history_slice):
                 elif ctx_name == "Grupo do Bicho" and str(get_grupo(prev_m[-2:])) == ctx_val: match = True
                 elif ctx_name == "Horário Fixo" and history_slice[i]['horario'] == ctx_val: match = True
                 elif ctx_name == "Estrutura da Milhar" and get_estrutura_milhar(prev_m) == ctx_val: match = True
+                elif ctx_name == "Combo de Estruturas (Últimas 2)" and f"{get_estrutura_milhar(prev_prev_m)} ➡️ {get_estrutura_milhar(prev_m)}" == ctx_val: match = True
                 
                 if match:
                     next_m = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
                     if next_m != "0000":
                         targets.append(next_m)
             
-            if len(targets) < 5: continue 
+            # Ajuste de Sensibilidade: Como "Combos" são mais raros, aceitamos buscar se aconteceram pelo menos 3 vezes no passado.
+            if len(targets) < 3: continue 
                 
             all_digits = "".join(targets)
             counts = {str(d): all_digits.count(str(d)) for d in range(10)}
@@ -338,12 +351,12 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - GATILHOS DE ELITE")
-    st.markdown("Busca por **Padrões Ocultos (Agora com 5 Dimensões)**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
+    st.title("🛡️ PENTÁGONO - GATILHOS DE ELITE (6D)")
+    st.markdown("Busca por **Padrões Ocultos (Agora com 6 Dimensões, incluindo Sequência de Estruturas)**. O robô só avisa se encontrar uma estratégia histórica que **falhou NO MÁXIMO 1 VEZ SEGUIDA**.")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Escaneando Dimensões (Cabeça, Finais, Grupos, Horários e Estrutura de Repetição)..."):
+    with st.spinner("📡 Escaneando Dimensões (Cabeça, Finais, Grupos, Horários, Estrutura Simples e COMBO DE ESTRUTURAS)..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -576,7 +589,7 @@ else:
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
             st.markdown("### 🎯 Análise Dimensional e Alertas de Estresse")
-            st.write("O robô testa as 5 dimensões (Cabeça, Final, Grupo, Horário e a **Estrutura de Repetição**) para achar qual padrão oferece no **máximo 1 derrota seguida**.")
+            st.write("O robô testa **6 dimensões**, incluindo a nova **Sequência de Combo Estrutural**. Ele vasculha o passado para te dizer o que fazer quando duas anomalias acontecem seguidas.")
             
             radar_inv = calcular_radar_padroes_ocultos(hist_milhar)
             
@@ -595,7 +608,7 @@ else:
                 <div class="{cor_classe}">
                     <h4 style="margin:0; color:white;">🏆 {alvo['premio']}º Prêmio | Última: {alvo['ult_milhar']} | {status_icone}</h4>
                     <p style="margin-top:5px; color:#cccccc;">
-                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado anterior tiver a condição: <b>{padrao['valor_gatilho']}</b>).<br>
+                    O robô detectou o melhor padrão na dimensão: <b>{padrao['dimensao']}</b> (Sempre que o resultado tiver a condição: <b>{padrao['valor_gatilho']}</b>).<br>
                     Nestas condições históricas, os dígitos cortados são: <b>{padrao['cortes']}</b>.
                     </p>
                     <code style="background-color:black; color:#00ff00; padding:5px; display:block; margin-bottom:10px;">{padrao['esquadrao']}</code>
