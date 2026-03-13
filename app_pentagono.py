@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V98.0 - Gatilhos Extremos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V99.0 - Esquadrão 4 Gatilhos", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -35,14 +35,20 @@ CONFIG_BANCAS = {
 }
 
 def is_repetida(m_str):
-    """Verifica se a milhar tem números repetidos (Dupla, Trinca, Quadra)"""
     if len(m_str) != 4: return False
     return len(set(m_str)) < 4
 
 def is_simples(m_str):
-    """Verifica se a milhar NÃO tem números repetidos (1234)"""
     if len(m_str) != 4: return False
     return len(set(m_str)) == 4
+
+def is_all_even(m_str):
+    if len(m_str) != 4: return False
+    return all(d in '02468' for d in m_str)
+
+def is_all_odd(m_str):
+    if len(m_str) != 4: return False
+    return all(d in '13579' for d in m_str)
 
 st.markdown("""
 <style>
@@ -178,114 +184,151 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: GATILHOS EXTREMOS (EXAUSTÃO DUPLA & ESCASSEZ TRIPLA) ---
+# --- 3. CÉREBRO: ESQUADRÃO DE 4 GATILHOS EXTREMOS (>= 95%) ---
 # =============================================================================
 
-def calcular_radar_gatilhos_extremos(history_slice):
+def calcular_radar_esquadrao_sniper(history_slice):
     if len(history_slice) < 50: return []
     resultados_radar = []
     
     for p_idx in range(5):
-        if len(history_slice) < 3: continue
+        if len(history_slice) < 4: continue
             
-        ult_draw = history_slice[-1]
-        penult_draw = history_slice[-2]
-        antepenult_draw = history_slice[-3]
+        m1 = str(history_slice[-1]['premios'][p_idx]).zfill(4) # Última
+        m2 = str(history_slice[-2]['premios'][p_idx]).zfill(4) # Penúltima
+        m3 = str(history_slice[-3]['premios'][p_idx]).zfill(4) # Antepenúltima
+        m4 = str(history_slice[-4]['premios'][p_idx]).zfill(4) # 4ª de trás
         
-        ult_milhar = str(ult_draw['premios'][p_idx]).zfill(4)
-        penult_milhar = str(penult_draw['premios'][p_idx]).zfill(4)
-        antepenult_milhar = str(antepenult_draw['premios'][p_idx]).zfill(4)
-        
-        if ult_milhar == "0000" or penult_milhar == "0000" or antepenult_milhar == "0000": continue
+        if "0000" in [m1, m2, m3, m4]: continue
 
-        # 1. VERIFICA QUAL GATILHO FOI ARMADO
-        gatilho_a_armado = is_repetida(ult_milhar) and is_repetida(penult_milhar)
-        gatilho_b_armado = is_simples(ult_milhar) and is_simples(penult_milhar) and is_simples(antepenult_milhar)
-        
-        tipo_gatilho = ""
-        if gatilho_a_armado:
-            tipo_gatilho = "🔥 GATILHO A: Exaustão de Repetição (2x)"
-        elif gatilho_b_armado:
-            tipo_gatilho = "🧊 GATILHO B: Escassez Tripla (3x Sem Repetir)"
-            
-        gatilho_ativo = gatilho_a_armado or gatilho_b_armado
+        gatilhos_armados = []
 
-        if not gatilho_ativo:
-            resultados_radar.append({
-                "premio": p_idx + 1,
-                "status": "REPOUSO",
-                "gatilho": False
-            })
-            continue
-
-        # 2. VIAJA NO TEMPO PROCURANDO O MESMO GATILHO
-        targets = []
-        
-        if gatilho_a_armado:
+        # --- GATILHO A: Exaustão Repetição (2x) ---
+        if is_repetida(m1) and is_repetida(m2):
+            targets_a = []
             for i in range(1, len(history_slice) - 1):
-                hp = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                hu = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                
-                if hp != "0000" and hu != "0000" and is_repetida(hp) and is_repetida(hu):
-                    hist_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                    if hist_next != "0000": targets.append(hist_next)
-                    
-        elif gatilho_b_armado:
+                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+                if h1 != "0000" and h2 != "0000" and is_repetida(h1) and is_repetida(h2):
+                    nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                    if nxt != "0000": targets_a.append(nxt)
+            
+            if len(targets_a) >= 3:
+                all_digits = "".join(targets_a)
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+                c1, c2 = s_digits[0][0], s_digits[1][0]
+                gatilhos_armados.append(("🔥 GATILHO A (Repetição 2x)", targets_a, c1, c2))
+
+        # --- GATILHO B: Escassez Tripla (3x) ---
+        if is_simples(m1) and is_simples(m2) and is_simples(m3):
+            targets_b = []
             for i in range(2, len(history_slice) - 1):
-                hap = str(history_slice[i-2]['premios'][p_idx]).zfill(4)
-                hp = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                hu = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                
-                if hap != "0000" and hp != "0000" and hu != "0000" and is_simples(hap) and is_simples(hp) and is_simples(hu):
-                    hist_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                    if hist_next != "0000": targets.append(hist_next)
+                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+                h3 = str(history_slice[i-2]['premios'][p_idx]).zfill(4)
+                if "0000" not in [h1, h2, h3] and is_simples(h1) and is_simples(h2) and is_simples(h3):
+                    nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                    if nxt != "0000": targets_b.append(nxt)
                     
-        # Se aconteceu poucas vezes no passado, não há dados para matemática segura
-        if len(targets) < 3:
-            resultados_radar.append({
-                "premio": p_idx + 1,
-                "status": "INSUFICIENTE",
-                "gatilho": True,
-                "tipo": tipo_gatilho
-            })
+            if len(targets_b) >= 3:
+                all_digits = "".join(targets_b)
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+                c1, c2 = s_digits[0][0], s_digits[1][0]
+                gatilhos_armados.append(("🧊 GATILHO B (Escassez Tripla)", targets_b, c1, c2))
+
+        # --- GATILHO C: Dígito Chiclete (4x) ---
+        shared = set(m1) & set(m2) & set(m3) & set(m4)
+        if shared:
+            digito_chiclete = list(shared)[0]
+            targets_c = []
+            for i in range(3, len(history_slice) - 1):
+                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+                h3 = str(history_slice[i-2]['premios'][p_idx]).zfill(4)
+                h4 = str(history_slice[i-3]['premios'][p_idx]).zfill(4)
+                if "0000" not in [h1, h2, h3, h4]:
+                    if digito_chiclete in h1 and digito_chiclete in h2 and digito_chiclete in h3 and digito_chiclete in h4:
+                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                        if nxt != "0000": targets_c.append(nxt)
+            
+            if len(targets_c) >= 3:
+                all_digits = "".join(targets_c)
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                counts[digito_chiclete] = 9999 # Impede que o chiclete seja escolhido novamente como c2 aqui
+                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+                c1 = digito_chiclete
+                c2 = s_digits[0][0]
+                gatilhos_armados.append(("🎯 GATILHO C (Dígito Chiclete 4x)", targets_c, c1, c2))
+
+        # --- GATILHO D: Colapso de Paridade (2x) ---
+        paridade_match = ""
+        if is_all_even(m1) and is_all_even(m2): paridade_match = "PAR"
+        elif is_all_odd(m1) and is_all_odd(m2): paridade_match = "ÍMPAR"
+
+        if paridade_match:
+            targets_d = []
+            for i in range(1, len(history_slice) - 1):
+                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
+                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
+                if h1 != "0000" and h2 != "0000":
+                    if paridade_match == "PAR" and is_all_even(h1) and is_all_even(h2):
+                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                        if nxt != "0000": targets_d.append(nxt)
+                    elif paridade_match == "ÍMPAR" and is_all_odd(h1) and is_all_odd(h2):
+                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+                        if nxt != "0000": targets_d.append(nxt)
+            
+            if len(targets_d) >= 3:
+                all_digits = "".join(targets_d)
+                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
+                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
+                c1, c2 = s_digits[0][0], s_digits[1][0]
+                gatilhos_armados.append((f"⚖️ GATILHO D (100% {paridade_match} 2x)", targets_d, c1, c2))
+
+
+        # --- AVALIAÇÃO DOS GATILHOS ARMADOS ---
+        if not gatilhos_armados:
+            resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
             continue
 
-        # 3. Mapeia os 2 números que mais "fogem" depois desse evento
-        all_digits = "".join(targets)
-        counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-        sorted_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-        corte1, corte2 = sorted_digits[0][0], sorted_digits[1][0]
+        melhor_gatilho = None
+        melhor_taxa = -1
         
-        esquadrao_vivo = [str(d) for d in range(10) if str(d) not in [corte1, corte2]]
-        
-        # 4. SIMULAÇÃO HISTÓRICA E CÁLCULO DE EFICIÊNCIA
-        vitorias = 0
-        derrotas = 0
-        backtest_visual = []
-        
-        for t in targets:
-            venceu = all(d in esquadrao_vivo for d in t)
-            if venceu:
-                vitorias += 1
-                backtest_visual.append("✅")
-            else:
-                derrotas += 1
-                backtest_visual.append("❌")
-                
-        taxa_acerto = (vitorias / len(targets)) * 100
-        
-        resultados_radar.append({
-            "premio": p_idx + 1,
-            "status": "ANALISADO",
-            "gatilho": True,
-            "tipo": tipo_gatilho,
-            "cortes": f"{corte1} e {corte2}",
-            "esquadrao": ",".join([f"{d},{d}" for d in esquadrao_vivo]),
-            "taxa": taxa_acerto,
-            "ocorrencias": len(targets),
-            "backtest": backtest_visual[-10:]
-        })
-        
+        for g_nome, targets, c1, c2 in gatilhos_armados:
+            esq_vivo = [str(d) for d in range(10) if str(d) not in [c1, c2]]
+            vitorias = 0
+            derrotas = 0
+            bt_visual = []
+            
+            for t in targets:
+                if all(d in esq_vivo for d in t):
+                    vitorias += 1
+                    bt_visual.append("✅")
+                else:
+                    derrotas += 1
+                    bt_visual.append("❌")
+                    
+            taxa = (vitorias / len(targets)) * 100
+            if taxa > melhor_taxa:
+                melhor_taxa = taxa
+                melhor_gatilho = {
+                    "premio": p_idx + 1,
+                    "status": "ANALISADO",
+                    "tipo": g_nome,
+                    "cortes": f"{c1} e {c2}",
+                    "esquadrao": ",".join([f"{d},{d}" for d in esq_vivo]),
+                    "taxa": taxa,
+                    "ocorrencias": len(targets),
+                    "backtest": bt_visual[-10:]
+                }
+
+        if melhor_gatilho:
+            resultados_radar.append(melhor_gatilho)
+        else:
+            resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
+            
     return resultados_radar
 
 # =============================================================================
@@ -330,21 +373,21 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - GATILHOS EXTREMOS (V98)")
-    st.markdown("Monitoramento Duplo Ativado: **Exaustão de Repetição (2x)** e **Escassez Tripla (3x)**. Filtro de Segurança cravado em **>= 95%**.")
+    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V99)")
+    st.markdown("O sistema processa 4 Gatilhos de Extrema Anomalia simultaneamente. Filtro Absoluto >= 95%.")
     
     alertas_sniper = []
     
-    with st.spinner("📡 Escaneando Anomalias Extremas nas Bancas..."):
+    with st.spinner("📡 Escaneando Esquadrão de 4 Gatilhos nas Bancas..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 50:
-                    radar_dados = calcular_radar_gatilhos_extremos(hist_milhar)
+                    radar_dados = calcular_radar_esquadrao_sniper(hist_milhar)
                     
                     for alvo in radar_dados:
                         nome_banca_limpo = config['display_name'].replace("👑 ", "")
-                        if alvo.get('status') == "ANALISADO" and alvo.get('gatilho') and alvo.get('taxa', 0) >= 95.0:
+                        if alvo.get('status') == "ANALISADO" and alvo.get('taxa', 0) >= 95.0:
                             alertas_sniper.append({
                                 "banca_key": banca_key,
                                 "banca": nome_banca_limpo,
@@ -355,14 +398,14 @@ if escolha_menu == "🏠 RADAR GERAL (Home)":
                             })
 
     if not alertas_sniper:
-        st.info("😴 **Zona Segura:** Nenhum alvo alcançou os 95% em eventos extremos. O mercado está normal. Cofre trancado.")
+        st.info("😴 **Zona Segura:** Nenhum dos 4 gatilhos extremos bateu os 95% de segurança. O mercado está padrão. Arma travada.")
     else:
         st.markdown("### 🎯 SNIPERS AUTORIZADOS ( >= 95% )")
         for a in alertas_sniper:
             with st.container(border=True):
                 col_txt, col_btn = st.columns([4, 1])
                 with col_txt:
-                    st.success(f"**{a['banca']} - {a['premio']}º Prêmio** | {a['tipo']} | Acerto Histórico: **{a['taxa']}** | Corte: `{a['cortes']}`")
+                    st.success(f"**{a['banca']} - {a['premio']}º Prêmio** | {a['tipo']} | Acerto: **{a['taxa']}** | Corte `{a['cortes']}`.")
                 with col_btn:
                     st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
 
@@ -555,56 +598,45 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Motores de Exaustão (Tolerância 95%)")
+        st.header(f"👑 Esquadrão 4 Gatilhos (Tolerância >= 95%)")
         
-        with st.spinner("Analisando padrões extremos no globo (Repetição vs Escassez)..."):
+        with st.spinner("Varrendo o globo em busca das 4 maiores anomalias matemáticas..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
 
-            st.markdown("### 🎯 Análise Tática: Gatilho A e Gatilho B")
-            st.write("O robô avalia a **Exaustão de Repetição (2x)** e a **Escassez Tripla (3x sem repetir)** simultaneamente.")
+            st.markdown("### 🎯 Análise Tática de Extremos")
+            st.write("O robô procura por Exaustão de Repetição, Escassez Tripla, Dígito Chiclete (4x) e Colapso de Paridade.")
             
-            radar_inv = calcular_radar_gatilhos_extremos(hist_milhar)
+            radar_inv = calcular_radar_esquadrao_sniper(hist_milhar)
             
             for alvo in radar_inv:
-                if alvo['status'] == "REPOUSO":
+                if alvo.get('status') == "REPOUSO":
                     html_card = (
                         '<div class="alerta-cinza">'
                         f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | 😴 REPOUSO</h4>'
-                        '<p style="margin-top:5px; color:#cccccc;">Nenhum evento extremo de anomalia detectado. Aguardando a hora certa.</p>'
+                        '<p style="margin-top:5px; color:#cccccc;">Nenhuma das 4 Anomalias Extremas detectada. Aguardando momento letal.</p>'
                         '</div>'
                     )
                     st.markdown(html_card, unsafe_allow_html=True)
                     continue
 
-                if alvo['status'] == "INSUFICIENTE":
-                    html_card = (
-                        '<div class="alerta-cinza">'
-                        f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {alvo["tipo"]}</h4>'
-                        '<p style="margin-top:5px; color:#cccccc;">O gatilho armou, mas existem poucos dados no passado para garantir segurança. Operação abortada.</p>'
-                        '</div>'
-                    )
-                    st.markdown(html_card, unsafe_allow_html=True)
-                    continue
-                    
                 taxa = alvo['taxa']
                 tipo_g = alvo['tipo']
                 
                 if taxa >= 95.0:
                     cor_classe = "alerta-verde"
                     status_icone = f"🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
-                    msg_corpo = f"A banca atingiu o limite! Cortando os dígitos <b>{alvo['cortes']}</b>, a precisão histórica é cirúrgica."
+                    msg_corpo = f"O algoritmo detectou uma brecha gigante! Cortando os dígitos <b>{alvo['cortes']}</b>, a margem de segurança é de elite."
                     codigo_display = f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
                 else:
                     cor_classe = "alerta-vermelho"
-                    status_icone = f"🚫 ALVO BLOQUEADO (Risco de Falha: {100-taxa:.1f}%)"
-                    msg_corpo = f"A anomalia extrema aconteceu, mas o risco histórico desse corte falhar impede a operação tática."
+                    status_icone = f"🚫 ALVO BLOQUEADO (Acerto: {taxa:.1f}%)"
+                    msg_corpo = f"O gatilho armou, mas o corte de dígitos <b>{alvo['cortes']}</b> não atinge os 95% de segurança exigidos. Fique fora."
                     codigo_display = f'<div style="background-color:black; color:#ff4444; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</div>'
 
-                # HTML LISO SEM RECUOS PARA STREAMLIT NÃO BUGAR
                 html_card = (
                     f'<div class="{cor_classe}">'
                     f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {tipo_g}</h4>'
@@ -612,9 +644,9 @@ else:
                     f'<p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>'
                     f'{codigo_display}'
                     f'<div style="font-size:0.9em; color:#ffd700; margin-top:8px;">'
-                    f'<b>📊 Histórico do Extremo:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
+                    f'<b>📊 Histórico da Anomalia:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
                     f'🔁 Ocorrências Lidas: {alvo["ocorrencias"]}<br>'
-                    f'<b>🕰️ Testes no Passado:</b> {" | ".join(alvo["backtest"])}'
+                    f'<b>🕰️ Backtest:</b> {" | ".join(alvo["backtest"])}'
                     f'</div>'
                     f'</div>'
                 )
@@ -622,7 +654,7 @@ else:
                 
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
-            st.subheader("🛡️ Calculadora de Seguro de Banca (Opcional)")
+            st.subheader("🛡️ Calculadora de Seguro de Banca")
             
             with st.container(border=True):
                 col_calc1, col_calc2 = st.columns(2)
