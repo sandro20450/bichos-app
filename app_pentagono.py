@@ -12,6 +12,7 @@ from collections import Counter
 # --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
     from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import LabelEncoder
     HAS_AI = True
 except ImportError:
@@ -20,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V99.0 - Esquadrão 4 Gatilhos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V100 - Projeto Skynet", page_icon="🤖", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -61,6 +62,7 @@ st.markdown("""
     .alerta-verde { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
     .alerta-vermelho { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
     .alerta-cinza { background-color: #2b2b2b; padding: 15px; border-radius: 8px; border-left: 5px solid #888888; margin-bottom: 10px; }
+    .alerta-skynet-verde { background-color: #001f3f; padding: 15px; border-radius: 8px; border-left: 5px solid #007bff; margin-bottom: 10px; border: 1px solid #007bff;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,7 +102,6 @@ def carregar_dados_hibridos(nome_aba):
         try:
             raw = ws.get_all_values()
             if len(raw) < 2: return []
-            
             dados_unicos = {}
             for row in raw[1:]:
                 if len(row) >= 3:
@@ -115,7 +116,6 @@ def carregar_dados_hibridos(nome_aba):
                                 if p_str.isdigit(): premios.append(p_str.zfill(2))
                                 else: premios.append("00")
                             else: premios.append("00")
-                        
                         dados_unicos[chave] = {
                             "data": dt_obj.strftime('%Y-%m-%d'),
                             "horario": hr_str,
@@ -130,7 +130,6 @@ def carregar_dados_hibridos(nome_aba):
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
     tipo_ext = config.get('tipo_extracao', config['tipo'])
-    
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
     if data_alvo == date.today(): url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     try:
@@ -151,7 +150,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         if ':' in raw: h_detect = raw
                         elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
                         else: h_detect = raw.strip().zfill(2) + ":00"
-                        
                         if normalizar_hora(h_detect) == normalizar_hora(horario_alvo):
                             dezenas_encontradas = []
                             linhas = tabela.find_all('tr')
@@ -171,7 +169,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                                     dezenas_encontradas.append(clean_num[-4:].zfill(4))
                                                 else:
                                                     dezenas_encontradas.append(clean_num[-2:])
-                                                
                             if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                                 if len(dezenas_encontradas) >= 1: 
                                     res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
@@ -184,7 +181,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: ESQUADRÃO DE 4 GATILHOS EXTREMOS (>= 95%) ---
+# --- 3A. CÉREBRO: ESQUADRÃO DE 4 GATILHOS EXTREMOS (>= 95%) ---
 # =============================================================================
 
 def calcular_radar_esquadrao_sniper(history_slice):
@@ -194,16 +191,15 @@ def calcular_radar_esquadrao_sniper(history_slice):
     for p_idx in range(5):
         if len(history_slice) < 4: continue
             
-        m1 = str(history_slice[-1]['premios'][p_idx]).zfill(4) # Última
-        m2 = str(history_slice[-2]['premios'][p_idx]).zfill(4) # Penúltima
-        m3 = str(history_slice[-3]['premios'][p_idx]).zfill(4) # Antepenúltima
-        m4 = str(history_slice[-4]['premios'][p_idx]).zfill(4) # 4ª de trás
+        m1 = str(history_slice[-1]['premios'][p_idx]).zfill(4) 
+        m2 = str(history_slice[-2]['premios'][p_idx]).zfill(4) 
+        m3 = str(history_slice[-3]['premios'][p_idx]).zfill(4) 
+        m4 = str(history_slice[-4]['premios'][p_idx]).zfill(4) 
         
         if "0000" in [m1, m2, m3, m4]: continue
 
         gatilhos_armados = []
 
-        # --- GATILHO A: Exaustão Repetição (2x) ---
         if is_repetida(m1) and is_repetida(m2):
             targets_a = []
             for i in range(1, len(history_slice) - 1):
@@ -212,7 +208,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                 if h1 != "0000" and h2 != "0000" and is_repetida(h1) and is_repetida(h2):
                     nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
                     if nxt != "0000": targets_a.append(nxt)
-            
             if len(targets_a) >= 3:
                 all_digits = "".join(targets_a)
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
@@ -220,7 +215,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                 c1, c2 = s_digits[0][0], s_digits[1][0]
                 gatilhos_armados.append(("🔥 GATILHO A (Repetição 2x)", targets_a, c1, c2))
 
-        # --- GATILHO B: Escassez Tripla (3x) ---
         if is_simples(m1) and is_simples(m2) and is_simples(m3):
             targets_b = []
             for i in range(2, len(history_slice) - 1):
@@ -230,7 +224,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                 if "0000" not in [h1, h2, h3] and is_simples(h1) and is_simples(h2) and is_simples(h3):
                     nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
                     if nxt != "0000": targets_b.append(nxt)
-                    
             if len(targets_b) >= 3:
                 all_digits = "".join(targets_b)
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
@@ -238,7 +231,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                 c1, c2 = s_digits[0][0], s_digits[1][0]
                 gatilhos_armados.append(("🧊 GATILHO B (Escassez Tripla)", targets_b, c1, c2))
 
-        # --- GATILHO C: Dígito Chiclete (4x) ---
         shared = set(m1) & set(m2) & set(m3) & set(m4)
         if shared:
             digito_chiclete = list(shared)[0]
@@ -252,17 +244,15 @@ def calcular_radar_esquadrao_sniper(history_slice):
                     if digito_chiclete in h1 and digito_chiclete in h2 and digito_chiclete in h3 and digito_chiclete in h4:
                         nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
                         if nxt != "0000": targets_c.append(nxt)
-            
             if len(targets_c) >= 3:
                 all_digits = "".join(targets_c)
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                counts[digito_chiclete] = 9999 # Impede que o chiclete seja escolhido novamente como c2 aqui
+                counts[digito_chiclete] = 9999 
                 s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
                 c1 = digito_chiclete
                 c2 = s_digits[0][0]
                 gatilhos_armados.append(("🎯 GATILHO C (Dígito Chiclete 4x)", targets_c, c1, c2))
 
-        # --- GATILHO D: Colapso de Paridade (2x) ---
         paridade_match = ""
         if is_all_even(m1) and is_all_even(m2): paridade_match = "PAR"
         elif is_all_odd(m1) and is_all_odd(m2): paridade_match = "ÍMPAR"
@@ -279,7 +269,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                     elif paridade_match == "ÍMPAR" and is_all_odd(h1) and is_all_odd(h2):
                         nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
                         if nxt != "0000": targets_d.append(nxt)
-            
             if len(targets_d) >= 3:
                 all_digits = "".join(targets_d)
                 counts = {str(d): all_digits.count(str(d)) for d in range(10)}
@@ -287,8 +276,6 @@ def calcular_radar_esquadrao_sniper(history_slice):
                 c1, c2 = s_digits[0][0], s_digits[1][0]
                 gatilhos_armados.append((f"⚖️ GATILHO D (100% {paridade_match} 2x)", targets_d, c1, c2))
 
-
-        # --- AVALIAÇÃO DOS GATILHOS ARMADOS ---
         if not gatilhos_armados:
             resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
             continue
@@ -301,35 +288,105 @@ def calcular_radar_esquadrao_sniper(history_slice):
             vitorias = 0
             derrotas = 0
             bt_visual = []
-            
             for t in targets:
                 if all(d in esq_vivo for d in t):
-                    vitorias += 1
-                    bt_visual.append("✅")
+                    vitorias += 1; bt_visual.append("✅")
                 else:
-                    derrotas += 1
-                    bt_visual.append("❌")
-                    
+                    derrotas += 1; bt_visual.append("❌")
             taxa = (vitorias / len(targets)) * 100
             if taxa > melhor_taxa:
                 melhor_taxa = taxa
                 melhor_gatilho = {
-                    "premio": p_idx + 1,
-                    "status": "ANALISADO",
-                    "tipo": g_nome,
-                    "cortes": f"{c1} e {c2}",
-                    "esquadrao": ",".join([f"{d},{d}" for d in esq_vivo]),
-                    "taxa": taxa,
-                    "ocorrencias": len(targets),
-                    "backtest": bt_visual[-10:]
+                    "premio": p_idx + 1, "status": "ANALISADO", "tipo": g_nome,
+                    "cortes": f"{c1} e {c2}", "esquadrao": ",".join([f"{d},{d}" for d in esq_vivo]),
+                    "taxa": taxa, "ocorrencias": len(targets), "backtest": bt_visual[-10:]
                 }
 
-        if melhor_gatilho:
-            resultados_radar.append(melhor_gatilho)
-        else:
-            resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
+        if melhor_gatilho: resultados_radar.append(melhor_gatilho)
+        else: resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
             
     return resultados_radar
+
+# =============================================================================
+# --- 3B. PROJETO SKYNET: PREVISÃO VIA MACHINE LEARNING (Apenas Lotep/Caminho) ---
+# =============================================================================
+
+def executar_conselho_ia(history_slice, p_idx):
+    if not HAS_AI or len(history_slice) < 50:
+        return None
+
+    records = []
+    for i in range(len(history_slice)-1):
+        curr = history_slice[i]
+        nxt = history_slice[i+1]
+        curr_m = str(curr['premios'][p_idx]).zfill(4)
+        nxt_m = str(nxt['premios'][p_idx]).zfill(4)
+        if curr_m == "0000" or nxt_m == "0000": continue
+        
+        try: dt_obj = datetime.strptime(curr['data'], '%Y-%m-%d'); dia_semana = dt_obj.weekday()
+        except: dia_semana = 0
+        try: hora = int(curr['horario'].split(':')[0])
+        except: hora = 0
+
+        record = {
+            'dia': dia_semana, 'hora': hora,
+            'cabeca': int(curr_m[0]), 'final': int(curr_m[-1])
+        }
+        for d in range(10): record[f't_{d}'] = 1 if str(d) in nxt_m else 0
+        records.append(record)
+
+    if len(records) < 30: return None
+
+    df = pd.DataFrame(records)
+    X = df[['dia', 'hora', 'cabeca', 'final']]
+
+    ult = history_slice[-1]
+    ult_m = str(ult['premios'][p_idx]).zfill(4)
+    if ult_m == "0000": return None
+    
+    try: curr_dia = datetime.strptime(ult['data'], '%Y-%m-%d').weekday()
+    except: curr_dia = 0
+    try: curr_hora = int(ult['horario'].split(':')[0])
+    except: curr_hora = 0
+    
+    X_curr = pd.DataFrame([{'dia': curr_dia, 'hora': curr_hora, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
+
+    probas_rf = {}; probas_lr = {}
+    
+    try:
+        for d in range(10):
+            y = df[f't_{d}']
+            if len(y.unique()) == 1:
+                probas_rf[d] = 1.0 if y.iloc[0] == 1 else 0.0
+                probas_lr[d] = 1.0 if y.iloc[0] == 1 else 0.0
+                continue
+
+            rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=5)
+            lr = LogisticRegression(max_iter=300, random_state=42)
+            rf.fit(X, y); lr.fit(X, y)
+
+            p_rf = rf.predict_proba(X_curr)[0]; p_lr = lr.predict_proba(X_curr)[0]
+            idx_1_rf = list(rf.classes_).index(1); idx_1_lr = list(lr.classes_).index(1)
+            
+            probas_rf[d] = p_rf[idx_1_rf]
+            probas_lr[d] = p_lr[idx_1_lr]
+    except Exception as e: return None
+
+    rank_rf = sorted(probas_rf.items(), key=lambda x: x[1])
+    rank_lr = sorted(probas_lr.items(), key=lambda x: x[1])
+
+    cortes_rf = [str(rank_rf[0][0]), str(rank_rf[1][0])]; cortes_rf.sort()
+    cortes_lr = [str(rank_lr[0][0]), str(rank_lr[1][0])]; cortes_lr.sort()
+
+    consenso = (cortes_rf == cortes_lr)
+    esquadrao = [str(d) for d in range(10) if str(d) not in cortes_rf]
+    esq_formatado = ",".join([f"{d},{d}" for d in esquadrao])
+
+    return {
+        'cortes_rf': cortes_rf, 'cortes_lr': cortes_lr,
+        'consenso': consenso, 'cortes_finais': cortes_rf if consenso else None,
+        'esquadrao': esq_formatado if consenso else ""
+    }
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -373,7 +430,7 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V99)")
+    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V100 Skynet)")
     st.markdown("O sistema processa 4 Gatilhos de Extrema Anomalia simultaneamente. Filtro Absoluto >= 95%.")
     
     alertas_sniper = []
@@ -606,52 +663,92 @@ else:
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
+            
+            # --- CRIAÇÃO DAS ABAS SKYNET PARA LOTEP E CAMINHO ---
+            if banca_selecionada in ["LOTEP_MILHAR", "CAMINHO_MILHAR"] and HAS_AI:
+                abas_estrategia = st.tabs(["🎯 Radares (V99)", "🧠 Skynet (IAs de Machine Learning)"])
+                aba_ativa_radares = abas_estrategia[0]
+                aba_ativa_skynet = abas_estrategia[1]
+            else:
+                aba_ativa_radares = st.container()
+                aba_ativa_skynet = None
 
-            st.markdown("### 🎯 Análise Tática de Extremos")
-            st.write("O robô procura por Exaustão de Repetição, Escassez Tripla, Dígito Chiclete (4x) e Colapso de Paridade.")
-            
-            radar_inv = calcular_radar_esquadrao_sniper(hist_milhar)
-            
-            for alvo in radar_inv:
-                if alvo.get('status') == "REPOUSO":
+            with aba_ativa_radares:
+                st.markdown("### 🎯 Análise Tática de Extremos")
+                st.write("O robô procura por Exaustão de Repetição, Escassez Tripla, Dígito Chiclete (4x) e Colapso de Paridade.")
+                
+                radar_inv = calcular_radar_esquadrao_sniper(hist_milhar)
+                
+                for alvo in radar_inv:
+                    if alvo.get('status') == "REPOUSO":
+                        html_card = (
+                            '<div class="alerta-cinza">'
+                            f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | 😴 REPOUSO</h4>'
+                            '<p style="margin-top:5px; color:#cccccc;">Nenhuma das 4 Anomalias Extremas detectada. Aguardando momento letal.</p>'
+                            '</div>'
+                        )
+                        st.markdown(html_card, unsafe_allow_html=True)
+                        continue
+
+                    taxa = alvo['taxa']
+                    tipo_g = alvo['tipo']
+                    
+                    if taxa >= 95.0:
+                        cor_classe = "alerta-verde"
+                        status_icone = f"🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
+                        msg_corpo = f"O algoritmo detectou uma brecha gigante! Cortando os dígitos <b>{alvo['cortes']}</b>, a margem de segurança é de elite."
+                        codigo_display = f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
+                    else:
+                        cor_classe = "alerta-vermelho"
+                        status_icone = f"🚫 ALVO BLOQUEADO (Acerto: {taxa:.1f}%)"
+                        msg_corpo = f"O gatilho armou, mas o corte de dígitos <b>{alvo['cortes']}</b> não atinge os 95% de segurança exigidos. Fique fora."
+                        codigo_display = f'<div style="background-color:black; color:#ff4444; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</div>'
+
                     html_card = (
-                        '<div class="alerta-cinza">'
-                        f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | 😴 REPOUSO</h4>'
-                        '<p style="margin-top:5px; color:#cccccc;">Nenhuma das 4 Anomalias Extremas detectada. Aguardando momento letal.</p>'
-                        '</div>'
+                        f'<div class="{cor_classe}">'
+                        f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {tipo_g}</h4>'
+                        f'<h5 style="margin:5px 0 0 0; color:#ffd700;">{status_icone}</h5>'
+                        f'<p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>'
+                        f'{codigo_display}'
+                        f'<div style="font-size:0.9em; color:#ffd700; margin-top:8px;">'
+                        f'<b>📊 Histórico da Anomalia:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
+                        f'🔁 Ocorrências Lidas: {alvo["ocorrencias"]}<br>'
+                        f'<b>🕰️ Backtest:</b> {" | ".join(alvo["backtest"])}'
+                        f'</div>'
+                        f'</div>'
                     )
                     st.markdown(html_card, unsafe_allow_html=True)
-                    continue
-
-                taxa = alvo['taxa']
-                tipo_g = alvo['tipo']
-                
-                if taxa >= 95.0:
-                    cor_classe = "alerta-verde"
-                    status_icone = f"🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
-                    msg_corpo = f"O algoritmo detectou uma brecha gigante! Cortando os dígitos <b>{alvo['cortes']}</b>, a margem de segurança é de elite."
-                    codigo_display = f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
-                else:
-                    cor_classe = "alerta-vermelho"
-                    status_icone = f"🚫 ALVO BLOQUEADO (Acerto: {taxa:.1f}%)"
-                    msg_corpo = f"O gatilho armou, mas o corte de dígitos <b>{alvo['cortes']}</b> não atinge os 95% de segurança exigidos. Fique fora."
-                    codigo_display = f'<div style="background-color:black; color:#ff4444; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</div>'
-
-                html_card = (
-                    f'<div class="{cor_classe}">'
-                    f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {tipo_g}</h4>'
-                    f'<h5 style="margin:5px 0 0 0; color:#ffd700;">{status_icone}</h5>'
-                    f'<p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>'
-                    f'{codigo_display}'
-                    f'<div style="font-size:0.9em; color:#ffd700; margin-top:8px;">'
-                    f'<b>📊 Histórico da Anomalia:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
-                    f'🔁 Ocorrências Lidas: {alvo["ocorrencias"]}<br>'
-                    f'<b>🕰️ Backtest:</b> {" | ".join(alvo["backtest"])}'
-                    f'</div>'
-                    f'</div>'
-                )
-                st.markdown(html_card, unsafe_allow_html=True)
-                
+            
+            # --- LÓGICA DA ABA SKYNET ---
+            if aba_ativa_skynet is not None:
+                with aba_ativa_skynet:
+                    st.markdown("### 🧠 Conselho de Generais (Machine Learning)")
+                    st.info("Duas Inteligências Artificiais (Floresta Aleatória e Regressão Logística) estão escaneando o banco de dados. Elas só autorizam o tiro se **ambas concordarem** nos 2 números que devem ser cortados.")
+                    
+                    with st.spinner("Treinando Redes Neurais... Isso pode levar alguns segundos..."):
+                        for p_idx in range(5):
+                            res_ia = executar_conselho_ia(hist_milhar, p_idx)
+                            if res_ia is None:
+                                st.markdown(f'<div class="alerta-cinza"><h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio</h4><p style="margin-top:5px; color:#ccc;">Dados insuficientes para treino das IAs neste prêmio.</p></div>', unsafe_allow_html=True)
+                            else:
+                                if res_ia['consenso']:
+                                    html_skynet = (
+                                        f'<div class="alerta-skynet-verde">'
+                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🟢 CONSENSO DE IA ALCANÇADO</h4>'
+                                        f'<p style="margin-top:5px; color:#ffffff;">As duas Redes Neurais (IA 1 e IA 2) cruzaram as variáveis e <b>concordaram</b>. Os dígitos com menor probabilidade matemática de sair são: <b>{res_ia["cortes_finais"][0]} e {res_ia["cortes_finais"][1]}</b>.</p>'
+                                        f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{res_ia["esquadrao"]}</div>'
+                                        f'</div>'
+                                    )
+                                    st.markdown(html_skynet, unsafe_allow_html=True)
+                                else:
+                                    html_skynet = (
+                                        f'<div class="alerta-vermelho">'
+                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🚫 DIVERGÊNCIA NO COMANDO</h4>'
+                                        f'<p style="margin-top:5px; color:#ffffff;">As Redes Neurais discordaram. IA 1 mandou cortar <b>{res_ia["cortes_rf"][0]} e {res_ia["cortes_rf"][1]}</b>. IA 2 mandou cortar <b>{res_ia["cortes_lr"][0]} e {res_ia["cortes_lr"][1]}</b>. Operação Abortada por segurança.</p>'
+                                        f'</div>'
+                                    )
+                                    st.markdown(html_skynet, unsafe_allow_html=True)
+                                    
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
             st.subheader("🛡️ Calculadora de Seguro de Banca")
