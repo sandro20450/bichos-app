@@ -11,7 +11,7 @@ from collections import Counter
 
 # --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
-    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import LabelEncoder
     HAS_AI = True
@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V100 - Projeto Skynet", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V101 - Triunvirato Skynet", page_icon="🤖", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -308,7 +308,7 @@ def calcular_radar_esquadrao_sniper(history_slice):
     return resultados_radar
 
 # =============================================================================
-# --- 3B. PROJETO SKYNET: PREVISÃO VIA MACHINE LEARNING (Apenas Lotep/Caminho) ---
+# --- 3B. PROJETO SKYNET: TRIUNVIRATO MACHINE LEARNING (Apenas Lotep/Caminho) ---
 # =============================================================================
 
 def executar_conselho_ia(history_slice, p_idx):
@@ -351,7 +351,7 @@ def executar_conselho_ia(history_slice, p_idx):
     
     X_curr = pd.DataFrame([{'dia': curr_dia, 'hora': curr_hora, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
 
-    probas_rf = {}; probas_lr = {}
+    probas_rf = {}; probas_lr = {}; probas_gb = {}
     
     try:
         for d in range(10):
@@ -359,31 +359,43 @@ def executar_conselho_ia(history_slice, p_idx):
             if len(y.unique()) == 1:
                 probas_rf[d] = 1.0 if y.iloc[0] == 1 else 0.0
                 probas_lr[d] = 1.0 if y.iloc[0] == 1 else 0.0
+                probas_gb[d] = 1.0 if y.iloc[0] == 1 else 0.0
                 continue
 
             rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=5)
             lr = LogisticRegression(max_iter=300, random_state=42)
-            rf.fit(X, y); lr.fit(X, y)
+            gb = GradientBoostingClassifier(n_estimators=30, random_state=42, max_depth=3)
+            
+            rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
 
-            p_rf = rf.predict_proba(X_curr)[0]; p_lr = lr.predict_proba(X_curr)[0]
-            idx_1_rf = list(rf.classes_).index(1); idx_1_lr = list(lr.classes_).index(1)
+            p_rf = rf.predict_proba(X_curr)[0]
+            p_lr = lr.predict_proba(X_curr)[0]
+            p_gb = gb.predict_proba(X_curr)[0]
+            
+            idx_1_rf = list(rf.classes_).index(1)
+            idx_1_lr = list(lr.classes_).index(1)
+            idx_1_gb = list(gb.classes_).index(1)
             
             probas_rf[d] = p_rf[idx_1_rf]
             probas_lr[d] = p_lr[idx_1_lr]
+            probas_gb[d] = p_gb[idx_1_gb]
+            
     except Exception as e: return None
 
     rank_rf = sorted(probas_rf.items(), key=lambda x: x[1])
     rank_lr = sorted(probas_lr.items(), key=lambda x: x[1])
+    rank_gb = sorted(probas_gb.items(), key=lambda x: x[1])
 
     cortes_rf = [str(rank_rf[0][0]), str(rank_rf[1][0])]; cortes_rf.sort()
     cortes_lr = [str(rank_lr[0][0]), str(rank_lr[1][0])]; cortes_lr.sort()
+    cortes_gb = [str(rank_gb[0][0]), str(rank_gb[1][0])]; cortes_gb.sort()
 
-    consenso = (cortes_rf == cortes_lr)
+    consenso = (cortes_rf == cortes_lr == cortes_gb)
     esquadrao = [str(d) for d in range(10) if str(d) not in cortes_rf]
     esq_formatado = ",".join([f"{d},{d}" for d in esquadrao])
 
     return {
-        'cortes_rf': cortes_rf, 'cortes_lr': cortes_lr,
+        'cortes_rf': cortes_rf, 'cortes_lr': cortes_lr, 'cortes_gb': cortes_gb,
         'consenso': consenso, 'cortes_finais': cortes_rf if consenso else None,
         'esquadrao': esq_formatado if consenso else ""
     }
@@ -430,7 +442,7 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V100 Skynet)")
+    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V101 Skynet 3.0)")
     st.markdown("O sistema processa 4 Gatilhos de Extrema Anomalia simultaneamente. Filtro Absoluto >= 95%.")
     
     alertas_sniper = []
@@ -655,9 +667,9 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Esquadrão 4 Gatilhos (Tolerância >= 95%)")
+        st.header(f"👑 Esquadrão 4 Gatilhos e Conselho Skynet")
         
-        with st.spinner("Varrendo o globo em busca das 4 maiores anomalias matemáticas..."):
+        with st.spinner("Varrendo o globo em busca de Anomalias Matemáticas e Treinando Redes Neurais..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
@@ -666,7 +678,7 @@ else:
             
             # --- CRIAÇÃO DAS ABAS SKYNET PARA LOTEP E CAMINHO ---
             if banca_selecionada in ["LOTEP_MILHAR", "CAMINHO_MILHAR"] and HAS_AI:
-                abas_estrategia = st.tabs(["🎯 Radares (V99)", "🧠 Skynet (IAs de Machine Learning)"])
+                abas_estrategia = st.tabs(["🎯 Radares Ocultos (V99)", "🧠 Skynet (O Triunvirato - 3 IAs)"])
                 aba_ativa_radares = abas_estrategia[0]
                 aba_ativa_skynet = abas_estrategia[1]
             else:
@@ -722,20 +734,20 @@ else:
             # --- LÓGICA DA ABA SKYNET ---
             if aba_ativa_skynet is not None:
                 with aba_ativa_skynet:
-                    st.markdown("### 🧠 Conselho de Generais (Machine Learning)")
-                    st.info("Duas Inteligências Artificiais (Floresta Aleatória e Regressão Logística) estão escaneando o banco de dados. Elas só autorizam o tiro se **ambas concordarem** nos 2 números que devem ser cortados.")
+                    st.markdown("### 🧠 Conselho de Generais (Triunvirato ML)")
+                    st.info("Três Inteligências Artificiais (Floresta Aleatória, Regressão Logística e Gradient Boosting) estão processando os dados em tempo real. A tela só acende se houver **unanimidade absoluta (3 a 0)**.")
                     
-                    with st.spinner("Treinando Redes Neurais... Isso pode levar alguns segundos..."):
+                    with st.spinner("Treinando as 3 Redes Neurais... O processamento pesado está rodando..."):
                         for p_idx in range(5):
                             res_ia = executar_conselho_ia(hist_milhar, p_idx)
                             if res_ia is None:
-                                st.markdown(f'<div class="alerta-cinza"><h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio</h4><p style="margin-top:5px; color:#ccc;">Dados insuficientes para treino das IAs neste prêmio.</p></div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="alerta-cinza"><h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio</h4><p style="margin-top:5px; color:#ccc;">Dados insuficientes para o treino das IAs neste prêmio.</p></div>', unsafe_allow_html=True)
                             else:
                                 if res_ia['consenso']:
                                     html_skynet = (
                                         f'<div class="alerta-skynet-verde">'
-                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🟢 CONSENSO DE IA ALCANÇADO</h4>'
-                                        f'<p style="margin-top:5px; color:#ffffff;">As duas Redes Neurais (IA 1 e IA 2) cruzaram as variáveis e <b>concordaram</b>. Os dígitos com menor probabilidade matemática de sair são: <b>{res_ia["cortes_finais"][0]} e {res_ia["cortes_finais"][1]}</b>.</p>'
+                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🟢 CONSENSO ABSOLUTO (3x0)</h4>'
+                                        f'<p style="margin-top:5px; color:#ffffff;">As três arquiteturas matemáticas (RF, LR e GB) concordaram com precisão. Os dígitos com menor probabilidade estatística para o próximo sorteio são: <b>{res_ia["cortes_finais"][0]} e {res_ia["cortes_finais"][1]}</b>.</p>'
                                         f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{res_ia["esquadrao"]}</div>'
                                         f'</div>'
                                     )
@@ -744,7 +756,10 @@ else:
                                     html_skynet = (
                                         f'<div class="alerta-vermelho">'
                                         f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🚫 DIVERGÊNCIA NO COMANDO</h4>'
-                                        f'<p style="margin-top:5px; color:#ffffff;">As Redes Neurais discordaram. IA 1 mandou cortar <b>{res_ia["cortes_rf"][0]} e {res_ia["cortes_rf"][1]}</b>. IA 2 mandou cortar <b>{res_ia["cortes_lr"][0]} e {res_ia["cortes_lr"][1]}</b>. Operação Abortada por segurança.</p>'
+                                        f'<p style="margin-top:5px; color:#ffffff;">As Redes Neurais discordaram. A operação é muito arriscada.<br>'
+                                        f'• IA 1 (Floresta) cortou: <b>{res_ia["cortes_rf"][0]} e {res_ia["cortes_rf"][1]}</b>.<br>'
+                                        f'• IA 2 (Logística) cortou: <b>{res_ia["cortes_lr"][0]} e {res_ia["cortes_lr"][1]}</b>.<br>'
+                                        f'• IA 3 (Boosting) cortou: <b>{res_ia["cortes_gb"][0]} e {res_ia["cortes_gb"][1]}</b>.</p>'
                                         f'</div>'
                                     )
                                     st.markdown(html_skynet, unsafe_allow_html=True)
