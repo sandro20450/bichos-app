@@ -13,7 +13,7 @@ from collections import Counter
 try:
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import LabelEncoder
+    import numpy as np
     HAS_AI = True
 except ImportError:
     HAS_AI = False
@@ -21,35 +21,27 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V101 - Triunvirato Skynet", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V102 - Foco 26", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    
     "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
-    
-    "LOTEP_MILHAR": { "display_name": "👑 LOTEP (Vitorino)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5" },
-    
-    "CAMINHO_MILHAR": { "display_name": "👑 CAMINHO (Vitorino)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5" },
-    
+    "LOTEP_MILHAR": { "display_name": "🎯 LOTEP (Foco 26)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "foco_26": True },
+    "CAMINHO_MILHAR": { "display_name": "🎯 CAMINHO (Foco 26)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "foco_26": True },
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
-def is_repetida(m_str):
-    if len(m_str) != 4: return False
-    return len(set(m_str)) < 4
+def get_estrutura(m_str):
+    if len(m_str) != 4: return "Desconhecida"
+    unicos = len(set(m_str))
+    if unicos == 4: return "Simples"
+    if unicos == 3: return "Dupla"
+    if unicos == 2: return "Trinca/DuplaDupla"
+    return "Quadra"
 
-def is_simples(m_str):
-    if len(m_str) != 4: return False
-    return len(set(m_str)) == 4
-
-def is_all_even(m_str):
-    if len(m_str) != 4: return False
-    return all(d in '02468' for d in m_str)
-
-def is_all_odd(m_str):
-    if len(m_str) != 4: return False
-    return all(d in '13579' for d in m_str)
+def target_26_won(m_str):
+    """Retorna True se nem o 2 nem o 6 estiverem na milhar (Vitória do jogador)"""
+    return ('2' not in m_str) and ('6' not in m_str)
 
 st.markdown("""
 <style>
@@ -60,9 +52,12 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
     .alerta-verde { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
+    .alerta-amarelo { background-color: #5a4b00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffc107; margin-bottom: 10px; }
     .alerta-vermelho { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
     .alerta-cinza { background-color: #2b2b2b; padding: 15px; border-radius: 8px; border-left: 5px solid #888888; margin-bottom: 10px; }
-    .alerta-skynet-verde { background-color: #001f3f; padding: 15px; border-radius: 8px; border-left: 5px solid #007bff; margin-bottom: 10px; border: 1px solid #007bff;}
+    .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+    .progress-bg { background-color: #333; border-radius: 10px; height: 15px; width: 100%; margin-top: 5px; }
+    .progress-bar-green { background-color: #28a745; height: 100%; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -181,223 +176,103 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3A. CÉREBRO: ESQUADRÃO DE 4 GATILHOS EXTREMOS (>= 95%) ---
+# --- 3. CÉREBRO: OPERAÇÃO FOCO 26 (Cálculo de Vulnerabilidade) ---
 # =============================================================================
 
-def calcular_radar_esquadrao_sniper(history_slice):
-    if len(history_slice) < 50: return []
-    resultados_radar = []
+def analisar_vulnerabilidade_26(history_slice, p_idx):
+    """Retorna um dicionário com as métricas de fraqueza do 2 e 6 para um prêmio específico"""
+    if len(history_slice) < 40: return None
     
-    for p_idx in range(5):
-        if len(history_slice) < 4: continue
-            
-        m1 = str(history_slice[-1]['premios'][p_idx]).zfill(4) 
-        m2 = str(history_slice[-2]['premios'][p_idx]).zfill(4) 
-        m3 = str(history_slice[-3]['premios'][p_idx]).zfill(4) 
-        m4 = str(history_slice[-4]['premios'][p_idx]).zfill(4) 
-        
-        if "0000" in [m1, m2, m3, m4]: continue
-
-        gatilhos_armados = []
-
-        if is_repetida(m1) and is_repetida(m2):
-            targets_a = []
-            for i in range(1, len(history_slice) - 1):
-                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                if h1 != "0000" and h2 != "0000" and is_repetida(h1) and is_repetida(h2):
-                    nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                    if nxt != "0000": targets_a.append(nxt)
-            if len(targets_a) >= 3:
-                all_digits = "".join(targets_a)
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-                c1, c2 = s_digits[0][0], s_digits[1][0]
-                gatilhos_armados.append(("🔥 GATILHO A (Repetição 2x)", targets_a, c1, c2))
-
-        if is_simples(m1) and is_simples(m2) and is_simples(m3):
-            targets_b = []
-            for i in range(2, len(history_slice) - 1):
-                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                h3 = str(history_slice[i-2]['premios'][p_idx]).zfill(4)
-                if "0000" not in [h1, h2, h3] and is_simples(h1) and is_simples(h2) and is_simples(h3):
-                    nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                    if nxt != "0000": targets_b.append(nxt)
-            if len(targets_b) >= 3:
-                all_digits = "".join(targets_b)
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-                c1, c2 = s_digits[0][0], s_digits[1][0]
-                gatilhos_armados.append(("🧊 GATILHO B (Escassez Tripla)", targets_b, c1, c2))
-
-        shared = set(m1) & set(m2) & set(m3) & set(m4)
-        if shared:
-            digito_chiclete = list(shared)[0]
-            targets_c = []
-            for i in range(3, len(history_slice) - 1):
-                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                h3 = str(history_slice[i-2]['premios'][p_idx]).zfill(4)
-                h4 = str(history_slice[i-3]['premios'][p_idx]).zfill(4)
-                if "0000" not in [h1, h2, h3, h4]:
-                    if digito_chiclete in h1 and digito_chiclete in h2 and digito_chiclete in h3 and digito_chiclete in h4:
-                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                        if nxt != "0000": targets_c.append(nxt)
-            if len(targets_c) >= 3:
-                all_digits = "".join(targets_c)
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                counts[digito_chiclete] = 9999 
-                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-                c1 = digito_chiclete
-                c2 = s_digits[0][0]
-                gatilhos_armados.append(("🎯 GATILHO C (Dígito Chiclete 4x)", targets_c, c1, c2))
-
-        paridade_match = ""
-        if is_all_even(m1) and is_all_even(m2): paridade_match = "PAR"
-        elif is_all_odd(m1) and is_all_odd(m2): paridade_match = "ÍMPAR"
-
-        if paridade_match:
-            targets_d = []
-            for i in range(1, len(history_slice) - 1):
-                h1 = str(history_slice[i]['premios'][p_idx]).zfill(4)
-                h2 = str(history_slice[i-1]['premios'][p_idx]).zfill(4)
-                if h1 != "0000" and h2 != "0000":
-                    if paridade_match == "PAR" and is_all_even(h1) and is_all_even(h2):
-                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                        if nxt != "0000": targets_d.append(nxt)
-                    elif paridade_match == "ÍMPAR" and is_all_odd(h1) and is_all_odd(h2):
-                        nxt = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-                        if nxt != "0000": targets_d.append(nxt)
-            if len(targets_d) >= 3:
-                all_digits = "".join(targets_d)
-                counts = {str(d): all_digits.count(str(d)) for d in range(10)}
-                s_digits = sorted(counts.items(), key=lambda x: (x[1], x[0]))
-                c1, c2 = s_digits[0][0], s_digits[1][0]
-                gatilhos_armados.append((f"⚖️ GATILHO D (100% {paridade_match} 2x)", targets_d, c1, c2))
-
-        if not gatilhos_armados:
-            resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
-            continue
-
-        melhor_gatilho = None
-        melhor_taxa = -1
-        
-        for g_nome, targets, c1, c2 in gatilhos_armados:
-            esq_vivo = [str(d) for d in range(10) if str(d) not in [c1, c2]]
-            vitorias = 0
-            derrotas = 0
-            bt_visual = []
-            for t in targets:
-                if all(d in esq_vivo for d in t):
-                    vitorias += 1; bt_visual.append("✅")
-                else:
-                    derrotas += 1; bt_visual.append("❌")
-            taxa = (vitorias / len(targets)) * 100
-            if taxa > melhor_taxa:
-                melhor_taxa = taxa
-                melhor_gatilho = {
-                    "premio": p_idx + 1, "status": "ANALISADO", "tipo": g_nome,
-                    "cortes": f"{c1} e {c2}", "esquadrao": ",".join([f"{d},{d}" for d in esq_vivo]),
-                    "taxa": taxa, "ocorrencias": len(targets), "backtest": bt_visual[-10:]
-                }
-
-        if melhor_gatilho: resultados_radar.append(melhor_gatilho)
-        else: resultados_radar.append({"premio": p_idx + 1, "status": "REPOUSO"})
-            
-    return resultados_radar
-
-# =============================================================================
-# --- 3B. PROJETO SKYNET: TRIUNVIRATO MACHINE LEARNING (Apenas Lotep/Caminho) ---
-# =============================================================================
-
-def executar_conselho_ia(history_slice, p_idx):
-    if not HAS_AI or len(history_slice) < 50:
-        return None
-
-    records = []
-    for i in range(len(history_slice)-1):
-        curr = history_slice[i]
-        nxt = history_slice[i+1]
-        curr_m = str(curr['premios'][p_idx]).zfill(4)
-        nxt_m = str(nxt['premios'][p_idx]).zfill(4)
-        if curr_m == "0000" or nxt_m == "0000": continue
-        
-        try: dt_obj = datetime.strptime(curr['data'], '%Y-%m-%d'); dia_semana = dt_obj.weekday()
-        except: dia_semana = 0
-        try: hora = int(curr['horario'].split(':')[0])
-        except: hora = 0
-
-        record = {
-            'dia': dia_semana, 'hora': hora,
-            'cabeca': int(curr_m[0]), 'final': int(curr_m[-1])
-        }
-        for d in range(10): record[f't_{d}'] = 1 if str(d) in nxt_m else 0
-        records.append(record)
-
-    if len(records) < 30: return None
-
-    df = pd.DataFrame(records)
-    X = df[['dia', 'hora', 'cabeca', 'final']]
-
-    ult = history_slice[-1]
-    ult_m = str(ult['premios'][p_idx]).zfill(4)
+    ult_draw = history_slice[-1]
+    ult_m = str(ult_draw['premios'][p_idx]).zfill(4)
     if ult_m == "0000": return None
-    
-    try: curr_dia = datetime.strptime(ult['data'], '%Y-%m-%d').weekday()
-    except: curr_dia = 0
-    try: curr_hora = int(ult['horario'].split(':')[0])
-    except: curr_hora = 0
-    
-    X_curr = pd.DataFrame([{'dia': curr_dia, 'hora': curr_hora, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
 
-    probas_rf = {}; probas_lr = {}; probas_gb = {}
+    # 1. PRESSÃO DE EXAUSTÃO (Últimos 10 jogos)
+    ultimos_10 = history_slice[-11:-1]
+    ocorrencias_26 = 0
+    for d in ultimos_10:
+        m = str(d['premios'][p_idx]).zfill(4)
+        if '2' in m or '6' in m: ocorrencias_26 += 1
     
-    try:
-        for d in range(10):
-            y = df[f't_{d}']
-            if len(y.unique()) == 1:
-                probas_rf[d] = 1.0 if y.iloc[0] == 1 else 0.0
-                probas_lr[d] = 1.0 if y.iloc[0] == 1 else 0.0
-                probas_gb[d] = 1.0 if y.iloc[0] == 1 else 0.0
-                continue
+    # Quanto mais o 2 e 6 saíram nos últimos 10 jogos, maior a chance de falharem agora (Reversão)
+    fator_exaustao = (ocorrencias_26 / 10.0) * 100 
 
-            rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=5)
-            lr = LogisticRegression(max_iter=300, random_state=42)
+    # 2. BACKTEST CONDICIONAL (Histórico similar)
+    estrutura_atual = get_estrutura(ult_m)
+    cabeca_atual = ult_m[0]
+    
+    vitorias_bt = 0
+    total_bt = 0
+    for i in range(len(history_slice) - 1):
+        h_curr = str(history_slice[i]['premios'][p_idx]).zfill(4)
+        if h_curr != "0000" and get_estrutura(h_curr) == estrutura_atual and h_curr[0] == cabeca_atual:
+            h_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
+            if h_next != "0000":
+                total_bt += 1
+                if target_26_won(h_next): vitorias_bt += 1
+                
+    taxa_backtest = (vitorias_bt / total_bt * 100) if total_bt > 0 else 50.0
+
+    # 3. PROJETO SKYNET (Previsão de Ausência com 3 IAs)
+    ia_score = 50.0
+    if HAS_AI:
+        records = []
+        for i in range(len(history_slice)-1):
+            curr = history_slice[i]
+            nxt = history_slice[i+1]
+            c_m = str(curr['premios'][p_idx]).zfill(4)
+            n_m = str(nxt['premios'][p_idx]).zfill(4)
+            if c_m == "0000" or n_m == "0000": continue
+            
+            try: d_sem = datetime.strptime(curr['data'], '%Y-%m-%d').weekday()
+            except: d_sem = 0
+            try: hr = int(curr['horario'].split(':')[0])
+            except: hr = 0
+            
+            # Target 1 = O 2 e o 6 NÃO SAÍRAM (Vitória)
+            target = 1 if target_26_won(n_m) else 0
+            records.append({'dia': d_sem, 'hora': hr, 'cabeca': int(c_m[0]), 'final': int(c_m[-1]), 'target': target})
+            
+        df = pd.DataFrame(records)
+        if len(df) >= 30 and len(df['target'].unique()) > 1:
+            X = df[['dia', 'hora', 'cabeca', 'final']]
+            y = df['target']
+            
+            rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=3)
+            lr = LogisticRegression(max_iter=200, random_state=42)
             gb = GradientBoostingClassifier(n_estimators=30, random_state=42, max_depth=3)
             
             rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
-
-            p_rf = rf.predict_proba(X_curr)[0]
-            p_lr = lr.predict_proba(X_curr)[0]
-            p_gb = gb.predict_proba(X_curr)[0]
+            
+            try: c_dia = datetime.strptime(ult['data'], '%Y-%m-%d').weekday()
+            except: c_dia = 0
+            try: c_hr = int(ult['horario'].split(':')[0])
+            except: c_hr = 0
+            
+            X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
             
             idx_1_rf = list(rf.classes_).index(1)
             idx_1_lr = list(lr.classes_).index(1)
             idx_1_gb = list(gb.classes_).index(1)
             
-            probas_rf[d] = p_rf[idx_1_rf]
-            probas_lr[d] = p_lr[idx_1_lr]
-            probas_gb[d] = p_gb[idx_1_gb]
+            p_rf = rf.predict_proba(X_curr)[0][idx_1_rf]
+            p_lr = lr.predict_proba(X_curr)[0][idx_1_lr]
+            p_gb = gb.predict_proba(X_curr)[0][idx_1_gb]
             
-    except Exception as e: return None
+            ia_score = ((p_rf + p_lr + p_gb) / 3.0) * 100
 
-    rank_rf = sorted(probas_rf.items(), key=lambda x: x[1])
-    rank_lr = sorted(probas_lr.items(), key=lambda x: x[1])
-    rank_gb = sorted(probas_gb.items(), key=lambda x: x[1])
-
-    cortes_rf = [str(rank_rf[0][0]), str(rank_rf[1][0])]; cortes_rf.sort()
-    cortes_lr = [str(rank_lr[0][0]), str(rank_lr[1][0])]; cortes_lr.sort()
-    cortes_gb = [str(rank_gb[0][0]), str(rank_gb[1][0])]; cortes_gb.sort()
-
-    consenso = (cortes_rf == cortes_lr == cortes_gb)
-    esquadrao = [str(d) for d in range(10) if str(d) not in cortes_rf]
-    esq_formatado = ",".join([f"{d},{d}" for d in esquadrao])
-
+    # PONTUAÇÃO FINAL (Média Ponderada)
+    # Damos um peso levemente maior para o Backtest Histórico e para a IA.
+    score_final = (taxa_backtest * 0.4) + (ia_score * 0.4) + (fator_exaustao * 0.2)
+    
     return {
-        'cortes_rf': cortes_rf, 'cortes_lr': cortes_lr, 'cortes_gb': cortes_gb,
-        'consenso': consenso, 'cortes_finais': cortes_rf if consenso else None,
-        'esquadrao': esq_formatado if consenso else ""
+        "premio": p_idx + 1,
+        "ult_m": ult_m,
+        "exaustao": fator_exaustao,
+        "backtest": taxa_backtest,
+        "ia_score": ia_score,
+        "score_final": score_final,
+        "ocorrencias_bt": total_bt
     }
 
 # =============================================================================
@@ -405,12 +280,12 @@ def executar_conselho_ia(history_slice, p_idx):
 # =============================================================================
 
 if "menu_nav" not in st.session_state:
-    st.session_state.menu_nav = "🏠 RADAR GERAL (Home)"
+    st.session_state.menu_nav = "🏠 RADAR FOCO 26 (Home)"
 
 def acionar_teletransporte(destino):
     st.session_state.menu_nav = destino
 
-menu_opcoes = ["🏠 RADAR GERAL (Home)"] + list(CONFIG_BANCAS.keys())
+menu_opcoes = ["🏠 RADAR FOCO 26 (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes, key="menu_nav")
 
 def acao_limpar_banco(nome_aba):
@@ -441,42 +316,55 @@ def acao_limpar_banco(nome_aba):
 
 st.sidebar.markdown("---")
 
-if escolha_menu == "🏠 RADAR GERAL (Home)":
-    st.title("🛡️ PENTÁGONO - CENTRAL DE ALVOS (V101 Skynet 3.0)")
-    st.markdown("O sistema processa 4 Gatilhos de Extrema Anomalia simultaneamente. Filtro Absoluto >= 95%.")
+if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
+    st.title("🎯 OPERAÇÃO FOCO 26")
+    st.markdown("O sistema analisa **LOTEP** e **CAMINHO DA SORTE** em tempo real para descobrir o prêmio exato onde os números **2 e 6** estão mais vulneráveis (próximos de falhar). Apenas atire em pontuações globais acima de **80%**.")
     
-    alertas_sniper = []
+    ranking_global = []
     
-    with st.spinner("📡 Escaneando Esquadrão de 4 Gatilhos nas Bancas..."):
+    with st.spinner("📡 Triangulando Vulnerabilidade do 2 e 6 nas Bancas..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config['tipo'] == 'MILHAR_VIEW' and "TRADICIONAL" not in banca_key:
+            if config.get('foco_26') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 50:
-                    radar_dados = calcular_radar_esquadrao_sniper(hist_milhar)
-                    
-                    for alvo in radar_dados:
-                        nome_banca_limpo = config['display_name'].replace("👑 ", "")
-                        if alvo.get('status') == "ANALISADO" and alvo.get('taxa', 0) >= 95.0:
-                            alertas_sniper.append({
-                                "banca_key": banca_key,
-                                "banca": nome_banca_limpo,
-                                "premio": alvo['premio'],
-                                "tipo": alvo['tipo'],
-                                "taxa": f"{alvo['taxa']:.1f}%",
-                                "cortes": alvo['cortes']
-                            })
+                    for p_idx in range(5):
+                        analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
+                        if analise:
+                            analise['banca'] = config['display_name'].replace("🎯 ", "").replace(" (Foco 26)", "")
+                            analise['banca_key'] = banca_key
+                            ranking_global.append(analise)
 
-    if not alertas_sniper:
-        st.info("😴 **Zona Segura:** Nenhum dos 4 gatilhos extremos bateu os 95% de segurança. O mercado está padrão. Arma travada.")
+    if not ranking_global:
+        st.info("⚠️ Sem dados suficientes ou bancas offline.")
     else:
-        st.markdown("### 🎯 SNIPERS AUTORIZADOS ( >= 95% )")
-        for a in alertas_sniper:
-            with st.container(border=True):
-                col_txt, col_btn = st.columns([4, 1])
-                with col_txt:
-                    st.success(f"**{a['banca']} - {a['premio']}º Prêmio** | {a['tipo']} | Acerto: **{a['taxa']}** | Corte `{a['cortes']}`.")
-                with col_btn:
-                    st.button("🎯 Abrir Banca", key=f"go_{a['banca_key']}_{a['premio']}", on_click=acionar_teletransporte, args=(a['banca_key'],), use_container_width=True)
+        # Ordena do maior Score para o menor
+        ranking_global.sort(key=lambda x: x['score_final'], reverse=True)
+        
+        st.markdown("### 🏆 RANKING DE VULNERABILIDADE")
+        
+        for idx, alvo in enumerate(ranking_global):
+            score = alvo['score_final']
+            if score >= 85.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)" # Verde
+            elif score >= 70.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)" # Amarelo
+            else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)" # Vermelho
+            
+            # Formatação Linear para evitar bugs de markdown
+            html_ranking = (
+                f'<div class="card-ranking">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                f'  <h3 style="margin:0; color:#fff;">#{idx+1} | {alvo["banca"]} - {alvo["premio"]}º Prêmio</h3>'
+                f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
+                f'</div>'
+                f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
+                f'<div style="font-size:0.9em; color:#ddd;">'
+                f'  • <b>Backtest (Histórico):</b> A ausência do 2 e 6 bateu em {alvo["backtest"]:.1f}% das vezes que esse cenário ocorreu.<br>'
+                f'  • <b>Skynet (IAs):</b> As 3 redes neurais preveem {alvo["ia_score"]:.1f}% de chance de ausência.<br>'
+                f'  • <b>Exaustão:</b> O 2 e o 6 saíram em {alvo["exaustao"]:.1f}% dos últimos 10 jogos (Pressão Acumulada).'
+                f'</div>'
+                f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
+                f'</div>'
+            )
+            st.markdown(html_ranking, unsafe_allow_html=True)
 
 else:
     banca_selecionada = escolha_menu
@@ -667,116 +555,54 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👑 Esquadrão 4 Gatilhos e Conselho Skynet")
+        st.header(f"🎯 {config['display_name']}")
         
-        with st.spinner("Varrendo o globo em busca de Anomalias Matemáticas e Treinando Redes Neurais..."):
+        with st.spinner("Processando Inteligência Foco 26..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
             
-            # --- CRIAÇÃO DAS ABAS SKYNET PARA LOTEP E CAMINHO ---
-            if banca_selecionada in ["LOTEP_MILHAR", "CAMINHO_MILHAR"] and HAS_AI:
-                abas_estrategia = st.tabs(["🎯 Radares Ocultos (V99)", "🧠 Skynet (O Triunvirato - 3 IAs)"])
-                aba_ativa_radares = abas_estrategia[0]
-                aba_ativa_skynet = abas_estrategia[1]
-            else:
-                aba_ativa_radares = st.container()
-                aba_ativa_skynet = None
-
-            with aba_ativa_radares:
-                st.markdown("### 🎯 Análise Tática de Extremos")
-                st.write("O robô procura por Exaustão de Repetição, Escassez Tripla, Dígito Chiclete (4x) e Colapso de Paridade.")
-                
-                radar_inv = calcular_radar_esquadrao_sniper(hist_milhar)
-                
-                for alvo in radar_inv:
-                    if alvo.get('status') == "REPOUSO":
-                        html_card = (
-                            '<div class="alerta-cinza">'
-                            f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | 😴 REPOUSO</h4>'
-                            '<p style="margin-top:5px; color:#cccccc;">Nenhuma das 4 Anomalias Extremas detectada. Aguardando momento letal.</p>'
-                            '</div>'
+            if config.get('foco_26'):
+                st.markdown("### 📊 Relatório Foco 26 (Status por Prêmio)")
+                for p_idx in range(5):
+                    analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
+                    if analise:
+                        score = analise['score_final']
+                        if score >= 85.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
+                        elif score >= 70.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
+                        else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
+                        
+                        html_ranking = (
+                            f'<div class="card-ranking">'
+                            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                            f'  <h3 style="margin:0; color:#fff;">🏆 {p_idx+1}º Prêmio</h3>'
+                            f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
+                            f'</div>'
+                            f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
+                            f'<div style="font-size:0.9em; color:#ddd;">'
+                            f'  • <b>Backtest:</b> {analise["backtest"]:.1f}% (Baseado em {analise["ocorrencias_bt"]} ocorrências similares)<br>'
+                            f'  • <b>Skynet ML:</b> {analise["ia_score"]:.1f}% de probabilidade de ausência.<br>'
+                            f'  • <b>Exaustão:</b> {analise["exaustao"]:.1f}% de pressão nos últimos 10 sorteios.'
+                            f'</div>'
+                            f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
+                            f'</div>'
                         )
-                        st.markdown(html_card, unsafe_allow_html=True)
-                        continue
-
-                    taxa = alvo['taxa']
-                    tipo_g = alvo['tipo']
-                    
-                    if taxa >= 95.0:
-                        cor_classe = "alerta-verde"
-                        status_icone = f"🟢 SNIPER AUTORIZADO (Taxa >= 95%)"
-                        msg_corpo = f"O algoritmo detectou uma brecha gigante! Cortando os dígitos <b>{alvo['cortes']}</b>, a margem de segurança é de elite."
-                        codigo_display = f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
-                    else:
-                        cor_classe = "alerta-vermelho"
-                        status_icone = f"🚫 ALVO BLOQUEADO (Acerto: {taxa:.1f}%)"
-                        msg_corpo = f"O gatilho armou, mas o corte de dígitos <b>{alvo['cortes']}</b> não atinge os 95% de segurança exigidos. Fique fora."
-                        codigo_display = f'<div style="background-color:black; color:#ff4444; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace;">Cortes: {alvo["cortes"]} (NÃO COPIAR)</div>'
-
-                    html_card = (
-                        f'<div class="{cor_classe}">'
-                        f'<h4 style="margin:0; color:white;">🏆 {alvo["premio"]}º Prêmio | {tipo_g}</h4>'
-                        f'<h5 style="margin:5px 0 0 0; color:#ffd700;">{status_icone}</h5>'
-                        f'<p style="margin-top:5px; color:#ffffff;">{msg_corpo}</p>'
-                        f'{codigo_display}'
-                        f'<div style="font-size:0.9em; color:#ffd700; margin-top:8px;">'
-                        f'<b>📊 Histórico da Anomalia:</b> Taxa de Acerto: <b>{taxa:.1f}%</b> | '
-                        f'🔁 Ocorrências Lidas: {alvo["ocorrencias"]}<br>'
-                        f'<b>🕰️ Backtest:</b> {" | ".join(alvo["backtest"])}'
-                        f'</div>'
-                        f'</div>'
-                    )
-                    st.markdown(html_card, unsafe_allow_html=True)
-            
-            # --- LÓGICA DA ABA SKYNET ---
-            if aba_ativa_skynet is not None:
-                with aba_ativa_skynet:
-                    st.markdown("### 🧠 Conselho de Generais (Triunvirato ML)")
-                    st.info("Três Inteligências Artificiais (Floresta Aleatória, Regressão Logística e Gradient Boosting) estão processando os dados em tempo real. A tela só acende se houver **unanimidade absoluta (3 a 0)**.")
-                    
-                    with st.spinner("Treinando as 3 Redes Neurais... O processamento pesado está rodando..."):
-                        for p_idx in range(5):
-                            res_ia = executar_conselho_ia(hist_milhar, p_idx)
-                            if res_ia is None:
-                                st.markdown(f'<div class="alerta-cinza"><h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio</h4><p style="margin-top:5px; color:#ccc;">Dados insuficientes para o treino das IAs neste prêmio.</p></div>', unsafe_allow_html=True)
-                            else:
-                                if res_ia['consenso']:
-                                    html_skynet = (
-                                        f'<div class="alerta-skynet-verde">'
-                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🟢 CONSENSO ABSOLUTO (3x0)</h4>'
-                                        f'<p style="margin-top:5px; color:#ffffff;">As três arquiteturas matemáticas (RF, LR e GB) concordaram com precisão. Os dígitos com menor probabilidade estatística para o próximo sorteio são: <b>{res_ia["cortes_finais"][0]} e {res_ia["cortes_finais"][1]}</b>.</p>'
-                                        f'<div style="background-color:black; color:#00ff00; padding:10px; border-radius:5px; margin-bottom:10px; font-family:monospace; letter-spacing: 2px;">{res_ia["esquadrao"]}</div>'
-                                        f'</div>'
-                                    )
-                                    st.markdown(html_skynet, unsafe_allow_html=True)
-                                else:
-                                    html_skynet = (
-                                        f'<div class="alerta-vermelho">'
-                                        f'<h4 style="margin:0; color:white;">🏆 {p_idx+1}º Prêmio | 🚫 DIVERGÊNCIA NO COMANDO</h4>'
-                                        f'<p style="margin-top:5px; color:#ffffff;">As Redes Neurais discordaram. A operação é muito arriscada.<br>'
-                                        f'• IA 1 (Floresta) cortou: <b>{res_ia["cortes_rf"][0]} e {res_ia["cortes_rf"][1]}</b>.<br>'
-                                        f'• IA 2 (Logística) cortou: <b>{res_ia["cortes_lr"][0]} e {res_ia["cortes_lr"][1]}</b>.<br>'
-                                        f'• IA 3 (Boosting) cortou: <b>{res_ia["cortes_gb"][0]} e {res_ia["cortes_gb"][1]}</b>.</p>'
-                                        f'</div>'
-                                    )
-                                    st.markdown(html_skynet, unsafe_allow_html=True)
-                                    
+                        st.markdown(html_ranking, unsafe_allow_html=True)
+            else:
+                st.info("⚠️ O módulo Foco 26 não está ativo para esta banca. Utilize a Lotep ou Caminho da Sorte.")
+                
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
             st.subheader("🛡️ Calculadora de Seguro de Banca")
-            
             with st.container(border=True):
                 col_calc1, col_calc2 = st.columns(2)
                 with col_calc1:
                     valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
-                
                 seguro_recomendado = valor_milhar / 21 
                 custo_total = valor_milhar + seguro_recomendado
                 retorno_seguro = seguro_recomendado * 23
-                
                 with col_calc2:
                     st.info(f"**🛡️ Jogue no Grupo da Milhar:** R$ {seguro_recomendado:.2f}")
                     st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
