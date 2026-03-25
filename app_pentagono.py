@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V102 - Foco 26", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V102.1 - Foco 26 (Corrigido)", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -180,7 +180,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
 # =============================================================================
 
 def analisar_vulnerabilidade_26(history_slice, p_idx):
-    """Retorna um dicionário com as métricas de fraqueza do 2 e 6 para um prêmio específico"""
     if len(history_slice) < 40: return None
     
     ult_draw = history_slice[-1]
@@ -189,13 +188,14 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
 
     # 1. PRESSÃO DE EXAUSTÃO (Últimos 10 jogos)
     ultimos_10 = history_slice[-11:-1]
+    if len(ultimos_10) == 0: return None
+    
     ocorrencias_26 = 0
     for d in ultimos_10:
         m = str(d['premios'][p_idx]).zfill(4)
         if '2' in m or '6' in m: ocorrencias_26 += 1
     
-    # Quanto mais o 2 e 6 saíram nos últimos 10 jogos, maior a chance de falharem agora (Reversão)
-    fator_exaustao = (ocorrencias_26 / 10.0) * 100 
+    fator_exaustao = (ocorrencias_26 / float(len(ultimos_10))) * 100.0
 
     # 2. BACKTEST CONDICIONAL (Histórico similar)
     estrutura_atual = get_estrutura(ult_m)
@@ -211,7 +211,7 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
                 total_bt += 1
                 if target_26_won(h_next): vitorias_bt += 1
                 
-    taxa_backtest = (vitorias_bt / total_bt * 100) if total_bt > 0 else 50.0
+    taxa_backtest = (vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
 
     # 3. PROJETO SKYNET (Previsão de Ausência com 3 IAs)
     ia_score = 50.0
@@ -229,7 +229,6 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
             try: hr = int(curr['horario'].split(':')[0])
             except: hr = 0
             
-            # Target 1 = O 2 e o 6 NÃO SAÍRAM (Vitória)
             target = 1 if target_26_won(n_m) else 0
             records.append({'dia': d_sem, 'hora': hr, 'cabeca': int(c_m[0]), 'final': int(c_m[-1]), 'target': target})
             
@@ -251,19 +250,19 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
             
             X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
             
-            idx_1_rf = list(rf.classes_).index(1)
-            idx_1_lr = list(lr.classes_).index(1)
-            idx_1_gb = list(gb.classes_).index(1)
+            # Garante a busca correta da probabilidade da classe 1 (Vitória)
+            idx_1_rf = list(rf.classes_).index(1) if 1 in rf.classes_ else -1
+            idx_1_lr = list(lr.classes_).index(1) if 1 in lr.classes_ else -1
+            idx_1_gb = list(gb.classes_).index(1) if 1 in gb.classes_ else -1
             
-            p_rf = rf.predict_proba(X_curr)[0][idx_1_rf]
-            p_lr = lr.predict_proba(X_curr)[0][idx_1_lr]
-            p_gb = gb.predict_proba(X_curr)[0][idx_1_gb]
+            p_rf = rf.predict_proba(X_curr)[0][idx_1_rf] * 100.0 if idx_1_rf != -1 else 0.0
+            p_lr = lr.predict_proba(X_curr)[0][idx_1_lr] * 100.0 if idx_1_lr != -1 else 0.0
+            p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
             
-            ia_score = ((p_rf + p_lr + p_gb) / 3.0) * 100
+            ia_score = (p_rf + p_lr + p_gb) / 3.0
 
-    # PONTUAÇÃO FINAL (Média Ponderada)
-    # Damos um peso levemente maior para o Backtest Histórico e para a IA.
-    score_final = (taxa_backtest * 0.4) + (ia_score * 0.4) + (fator_exaustao * 0.2)
+    # PONTUAÇÃO FINAL (MÉDIA MATEMÁTICA PURA DIVIDIDA POR 3)
+    score_final = (taxa_backtest + ia_score + fator_exaustao) / 3.0
     
     return {
         "premio": p_idx + 1,
@@ -344,11 +343,10 @@ if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
         
         for idx, alvo in enumerate(ranking_global):
             score = alvo['score_final']
-            if score >= 85.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)" # Verde
-            elif score >= 70.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)" # Amarelo
+            if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)" # Verde
+            elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)" # Amarelo
             else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)" # Vermelho
             
-            # Formatação Linear para evitar bugs de markdown
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center;">'
@@ -357,9 +355,9 @@ if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
                 f'</div>'
                 f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
                 f'<div style="font-size:0.9em; color:#ddd;">'
-                f'  • <b>Backtest (Histórico):</b> A ausência do 2 e 6 bateu em {alvo["backtest"]:.1f}% das vezes que esse cenário ocorreu.<br>'
-                f'  • <b>Skynet (IAs):</b> As 3 redes neurais preveem {alvo["ia_score"]:.1f}% de chance de ausência.<br>'
-                f'  • <b>Exaustão:</b> O 2 e o 6 saíram em {alvo["exaustao"]:.1f}% dos últimos 10 jogos (Pressão Acumulada).'
+                f'  • <b>Backtest:</b> A ausência do 2 e 6 bateu em {alvo["backtest"]:.1f}% das vezes.<br>'
+                f'  • <b>Skynet ML:</b> As 3 redes neurais preveem {alvo["ia_score"]:.1f}% de chance de ausência.<br>'
+                f'  • <b>Exaustão:</b> O 2 e o 6 saíram em {alvo["exaustao"]:.1f}% dos últimos 10 jogos.'
                 f'</div>'
                 f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
                 f'</div>'
@@ -570,8 +568,8 @@ else:
                     analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
                     if analise:
                         score = analise['score_final']
-                        if score >= 85.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
-                        elif score >= 70.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
+                        if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
+                        elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
                         else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
                         
                         html_ranking = (
