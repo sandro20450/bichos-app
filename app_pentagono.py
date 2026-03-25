@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V102.1 - Foco 26 (Corrigido)", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V102.2 - Transparência Matemática", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -176,7 +176,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: OPERAÇÃO FOCO 26 (Cálculo de Vulnerabilidade) ---
+# --- 3. CÉREBRO: OPERAÇÃO FOCO 26 (Cálculo Blindado) ---
 # =============================================================================
 
 def analisar_vulnerabilidade_26(history_slice, p_idx):
@@ -186,7 +186,7 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
     ult_m = str(ult_draw['premios'][p_idx]).zfill(4)
     if ult_m == "0000": return None
 
-    # 1. PRESSÃO DE EXAUSTÃO (Últimos 10 jogos)
+    # 1. PRESSÃO DE EXAUSTÃO
     ultimos_10 = history_slice[-11:-1]
     if len(ultimos_10) == 0: return None
     
@@ -195,9 +195,9 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
         m = str(d['premios'][p_idx]).zfill(4)
         if '2' in m or '6' in m: ocorrencias_26 += 1
     
-    fator_exaustao = (ocorrencias_26 / float(len(ultimos_10))) * 100.0
+    fator_exaustao = float(ocorrencias_26 / float(len(ultimos_10))) * 100.0
 
-    # 2. BACKTEST CONDICIONAL (Histórico similar)
+    # 2. BACKTEST CONDICIONAL
     estrutura_atual = get_estrutura(ult_m)
     cabeca_atual = ult_m[0]
     
@@ -211,9 +211,9 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
                 total_bt += 1
                 if target_26_won(h_next): vitorias_bt += 1
                 
-    taxa_backtest = (vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
+    taxa_backtest = float(vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
 
-    # 3. PROJETO SKYNET (Previsão de Ausência com 3 IAs)
+    # 3. PROJETO SKYNET
     ia_score = 50.0
     if HAS_AI:
         records = []
@@ -250,7 +250,6 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
             
             X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
             
-            # Garante a busca correta da probabilidade da classe 1 (Vitória)
             idx_1_rf = list(rf.classes_).index(1) if 1 in rf.classes_ else -1
             idx_1_lr = list(lr.classes_).index(1) if 1 in lr.classes_ else -1
             idx_1_gb = list(gb.classes_).index(1) if 1 in gb.classes_ else -1
@@ -259,10 +258,10 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
             p_lr = lr.predict_proba(X_curr)[0][idx_1_lr] * 100.0 if idx_1_lr != -1 else 0.0
             p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
             
-            ia_score = (p_rf + p_lr + p_gb) / 3.0
+            ia_score = float((p_rf + p_lr + p_gb) / 3.0)
 
-    # PONTUAÇÃO FINAL (MÉDIA MATEMÁTICA PURA DIVIDIDA POR 3)
-    score_final = (taxa_backtest + ia_score + fator_exaustao) / 3.0
+    # MATEMÁTICA PURA (Soma Direta / 3)
+    score_final = float((taxa_backtest + ia_score + fator_exaustao) / 3.0)
     
     return {
         "premio": p_idx + 1,
@@ -316,7 +315,7 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
-    st.title("🎯 OPERAÇÃO FOCO 26")
+    st.title("🎯 OPERAÇÃO FOCO 26 (Matemática Blindada)")
     st.markdown("O sistema analisa **LOTEP** e **CAMINHO DA SORTE** em tempo real para descobrir o prêmio exato onde os números **2 e 6** estão mais vulneráveis (próximos de falhar). Apenas atire em pontuações globais acima de **80%**.")
     
     ranking_global = []
@@ -336,16 +335,15 @@ if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
     if not ranking_global:
         st.info("⚠️ Sem dados suficientes ou bancas offline.")
     else:
-        # Ordena do maior Score para o menor
         ranking_global.sort(key=lambda x: x['score_final'], reverse=True)
         
         st.markdown("### 🏆 RANKING DE VULNERABILIDADE")
         
         for idx, alvo in enumerate(ranking_global):
             score = alvo['score_final']
-            if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)" # Verde
-            elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)" # Amarelo
-            else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)" # Vermelho
+            if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
+            elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
+            else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
             
             html_ranking = (
                 f'<div class="card-ranking">'
@@ -354,10 +352,11 @@ if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
                 f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
                 f'</div>'
                 f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
-                f'<div style="font-size:0.9em; color:#ddd;">'
-                f'  • <b>Backtest:</b> A ausência do 2 e 6 bateu em {alvo["backtest"]:.1f}% das vezes.<br>'
-                f'  • <b>Skynet ML:</b> As 3 redes neurais preveem {alvo["ia_score"]:.1f}% de chance de ausência.<br>'
-                f'  • <b>Exaustão:</b> O 2 e o 6 saíram em {alvo["exaustao"]:.1f}% dos últimos 10 jogos.'
+                f'<div style="font-size:0.9em; color:#ddd; background-color:#222; padding:10px; border-radius:5px;">'
+                f'  • <b>Backtest:</b> {alvo["backtest"]:.1f}% de chance.<br>'
+                f'  • <b>Skynet ML:</b> {alvo["ia_score"]:.1f}% de chance.<br>'
+                f'  • <b>Exaustão:</b> {alvo["exaustao"]:.1f}% de pressão.<br>'
+                f'  • <b style="color:#00ff00;">Prova Real:</b> ({alvo["backtest"]:.1f} + {alvo["ia_score"]:.1f} + {alvo["exaustao"]:.1f}) ÷ 3 = <b>{score:.1f}%</b>'
                 f'</div>'
                 f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
                 f'</div>'
@@ -579,10 +578,11 @@ else:
                             f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
                             f'</div>'
                             f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
-                            f'<div style="font-size:0.9em; color:#ddd;">'
-                            f'  • <b>Backtest:</b> {analise["backtest"]:.1f}% (Baseado em {analise["ocorrencias_bt"]} ocorrências similares)<br>'
-                            f'  • <b>Skynet ML:</b> {analise["ia_score"]:.1f}% de probabilidade de ausência.<br>'
-                            f'  • <b>Exaustão:</b> {analise["exaustao"]:.1f}% de pressão nos últimos 10 sorteios.'
+                            f'<div style="font-size:0.9em; color:#ddd; background-color:#222; padding:10px; border-radius:5px;">'
+                            f'  • <b>Backtest:</b> {analise["backtest"]:.1f}% de chance.<br>'
+                            f'  • <b>Skynet ML:</b> {analise["ia_score"]:.1f}% de chance.<br>'
+                            f'  • <b>Exaustão:</b> {analise["exaustao"]:.1f}% de pressão.<br>'
+                            f'  • <b style="color:#00ff00;">Prova Real:</b> ({analise["backtest"]:.1f} + {analise["ia_score"]:.1f} + {analise["exaustao"]:.1f}) ÷ 3 = <b>{score:.1f}%</b>'
                             f'</div>'
                             f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
                             f'</div>'
