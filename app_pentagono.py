@@ -21,7 +21,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V103 - Caçador Dinâmico", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V103.1 - Caçador Dinâmico", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -218,7 +218,6 @@ def analisar_cacador_dinamico(history_slice, p_idx):
             
         if len(set(y)) < 2: continue
             
-        # Modelos otimizados para rodarem rápido em loop
         rf = RandomForestClassifier(n_estimators=15, random_state=42, max_depth=3)
         lr = LogisticRegression(max_iter=100, random_state=42)
         gb = GradientBoostingClassifier(n_estimators=15, random_state=42, max_depth=3)
@@ -242,10 +241,8 @@ def analisar_cacador_dinamico(history_slice, p_idx):
 
     if melhor_par is None: return None
 
-    # Encontrou o melhor par, agora calcula exaustão e backtest para eles
     d1, d2 = melhor_par
     
-    # 1. PRESSÃO DE EXAUSTÃO
     ultimos_10 = history_slice[-11:-1]
     ocorrencias = 0
     if len(ultimos_10) > 0:
@@ -255,7 +252,6 @@ def analisar_cacador_dinamico(history_slice, p_idx):
         fator_exaustao = float(ocorrencias / float(len(ultimos_10))) * 100.0
     else: fator_exaustao = 0.0
 
-    # 2. BACKTEST CONDICIONAL
     estrutura_atual = get_estrutura(ult_m)
     cabeca_atual = ult_m[0]
     vitorias_bt = 0
@@ -328,11 +324,11 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
     st.title("🎯 CAÇADOR DINÂMICO DE EXAUSTÃO")
-    st.markdown("O sistema não fica mais preso ao 2 e 6. As 3 IAs escaneiam as 45 duplas possíveis para achar os 2 números mais fracos. **Alvos autorizados apenas se a média da IA for >= 49.0%.**")
+    st.markdown("As 3 IAs escaneiam as 45 duplas possíveis para achar os 2 números mais fracos. **Alvos autorizados apenas se a média da IA for >= 49.0%.**")
     
     ranking_global = []
     
-    with st.spinner("📡 IAs escaneando 45 cenários possíveis em cada prêmio (Isso pode levar até 10 segundos)..."):
+    with st.spinner("📡 IAs escaneando 45 cenários possíveis em cada prêmio..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config.get('foco_dinamico') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -347,10 +343,11 @@ if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
     if not ranking_global:
         st.info("⚠️ Sem dados suficientes, IAs offline ou bancas vazias.")
     else:
-        # Ordena do maior Score (Média IA) para o menor
         ranking_global.sort(key=lambda x: x['media_ia'], reverse=True)
-        
         st.markdown("### 🏆 RANKING DE CAÇA (Média das 3 IAs)")
+        
+        # Agrupamento blindado do HTML para evitar erro 'removeChild'
+        html_final = ""
         
         for idx, alvo in enumerate(ranking_global):
             media = alvo['media_ia']
@@ -377,7 +374,9 @@ if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
                 f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{media if media <= 100 else 100}%;"></div></div>'
                 f'</div>'
             )
-            st.markdown(html_ranking, unsafe_allow_html=True)
+            html_final += html_ranking
+            
+        st.markdown(html_final, unsafe_allow_html=True)
 
 else:
     banca_selecionada = escolha_menu
@@ -579,6 +578,10 @@ else:
             
             if config.get('foco_dinamico'):
                 st.markdown("### 📊 Caçador Dinâmico (Alvos Variáveis)")
+                
+                # Agrupamento blindado
+                html_final = ""
+                
                 for p_idx in range(5):
                     analise = analisar_cacador_dinamico(hist_milhar, p_idx)
                     if analise:
@@ -606,7 +609,9 @@ else:
                             f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{media if media <= 100 else 100}%;"></div></div>'
                             f'</div>'
                         )
-                        st.markdown(html_ranking, unsafe_allow_html=True)
+                        html_final += html_ranking
+                        
+                st.markdown(html_final, unsafe_allow_html=True)
             else:
                 st.info("⚠️ O módulo Dinâmico não está ativo para esta banca. Utilize a Lotep ou Caminho da Sorte.")
                 
