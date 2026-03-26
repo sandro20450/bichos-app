@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
-from collections import Counter
+from itertools import combinations
 
 # --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
@@ -21,13 +21,13 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V102.2 - Transparência Matemática", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V103 - Caçador Dinâmico", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
-    "LOTEP_MILHAR": { "display_name": "🎯 LOTEP (Foco 26)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "foco_26": True },
-    "CAMINHO_MILHAR": { "display_name": "🎯 CAMINHO (Foco 26)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "foco_26": True },
+    "LOTEP_MILHAR": { "display_name": "🎯 LOTEP (Dinâmico)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "foco_dinamico": True },
+    "CAMINHO_MILHAR": { "display_name": "🎯 CAMINHO (Dinâmico)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "foco_dinamico": True },
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
@@ -39,10 +39,6 @@ def get_estrutura(m_str):
     if unicos == 2: return "Trinca/DuplaDupla"
     return "Quadra"
 
-def target_26_won(m_str):
-    """Retorna True se nem o 2 nem o 6 estiverem na milhar (Vitória do jogador)"""
-    return ('2' not in m_str) and ('6' not in m_str)
-
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
@@ -51,13 +47,8 @@ st.markdown("""
     h1, h2, h3 { color: #ffd700 !important; }
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
-    .alerta-verde { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
-    .alerta-amarelo { background-color: #5a4b00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffc107; margin-bottom: 10px; }
-    .alerta-vermelho { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
-    .alerta-cinza { background-color: #2b2b2b; padding: 15px; border-radius: 8px; border-left: 5px solid #888888; margin-bottom: 10px; }
     .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
     .progress-bg { background-color: #333; border-radius: 10px; height: 15px; width: 100%; margin-top: 5px; }
-    .progress-bar-green { background-color: #28a745; height: 100%; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,31 +167,97 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: OPERAÇÃO FOCO 26 (Cálculo Blindado) ---
+# --- 3. CÉREBRO: CAÇADOR DINÂMICO DE DUPLAS (FILTRO 49%) ---
 # =============================================================================
 
-def analisar_vulnerabilidade_26(history_slice, p_idx):
-    if len(history_slice) < 40: return None
+def analisar_cacador_dinamico(history_slice, p_idx):
+    if not HAS_AI or len(history_slice) < 40: return None
     
     ult_draw = history_slice[-1]
     ult_m = str(ult_draw['premios'][p_idx]).zfill(4)
     if ult_m == "0000": return None
 
+    records = []
+    for i in range(len(history_slice)-1):
+        curr = history_slice[i]
+        c_m = str(curr['premios'][p_idx]).zfill(4)
+        if c_m == "0000": continue
+        
+        try: d_sem = datetime.strptime(curr['data'], '%Y-%m-%d').weekday()
+        except: d_sem = 0
+        try: hr = int(curr['horario'].split(':')[0])
+        except: hr = 0
+        
+        records.append({'dia': d_sem, 'hora': hr, 'cabeca': int(c_m[0]), 'final': int(c_m[-1]), 'idx': i})
+
+    if len(records) < 30: return None
+    
+    df_X = pd.DataFrame(records)
+    X = df_X[['dia', 'hora', 'cabeca', 'final']]
+
+    try: c_dia = datetime.strptime(ult_draw['data'], '%Y-%m-%d').weekday()
+    except: c_dia = 0
+    try: c_hr = int(ult_draw['horario'].split(':')[0])
+    except: c_hr = 0
+    X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
+
+    pares_possiveis = list(combinations([str(d) for d in range(10)], 2))
+    
+    melhor_par = None
+    melhor_media_ia = -1.0
+    melhores_probs = (0.0, 0.0, 0.0)
+
+    for d1, d2 in pares_possiveis:
+        y = []
+        for r in records:
+            nxt = history_slice[r['idx']+1]
+            n_m = str(nxt['premios'][p_idx]).zfill(4)
+            # Vitória: se d1 não está E d2 não está na milhar
+            if d1 not in n_m and d2 not in n_m: y.append(1)
+            else: y.append(0)
+            
+        if len(set(y)) < 2: continue
+            
+        # Modelos otimizados para rodarem rápido em loop
+        rf = RandomForestClassifier(n_estimators=15, random_state=42, max_depth=3)
+        lr = LogisticRegression(max_iter=100, random_state=42)
+        gb = GradientBoostingClassifier(n_estimators=15, random_state=42, max_depth=3)
+        
+        rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
+        
+        idx_1_rf = list(rf.classes_).index(1) if 1 in rf.classes_ else -1
+        idx_1_lr = list(lr.classes_).index(1) if 1 in lr.classes_ else -1
+        idx_1_gb = list(gb.classes_).index(1) if 1 in gb.classes_ else -1
+        
+        p_rf = rf.predict_proba(X_curr)[0][idx_1_rf] * 100.0 if idx_1_rf != -1 else 0.0
+        p_lr = lr.predict_proba(X_curr)[0][idx_1_lr] * 100.0 if idx_1_lr != -1 else 0.0
+        p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
+        
+        media_ia = float((p_rf + p_lr + p_gb) / 3.0)
+        
+        if media_ia > melhor_media_ia:
+            melhor_media_ia = media_ia
+            melhor_par = (d1, d2)
+            melhores_probs = (p_rf, p_lr, p_gb)
+
+    if melhor_par is None: return None
+
+    # Encontrou o melhor par, agora calcula exaustão e backtest para eles
+    d1, d2 = melhor_par
+    
     # 1. PRESSÃO DE EXAUSTÃO
     ultimos_10 = history_slice[-11:-1]
-    if len(ultimos_10) == 0: return None
-    
-    ocorrencias_26 = 0
-    for d in ultimos_10:
-        m = str(d['premios'][p_idx]).zfill(4)
-        if '2' in m or '6' in m: ocorrencias_26 += 1
-    
-    fator_exaustao = float(ocorrencias_26 / float(len(ultimos_10))) * 100.0
+    ocorrencias = 0
+    if len(ultimos_10) > 0:
+        for d in ultimos_10:
+            m = str(d['premios'][p_idx]).zfill(4)
+            if d1 in m or d2 in m: ocorrencias += 1
+        fator_exaustao = float(ocorrencias / float(len(ultimos_10))) * 100.0
+    else: fator_exaustao = 0.0
 
     # 2. BACKTEST CONDICIONAL
     estrutura_atual = get_estrutura(ult_m)
     cabeca_atual = ult_m[0]
-    
     vitorias_bt = 0
     total_bt = 0
     for i in range(len(history_slice) - 1):
@@ -209,68 +266,23 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
             h_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
             if h_next != "0000":
                 total_bt += 1
-                if target_26_won(h_next): vitorias_bt += 1
-                
+                if d1 not in h_next and d2 not in h_next: vitorias_bt += 1
     taxa_backtest = float(vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
 
-    # 3. PROJETO SKYNET
-    ia_score = 50.0
-    if HAS_AI:
-        records = []
-        for i in range(len(history_slice)-1):
-            curr = history_slice[i]
-            nxt = history_slice[i+1]
-            c_m = str(curr['premios'][p_idx]).zfill(4)
-            n_m = str(nxt['premios'][p_idx]).zfill(4)
-            if c_m == "0000" or n_m == "0000": continue
-            
-            try: d_sem = datetime.strptime(curr['data'], '%Y-%m-%d').weekday()
-            except: d_sem = 0
-            try: hr = int(curr['horario'].split(':')[0])
-            except: hr = 0
-            
-            target = 1 if target_26_won(n_m) else 0
-            records.append({'dia': d_sem, 'hora': hr, 'cabeca': int(c_m[0]), 'final': int(c_m[-1]), 'target': target})
-            
-        df = pd.DataFrame(records)
-        if len(df) >= 30 and len(df['target'].unique()) > 1:
-            X = df[['dia', 'hora', 'cabeca', 'final']]
-            y = df['target']
-            
-            rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=3)
-            lr = LogisticRegression(max_iter=200, random_state=42)
-            gb = GradientBoostingClassifier(n_estimators=30, random_state=42, max_depth=3)
-            
-            rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
-            
-            try: c_dia = datetime.strptime(ult['data'], '%Y-%m-%d').weekday()
-            except: c_dia = 0
-            try: c_hr = int(ult['horario'].split(':')[0])
-            except: c_hr = 0
-            
-            X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
-            
-            idx_1_rf = list(rf.classes_).index(1) if 1 in rf.classes_ else -1
-            idx_1_lr = list(lr.classes_).index(1) if 1 in lr.classes_ else -1
-            idx_1_gb = list(gb.classes_).index(1) if 1 in gb.classes_ else -1
-            
-            p_rf = rf.predict_proba(X_curr)[0][idx_1_rf] * 100.0 if idx_1_rf != -1 else 0.0
-            p_lr = lr.predict_proba(X_curr)[0][idx_1_lr] * 100.0 if idx_1_lr != -1 else 0.0
-            p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
-            
-            ia_score = float((p_rf + p_lr + p_gb) / 3.0)
+    esquadrao_vivo = [str(n) for n in range(10) if str(n) not in melhor_par]
 
-    # MATEMÁTICA PURA (Soma Direta / 3)
-    score_final = float((taxa_backtest + ia_score + fator_exaustao) / 3.0)
-    
     return {
         "premio": p_idx + 1,
         "ult_m": ult_m,
+        "alvos": f"{d1} e {d2}",
+        "p_rf": melhores_probs[0],
+        "p_lr": melhores_probs[1],
+        "p_gb": melhores_probs[2],
+        "media_ia": melhor_media_ia,
         "exaustao": fator_exaustao,
         "backtest": taxa_backtest,
-        "ia_score": ia_score,
-        "score_final": score_final,
-        "ocorrencias_bt": total_bt
+        "ocorrencias_bt": total_bt,
+        "esquadrao": ",".join([f"{n},{n}" for n in esquadrao_vivo])
     }
 
 # =============================================================================
@@ -278,12 +290,12 @@ def analisar_vulnerabilidade_26(history_slice, p_idx):
 # =============================================================================
 
 if "menu_nav" not in st.session_state:
-    st.session_state.menu_nav = "🏠 RADAR FOCO 26 (Home)"
+    st.session_state.menu_nav = "🏠 RADAR DINÂMICO (Home)"
 
 def acionar_teletransporte(destino):
     st.session_state.menu_nav = destino
 
-menu_opcoes = ["🏠 RADAR FOCO 26 (Home)"] + list(CONFIG_BANCAS.keys())
+menu_opcoes = ["🏠 RADAR DINÂMICO (Home)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes, key="menu_nav")
 
 def acao_limpar_banco(nome_aba):
@@ -314,51 +326,55 @@ def acao_limpar_banco(nome_aba):
 
 st.sidebar.markdown("---")
 
-if escolha_menu == "🏠 RADAR FOCO 26 (Home)":
-    st.title("🎯 OPERAÇÃO FOCO 26 (Matemática Blindada)")
-    st.markdown("O sistema analisa **LOTEP** e **CAMINHO DA SORTE** em tempo real para descobrir o prêmio exato onde os números **2 e 6** estão mais vulneráveis (próximos de falhar). Apenas atire em pontuações globais acima de **80%**.")
+if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
+    st.title("🎯 CAÇADOR DINÂMICO DE EXAUSTÃO")
+    st.markdown("O sistema não fica mais preso ao 2 e 6. As 3 IAs escaneiam as 45 duplas possíveis para achar os 2 números mais fracos. **Alvos autorizados apenas se a média da IA for >= 49.0%.**")
     
     ranking_global = []
     
-    with st.spinner("📡 Triangulando Vulnerabilidade do 2 e 6 nas Bancas..."):
+    with st.spinner("📡 IAs escaneando 45 cenários possíveis em cada prêmio (Isso pode levar até 10 segundos)..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config.get('foco_26') == True:
+            if config.get('foco_dinamico') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 50:
                     for p_idx in range(5):
-                        analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
+                        analise = analisar_cacador_dinamico(hist_milhar, p_idx)
                         if analise:
-                            analise['banca'] = config['display_name'].replace("🎯 ", "").replace(" (Foco 26)", "")
+                            analise['banca'] = config['display_name'].replace("🎯 ", "").replace(" (Dinâmico)", "")
                             analise['banca_key'] = banca_key
                             ranking_global.append(analise)
 
     if not ranking_global:
-        st.info("⚠️ Sem dados suficientes ou bancas offline.")
+        st.info("⚠️ Sem dados suficientes, IAs offline ou bancas vazias.")
     else:
-        ranking_global.sort(key=lambda x: x['score_final'], reverse=True)
+        # Ordena do maior Score (Média IA) para o menor
+        ranking_global.sort(key=lambda x: x['media_ia'], reverse=True)
         
-        st.markdown("### 🏆 RANKING DE VULNERABILIDADE")
+        st.markdown("### 🏆 RANKING DE CAÇA (Média das 3 IAs)")
         
         for idx, alvo in enumerate(ranking_global):
-            score = alvo['score_final']
-            if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
-            elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
-            else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
+            media = alvo['media_ia']
+            alvos_excluir = alvo['alvos']
+            
+            if media >= 49.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO >= 49%)"
+            elif media >= 45.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (QUASE EXAUSTO)"
+            else: cor_barra, status_txt = "#dc3545", "🚫 BLOQUEADO (< 49%)"
             
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center;">'
                 f'  <h3 style="margin:0; color:#fff;">#{idx+1} | {alvo["banca"]} - {alvo["premio"]}º Prêmio</h3>'
-                f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
+                f'  <h3 style="margin:0; color:{cor_barra};">{media:.1f}% IA</h3>'
                 f'</div>'
                 f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
+                f'<p style="margin:0 0 10px 0; color:#ff4444; font-size:1.2em; font-weight:bold;">ALVOS A ELIMINAR: {alvos_excluir}</p>'
                 f'<div style="font-size:0.9em; color:#ddd; background-color:#222; padding:10px; border-radius:5px;">'
-                f'  • <b>Backtest:</b> {alvo["backtest"]:.1f}% de chance.<br>'
-                f'  • <b>Skynet ML:</b> {alvo["ia_score"]:.1f}% de chance.<br>'
-                f'  • <b>Exaustão:</b> {alvo["exaustao"]:.1f}% de pressão.<br>'
-                f'  • <b style="color:#00ff00;">Prova Real:</b> ({alvo["backtest"]:.1f} + {alvo["ia_score"]:.1f} + {alvo["exaustao"]:.1f}) ÷ 3 = <b>{score:.1f}%</b>'
+                f'  • <b>Backtest (Confirmação):</b> No passado, esse cenário derrubou o {alvos_excluir} em {alvo["backtest"]:.1f}% das vezes.<br>'
+                f'  • <b>Exaustão Recente:</b> O {alvos_excluir} apareceu em {alvo["exaustao"]:.1f}% dos últimos 10 jogos.<br>'
+                f'  • <b style="color:#00ff00;">Prova Real IA:</b> ({alvo["p_rf"]:.1f} + {alvo["p_lr"]:.1f} + {alvo["p_gb"]:.1f}) ÷ 3 = <b>{media:.1f}%</b>'
                 f'</div>'
-                f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
+                f'<div style="margin-top:10px; background-color:black; color:#00ff00; padding:10px; border-radius:5px; font-family:monospace; letter-spacing: 2px;">{alvo["esquadrao"]}</div>'
+                f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{media if media <= 100 else 100}%;"></div></div>'
                 f'</div>'
             )
             st.markdown(html_ranking, unsafe_allow_html=True)
@@ -554,42 +570,45 @@ else:
     if config['tipo'] == "MILHAR_VIEW":
         st.header(f"🎯 {config['display_name']}")
         
-        with st.spinner("Processando Inteligência Foco 26..."):
+        with st.spinner("IAs processando 45 combinações de duplas..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
             
-            if config.get('foco_26'):
-                st.markdown("### 📊 Relatório Foco 26 (Status por Prêmio)")
+            if config.get('foco_dinamico'):
+                st.markdown("### 📊 Caçador Dinâmico (Alvos Variáveis)")
                 for p_idx in range(5):
-                    analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
+                    analise = analisar_cacador_dinamico(hist_milhar, p_idx)
                     if analise:
-                        score = analise['score_final']
-                        if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
-                        elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
-                        else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
+                        media = analise['media_ia']
+                        alvos_excluir = analise['alvos']
+                        
+                        if media >= 49.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO >= 49%)"
+                        elif media >= 45.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (QUASE EXAUSTO)"
+                        else: cor_barra, status_txt = "#dc3545", "🚫 BLOQUEADO (< 49%)"
                         
                         html_ranking = (
                             f'<div class="card-ranking">'
                             f'<div style="display:flex; justify-content:space-between; align-items:center;">'
                             f'  <h3 style="margin:0; color:#fff;">🏆 {p_idx+1}º Prêmio</h3>'
-                            f'  <h3 style="margin:0; color:{cor_barra};">{score:.1f}%</h3>'
+                            f'  <h3 style="margin:0; color:{cor_barra};">{media:.1f}% IA</h3>'
                             f'</div>'
                             f'<p style="margin:5px 0 10px 0; color:#aaa; font-weight:bold;">Status: <span style="color:{cor_barra}">{status_txt}</span></p>'
+                            f'<p style="margin:0 0 10px 0; color:#ff4444; font-size:1.2em; font-weight:bold;">ALVOS A ELIMINAR: {alvos_excluir}</p>'
                             f'<div style="font-size:0.9em; color:#ddd; background-color:#222; padding:10px; border-radius:5px;">'
-                            f'  • <b>Backtest:</b> {analise["backtest"]:.1f}% de chance.<br>'
-                            f'  • <b>Skynet ML:</b> {analise["ia_score"]:.1f}% de chance.<br>'
-                            f'  • <b>Exaustão:</b> {analise["exaustao"]:.1f}% de pressão.<br>'
-                            f'  • <b style="color:#00ff00;">Prova Real:</b> ({analise["backtest"]:.1f} + {analise["ia_score"]:.1f} + {analise["exaustao"]:.1f}) ÷ 3 = <b>{score:.1f}%</b>'
+                            f'  • <b>Backtest:</b> {analise["backtest"]:.1f}% de confirmação de queda.<br>'
+                            f'  • <b>Exaustão:</b> O par {alvos_excluir} esteve presente em {analise["exaustao"]:.1f}% dos últimos 10 jogos.<br>'
+                            f'  • <b style="color:#00ff00;">Prova Real IA:</b> ({analise["p_rf"]:.1f} + {analise["p_lr"]:.1f} + {analise["p_gb"]:.1f}) ÷ 3 = <b>{media:.1f}%</b>'
                             f'</div>'
-                            f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{score}%;"></div></div>'
+                            f'<div style="margin-top:10px; background-color:black; color:#00ff00; padding:10px; border-radius:5px; font-family:monospace; letter-spacing: 2px;">{analise["esquadrao"]}</div>'
+                            f'<div class="progress-bg"><div style="background-color:{cor_barra}; height:100%; border-radius:10px; width:{media if media <= 100 else 100}%;"></div></div>'
                             f'</div>'
                         )
                         st.markdown(html_ranking, unsafe_allow_html=True)
             else:
-                st.info("⚠️ O módulo Foco 26 não está ativo para esta banca. Utilize a Lotep ou Caminho da Sorte.")
+                st.info("⚠️ O módulo Dinâmico não está ativo para esta banca. Utilize a Lotep ou Caminho da Sorte.")
                 
             # --- CALCULADORA DE HEDGE ---
             st.markdown("---")
