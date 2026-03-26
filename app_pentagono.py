@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
-from itertools import combinations
 
 # --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
@@ -21,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V103.1 - Caçador Dinâmico", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V103.2 - Caçador Rápido", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -167,7 +166,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: CAÇADOR DINÂMICO DE DUPLAS (FILTRO 49%) ---
+# --- 3. CÉREBRO: CAÇADOR DINÂMICO RÁPIDO (FILTRO 49%) ---
 # =============================================================================
 
 def analisar_cacador_dinamico(history_slice, p_idx):
@@ -201,26 +200,25 @@ def analisar_cacador_dinamico(history_slice, p_idx):
     except: c_hr = 0
     X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
 
-    pares_possiveis = list(combinations([str(d) for d in range(10)], 2))
-    
-    melhor_par = None
-    melhor_media_ia = -1.0
-    melhores_probs = (0.0, 0.0, 0.0)
+    # 1. OTIMIZAÇÃO: A IA analisa os 10 dígitos individualmente (ao invés de 45 duplas)
+    medias_digitos = {}
+    probs_salvas = {}
 
-    for d1, d2 in pares_possiveis:
+    for d in range(10):
+        d_str = str(d)
         y = []
         for r in records:
             nxt = history_slice[r['idx']+1]
             n_m = str(nxt['premios'][p_idx]).zfill(4)
-            # Vitória: se d1 não está E d2 não está na milhar
-            if d1 not in n_m and d2 not in n_m: y.append(1)
+            # Vitória: O dígito NÃO aparece na próxima milhar
+            if d_str not in n_m: y.append(1)
             else: y.append(0)
             
         if len(set(y)) < 2: continue
             
-        rf = RandomForestClassifier(n_estimators=15, random_state=42, max_depth=3)
+        rf = RandomForestClassifier(n_estimators=10, random_state=42, max_depth=3)
         lr = LogisticRegression(max_iter=100, random_state=42)
-        gb = GradientBoostingClassifier(n_estimators=15, random_state=42, max_depth=3)
+        gb = GradientBoostingClassifier(n_estimators=10, random_state=42, max_depth=3)
         
         rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
         
@@ -233,16 +231,22 @@ def analisar_cacador_dinamico(history_slice, p_idx):
         p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
         
         media_ia = float((p_rf + p_lr + p_gb) / 3.0)
-        
-        if media_ia > melhor_media_ia:
-            melhor_media_ia = media_ia
-            melhor_par = (d1, d2)
-            melhores_probs = (p_rf, p_lr, p_gb)
+        medias_digitos[d_str] = media_ia
+        probs_salvas[d_str] = (p_rf, p_lr, p_gb)
 
-    if melhor_par is None: return None
+    # Ordena para pegar os 2 números com maior chance de NÃO saírem
+    rank_digitos = sorted(medias_digitos.items(), key=lambda x: x[1], reverse=True)
+    if len(rank_digitos) < 2: return None
 
-    d1, d2 = melhor_par
+    d1, d2 = rank_digitos[0][0], rank_digitos[1][0]
     
+    # A média da dupla é a média das ausências individuais das IAs
+    melhor_media_ia = (rank_digitos[0][1] + rank_digitos[1][1]) / 2.0
+    p_rf_total = (probs_salvas[d1][0] + probs_salvas[d2][0]) / 2.0
+    p_lr_total = (probs_salvas[d1][1] + probs_salvas[d2][1]) / 2.0
+    p_gb_total = (probs_salvas[d1][2] + probs_salvas[d2][2]) / 2.0
+    
+    # 2. PRESSÃO DE EXAUSTÃO
     ultimos_10 = history_slice[-11:-1]
     ocorrencias = 0
     if len(ultimos_10) > 0:
@@ -252,6 +256,7 @@ def analisar_cacador_dinamico(history_slice, p_idx):
         fator_exaustao = float(ocorrencias / float(len(ultimos_10))) * 100.0
     else: fator_exaustao = 0.0
 
+    # 3. BACKTEST CONDICIONAL
     estrutura_atual = get_estrutura(ult_m)
     cabeca_atual = ult_m[0]
     vitorias_bt = 0
@@ -265,15 +270,17 @@ def analisar_cacador_dinamico(history_slice, p_idx):
                 if d1 not in h_next and d2 not in h_next: vitorias_bt += 1
     taxa_backtest = float(vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
 
-    esquadrao_vivo = [str(n) for n in range(10) if str(n) not in melhor_par]
+    esquadrao_vivo = [str(n) for n in range(10) if n != int(d1) and n != int(d2)]
+    d1_int, d2_int = int(d1), int(d2)
+    alvos_formatados = f"{min(d1_int, d2_int)} e {max(d1_int, d2_int)}"
 
     return {
         "premio": p_idx + 1,
         "ult_m": ult_m,
-        "alvos": f"{d1} e {d2}",
-        "p_rf": melhores_probs[0],
-        "p_lr": melhores_probs[1],
-        "p_gb": melhores_probs[2],
+        "alvos": alvos_formatados,
+        "p_rf": p_rf_total,
+        "p_lr": p_lr_total,
+        "p_gb": p_gb_total,
         "media_ia": melhor_media_ia,
         "exaustao": fator_exaustao,
         "backtest": taxa_backtest,
@@ -324,11 +331,11 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
     st.title("🎯 CAÇADOR DINÂMICO DE EXAUSTÃO")
-    st.markdown("As 3 IAs escaneiam as 45 duplas possíveis para achar os 2 números mais fracos. **Alvos autorizados apenas se a média da IA for >= 49.0%.**")
+    st.markdown("O sistema analisa todos os 10 números para achar as 2 vítimas mais fracas do globo. **Alvos autorizados apenas se a média da IA for >= 49.0%.**")
     
     ranking_global = []
     
-    with st.spinner("📡 IAs escaneando 45 cenários possíveis em cada prêmio..."):
+    with st.spinner("📡 IAs calculando alvos fracos nas bancas..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config.get('foco_dinamico') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
@@ -346,9 +353,7 @@ if escolha_menu == "🏠 RADAR DINÂMICO (Home)":
         ranking_global.sort(key=lambda x: x['media_ia'], reverse=True)
         st.markdown("### 🏆 RANKING DE CAÇA (Média das 3 IAs)")
         
-        # Agrupamento blindado do HTML para evitar erro 'removeChild'
         html_final = ""
-        
         for idx, alvo in enumerate(ranking_global):
             media = alvo['media_ia']
             alvos_excluir = alvo['alvos']
@@ -385,7 +390,7 @@ else:
     url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
-    if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS"):
+    if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS", key=f"btn_faxina_{banca_selecionada}"):
         with st.spinner("Limpando e reescrevendo planilha..."):
             res_principal = acao_limpar_banco(config['nome_aba'])
             if 'base_dez' in config: acao_limpar_banco(config['base_dez'])
@@ -412,7 +417,7 @@ else:
                     
             horario_busca = st.selectbox("Horário:", lista_horarios)
             
-            if st.button("🚀 Baixar & Salvar"):
+            if st.button("🚀 Baixar & Salvar", key=f"btn_baixar_unit_{banca_selecionada}"):
                 aba_dez = config.get('base_dez', config['nome_aba'])
                 aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
                 tipo_ext = config.get('tipo_extracao', config['tipo'])
@@ -452,7 +457,7 @@ else:
         with col1: data_ini = st.sidebar.date_input("Início:", date.today() - timedelta(days=1))
         with col2: data_fim = st.sidebar.date_input("Fim:", date.today())
         
-        if st.sidebar.button("🚀 INICIAR TURBO"):
+        if st.sidebar.button("🚀 INICIAR TURBO", key=f"btn_baixar_turbo_{banca_selecionada}"):
             aba_dez = config.get('base_dez', config['nome_aba'])
             aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
             tipo_ext = config.get('tipo_extracao', config['tipo'])
@@ -569,7 +574,7 @@ else:
     if config['tipo'] == "MILHAR_VIEW":
         st.header(f"🎯 {config['display_name']}")
         
-        with st.spinner("IAs processando 45 combinações de duplas..."):
+        with st.spinner("IAs caçando os alvos mais fracos..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
@@ -579,9 +584,7 @@ else:
             if config.get('foco_dinamico'):
                 st.markdown("### 📊 Caçador Dinâmico (Alvos Variáveis)")
                 
-                # Agrupamento blindado
                 html_final = ""
-                
                 for p_idx in range(5):
                     analise = analisar_cacador_dinamico(hist_milhar, p_idx)
                     if analise:
