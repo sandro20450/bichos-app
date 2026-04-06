@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V113.0 - Extrator Absoluto", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V114.0 - Extrator Cirúrgico", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -105,7 +105,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL (CÓDIGO DE VISÃO RAIO-X EM BLOCO) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO (ISOLAMENTO POR TABELA) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -113,11 +113,17 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    if "TRADICIONAL" in banca_key:
+        url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    else:
+        if data_alvo == date.today(): 
+            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+        else:
+            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'pt-BR,pt;q=0.9',
             'Cache-Control': 'no-cache'
         }
@@ -142,24 +148,21 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         except: return None, "Formato de hora inválido."
         
         for tabela in tabelas:
-            # Puxa todo o texto que está literalmente em volta da tabela (a caixa inteira)
-            texto_container = ""
-            pai = tabela.parent
-            # Sobe 5 níveis no HTML para engolir a caixa azul (card) inteira de uma vez só
-            for _ in range(5):
-                if pai:
-                    texto_container += " " + pai.get_text().lower()
-                    pai = pai.parent
+            txt_tabela = tabela.get_text().lower()
+            if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
-            # Adiciona os cabeçalhos soltos just in case (SEM NENHUM COMANDO DE PARAR DE LER)
-            textos_previos = ""
-            for elem in tabela.find_all_previous(['h1', 'h2', 'h3', 'h4', 'h5', 'strong', 'span', 'div'], limit=15):
-                textos_previos += " " + elem.get_text().lower()
-                        
-            texto_total = tabela.get_text().lower() + " " + texto_container + " " + textos_previos
-            
-            # Acha os números com o formato de hora (ex: 19:20, 19h20, 19hs20)
-            times_found = re.findall(r'(\d{1,2})[:hH]s?(\d{2})', texto_total)
+            # --- MURALHA DE ISOLAMENTO ---
+            # O robô copia o texto da tabela e lê de trás para frente. 
+            # Ele PARA DE LER imediatamente ao esbarrar em outra tabela no código.
+            texto_analise = txt_tabela + " "
+            for prev in tabela.previous_elements:
+                if prev.name == 'table': 
+                    break # Fim do isolamento. Não vaza para os outros prêmios.
+                if isinstance(prev, str):
+                    texto_analise += prev.lower() + " "
+                    
+            # Procura os números que formam a hora dentro do bloco isolado
+            times_found = re.findall(r'(\d{1,2})[:hH]s?(\d{2})', texto_analise)
             
             match_found = False
             for h, m in times_found:
@@ -197,7 +200,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                 
                 return None, "Tabela Encontrada, mas falha ao ler as milhares."
                 
-        return None, f"Horário ({horario_alvo}) não encontrado na página. A banca ainda não publicou."
+        return None, f"Horário ({horario_alvo}) não encontrado na página."
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
@@ -375,7 +378,10 @@ else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
+    if "TRADICIONAL" in banca_selecionada:
+        url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
+    else:
+        url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
@@ -392,6 +398,9 @@ else:
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
+    # -------------------------------------------------------------------------
+    # BLOCO EXTRATOR UNITÁRIO 
+    # -------------------------------------------------------------------------
     if modo_extracao == "🎯 Unitária":
         data_busca = date.today()
         horario_busca = config['horarios'][0]
@@ -444,6 +453,9 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro na Planilha do Google")
 
+    # -------------------------------------------------------------------------
+    # BLOCO EXTRATOR TURBO
+    # -------------------------------------------------------------------------
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
@@ -503,6 +515,9 @@ else:
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Google")
 
+    # -------------------------------------------------------------------------
+    # BLOCO LANÇAMENTO MANUAL
+    # -------------------------------------------------------------------------
     elif modo_extracao == "✍️ Manual":
         data_busca_man = date.today()
         horario_busca_man = config['horarios'][0]
