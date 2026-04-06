@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V116.0 - Atirador de Elite", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V117.0 - Prova Real", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR DE ELITE (BLINDAGEM CONTRA MENUS) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -160,32 +160,26 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             txt_tabela = tabela.get_text().lower()
             if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
-            # --- VISÃO DE FRANCO-ATIRADOR (ISOLAMENTO ESTRITO) ---
             texto_analise = txt_tabela + " "
-            
-            # 1. Pega apenas o PRIMEIRO cabeçalho oficial colado na tabela
             cabecalho = tabela.find_previous(['h2', 'h3', 'h4', 'h5', 'caption'])
             if cabecalho:
                 texto_analise += cabecalho.get_text().lower() + " "
                 
-            # 2. Pega a caixa pai da tabela apenas se for pequena (rejeita menus e a página inteira)
             if tabela.parent:
                 txt_parent = tabela.parent.get_text().lower()
                 if len(txt_parent) < 1500:  
                     texto_analise += txt_parent + " "
             
-            # 3. Pega blocos soltos vizinhos imediatamente acima da tabela
             prev = tabela.previous_sibling
             for _ in range(3):
                 if prev:
-                    if prev.name == 'table': break # Se bater noutra tabela, para instantaneamente
+                    if prev.name == 'table': break 
                     if prev.name and prev.get_text():
                         texto_analise += prev.get_text().lower() + " "
                     elif isinstance(prev, str):
                         texto_analise += prev.lower() + " "
                     prev = prev.previous_sibling
 
-            # Busca segura com Regex para não confundir
             times_found = re.findall(r'(?<!\d)(\d{1,2})[:hH]s?(\d{2})(?!\d)', texto_analise)
             
             match_found = False
@@ -228,14 +222,15 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS (RADAR DE CENTENAS 1º AO 5º) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS & BACKTEST (RADAR DE CENTENAS 1º AO 5º) ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
+    """Analisa as centenas e prevê o próximo dígito."""
     if len(history_slice) < 15: return None
 
     historico_centenas = []
-    historico_milhares = [] # Captura a milhar completa para exibir
+    historico_milhares = [] 
     for draw in history_slice:
         centenas_draw = []
         milhares_draw = []
@@ -310,6 +305,50 @@ def analisar_radar_centena(history_slice):
         "score": top_data["score"],
         "rank_completo": rank
     }
+
+def rodar_backtest_centenas(history_slice, qtd_testes=5):
+    """Viaja no tempo e testa as previsões passadas contra a realidade."""
+    # Precisa de pelo menos o histórico inicial (15) + a quantidade de testes que queremos fazer
+    if len(history_slice) < 15 + qtd_testes: 
+        return None 
+        
+    resultados_bt = []
+    inicio_teste = len(history_slice) - qtd_testes
+    
+    for i in range(inicio_teste, len(history_slice)):
+        # Esconde o futuro: Pega os dados só até antes do sorteio que vamos testar
+        historico_passado = history_slice[:i]
+        sorteio_real = history_slice[i]
+        
+        # Pede pra IA analisar o passado
+        analise_passada = analisar_radar_centena(historico_passado)
+        if not analise_passada: continue
+            
+        digito_previsto = analise_passada['top_digit']
+        
+        # Extrai as centenas que REALMENTE saíram naquele sorteio
+        centenas_reais = []
+        for p in range(5):
+            try:
+                m = str(sorteio_real['premios'][p]).zfill(4)
+                if m != "0000" and m != "00" and len(m) == 4:
+                    centenas_reais.append(m[1])
+            except: pass
+            
+        if not centenas_reais: continue
+            
+        # O Julgamento: O dígito previsto estava entre as centenas que saíram?
+        vitoria = digito_previsto in centenas_reais
+        
+        resultados_bt.append({
+            'data': sorteio_real['data'],
+            'horario': sorteio_real['horario'],
+            'previsto': digito_previsto,
+            'reais': centenas_reais,
+            'vitoria': vitoria
+        })
+        
+    return resultados_bt
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -639,6 +678,30 @@ else:
                         for i in range(min(3, len(rank))):
                             dig = rank[i][0]
                             st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']})")
+                            
+                    # --- NOVO BLOCO: PROVA REAL / BACKTEST ---
+                    st.markdown("---")
+                    st.markdown("#### 🔬 Prova Real (Backtest dos Últimos 5 Sorteios)")
+                    resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
+                    
+                    if resultados_bt:
+                        # Mostra do mais recente (último) para o mais antigo
+                        for bt in reversed(resultados_bt):
+                            status_icon = "🟢 VITÓRIA" if bt['vitoria'] else "❌ DERROTA"
+                            cor_fundo = "#1a3a1a" if bt['vitoria'] else "#3a1a1a"
+                            cor_borda = "#00ff00" if bt['vitoria'] else "#ff4444"
+                            
+                            st.markdown(
+                                f"<div style='background-color:{cor_fundo}; padding:10px; border-radius:5px; margin-bottom:8px; border-left: 4px solid {cor_borda};'>"
+                                f"<span style='color:#ccc; font-size:0.9em;'>Sorteio: <b>{bt['data']} às {bt['horario']}</b></span><br>"
+                                f"A IA previu a centena: <b>{bt['previsto']}</b> | Centenas Reais que saíram: <b>{', '.join(bt['reais'])}</b> <br>"
+                                f"<span style='color:{cor_borda}; font-weight:bold; font-size:1.1em;'>{status_icon}</span>"
+                                f"</div>", 
+                                unsafe_allow_html=True
+                            )
+                    else:
+                        st.info("Aguardando mais dados para gerar o backtest (mínimo de 20 sorteios armazenados).")
+
                 else:
                     st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
