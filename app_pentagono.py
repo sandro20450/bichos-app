@@ -8,21 +8,11 @@ import re
 from datetime import datetime, date, timedelta
 import time
 
-# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
-try:
-    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-    from sklearn.linear_model import LogisticRegression
-    import numpy as np
-    HAS_AI = True
-except ImportError:
-    HAS_AI = False
-
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V112.0 - Rede PlayBicho", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V113.0 - Extrator Absoluto", page_icon="👁️", layout="wide")
 
-# SLUGS ATUALIZADOS PARA O PADRÃO DO PLAYBICHO
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     
@@ -115,7 +105,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL (SATÉLITE PLAYBICHO PARA TODAS AS BANCAS) ---
+# --- 3. EXTRATOR UNIVERSAL (CÓDIGO DE VISÃO RAIO-X EM BLOCO) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -123,8 +113,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    # 🎯 ROTA UNIVERSAL PLAYBICHO COM INJEÇÃO DE DATA
-    # Ex: https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-2026-03-13
     url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
@@ -141,7 +129,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             except requests.exceptions.RequestException:
                 time.sleep(1)
                 
-        # Fallback caso o PlayBicho use a URL base sem data para o dia de hoje
         if r.status_code == 404 and data_alvo == date.today():
             url_fallback = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}"
             r = requests.get(url_fallback, headers=headers, timeout=10)
@@ -154,22 +141,24 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         try: target_h, target_m = map(int, horario_alvo.split(':'))
         except: return None, "Formato de hora inválido."
         
-        h_formatado = horario_alvo 
-        h_h = f"{target_h}h{target_m:02d}" 
-        h_h_curto = f"{target_h}h"
-        
         for tabela in tabelas:
-            txt_tabela = tabela.get_text().lower()
+            # Puxa todo o texto que está literalmente em volta da tabela (a caixa inteira)
+            texto_container = ""
+            pai = tabela.parent
+            # Sobe 5 níveis no HTML para engolir a caixa azul (card) inteira de uma vez só
+            for _ in range(5):
+                if pai:
+                    texto_container += " " + pai.get_text().lower()
+                    pai = pai.parent
             
-            # Lê a tabela e o entorno para achar o horário do prêmio
-            textos_associados = [txt_tabela]
-            for elem in tabela.find_all_previous(['h2', 'h3', 'h4', 'h5', 'div', 'p', 'caption', 'span', 'strong'], limit=10):
-                texto_elem = elem.get_text().lower()
-                textos_associados.append(texto_elem)
-                if "resultado" in texto_elem or "prêmio" in texto_elem or "jogo do bicho" in texto_elem: break
+            # Adiciona os cabeçalhos soltos just in case (SEM NENHUM COMANDO DE PARAR DE LER)
+            textos_previos = ""
+            for elem in tabela.find_all_previous(['h1', 'h2', 'h3', 'h4', 'h5', 'strong', 'span', 'div'], limit=15):
+                textos_previos += " " + elem.get_text().lower()
                         
-            texto_total = " ".join(textos_associados)
+            texto_total = tabela.get_text().lower() + " " + texto_container + " " + textos_previos
             
+            # Acha os números com o formato de hora (ex: 19:20, 19h20, 19hs20)
             times_found = re.findall(r'(\d{1,2})[:hH]s?(\d{2})', texto_total)
             
             match_found = False
@@ -206,7 +195,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                     elif len(dezenas_encontradas) >= 5: 
                         return dezenas_encontradas[:5], "Sucesso"
                 
-                return None, "Tabela Encontrada, mas falha ao ler as milhares do PlayBicho."
+                return None, "Tabela Encontrada, mas falha ao ler as milhares."
                 
         return None, f"Horário ({horario_alvo}) não encontrado na página. A banca ainda não publicou."
     except Exception as e: return None, f"Erro de Varredura: {e}"
@@ -386,7 +375,6 @@ else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    # 🔗 LINK DINÂMICO PARA A BANCA CERTA (SATÉLITE PLAYBICHO)
     url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
@@ -404,9 +392,6 @@ else:
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
-    # -------------------------------------------------------------------------
-    # BLOCO EXTRATOR UNITÁRIO 
-    # -------------------------------------------------------------------------
     if modo_extracao == "🎯 Unitária":
         data_busca = date.today()
         horario_busca = config['horarios'][0]
@@ -459,9 +444,6 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro na Planilha do Google")
 
-    # -------------------------------------------------------------------------
-    # BLOCO EXTRATOR TURBO
-    # -------------------------------------------------------------------------
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
@@ -521,9 +503,6 @@ else:
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Google")
 
-    # -------------------------------------------------------------------------
-    # BLOCO LANÇAMENTO MANUAL
-    # -------------------------------------------------------------------------
     elif modo_extracao == "✍️ Manual":
         data_busca_man = date.today()
         horario_busca_man = config['horarios'][0]
