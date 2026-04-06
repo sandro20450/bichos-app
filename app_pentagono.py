@@ -8,10 +8,19 @@ import re
 from datetime import datetime, date, timedelta
 import time
 
+# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
+try:
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+    import numpy as np
+    HAS_AI = True
+except ImportError:
+    HAS_AI = False
+
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V114.0 - Extrator Cirúrgico", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V116.0 - Atirador de Elite", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -105,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO (ISOLAMENTO POR TABELA) ---
+# --- 3. EXTRATOR DE ELITE (BLINDAGEM CONTRA MENUS) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -151,18 +160,33 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             txt_tabela = tabela.get_text().lower()
             if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
-            # --- MURALHA DE ISOLAMENTO ---
-            # O robô copia o texto da tabela e lê de trás para frente. 
-            # Ele PARA DE LER imediatamente ao esbarrar em outra tabela no código.
+            # --- VISÃO DE FRANCO-ATIRADOR (ISOLAMENTO ESTRITO) ---
             texto_analise = txt_tabela + " "
-            for prev in tabela.previous_elements:
-                if prev.name == 'table': 
-                    break # Fim do isolamento. Não vaza para os outros prêmios.
-                if isinstance(prev, str):
-                    texto_analise += prev.lower() + " "
-                    
-            # Procura os números que formam a hora dentro do bloco isolado
-            times_found = re.findall(r'(\d{1,2})[:hH]s?(\d{2})', texto_analise)
+            
+            # 1. Pega apenas o PRIMEIRO cabeçalho oficial colado na tabela
+            cabecalho = tabela.find_previous(['h2', 'h3', 'h4', 'h5', 'caption'])
+            if cabecalho:
+                texto_analise += cabecalho.get_text().lower() + " "
+                
+            # 2. Pega a caixa pai da tabela apenas se for pequena (rejeita menus e a página inteira)
+            if tabela.parent:
+                txt_parent = tabela.parent.get_text().lower()
+                if len(txt_parent) < 1500:  
+                    texto_analise += txt_parent + " "
+            
+            # 3. Pega blocos soltos vizinhos imediatamente acima da tabela
+            prev = tabela.previous_sibling
+            for _ in range(3):
+                if prev:
+                    if prev.name == 'table': break # Se bater noutra tabela, para instantaneamente
+                    if prev.name and prev.get_text():
+                        texto_analise += prev.get_text().lower() + " "
+                    elif isinstance(prev, str):
+                        texto_analise += prev.lower() + " "
+                    prev = prev.previous_sibling
+
+            # Busca segura com Regex para não confundir
+            times_found = re.findall(r'(?<!\d)(\d{1,2})[:hH]s?(\d{2})(?!\d)', texto_analise)
             
             match_found = False
             for h, m in times_found:
@@ -200,7 +224,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                 
                 return None, "Tabela Encontrada, mas falha ao ler as milhares."
                 
-        return None, f"Horário ({horario_alvo}) não encontrado na página."
+        return None, f"Horário ({horario_alvo}) não encontrado na página. A banca ainda não publicou."
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
@@ -211,20 +235,25 @@ def analisar_radar_centena(history_slice):
     if len(history_slice) < 15: return None
 
     historico_centenas = []
+    historico_milhares = [] # Captura a milhar completa para exibir
     for draw in history_slice:
         centenas_draw = []
+        milhares_draw = []
         for p in range(5):
             try:
                 m = str(draw['premios'][p]).zfill(4)
                 if m != "0000" and m != "00" and len(m) == 4:
                     centenas_draw.append(m[1]) 
+                    milhares_draw.append(m)
             except: continue
         if centenas_draw:
             historico_centenas.append(centenas_draw)
+            historico_milhares.append(milhares_draw)
 
     if len(historico_centenas) < 2: return None
 
     ultimas_centenas = historico_centenas[-1]
+    ultimas_milhares = historico_milhares[-1]
 
     # 1. Atraso
     atrasos = {str(d): 0 for d in range(10)}
@@ -273,6 +302,7 @@ def analisar_radar_centena(history_slice):
 
     return {
         "ultimas": ultimas_centenas,
+        "ultimas_milhares": ultimas_milhares,
         "top_digit": top_digit,
         "atraso": top_data["atraso"],
         "freq": top_data["freq"],
@@ -353,13 +383,15 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
         for idx, alvo in enumerate(ranking_global):
             banca_nome = alvo['banca']
             tropa = ", ".join(alvo['ultimas'])
+            milhares_tropa = ", ".join(alvo['ultimas_milhares'])
             digito = alvo['top_digit']
             
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
                 f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
-                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas no Globo (1º ao 5º): <b>{tropa}</b></p>'
+                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Milhares do Globo (1º ao 5º): <b>{milhares_tropa}</b></p>'
+                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
                 f'</div>'
@@ -398,9 +430,6 @@ else:
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
-    # -------------------------------------------------------------------------
-    # BLOCO EXTRATOR UNITÁRIO 
-    # -------------------------------------------------------------------------
     if modo_extracao == "🎯 Unitária":
         data_busca = date.today()
         horario_busca = config['horarios'][0]
@@ -453,9 +482,6 @@ else:
                             else: st.error(msg)
                 else: st.error("Erro na Planilha do Google")
 
-    # -------------------------------------------------------------------------
-    # BLOCO EXTRATOR TURBO
-    # -------------------------------------------------------------------------
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
         col1, col2 = st.sidebar.columns(2)
@@ -515,9 +541,6 @@ else:
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Google")
 
-    # -------------------------------------------------------------------------
-    # BLOCO LANÇAMENTO MANUAL
-    # -------------------------------------------------------------------------
     elif modo_extracao == "✍️ Manual":
         data_busca_man = date.today()
         horario_busca_man = config['horarios'][0]
@@ -596,9 +619,11 @@ else:
                 
                 if res_centena:
                     tropa_atual = ", ".join(res_centena['ultimas'])
+                    milhares_atual = ", ".join(res_centena['ultimas_milhares'])
                     alvo_digito = res_centena['top_digit']
                     
                     with st.container(border=True):
+                        st.info(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
                         st.info(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
