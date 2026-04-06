@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, date, timedelta
 import time
-from collections import Counter
 
 # --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
 try:
@@ -21,27 +20,20 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V105.0 - Radar de Centenas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V106.0 - Olho de Hórus", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    "TRADICIONAL_MILHAR": { "display_name": "👑 TRADICIONAL (Vitorino)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ" },
-    "LOTEP_MILHAR": { "display_name": "🎯 LOTEP (Tático)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "foco_26": True },
-    "CAMINHO_MILHAR": { "display_name": "🎯 CAMINHO (Tático)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "foco_26": True },
+    
+    # TRADICIONAL AGORA PUXA DO 1º AO 5º (DUAL_PENTA) PARA O RADAR DE CENTENAS
+    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True },
+    
+    "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
+    
+    "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
+    
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
-
-def get_estrutura(m_str):
-    if len(m_str) != 4: return "Desconhecida"
-    unicos = len(set(m_str))
-    if unicos == 4: return "Simples"
-    if unicos == 3: return "Dupla"
-    if unicos == 2: return "Trinca/DuplaDupla"
-    return "Quadra"
-
-def target_26_won(m_str):
-    """Retorna True se nem o 2 nem o 6 estiverem na milhar (Vitória do jogador)"""
-    return ('2' not in m_str) and ('6' not in m_str)
 
 st.markdown("""
 <style>
@@ -51,13 +43,7 @@ st.markdown("""
     h1, h2, h3 { color: #ffd700 !important; }
     div[data-testid="stMetricValue"] { font-size: 24px; font-weight: bold; color: #00ff00; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
-    .alerta-verde { background-color: #1e4620; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; margin-bottom: 10px; }
-    .alerta-amarelo { background-color: #5a4b00; padding: 15px; border-radius: 8px; border-left: 5px solid #ffc107; margin-bottom: 10px; }
-    .alerta-vermelho { background-color: #4a1919; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; margin-bottom: 10px; }
-    .alerta-cinza { background-color: #2b2b2b; padding: 15px; border-radius: 8px; border-left: 5px solid #888888; margin-bottom: 10px; }
-    .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-    .progress-bg { background-color: #333; border-radius: 10px; height: 15px; width: 100%; margin-top: 5px; }
-    .progress-bar-green { background-color: #28a745; height: 100%; border-radius: 10px; }
+    .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #00ff00; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,170 +118,78 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
-        padrao_hora = re.compile(r'(\d{1,2}:\d{2}|\d{1,2}h|\b\d{1,2}\b)')
+        
+        h_formatado = horario_alvo 
+        h_h = f"{horario_alvo.split(':')[0]}h{horario_alvo.split(':')[1]}" 
+        
         for tabela in tabelas:
-            if "Prêmio" in tabela.get_text() or "1º" in tabela.get_text():
-                cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-                if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
-                prev = tabela.find_previous(string=padrao_hora)
-                if prev:
-                    m = re.search(padrao_hora, prev)
-                    if m:
-                        raw = m.group(1).strip()
-                        if ':' in raw: h_detect = raw
-                        elif 'h' in raw: h_detect = raw.replace('h', '').strip().zfill(2) + ":00"
-                        else: h_detect = raw.strip().zfill(2) + ":00"
-                        if normalizar_hora(h_detect) == normalizar_hora(horario_alvo):
-                            dezenas_encontradas = []
-                            linhas = tabela.find_all('tr')
-                            for linha in linhas:
-                                cols = linha.find_all('td')
-                                if len(cols) >= 2:
-                                    premio_txt = cols[0].get_text().strip()
-                                    numero_txt = cols[1].get_text().strip()
-                                    nums_premio = re.findall(r'\d+', premio_txt)
-                                    if nums_premio:
-                                        p_idx = int(nums_premio[0])
-                                        limite = 5 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
-                                        if 1 <= p_idx <= limite:
-                                            clean_num = re.sub(r'\D', '', numero_txt)
-                                            if len(clean_num) >= 2: 
-                                                if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
-                                                    dezenas_encontradas.append(clean_num[-4:].zfill(4))
-                                                else:
-                                                    dezenas_encontradas.append(clean_num[-2:])
-                            if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
-                                if len(dezenas_encontradas) >= 1: 
-                                    res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
-                                    return res[:5], "Sucesso"
-                            else:
-                                if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
-                                elif len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
-                            return None, "Incompleto"
+            cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
+            if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
+            
+            texto_arredores = ""
+            tag_anterior = tabela.find_previous(['h2', 'h3', 'h4', 'div', 'caption'])
+            if tag_anterior:
+                texto_arredores = tag_anterior.get_text().lower()
+                
+            texto_tabela = tabela.get_text().lower()
+            
+            if (h_formatado in texto_arredores or h_h in texto_arredores or 
+                h_formatado in texto_tabela or h_h in texto_tabela):
+                
+                dezenas_encontradas = []
+                linhas = tabela.find_all('tr')
+                for linha in linhas:
+                    cols = linha.find_all('td')
+                    if len(cols) >= 2:
+                        premio_txt = cols[0].get_text().strip()
+                        numero_txt = cols[1].get_text().strip()
+                        nums_premio = re.findall(r'\d+', premio_txt)
+                        if nums_premio:
+                            p_idx = int(nums_premio[0])
+                            limite = 5 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
+                            if 1 <= p_idx <= limite:
+                                clean_num = re.sub(r'\D', '', numero_txt)
+                                if len(clean_num) >= 2: 
+                                    if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
+                                        dezenas_encontradas.append(clean_num[-4:].zfill(4))
+                                    else:
+                                        dezenas_encontradas.append(clean_num[-2:])
+                
+                if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
+                    if len(dezenas_encontradas) >= 1: 
+                        res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
+                        return res[:5], "Sucesso"
+                else:
+                    if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
+                    elif len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
+                
+                return None, "Extração Incompleta"
+                
         return None, "Horário não encontrado"
     except Exception as e: return None, f"Erro: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO 1: OPERAÇÃO FOCO 26 ---
-# =============================================================================
-
-def analisar_vulnerabilidade_26(history_slice, p_idx):
-    if len(history_slice) < 40: return None
-    
-    ult_draw = history_slice[-1]
-    ult_m = str(ult_draw['premios'][p_idx]).zfill(4)
-    if ult_m == "0000": return None
-
-    # 1. PRESSÃO DE EXAUSTÃO
-    ultimos_10 = history_slice[-11:-1]
-    if len(ultimos_10) == 0: return None
-    
-    ocorrencias_26 = 0
-    for d in ultimos_10:
-        m = str(d['premios'][p_idx]).zfill(4)
-        if '2' in m or '6' in m: ocorrencias_26 += 1
-    
-    fator_exaustao = float(ocorrencias_26 / float(len(ultimos_10))) * 100.0
-
-    # 2. BACKTEST CONDICIONAL
-    estrutura_atual = get_estrutura(ult_m)
-    cabeca_atual = ult_m[0]
-    
-    vitorias_bt = 0
-    total_bt = 0
-    for i in range(len(history_slice) - 1):
-        h_curr = str(history_slice[i]['premios'][p_idx]).zfill(4)
-        if h_curr != "0000" and get_estrutura(h_curr) == estrutura_atual and h_curr[0] == cabeca_atual:
-            h_next = str(history_slice[i+1]['premios'][p_idx]).zfill(4)
-            if h_next != "0000":
-                total_bt += 1
-                if target_26_won(h_next): vitorias_bt += 1
-                
-    taxa_backtest = float(vitorias_bt / float(total_bt) * 100.0) if total_bt > 0 else 50.0
-
-    # 3. PROJETO SKYNET
-    ia_score = 50.0
-    if HAS_AI:
-        records = []
-        for i in range(len(history_slice)-1):
-            curr = history_slice[i]
-            nxt = history_slice[i+1]
-            c_m = str(curr['premios'][p_idx]).zfill(4)
-            n_m = str(nxt['premios'][p_idx]).zfill(4)
-            if c_m == "0000" or n_m == "0000": continue
-            
-            try: d_sem = datetime.strptime(curr['data'], '%Y-%m-%d').weekday()
-            except: d_sem = 0
-            try: hr = int(curr['horario'].split(':')[0])
-            except: hr = 0
-            
-            target = 1 if target_26_won(n_m) else 0
-            records.append({'dia': d_sem, 'hora': hr, 'cabeca': int(c_m[0]), 'final': int(c_m[-1]), 'target': target})
-            
-        df = pd.DataFrame(records)
-        if len(df) >= 30 and len(df['target'].unique()) > 1:
-            X = df[['dia', 'hora', 'cabeca', 'final']]
-            y = df['target']
-            
-            rf = RandomForestClassifier(n_estimators=30, random_state=42, max_depth=3)
-            lr = LogisticRegression(max_iter=200, random_state=42)
-            gb = GradientBoostingClassifier(n_estimators=30, random_state=42, max_depth=3)
-            
-            rf.fit(X, y); lr.fit(X, y); gb.fit(X, y)
-            
-            try: c_dia = datetime.strptime(ult['data'], '%Y-%m-%d').weekday()
-            except: c_dia = 0
-            try: c_hr = int(ult['horario'].split(':')[0])
-            except: c_hr = 0
-            
-            X_curr = pd.DataFrame([{'dia': c_dia, 'hora': c_hr, 'cabeca': int(ult_m[0]), 'final': int(ult_m[-1])}])
-            
-            idx_1_rf = list(rf.classes_).index(1) if 1 in rf.classes_ else -1
-            idx_1_lr = list(lr.classes_).index(1) if 1 in lr.classes_ else -1
-            idx_1_gb = list(gb.classes_).index(1) if 1 in gb.classes_ else -1
-            
-            p_rf = rf.predict_proba(X_curr)[0][idx_1_rf] * 100.0 if idx_1_rf != -1 else 0.0
-            p_lr = lr.predict_proba(X_curr)[0][idx_1_lr] * 100.0 if idx_1_lr != -1 else 0.0
-            p_gb = gb.predict_proba(X_curr)[0][idx_1_gb] * 100.0 if idx_1_gb != -1 else 0.0
-            
-            ia_score = float((p_rf + p_lr + p_gb) / 3.0)
-
-    # MATEMÁTICA PURA
-    score_final = float((taxa_backtest + ia_score + fator_exaustao) / 3.0)
-    
-    return {
-        "premio": p_idx + 1,
-        "ult_m": ult_m,
-        "exaustao": fator_exaustao,
-        "backtest": taxa_backtest,
-        "ia_score": ia_score,
-        "score_final": score_final,
-        "ocorrencias_bt": total_bt,
-        "p_rf": p_rf if HAS_AI else 0.0,
-        "p_lr": p_lr if HAS_AI else 0.0,
-        "p_gb": p_gb if HAS_AI else 0.0
-    }
-
-# =============================================================================
-# --- 4. CÉREBRO 2: RADAR DE CENTENAS (1º ao 5º Prêmio) ---
+# --- 3. CÉREBRO: OLHO DE HÓRUS (RADAR DE CENTENAS 1º AO 5º) ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
-    """Analisa as centenas do 1º ao 5º prêmio e prevê o algarismo mais forte."""
+    """Analisa as centenas do 1º ao 5º prêmio combinados e prevê o algarismo mais forte."""
     if len(history_slice) < 15: return None
 
-    # Extrai o algarismo da centena (index 1 de "ABCD") de cada prêmio
+    # Extrai o algarismo da centena (index 1 de "ABCD") de cada prêmio (1º ao 5º)
     historico_centenas = []
     for draw in history_slice:
         centenas_draw = []
         for p in range(5):
             m = str(draw['premios'][p]).zfill(4)
-            if m != "0000":
-                centenas_draw.append(m[1]) 
-        historico_centenas.append(centenas_draw)
+            if m != "0000" and m != "00" and len(m) == 4:
+                centenas_draw.append(m[1]) # Pega o segundo dígito (Centena)
+        if centenas_draw:
+            historico_centenas.append(centenas_draw)
+
+    if len(historico_centenas) < 2: return None
 
     ultimas_centenas = historico_centenas[-1]
-    if not ultimas_centenas: return None
 
     # 1. Atraso (Quantos sorteios o algarismo não aparece na centena do 1º ao 5º)
     atrasos = {str(d): 0 for d in range(10)}
@@ -307,14 +201,14 @@ def analisar_radar_centena(history_slice):
             atraso += 1
         atrasos[d_str] = atraso
 
-    # 2. Frequência (Quantas vezes apareceu nos últimos 10 sorteios)
+    # 2. Frequência (Quantas vezes apareceu nos últimos 10 sorteios - 1º ao 5º)
     freq_recente = {str(d): 0 for d in range(10)}
     ultimos_10 = historico_centenas[-11:-1]
     for draw in ultimos_10:
         for d_str in set(draw): 
             freq_recente[d_str] += 1
 
-    # 3. Transição de Cadeia de Markov (Se a tropa atual apareceu no passado, quem veio no próximo tiro?)
+    # 3. Transição de Cadeia de Markov (Se a tropa atual apareceu no passado, quem veio no próximo?)
     transicoes = {str(d): 0 for d in range(10)}
     total_transicoes = 0
     for i in range(len(historico_centenas) - 1):
@@ -333,7 +227,7 @@ def analisar_radar_centena(history_slice):
         d_str = str(d)
         tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
         
-        # Fórmula: Dá peso para quem "atrai" (transição), quem tá "quente" (frequência) e quem tá devendo (atraso)
+        # Fórmula: Peso equilibrado entre Markov (Atração), Frequência (Tendência) e Atraso (Pressão)
         score = (tx_transicao * 0.5) + (freq_recente[d_str] * 2.0) + (min(atrasos[d_str], 15) * 1.5)
         
         scores[d_str] = {
@@ -400,41 +294,54 @@ def acao_limpar_banco(nome_aba):
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR TÁTICO (Home)":
-    st.title("🎯 CENTRAL DO RADAR TÁTICO")
-    st.markdown("Monitorando as bancas **LOTEP** e **CAMINHO DA SORTE** para oportunidades de Foco 26.")
+    st.title("👁️ OLHO DE HÓRUS (RADAR DE CENTENAS)")
+    st.markdown("O sistema ignora as milhares e escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando TRADICIONAL, LOTEP e CAMINHO DA SORTE.")
     
     ranking_global = []
     
-    with st.spinner("📡 Escaneando oportunidades de disparo..."):
+    with st.spinner("📡 Rastreiando fluxo de Centenas no globo..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config.get('foco_26') == True:
+            if config.get('radar_centena') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
-                if len(hist_milhar) >= 50:
-                    for p_idx in range(5):
-                        analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
-                        if analise:
-                            analise['banca'] = config['display_name'].replace("🎯 ", "").replace(" (Tático)", "")
-                            analise['banca_key'] = banca_key
-                            ranking_global.append(analise)
+                if len(hist_milhar) >= 15:
+                    analise = analisar_radar_centena(hist_milhar)
+                    if analise:
+                        analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "")
+                        analise['banca_key'] = banca_key
+                        ranking_global.append(analise)
 
     if not ranking_global:
         st.info("⚠️ Sem dados suficientes ou bancas offline.")
     else:
-        ranking_global.sort(key=lambda x: x['score_final'], reverse=True)
+        # Ordena pelo maior score tático
+        ranking_global.sort(key=lambda x: x['score'], reverse=True)
         
-        st.markdown("### 🏆 RANKING FOCO 26 (Maiores Ameaças)")
+        st.markdown("### 🏆 ALVOS DE DISPARO (CENTENAS 1º AO 5º)")
         
+        html_final = ""
         for idx, alvo in enumerate(ranking_global):
-            score = alvo['score_final']
-            if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
-            elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
-            else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
+            banca_nome = alvo['banca']
+            tropa = ", ".join(alvo['ultimas'])
+            digito = alvo['top_digit']
             
-            with st.container(border=True):
-                st.markdown(f"<h4 style='color:{cor_barra}; margin-bottom:0;'>#{idx+1} | {alvo['banca']} - {alvo['premio']}º Prêmio: {score:.1f}%</h4>", unsafe_allow_html=True)
-                st.caption(f"Status: {status_txt}")
-                st.markdown(f"**Prova Real Matemática:** ({alvo['backtest']:.1f}% BT + {alvo['ia_score']:.1f}% IA + {alvo['exaustao']:.1f}% EX) ÷ 3 = **{score:.1f}%**")
-                st.progress(min(int(score), 100))
+            html_ranking = (
+                f'<div class="card-ranking">'
+                f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
+                f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
+                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas no Globo (1º ao 5º): <b>{tropa}</b></p>'
+                f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
+                f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
+                f'</div>'
+                f'<div style="margin-top:10px; display:flex; justify-content:space-around; font-size:0.9em; color:#ddd;">'
+                f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios fora</span>'
+                f'  <span><b>🔁 Frequência:</b> {alvo["freq"]} (últ. 10 jogos)</span>'
+                f'  <span><b>🧲 Atração (Markov):</b> {alvo["transicao"]:.1f}%</span>'
+                f'</div>'
+                f'</div>'
+            )
+            html_final += html_ranking
+            
+        st.markdown(html_final, unsafe_allow_html=True)
 
 else:
     banca_selecionada = escolha_menu
@@ -625,20 +532,18 @@ else:
     # --- PÁGINA DA BANCA ---
     
     if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"🎯 {config['display_name']}")
+        st.header(f"👁️ {config['display_name']}")
         
-        with st.spinner("Processando Radares Táticos..."):
+        with st.spinner("Processando Radar de Centenas..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
             ult = hist_milhar[-1]
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
             
-            if config.get('foco_26'):
+            if config.get('radar_centena'):
                 
-                # --- NOVO RADAR DE CENTENAS ---
-                st.markdown("---")
-                st.markdown("### 👁️‍🗨️ OLHO DE HÓRUS (Radar de Centenas 1º ao 5º)")
+                st.markdown("### 👁️‍🗨️ OLHO DE HÓRUS (Análise 1º ao 5º Prêmio)")
                 res_centena = analisar_radar_centena(hist_milhar)
                 
                 if res_centena:
@@ -646,55 +551,27 @@ else:
                     alvo_digito = res_centena['top_digit']
                     
                     with st.container(border=True):
-                        st.info(f"**Tropa de Centenas Atual no Globo:** {tropa_atual}")
-                        st.markdown(f"<h3 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: Aposte no algarismo ({alvo_digito})</h3>", unsafe_allow_html=True)
-                        st.markdown(f"<p style='text-align:center; color:#ccc;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
+                        st.info(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
+                        st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
                         
                         col_c1, col_c2, col_c3 = st.columns(3)
                         col_c1.metric("Atraso (Sorteios Fora)", res_centena['atraso'])
                         col_c2.metric("Frequência (Últimos 10)", res_centena['freq'])
-                        col_c3.metric("Poder de Transição", f"{res_centena['transicao']:.1f}%")
-                else:
-                    st.info("Sem dados suficientes para o Radar de Centenas.")
-                
-                # --- FOCO 26 ORIGINAL ---
-                st.markdown("---")
-                st.markdown("### 📊 Relatório Foco 26 (Corte 2 e 6)")
-                for p_idx in range(5):
-                    analise = analisar_vulnerabilidade_26(hist_milhar, p_idx)
-                    if analise:
-                        score = analise['score_final']
-                        if score >= 80.0: cor_barra, status_txt = "#00ff00", "🔥 LETAL (TIRO AUTORIZADO)"
-                        elif score >= 65.0: cor_barra, status_txt = "#ffc107", "⚠️ ATENÇÃO (AQUECENDO)"
-                        else: cor_barra, status_txt = "#dc3545", "🚫 PERIGO (NÃO ENTRAR)"
+                        col_c3.metric("Poder de Transição (Atração)", f"{res_centena['transicao']:.1f}%")
                         
-                        with st.container(border=True):
-                            col_f1, col_f2 = st.columns([3, 1])
-                            with col_f1:
-                                st.markdown(f"<h4 style='color:{cor_barra}; margin-bottom:0;'>🏆 {p_idx+1}º Prêmio</h4>", unsafe_allow_html=True)
-                            with col_f2:
-                                st.markdown(f"<h4 style='color:{cor_barra}; margin-bottom:0;'>{score:.1f}%</h4>", unsafe_allow_html=True)
-                            
-                            st.caption(f"Status: {status_txt}")
-                            st.info(f"**Prova Real Matemática:** ({analise['backtest']:.1f}% BT + {analise['ia_score']:.1f}% IA + {analise['exaustao']:.1f}% EX) ÷ 3 = **{score:.1f}%**")
-                            st.progress(min(int(score), 100))
-            else:
-                st.info("⚠️ O módulo Tático não está ativo para esta banca. Utilize a Lotep ou Caminho da Sorte.")
-                
-            # --- CALCULADORA DE HEDGE ---
-            st.markdown("---")
-            st.subheader("🛡️ Calculadora de Seguro de Banca")
-            with st.container(border=True):
-                col_calc1, col_calc2 = st.columns(2)
-                with col_calc1:
-                    valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
-                seguro_recomendado = valor_milhar / 21 
-                custo_total = valor_milhar + seguro_recomendado
-                retorno_seguro = seguro_recomendado * 23
-                with col_calc2:
-                    st.info(f"**🛡️ Jogue no Grupo da Milhar:** R$ {seguro_recomendado:.2f}")
-                    st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
+                        st.markdown("---")
+                        st.markdown("#### 📊 Posição Completa do Globo (Top 3)")
+                        rank = res_centena['rank_completo']
+                        for i in range(min(3, len(rank))):
+                            dig = rank[i][0]
+                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']})")
+                else:
+                    st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
+            else:
+                st.info("⚠️ O Radar de Centenas não está ativo para esta banca.")
+                
             # --- TABELA DO BANCO DE DADOS RESTAURADA ---
             st.markdown("---")
             st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
