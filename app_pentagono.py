@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V106.2 - Cache Turbo", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V107.0 - Tático Estável", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -29,14 +29,6 @@ CONFIG_BANCAS = {
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
-
-def get_estrutura(m_str):
-    if len(m_str) != 4: return "Desconhecida"
-    unicos = len(set(m_str))
-    if unicos == 4: return "Simples"
-    if unicos == 3: return "Dupla"
-    if unicos == 2: return "Trinca/DuplaDupla"
-    return "Quadra"
 
 st.markdown("""
 <style>
@@ -51,45 +43,25 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM (MOTOR TURBO COM CACHE BLINDADO) ---
+# --- 2. CONEXÃO SEGURA E CACHE PROTEGIDO DA GOOGLE ---
 # =============================================================================
 
-# 1. Blindagem da Google (Impede o erro de Quota Limit / APIError)
-@st.cache_resource(ttl=600, show_spinner=False)
-def init_gspread():
+@st.cache_resource(ttl=3600)
+def get_gspread_client():
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
     return None
 
 def conectar_planilha(nome_aba):
-    gc = init_gspread()
+    gc = get_gspread_client()
     if gc:
-        try:
-            sh = gc.open("CentralBichos")
-            return sh.worksheet(nome_aba)
-        except Exception:
-            st.cache_resource.clear() # Limpa o cache se der erro crítico para tentar de novo
-            return None
+        try: return gc.open("CentralBichos").worksheet(nome_aba)
+        except: return None
     return None
 
-def normalizar_data(data_str):
-    data_str = str(data_str).strip()
-    formatos = ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]
-    for fmt in formatos:
-        try: return datetime.strptime(data_str, fmt).date()
-        except: continue
-    return None
-
-def normalizar_hora(hora_str):
-    h_str = str(hora_str).strip()
-    h_clean = re.sub(r'[a-zA-Z]', '', h_str).strip()
-    if len(h_clean) > 5: h_clean = h_clean[:5] 
-    try:
-        if ':' in h_clean: return f"{int(h_clean.split(':')[0]):02}:{int(h_clean.split(':')[1]):02}"
-        else: return f"{int(h_clean):02}:00"
-    except: return "00:00"
-
+# CACHE DE DADOS (Impede a API do Google de travar com Quota Limit)
+@st.cache_data(ttl=120, show_spinner=False)
 def carregar_dados_hibridos(nome_aba):
     ws = conectar_planilha(nome_aba)
     if ws:
@@ -99,40 +71,34 @@ def carregar_dados_hibridos(nome_aba):
             dados_unicos = {}
             for row in raw[1:]:
                 if len(row) >= 3:
-                    dt_obj = normalizar_data(row[0])
-                    hr_str = normalizar_hora(row[1])
-                    if dt_obj:
-                        chave = f"{dt_obj.strftime('%Y-%m-%d')}|{hr_str}"
-                        premios = []
-                        for i in range(2, 7):
-                            if i < len(row):
-                                p_str = str(row[i]).strip()
-                                if p_str.isdigit(): premios.append(p_str.zfill(2))
-                                else: premios.append("00")
-                            else: premios.append("00")
-                        dados_unicos[chave] = {
-                            "data": dt_obj.strftime('%Y-%m-%d'),
-                            "horario": hr_str,
-                            "premios": premios
-                        }
+                    data_str = str(row[0]).strip()
+                    hr_str = str(row[1]).strip()
+                    h_clean = re.sub(r'[a-zA-Z]', '', hr_str).strip()
+                    if len(h_clean) > 5: h_clean = h_clean[:5] 
+                    if ':' not in h_clean and len(h_clean) >= 2: h_clean = f"{int(h_clean):02}:00"
+                    
+                    chave = f"{data_str}|{h_clean}"
+                    premios = []
+                    for i in range(2, 7):
+                        if i < len(row):
+                            p_str = str(row[i]).strip()
+                            premios.append(p_str.zfill(2) if p_str.isdigit() else "00")
+                        else: premios.append("00")
+                    
+                    dados_unicos[chave] = {
+                        "data": data_str,
+                        "horario": h_clean,
+                        "premios": premios
+                    }
             lista_final = list(dados_unicos.values())
-            lista_final.sort(key=lambda x: datetime.strptime(f"{x['data']} {x['horario']}", "%Y-%m-%d %H:%M"))
+            lista_final.sort(key=lambda x: f"{x['data']} {x['horario']}")
             return lista_final
         except: return [] 
     return []
 
-# 2. Blindagem de Extrator (Baixa a página 1 vez e faz 10 extrações sem travar)
-@st.cache_data(ttl=120, show_spinner=False)
-def baixar_pagina_banca(url):
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-        }
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code == 200: return r.text
-        return None
-    except: return None
+# =============================================================================
+# --- 3. EXTRATOR AGRESSIVO (AO VIVO - SEM CACHE) ---
+# =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
@@ -141,31 +107,46 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     if data_alvo == date.today(): 
         url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
         
-    html_text = baixar_pagina_banca(url)
-    if not html_text:
-        return None, "Erro de Conexão: Site fora do ar ou bloqueando acesso."
-        
     try:
-        soup = BeautifulSoup(html_text, 'html.parser')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control': 'no-cache'
+        }
+        # Tenta conectar com backoff em caso de timeout
+        for tentativa in range(2):
+            try:
+                r = requests.get(url, headers=headers, timeout=10)
+                if r.status_code == 200: break
+            except requests.exceptions.RequestException:
+                if tentativa == 1: return None, "Site da banca offline ou bloqueando acesso."
+                time.sleep(1)
+                
+        if r.status_code != 200: return None, f"Erro {r.status_code} no site da banca."
+            
+        soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
         h_formatado = horario_alvo 
         h_h = f"{horario_alvo.split(':')[0]}h{horario_alvo.split(':')[1]}" 
+        h_h_curto = f"{horario_alvo.split(':')[0]}h"
         
         for tabela in tabelas:
             txt_tabela = tabela.get_text().lower()
             if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
             textos_associados = [txt_tabela]
-            for elem in tabela.find_all_previous(limit=10):
-                if elem.name in ['h2', 'h3', 'h4', 'h5', 'caption', 'th', 'div', 'p']:
+            
+            # Varredura Profunda (Olha até 15 elementos acima procurando o título com a hora)
+            for elem in tabela.find_all_previous(limit=15):
+                if elem.name in ['h2', 'h3', 'h4', 'h5', 'caption', 'th', 'div', 'p', 'span']:
                     texto_elem = elem.get_text().lower()
                     textos_associados.append(texto_elem)
-                    if "resultado" in texto_elem: break
+                    if "resultado" in texto_elem or "prêmio" in texto_elem: break
                         
             texto_total = " ".join(textos_associados)
             
-            if (h_formatado in texto_total or h_h in texto_total):
+            if (h_formatado in texto_total or h_h in texto_total or h_h_curto in texto_total):
                 dezenas_encontradas = []
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
@@ -184,18 +165,20 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                     else: dezenas_encontradas.append(clean_num[-2:])
                 
                 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
-                    if len(dezenas_encontradas) >= 1: return dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas)), "Sucesso"
+                    if len(dezenas_encontradas) >= 1: 
+                        res = dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas))
+                        return res[:5], "Sucesso"
                 else:
                     if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
                     elif len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
                 
-                return None, "Tabela Encontrada, mas erro ao ler os números."
+                return None, "Tabela Encontrada, mas falha ao ler as milhares (Site alterou o layout)."
                 
         return None, "Horário não encontrado (Site não postou este prêmio ainda)."
-    except Exception as e: return None, f"Erro de Extração: {e}"
+    except Exception as e: return None, f"Erro de Execução: {e}"
 
 # =============================================================================
-# --- 3. CÉREBRO: OLHO DE HÓRUS (RADAR DE CENTENAS 1º AO 5º) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS (RADAR DE CENTENAS 1º AO 5º) ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
@@ -205,13 +188,16 @@ def analisar_radar_centena(history_slice):
     for draw in history_slice:
         centenas_draw = []
         for p in range(5):
-            m = str(draw['premios'][p]).zfill(4)
-            if m != "0000" and m != "00" and len(m) == 4:
-                centenas_draw.append(m[1]) 
+            try:
+                m = str(draw['premios'][p]).zfill(4)
+                if m != "0000" and m != "00" and len(m) == 4:
+                    centenas_draw.append(m[1]) 
+            except: continue
         if centenas_draw:
             historico_centenas.append(centenas_draw)
 
     if len(historico_centenas) < 2: return None
+
     ultimas_centenas = historico_centenas[-1]
 
     atrasos = {str(d): 0 for d in range(10)}
@@ -247,7 +233,10 @@ def analisar_radar_centena(history_slice):
         score = (tx_transicao * 0.5) + (freq_recente[d_str] * 2.0) + (min(atrasos[d_str], 15) * 1.5)
         
         scores[d_str] = {
-            "score": score, "atraso": atrasos[d_str], "freq": freq_recente[d_str], "transicao": tx_transicao
+            "score": score,
+            "atraso": atrasos[d_str],
+            "freq": freq_recente[d_str],
+            "transicao": tx_transicao
         }
 
     rank = sorted(scores.items(), key=lambda x: x[1]['score'], reverse=True)
@@ -287,18 +276,23 @@ def acao_limpar_banco(nome_aba):
             dados_unicos = {}
             for row in raw[1:]:
                 if len(row) >= 2:
-                    dt = normalizar_data(row[0])
-                    hr = normalizar_hora(row[1])
+                    dt = row[0].strip()
+                    hr = row[1].strip()
                     if dt:
-                        chave = f"{dt.strftime('%Y-%m-%d')}|{hr}"
-                        row[0] = dt.strftime('%Y-%m-%d')
-                        row[1] = hr
+                        chave = f"{dt}|{hr}"
                         dados_unicos[chave] = row
             lista_final = list(dados_unicos.values())
-            lista_final.sort(key=lambda r: datetime.strptime(f"{r[0]} {r[1]}", "%Y-%m-%d %H:%M"))
+            
+            # Ordena com segurança
+            def get_sort_key(r):
+                try: return datetime.strptime(f"{r[0]} {r[1]}", "%Y-%m-%d %H:%M")
+                except: return datetime.min
+            lista_final.sort(key=get_sort_key)
+            
             ws.clear()
             ws.append_row(cabecalho)
             if lista_final: ws.append_rows(lista_final)
+            st.cache_data.clear() # Limpa cache após alteração
             return f"Sucesso! Reduzido de {len(raw)-1} para {len(lista_final)} registros."
         except Exception as e: return f"Erro: {e}"
     return "Erro Conexão"
@@ -307,7 +301,7 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR TÁTICO (Home)":
     st.title("👁️ OLHO DE HÓRUS (RADAR DE CENTENAS)")
-    st.markdown("O sistema ignora as milhares e escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando TRADICIONAL, LOTEP e CAMINHO DA SORTE.")
+    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando TRADICIONAL, LOTEP e CAMINHO DA SORTE.")
     
     ranking_global = []
     
@@ -323,7 +317,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                         ranking_global.append(analise)
 
     if not ranking_global:
-        st.info("⚠️ Sem dados suficientes ou bancas offline.")
+        st.info("⚠️ Sem dados suficientes ou bancas vazias.")
     else:
         ranking_global.sort(key=lambda x: x['score'], reverse=True)
         
@@ -339,14 +333,14 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'<div class="card-ranking">'
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
                 f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
-                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
+                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas no Globo (1º ao 5º): <b>{tropa}</b></p>'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
                 f'</div>'
                 f'<div style="margin-top:10px; display:flex; justify-content:space-around; font-size:0.9em; color:#ddd;">'
-                f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios</span>'
-                f'  <span><b>🔁 Freq:</b> {alvo["freq"]} (últ 10)</span>'
-                f'  <span><b>🧲 Atração:</b> {alvo["transicao"]:.1f}%</span>'
+                f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios fora</span>'
+                f'  <span><b>🔁 Frequência:</b> {alvo["freq"]} (últ. 10 jogos)</span>'
+                f'  <span><b>🧲 Atração (Markov):</b> {alvo["transicao"]:.1f}%</span>'
                 f'</div>'
                 f'</div>'
             )
@@ -418,10 +412,10 @@ else:
                                     ws_dez.append_row(row_dez)
                                     if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
                                     st.toast(f"Motor Duplo Acionado! Dados salvos na base e no Vitorino.", icon="✅")
-                                st.cache_data.clear() # Limpa o cache após salvar novo dado para atualizar telas
+                                st.cache_data.clear() # Limpa memória velha para o radar atualizar
                                 time.sleep(1); st.rerun()
                             else: st.error(msg)
-                else: st.error("Erro na Planilha")
+                else: st.error("Erro na Planilha do Google")
                 
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
@@ -476,13 +470,13 @@ else:
                                 buffer_dez.append(row_d); chaves_d.append(chave_atual)
                                 if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
                             sucessos += 1
-                        time.sleep(0.1) # Otimizado: Mais rápido graças ao cache blindado da página
-                status.text("🚚 Sincronizando Matrizes Fantasmas e Visuais...")
+                        time.sleep(0.5) # Pausa estratégica para o site da banca não bloquear a gente
+                status.text("🚚 Sincronizando Matrizes no Google...")
                 if buffer_dez: ws_dez.append_rows(buffer_dez)
                 if buffer_m and ws_milhar: ws_milhar.append_rows(buffer_m)
-                st.cache_data.clear() # Limpa o cache após operação em massa
+                st.cache_data.clear() # Limpa memória para o Radar funcionar perfeito
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
-            else: st.sidebar.error("Erro Conexão")
+            else: st.sidebar.error("Erro Conexão Google")
             
     elif modo_extracao == "✍️ Manual":
         with st.sidebar.expander("📝 Lançar Manualmente", expanded=True):
