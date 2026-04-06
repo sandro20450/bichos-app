@@ -8,15 +8,25 @@ import re
 from datetime import datetime, date, timedelta
 import time
 
+# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
+try:
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+    import numpy as np
+    HAS_AI = True
+except ImportError:
+    HAS_AI = False
+
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V111.0 - Máquina do Tempo", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V112.0 - Rede PlayBicho", page_icon="👁️", layout="wide")
 
+# SLUGS ATUALIZADOS PARA O PADRÃO DO PLAYBICHO
 CONFIG_BANCAS = {
-    "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
+    "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     
-    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True },
+    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True },
     "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
     
@@ -105,25 +115,21 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL (COM NOVA ROTA PLAYBICHO PARA TRADICIONAL) ---
+# --- 3. EXTRATOR UNIVERSAL (SATÉLITE PLAYBICHO PARA TODAS AS BANCAS) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
     tipo_ext = config.get('tipo_extracao', config['tipo'])
+    slug = config['slug']
     
-    # 🎯 INJEÇÃO DA MÁQUINA DO TEMPO (PLAYBICHO)
-    if "TRADICIONAL" in banca_key:
-        url = f"https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    else:
-        if data_alvo == date.today(): 
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
-        else:
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    # 🎯 ROTA UNIVERSAL PLAYBICHO COM INJEÇÃO DE DATA
+    # Ex: https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-2026-03-13
+    url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
             'Accept-Language': 'pt-BR,pt;q=0.9',
             'Cache-Control': 'no-cache'
         }
@@ -135,7 +141,12 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             except requests.exceptions.RequestException:
                 time.sleep(1)
                 
-        if r.status_code != 200: return None, f"O site da banca retornou erro {r.status_code}."
+        # Fallback caso o PlayBicho use a URL base sem data para o dia de hoje
+        if r.status_code == 404 and data_alvo == date.today():
+            url_fallback = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}"
+            r = requests.get(url_fallback, headers=headers, timeout=10)
+            
+        if r.status_code != 200: return None, f"Acesso negado. O servidor retornou erro {r.status_code}."
             
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
@@ -149,13 +160,13 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         
         for tabela in tabelas:
             txt_tabela = tabela.get_text().lower()
-            if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
+            # Lê a tabela e o entorno para achar o horário do prêmio
             textos_associados = [txt_tabela]
             for elem in tabela.find_all_previous(['h2', 'h3', 'h4', 'h5', 'div', 'p', 'caption', 'span', 'strong'], limit=10):
                 texto_elem = elem.get_text().lower()
                 textos_associados.append(texto_elem)
-                if "resultado" in texto_elem or "prêmio" in texto_elem: break
+                if "resultado" in texto_elem or "prêmio" in texto_elem or "jogo do bicho" in texto_elem: break
                         
             texto_total = " ".join(textos_associados)
             
@@ -195,7 +206,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                     elif len(dezenas_encontradas) >= 5: 
                         return dezenas_encontradas[:5], "Sucesso"
                 
-                return None, "Tabela Encontrada, mas falha ao ler as milhares (O site mudou o formato)."
+                return None, "Tabela Encontrada, mas falha ao ler as milhares do PlayBicho."
                 
         return None, f"Horário ({horario_alvo}) não encontrado na página. A banca ainda não publicou."
     except Exception as e: return None, f"Erro de Varredura: {e}"
@@ -375,11 +386,8 @@ else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    # 🔗 LINK DINÂMICO PARA A BANCA CERTA (SATÉLITE NOVO)
-    if "TRADICIONAL" in banca_selecionada:
-        url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-{date.today().strftime('%Y-%m-%d')}"
-    else:
-        url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+    # 🔗 LINK DINÂMICO PARA A BANCA CERTA (SATÉLITE PLAYBICHO)
+    url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
