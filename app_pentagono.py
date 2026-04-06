@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E DADOS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V106.0 - Olho de Hórus", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V106.1 - Extrator Agressivo", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -35,6 +35,14 @@ CONFIG_BANCAS = {
     "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
 }
 
+def get_estrutura(m_str):
+    if len(m_str) != 4: return "Desconhecida"
+    unicos = len(set(m_str))
+    if unicos == 4: return "Simples"
+    if unicos == 3: return "Dupla"
+    if unicos == 2: return "Trinca/DuplaDupla"
+    return "Quadra"
+
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fff; }
@@ -48,7 +56,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO E RASPAGEM ---
+# --- 2. CONEXÃO E RASPAGEM (EXTRATOR AGRESSIVO CORRIGIDO) ---
 # =============================================================================
 
 def conectar_planilha(nome_aba):
@@ -112,10 +120,20 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    if data_alvo == date.today(): url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+    if data_alvo == date.today(): 
+        url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+        
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=10)
+        # Camuflagem pesada para evitar bloqueios do servidor
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+        r = requests.get(url, headers=headers, timeout=15)
+        
+        if r.status_code != 200:
+            return None, f"Erro {r.status_code} no Servidor da Banca"
+            
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
@@ -123,18 +141,26 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         h_h = f"{horario_alvo.split(':')[0]}h{horario_alvo.split(':')[1]}" 
         
         for tabela in tabelas:
-            cabecalho = tabela.find_previous(string=re.compile(r"Resultado do dia"))
-            if cabecalho and "FEDERAL" in cabecalho.upper(): continue 
+            txt_tabela = tabela.get_text().lower()
             
-            texto_arredores = ""
-            tag_anterior = tabela.find_previous(['h2', 'h3', 'h4', 'div', 'caption'])
-            if tag_anterior:
-                texto_arredores = tag_anterior.get_text().lower()
-                
-            texto_tabela = tabela.get_text().lower()
+            # Bloqueio de federais se não for federal
+            if "federal" in txt_tabela and "federal" not in banca_key.lower(): 
+                continue 
             
-            if (h_formatado in texto_arredores or h_h in texto_arredores or 
-                h_formatado in texto_tabela or h_h in texto_tabela):
+            textos_associados = [txt_tabela]
+            
+            # Busca Agressiva (Rastreia os elementos acima da tabela até achar um título)
+            for elem in tabela.find_all_previous(limit=10):
+                if elem.name in ['h2', 'h3', 'h4', 'h5', 'caption', 'th', 'div', 'p']:
+                    texto_elem = elem.get_text().lower()
+                    textos_associados.append(texto_elem)
+                    # Se achou a palavra resultado, provavelmente é o título da tabela, pode parar de subir
+                    if "resultado" in texto_elem:
+                        break
+                        
+            texto_total = " ".join(textos_associados)
+            
+            if (h_formatado in texto_total or h_h in texto_total):
                 
                 dezenas_encontradas = []
                 linhas = tabela.find_all('tr')
@@ -163,10 +189,10 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                     if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
                     elif len(dezenas_encontradas) >= 5: return dezenas_encontradas[:5], "Sucesso"
                 
-                return None, "Extração Incompleta"
+                return None, "Tabela Encontrada, mas erro ao ler as linhas (O site mudou o formato)."
                 
-        return None, "Horário não encontrado"
-    except Exception as e: return None, f"Erro: {e}"
+        return None, "Horário não encontrado (O site pode estar atrasado ou não postou)."
+    except Exception as e: return None, f"Erro Crítico de Conexão: {e}"
 
 # =============================================================================
 # --- 3. CÉREBRO: OLHO DE HÓRUS (RADAR DE CENTENAS 1º AO 5º) ---
@@ -572,6 +598,20 @@ else:
             else:
                 st.info("⚠️ O Radar de Centenas não está ativo para esta banca.")
                 
+            # --- CALCULADORA DE HEDGE ---
+            st.markdown("---")
+            st.subheader("🛡️ Calculadora de Seguro de Banca")
+            with st.container(border=True):
+                col_calc1, col_calc2 = st.columns(2)
+                with col_calc1:
+                    valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
+                seguro_recomendado = valor_milhar / 21 
+                custo_total = valor_milhar + seguro_recomendado
+                retorno_seguro = seguro_recomendado * 23
+                with col_calc2:
+                    st.info(f"**🛡️ Jogue no Grupo da Milhar:** R$ {seguro_recomendado:.2f}")
+                    st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
+                    
             # --- TABELA DO BANCO DE DADOS RESTAURADA ---
             st.markdown("---")
             st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
