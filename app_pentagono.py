@@ -11,12 +11,11 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V108.0 - Tático Estável", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V109.0 - Tático Estável", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "loteria-tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     
-    # BANCAS TÁTICAS (OLHO DE HÓRUS - 1º AO 5º PRÊMIO)
     "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "loteria-tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True },
     "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
@@ -53,7 +52,7 @@ def conectar_planilha(nome_aba):
         except: return None
     return None
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def carregar_dados_hibridos(nome_aba):
     ws = conectar_planilha(nome_aba)
     if ws:
@@ -88,8 +87,25 @@ def carregar_dados_hibridos(nome_aba):
         except: return [] 
     return []
 
+def normalizar_data(data_str):
+    data_str = str(data_str).strip()
+    formatos = ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]
+    for fmt in formatos:
+        try: return datetime.strptime(data_str, fmt).date()
+        except: continue
+    return None
+
+def normalizar_hora(hora_str):
+    h_str = str(hora_str).strip()
+    h_clean = re.sub(r'[a-zA-Z]', '', h_str).strip()
+    if len(h_clean) > 5: h_clean = h_clean[:5] 
+    try:
+        if ':' in h_clean: return f"{int(h_clean.split(':')[0]):02}:{int(h_clean.split(':')[1]):02}"
+        else: return f"{int(h_clean):02}:00"
+    except: return "00:00"
+
 # =============================================================================
-# --- 3. EXTRATOR AGRESSIVO (VISÃO PANORÂMICA) ---
+# --- 3. EXTRATOR AGRESSIVO UNIVERSAL (CORRIGIDO E BLINDADO) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -102,54 +118,56 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9',
             'Cache-Control': 'no-cache'
         }
         
-        # Sistema de tentativa dupla para evitar falhas de rede
-        for tentativa in range(2):
+        for _ in range(2):
             try:
-                r = requests.get(url, headers=headers, timeout=15)
+                r = requests.get(url, headers=headers, timeout=10)
                 if r.status_code == 200: break
             except requests.exceptions.RequestException:
-                if tentativa == 1: return None, "O site da banca demorou muito a responder."
-                time.sleep(2)
+                time.sleep(1)
                 
         if r.status_code != 200: return None, f"O site da banca retornou erro {r.status_code}."
             
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
         
-        h_formatado = horario_alvo 
-        h_h = f"{horario_alvo.split(':')[0]}h{horario_alvo.split(':')[1]}" 
-        h_h_curto = f"{horario_alvo.split(':')[0]}h"
+        # Converte o horário que buscamos em números exatos (ex: 15 e 40)
+        try: target_h, target_m = map(int, horario_alvo.split(':'))
+        except: return None, "Formato de hora inválido."
         
         for tabela in tabelas:
-            # Captura a tabela e a "caixa" (parent) onde ela está inserida
-            texto_tabela = tabela.get_text().lower()
-            texto_container = tabela.parent.get_text().lower() if tabela.parent else ""
+            txt_tabela = tabela.get_text().lower()
+            if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
-            # Filtro para não pegar resultado da Federal por engano em outras bancas
-            if "federal" in texto_container and "federal" not in banca_key.lower(): 
-                continue 
-            
-            # Captura os 3 títulos anteriores à tabela para garantir que acha a hora
-            textos_titulos = ""
-            for elem in tabela.find_all_previous(['h2', 'h3', 'h4', 'h5', 'div'], limit=3):
-                textos_titulos += " " + elem.get_text().lower()
+            # Puxa a tabela e os cabeçalhos acima dela
+            textos_associados = [txt_tabela]
+            for elem in tabela.find_all_previous(['h2', 'h3', 'h4', 'h5', 'div', 'p', 'caption'], limit=6):
+                texto_elem = elem.get_text().lower()
+                textos_associados.append(texto_elem)
+                if "resultado" in texto_elem or "prêmio" in texto_elem: break
                         
-            texto_total_analise = texto_tabela + " " + texto_container + " " + textos_titulos
+            texto_total = " ".join(textos_associados)
             
-            # Checa se a hora existe em qualquer parte próxima à tabela
-            if (h_formatado in texto_total_analise or h_h in texto_total_analise or h_h_curto in texto_total_analise):
+            # O Segredo do Robô Agressivo: Procura padrões numéricos (ex: 15:40, 15h40, 15hs40)
+            times_found = re.findall(r'(\d{1,2})[:hH]s?(\d{2})', texto_total)
+            
+            match_found = False
+            for h, m in times_found:
+                if int(h) == target_h and int(m) == target_m:
+                    match_found = True
+                    break
+            
+            if match_found:
                 dezenas_encontradas = []
                 linhas = tabela.find_all('tr')
                 for linha in linhas:
                     cols = linha.find_all('td')
                     if len(cols) >= 2:
-                        premio_txt = cols[0].get_text().strip()
                         numero_txt = cols[1].get_text().strip()
-                        nums_premio = re.findall(r'\d+', premio_txt)
+                        nums_premio = re.findall(r'\d+', cols[0].get_text())
                         if nums_premio:
                             p_idx = int(nums_premio[0])
                             limite = 5 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
@@ -161,7 +179,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                                     else: 
                                         dezenas_encontradas.append(clean_num[-2:])
                 
-                # Retorna os prêmios se encontrar
                 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
                     if len(dezenas_encontradas) >= 1: 
                         return dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas)), "Sucesso"
@@ -171,9 +188,9 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                     elif len(dezenas_encontradas) >= 5: 
                         return dezenas_encontradas[:5], "Sucesso"
                 
-                return None, "Achei a tabela, mas o site mudou a forma de escrever a milhar."
+                return None, "Tabela Encontrada, mas falha ao ler as milhares (Site alterou o layout)."
                 
-        return None, "Horário não encontrado na página (O site pode estar atrasado)."
+        return None, "Horário não encontrado na página (O site pode não ter postado o prêmio ainda)."
     except Exception as e: return None, f"Erro Crítico de Código: {e}"
 
 # =============================================================================
@@ -181,7 +198,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
-    """Analisa o segundo dígito (centena) dos prêmios 1 ao 5 e calcula força tática."""
     if len(history_slice) < 15: return None
 
     historico_centenas = []
@@ -200,7 +216,7 @@ def analisar_radar_centena(history_slice):
 
     ultimas_centenas = historico_centenas[-1]
 
-    # 1. Cálculo de Atraso
+    # 1. Atraso
     atrasos = {str(d): 0 for d in range(10)}
     for d in range(10):
         d_str = str(d)
@@ -210,14 +226,14 @@ def analisar_radar_centena(history_slice):
             atraso += 1
         atrasos[d_str] = atraso
 
-    # 2. Cálculo de Frequência Recente
+    # 2. Frequência
     freq_recente = {str(d): 0 for d in range(10)}
     ultimos_10 = historico_centenas[-11:-1]
     for draw in ultimos_10:
         for d_str in set(draw): 
             freq_recente[d_str] += 1
 
-    # 3. Transição de Cadeia de Markov
+    # 3. Transição (Markov)
     transicoes = {str(d): 0 for d in range(10)}
     total_transicoes = 0
     for i in range(len(historico_centenas) - 1):
@@ -228,7 +244,7 @@ def analisar_radar_centena(history_slice):
                 transicoes[c_next] += 1
             total_transicoes += 1
 
-    # 4. Pontuação e Rankeamento
+    # 4. Pontuação Final
     scores = {}
     for d in range(10):
         d_str = str(d)
@@ -369,9 +385,13 @@ else:
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
     # -------------------------------------------------------------------------
-    # BLOCO BLINDADO: MODO UNITÁRIO
+    # BLOCO EXTRATOR UNITÁRIO (VARIÁVEIS BLINDADAS)
     # -------------------------------------------------------------------------
     if modo_extracao == "🎯 Unitária":
+        # Inicialização das variáveis para impedir NameError
+        data_busca = date.today()
+        horario_busca = config['horarios'][0]
+        
         with st.sidebar.expander("📥 Importar Resultado", expanded=True):
             opcao_data = st.radio("Data:", ["Hoje", "Ontem", "Outra"], key=f"rad_dt_{banca_selecionada}")
             if opcao_data == "Hoje": data_busca = date.today()
@@ -421,7 +441,7 @@ else:
                 else: st.error("Erro na Planilha do Google")
 
     # -------------------------------------------------------------------------
-    # BLOCO BLINDADO: MODO TURBO
+    # BLOCO EXTRATOR TURBO (VARIÁVEIS BLINDADAS)
     # -------------------------------------------------------------------------
     elif modo_extracao == "🌪️ Em Massa (Turbo)": 
         st.sidebar.subheader("🌪️ Extração Turbo")
@@ -483,9 +503,13 @@ else:
             else: st.sidebar.error("Erro Conexão Google")
 
     # -------------------------------------------------------------------------
-    # BLOCO BLINDADO: MODO MANUAL
+    # BLOCO LANÇAMENTO MANUAL (VARIÁVEIS BLINDADAS)
     # -------------------------------------------------------------------------
     elif modo_extracao == "✍️ Manual":
+        # Inicialização
+        data_busca_man = date.today()
+        horario_busca_man = config['horarios'][0]
+        
         with st.sidebar.expander("📝 Lançar Manualmente", expanded=True):
             opcao_data_man = st.radio("Data:", ["Hoje", "Ontem", "Outra"], key=f"rad_man_{banca_selecionada}")
             if opcao_data_man == "Hoje": data_busca_man = date.today()
