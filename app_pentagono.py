@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V117.0 - Prova Real", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V118.0 - Visão Concisa", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
+# --- 3. EXTRATOR DE ELITE (BLINDAGEM CONTRA MENUS) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -161,6 +161,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
             texto_analise = txt_tabela + " "
+            
             cabecalho = tabela.find_previous(['h2', 'h3', 'h4', 'h5', 'caption'])
             if cabecalho:
                 texto_analise += cabecalho.get_text().lower() + " "
@@ -226,7 +227,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
-    """Analisa as centenas e prevê o próximo dígito."""
     if len(history_slice) < 15: return None
 
     historico_centenas = []
@@ -308,7 +308,6 @@ def analisar_radar_centena(history_slice):
 
 def rodar_backtest_centenas(history_slice, qtd_testes=5):
     """Viaja no tempo e testa as previsões passadas contra a realidade."""
-    # Precisa de pelo menos o histórico inicial (15) + a quantidade de testes que queremos fazer
     if len(history_slice) < 15 + qtd_testes: 
         return None 
         
@@ -316,17 +315,14 @@ def rodar_backtest_centenas(history_slice, qtd_testes=5):
     inicio_teste = len(history_slice) - qtd_testes
     
     for i in range(inicio_teste, len(history_slice)):
-        # Esconde o futuro: Pega os dados só até antes do sorteio que vamos testar
         historico_passado = history_slice[:i]
         sorteio_real = history_slice[i]
         
-        # Pede pra IA analisar o passado
         analise_passada = analisar_radar_centena(historico_passado)
         if not analise_passada: continue
             
         digito_previsto = analise_passada['top_digit']
         
-        # Extrai as centenas que REALMENTE saíram naquele sorteio
         centenas_reais = []
         for p in range(5):
             try:
@@ -337,7 +333,6 @@ def rodar_backtest_centenas(history_slice, qtd_testes=5):
             
         if not centenas_reais: continue
             
-        # O Julgamento: O dígito previsto estava entre as centenas que saíram?
         vitoria = digito_previsto in centenas_reais
         
         resultados_bt.append({
@@ -408,8 +403,17 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 if len(hist_milhar) >= 15:
                     analise = analisar_radar_centena(hist_milhar)
                     if analise:
+                        # Processa a string de backtest para exibir na Home
+                        resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
+                        if resultados_bt:
+                            bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(resultados_bt)]
+                            bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
+                        else:
+                            bt_str = "Aguardando dados..."
+                            
                         analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "")
                         analise['banca_key'] = banca_key
+                        analise['bt_str'] = bt_str
                         ranking_global.append(analise)
 
     if not ranking_global:
@@ -430,7 +434,8 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
                 f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Milhares do Globo (1º ao 5º): <b>{milhares_tropa}</b></p>'
-                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
+                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
+                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
                 f'</div>'
@@ -661,9 +666,19 @@ else:
                     milhares_atual = ", ".join(res_centena['ultimas_milhares'])
                     alvo_digito = res_centena['top_digit']
                     
+                    # Formata a string visual do backtest para o painel
+                    resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
+                    if resultados_bt:
+                        bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(resultados_bt)]
+                        bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
+                    else:
+                        bt_str = "Aguardando dados..."
+                    
                     with st.container(border=True):
                         st.info(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
                         st.info(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
+                        st.info(f"**Backtest (5 Últimos):** {bt_str}")
+                        
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
                         
@@ -678,49 +693,12 @@ else:
                         for i in range(min(3, len(rank))):
                             dig = rank[i][0]
                             st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']})")
-                            
-                    # --- NOVO BLOCO: PROVA REAL / BACKTEST ---
-                    st.markdown("---")
-                    st.markdown("#### 🔬 Prova Real (Backtest dos Últimos 5 Sorteios)")
-                    resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
-                    
-                    if resultados_bt:
-                        # Mostra do mais recente (último) para o mais antigo
-                        for bt in reversed(resultados_bt):
-                            status_icon = "🟢 VITÓRIA" if bt['vitoria'] else "❌ DERROTA"
-                            cor_fundo = "#1a3a1a" if bt['vitoria'] else "#3a1a1a"
-                            cor_borda = "#00ff00" if bt['vitoria'] else "#ff4444"
-                            
-                            st.markdown(
-                                f"<div style='background-color:{cor_fundo}; padding:10px; border-radius:5px; margin-bottom:8px; border-left: 4px solid {cor_borda};'>"
-                                f"<span style='color:#ccc; font-size:0.9em;'>Sorteio: <b>{bt['data']} às {bt['horario']}</b></span><br>"
-                                f"A IA previu a centena: <b>{bt['previsto']}</b> | Centenas Reais que saíram: <b>{', '.join(bt['reais'])}</b> <br>"
-                                f"<span style='color:{cor_borda}; font-weight:bold; font-size:1.1em;'>{status_icon}</span>"
-                                f"</div>", 
-                                unsafe_allow_html=True
-                            )
-                    else:
-                        st.info("Aguardando mais dados para gerar o backtest (mínimo de 20 sorteios armazenados).")
 
                 else:
                     st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
             else:
                 st.info("⚠️ O Radar de Centenas não está ativo para esta banca.")
-                
-            # --- CALCULADORA DE HEDGE ---
-            st.markdown("---")
-            st.subheader("🛡️ Calculadora de Seguro de Banca")
-            with st.container(border=True):
-                col_calc1, col_calc2 = st.columns(2)
-                with col_calc1:
-                    valor_milhar = st.number_input("💰 Valor da Invertida 8D (R$):", min_value=1.0, value=40.96, step=1.0)
-                seguro_recomendado = valor_milhar / 21 
-                custo_total = valor_milhar + seguro_recomendado
-                retorno_seguro = seguro_recomendado * 23
-                with col_calc2:
-                    st.info(f"**🛡️ Jogue no Grupo da Milhar:** R$ {seguro_recomendado:.2f}")
-                    st.caption(f"Custo Total: R$ {custo_total:.2f} | Prêmio Grupo: R$ {retorno_seguro:.2f}")
                     
             # --- TABELA DO BANCO DE DADOS RESTAURADA ---
             st.markdown("---")
