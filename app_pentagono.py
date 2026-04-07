@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V120.0 - Matemática e Risco", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V122.0 - Veredito do Sniper", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -223,7 +223,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: MATEMÁTICA CORRIGIDA & BACKTEST (1º AO 5º) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS & BACKTEST (RADAR DE CENTENAS 1º AO 5º) ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
@@ -250,19 +250,28 @@ def analisar_radar_centena(history_slice):
     ultimas_centenas = historico_centenas[-1]
     ultimas_milhares = historico_milhares[-1]
 
-    # 1. Atraso - BUG CORRIGIDO: Agora usa a lista completa, incluindo o resultado atual
+    # 1. Cálculo de Atraso Atual e Máximo Atraso Histórico
     atrasos = {str(d): 0 for d in range(10)}
+    max_atrasos = {str(d): 0 for d in range(10)}
+    current_atrasos = {str(d): 0 for d in range(10)}
+
+    for draw in historico_centenas:
+        for d in range(10):
+            d_str = str(d)
+            if d_str in draw:
+                max_atrasos[d_str] = max(max_atrasos[d_str], current_atrasos[d_str])
+                current_atrasos[d_str] = 0
+            else:
+                current_atrasos[d_str] += 1
+                
     for d in range(10):
         d_str = str(d)
-        atraso = 0
-        for draw in reversed(historico_centenas): # Removido o [:-1] que ignorava a tropa atual
-            if d_str in draw: break
-            atraso += 1
-        atrasos[d_str] = atraso
+        max_atrasos[d_str] = max(max_atrasos[d_str], current_atrasos[d_str])
+        atrasos[d_str] = current_atrasos[d_str]
 
-    # 2. Frequência - BUG CORRIGIDO: Pega os últimos 10 de verdade
+    # 2. Frequência
     freq_recente = {str(d): 0 for d in range(10)}
-    ultimos_10 = historico_centenas[-10:] # Removido o [-11:-1]
+    ultimos_10 = historico_centenas[-10:]
     for draw in ultimos_10:
         for d_str in set(draw): 
             freq_recente[d_str] += 1
@@ -287,6 +296,7 @@ def analisar_radar_centena(history_slice):
         scores[d_str] = {
             "score": score,
             "atraso": atrasos[d_str],
+            "max_atraso": max_atrasos[d_str],
             "freq": freq_recente[d_str],
             "transicao": tx_transicao
         }
@@ -300,6 +310,7 @@ def analisar_radar_centena(history_slice):
         "ultimas_milhares": ultimas_milhares,
         "top_digit": top_digit,
         "atraso": top_data["atraso"],
+        "max_atraso": top_data["max_atraso"],
         "freq": top_data["freq"],
         "transicao": top_data["transicao"],
         "score": top_data["score"],
@@ -307,7 +318,6 @@ def analisar_radar_centena(history_slice):
     }
 
 def rodar_backtest_centenas(history_slice, max_testes=15):
-    """Viaja no tempo até 15 sorteios para validar vitórias e derrotas passadas."""
     min_history = 15
     available_tests = len(history_slice) - min_history
     if available_tests <= 0: 
@@ -408,7 +418,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                     if analise:
                         resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
                         if resultados_bt_15:
-                            # Calcula Máximo de Derrotas Seguidas
                             max_loss = 0
                             curr_loss = 0
                             for bt in resultados_bt_15:
@@ -418,7 +427,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                 else:
                                     curr_loss = 0
                                     
-                            # String concisa apenas dos últimos 5
                             ultimos_5 = resultados_bt_15[-5:]
                             bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
                             bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
@@ -467,6 +475,22 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
             html_final += html_ranking
             
         st.markdown(html_final, unsafe_allow_html=True)
+        
+        # --- O VEREDITO DO SNIPER ---
+        melhor_alvo = ranking_global[0]
+        
+        st.markdown("---")
+        st.markdown("### 👑 VEREDITO DO PENTÁGONO (O Tiro de Sniper)")
+        
+        html_verdict = f"""
+        <div style='background-color:#1e3d1e; border: 2px solid #00ff00; border-radius: 8px; padding: 20px; text-align: center;'>
+            <h2 style='color:#00ff00; margin-top:0;'>FOGO AUTORIZADO: {melhor_alvo['banca']}</h2>
+            <p style='color:#fff; font-size:1.2em;'>De todas as opções, a <b>{melhor_alvo['banca']}</b> apresenta o alinhamento matemático mais letal neste momento.</p>
+            <p style='color:#ddd; font-size:1.1em;'>O <b>Algarismo {melhor_alvo['top_digit']}</b> tem <b>{melhor_alvo['transicao']:.1f}%</b> de força de atração (Markov). Pela Teoria do Elástico, o limite de tensão dele é <b>{melhor_alvo['max_atraso']}</b> sorteios, e ele já está pressionado com <b>{melhor_alvo['atraso']}</b> sorteios de atraso.</p>
+            <h3 style='color:#ffd700; margin-bottom:0;'>🎯 FOCO TOTAL: Centena {melhor_alvo['top_digit']} do 1º ao 5º na {melhor_alvo['banca']}</h3>
+        </div>
+        """
+        st.markdown(html_verdict, unsafe_allow_html=True)
 
 else:
     banca_selecionada = escolha_menu
@@ -684,7 +708,6 @@ else:
                     milhares_atual = ", ".join(res_centena['ultimas_milhares'])
                     alvo_digito = res_centena['top_digit']
                     
-                    # Processamento Visual do Risco (Backtest 15 jogos)
                     resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
                     if resultados_bt_15:
                         max_loss = 0
@@ -709,12 +732,13 @@ else:
                         st.success(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
                         st.success(f"**Backtest (5 Últimos):** {bt_str}")
                         st.warning(f"**⚠️ Risco Histórico:** {aviso_risco}")
+                        st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
                         
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
                         
                         col_c1, col_c2, col_c3 = st.columns(3)
-                        col_c1.metric("Atraso (Sorteios Fora)", res_centena['atraso'])
+                        col_c1.metric("Atraso Atual (Sorteios)", res_centena['atraso'])
                         col_c2.metric("Frequência (Últimos 10)", res_centena['freq'])
                         col_c3.metric("Poder de Transição (Atração)", f"{res_centena['transicao']:.1f}%")
                         
@@ -723,7 +747,7 @@ else:
                         rank = res_centena['rank_completo']
                         for i in range(min(3, len(rank))):
                             dig = rank[i][0]
-                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']})")
+                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso Atual: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']} | Teto: {rank[i][1]['max_atraso']})")
                 else:
                     st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
