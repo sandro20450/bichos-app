@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V122.0 - Veredito do Sniper", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V123.0 - DNA de Vitória", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR DE ELITE ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -223,7 +223,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS & BACKTEST (RADAR DE CENTENAS 1º AO 5º) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
@@ -250,7 +250,7 @@ def analisar_radar_centena(history_slice):
     ultimas_centenas = historico_centenas[-1]
     ultimas_milhares = historico_milhares[-1]
 
-    # 1. Cálculo de Atraso Atual e Máximo Atraso Histórico
+    # 1. Atraso Atual e Teto Histórico
     atrasos = {str(d): 0 for d in range(10)}
     max_atrasos = {str(d): 0 for d in range(10)}
     current_atrasos = {str(d): 0 for d in range(10)}
@@ -353,10 +353,35 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
             'horario': sorteio_real['horario'],
             'previsto': digito_previsto,
             'reais': centenas_reais,
-            'vitoria': vitoria
+            'vitoria': vitoria,
+            'analise': analise_passada # Salva os dados brutos da analise passada para o DNA
         })
         
     return resultados_bt
+
+def calcular_dna_banca(history_slice, max_lookback=60):
+    """Varre o passado e descobre as métricas exatas que mais deram vitória na banca."""
+    resultados_bt = rodar_backtest_centenas(history_slice, max_lookback)
+    if not resultados_bt: return None
+    
+    wins_atraso = []
+    wins_freq = []
+    wins_transicao = []
+    
+    for bt in resultados_bt:
+        if bt['vitoria']:
+            wins_atraso.append(bt['analise']['atraso'])
+            wins_freq.append(bt['analise']['freq'])
+            wins_transicao.append(bt['analise']['transicao'])
+            
+    if len(wins_atraso) < 3: return None # Precisa de pelo menos 3 vitórias para formar um DNA válido
+    
+    return {
+        "avg_atraso": sum(wins_atraso) / len(wins_atraso),
+        "avg_freq": sum(wins_freq) / len(wins_freq),
+        "avg_transicao": sum(wins_transicao) / len(wins_transicao),
+        "total_vitorias_lidas": len(wins_atraso)
+    }
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -476,7 +501,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
             
         st.markdown(html_final, unsafe_allow_html=True)
         
-        # --- O VEREDITO DO SNIPER ---
         melhor_alvo = ranking_global[0]
         
         st.markdown("---")
@@ -692,7 +716,7 @@ else:
     if config['tipo'] == "MILHAR_VIEW":
         st.header(f"👁️ {config['display_name']}")
         
-        with st.spinner("Processando Radar de Centenas..."):
+        with st.spinner("Processando Radar de Centenas e DNA..."):
             hist_milhar = carregar_dados_hibridos(config['nome_aba'])
             
         if len(hist_milhar) > 0:
@@ -726,6 +750,23 @@ else:
                     else:
                         bt_str = "Aguardando dados..."
                         aviso_risco = "Aguardando dados..."
+                        
+                    # MÓDULO DE DNA DE VITÓRIA
+                    dna_banca = calcular_dna_banca(hist_milhar, 60)
+                    alerta_dna = False
+                    
+                    if dna_banca:
+                        atraso_ideal = round(dna_banca['avg_atraso'])
+                        freq_ideal = round(dna_banca['avg_freq'])
+                        transicao_ideal = dna_banca['avg_transicao']
+                        
+                        # Regra de Alinhamento (Tolerância Matemática)
+                        match_atraso = abs(res_centena['atraso'] - atraso_ideal) <= 2
+                        match_freq = abs(res_centena['freq'] - freq_ideal) <= 2
+                        match_transicao = res_centena['transicao'] >= (transicao_ideal * 0.8) # Pelo menos 80% da força ideal
+                        
+                        if match_atraso and match_freq and match_transicao:
+                            alerta_dna = True
                     
                     with st.container(border=True):
                         st.success(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
@@ -733,6 +774,12 @@ else:
                         st.success(f"**Backtest (5 Últimos):** {bt_str}")
                         st.warning(f"**⚠️ Risco Histórico:** {aviso_risco}")
                         st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
+                        
+                        if dna_banca:
+                            st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
+                            
+                        if alerta_dna:
+                            st.error("🚨 CENÁRIO IDEAL DETECTADO: O ALVO ATUAL BATE EXATAMENTE COM O DNA VENCEDOR DA BANCA! FOGO AUTORIZADO! 🚨")
                         
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
