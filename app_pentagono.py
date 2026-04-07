@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V119.0 - Visão Concisa", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V120.0 - Matemática e Risco", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR DE ELITE (BLINDAGEM CONTRA MENUS) ---
+# --- 3. EXTRATOR DE ELITE ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -223,7 +223,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS & BACKTEST (RADAR DE CENTENAS 1º AO 5º) ---
+# --- 4. CÉREBRO: MATEMÁTICA CORRIGIDA & BACKTEST (1º AO 5º) ---
 # =============================================================================
 
 def analisar_radar_centena(history_slice):
@@ -250,19 +250,19 @@ def analisar_radar_centena(history_slice):
     ultimas_centenas = historico_centenas[-1]
     ultimas_milhares = historico_milhares[-1]
 
-    # 1. Atraso
+    # 1. Atraso - BUG CORRIGIDO: Agora usa a lista completa, incluindo o resultado atual
     atrasos = {str(d): 0 for d in range(10)}
     for d in range(10):
         d_str = str(d)
         atraso = 0
-        for draw in reversed(historico_centenas[:-1]):
+        for draw in reversed(historico_centenas): # Removido o [:-1] que ignorava a tropa atual
             if d_str in draw: break
             atraso += 1
         atrasos[d_str] = atraso
 
-    # 2. Frequência
+    # 2. Frequência - BUG CORRIGIDO: Pega os últimos 10 de verdade
     freq_recente = {str(d): 0 for d in range(10)}
-    ultimos_10 = historico_centenas[-11:-1]
+    ultimos_10 = historico_centenas[-10:] # Removido o [-11:-1]
     for draw in ultimos_10:
         for d_str in set(draw): 
             freq_recente[d_str] += 1
@@ -306,11 +306,14 @@ def analisar_radar_centena(history_slice):
         "rank_completo": rank
     }
 
-def rodar_backtest_centenas(history_slice, qtd_testes=5):
-    """Viaja no tempo e testa as previsões passadas contra a realidade."""
-    if len(history_slice) < 15 + qtd_testes: 
+def rodar_backtest_centenas(history_slice, max_testes=15):
+    """Viaja no tempo até 15 sorteios para validar vitórias e derrotas passadas."""
+    min_history = 15
+    available_tests = len(history_slice) - min_history
+    if available_tests <= 0: 
         return None 
         
+    qtd_testes = min(max_testes, available_tests)
     resultados_bt = []
     inicio_teste = len(history_slice) - qtd_testes
     
@@ -403,17 +406,31 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 if len(hist_milhar) >= 15:
                     analise = analisar_radar_centena(hist_milhar)
                     if analise:
-                        # Processa a string de backtest para exibir na Home
-                        resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
-                        if resultados_bt:
-                            bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(resultados_bt)]
+                        resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                        if resultados_bt_15:
+                            # Calcula Máximo de Derrotas Seguidas
+                            max_loss = 0
+                            curr_loss = 0
+                            for bt in resultados_bt_15:
+                                if not bt['vitoria']:
+                                    curr_loss += 1
+                                    max_loss = max(max_loss, curr_loss)
+                                else:
+                                    curr_loss = 0
+                                    
+                            # String concisa apenas dos últimos 5
+                            ultimos_5 = resultados_bt_15[-5:]
+                            bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
                             bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
+                            aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
                         else:
                             bt_str = "Aguardando dados..."
+                            aviso_risco = "Aguardando dados..."
                             
                         analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "")
                         analise['banca_key'] = banca_key
                         analise['bt_str'] = bt_str
+                        analise['aviso_risco'] = aviso_risco
                         ranking_global.append(analise)
 
     if not ranking_global:
@@ -435,7 +452,8 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Milhares do Globo (1º ao 5º): <b>{milhares_tropa}</b></p>'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
-                f'  <p style="margin:0 0 10px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
+                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
+                f'  <p style="margin:0 0 10px 0; color:#ffaa00; font-size:1.1em;">⚠️ Risco Histórico: <b>{alvo["aviso_risco"]}</b></p>'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
                 f'</div>'
@@ -666,18 +684,31 @@ else:
                     milhares_atual = ", ".join(res_centena['ultimas_milhares'])
                     alvo_digito = res_centena['top_digit']
                     
-                    # Formata a string visual do backtest para o painel
-                    resultados_bt = rodar_backtest_centenas(hist_milhar, 5)
-                    if resultados_bt:
-                        bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(resultados_bt)]
+                    # Processamento Visual do Risco (Backtest 15 jogos)
+                    resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                    if resultados_bt_15:
+                        max_loss = 0
+                        curr_loss = 0
+                        for bt in resultados_bt_15:
+                            if not bt['vitoria']:
+                                curr_loss += 1
+                                max_loss = max(max_loss, curr_loss)
+                            else:
+                                curr_loss = 0
+                                
+                        ultimos_5 = resultados_bt_15[-5:]
+                        bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
                         bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
+                        aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
                     else:
                         bt_str = "Aguardando dados..."
+                        aviso_risco = "Aguardando dados..."
                     
                     with st.container(border=True):
                         st.success(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
                         st.success(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
                         st.success(f"**Backtest (5 Últimos):** {bt_str}")
+                        st.warning(f"**⚠️ Risco Histórico:** {aviso_risco}")
                         
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
@@ -693,7 +724,6 @@ else:
                         for i in range(min(3, len(rank))):
                             dig = rank[i][0]
                             st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']})")
-
                 else:
                     st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
