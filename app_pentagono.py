@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V118.0 - Visão Concisa", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V119.0 - Visão Concisa", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -675,9 +675,9 @@ else:
                         bt_str = "Aguardando dados..."
                     
                     with st.container(border=True):
-                        st.info(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
-                        st.info(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
-                        st.info(f"**Backtest (5 Últimos):** {bt_str}")
+                        st.success(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
+                        st.success(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
+                        st.success(f"**Backtest (5 Últimos):** {bt_str}")
                         
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
