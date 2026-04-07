@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V123.0 - DNA de Vitória", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V124.0 - Pelotão Completo", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -29,7 +29,7 @@ CONFIG_BANCAS = {
     "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
     
-    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5" }
+    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Hórus)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True }
 }
 
 st.markdown("""
@@ -354,13 +354,12 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
             'previsto': digito_previsto,
             'reais': centenas_reais,
             'vitoria': vitoria,
-            'analise': analise_passada # Salva os dados brutos da analise passada para o DNA
+            'analise': analise_passada 
         })
         
     return resultados_bt
 
 def calcular_dna_banca(history_slice, max_lookback=60):
-    """Varre o passado e descobre as métricas exatas que mais deram vitória na banca."""
     resultados_bt = rodar_backtest_centenas(history_slice, max_lookback)
     if not resultados_bt: return None
     
@@ -374,7 +373,7 @@ def calcular_dna_banca(history_slice, max_lookback=60):
             wins_freq.append(bt['analise']['freq'])
             wins_transicao.append(bt['analise']['transicao'])
             
-    if len(wins_atraso) < 3: return None # Precisa de pelo menos 3 vitórias para formar um DNA válido
+    if len(wins_atraso) < 3: return None 
     
     return {
         "avg_atraso": sum(wins_atraso) / len(wins_atraso),
@@ -430,7 +429,7 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR TÁTICO (Home)":
     st.title("👁️ OLHO DE HÓRUS (RADAR DE CENTENAS)")
-    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando TRADICIONAL, LOTEP e CAMINHO DA SORTE.")
+    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando as Bancas Selecionadas.")
     
     ranking_global = []
     
@@ -460,7 +459,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                             bt_str = "Aguardando dados..."
                             aviso_risco = "Aguardando dados..."
                             
-                        analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "")
+                        analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "").replace(" (Vitorino)", "")
                         analise['banca_key'] = banca_key
                         analise['bt_str'] = bt_str
                         analise['aviso_risco'] = aviso_risco
@@ -751,7 +750,6 @@ else:
                         bt_str = "Aguardando dados..."
                         aviso_risco = "Aguardando dados..."
                         
-                    # MÓDULO DE DNA DE VITÓRIA
                     dna_banca = calcular_dna_banca(hist_milhar, 60)
                     alerta_dna = False
                     
@@ -760,10 +758,9 @@ else:
                         freq_ideal = round(dna_banca['avg_freq'])
                         transicao_ideal = dna_banca['avg_transicao']
                         
-                        # Regra de Alinhamento (Tolerância Matemática)
                         match_atraso = abs(res_centena['atraso'] - atraso_ideal) <= 2
                         match_freq = abs(res_centena['freq'] - freq_ideal) <= 2
-                        match_transicao = res_centena['transicao'] >= (transicao_ideal * 0.8) # Pelo menos 80% da força ideal
+                        match_transicao = res_centena['transicao'] >= (transicao_ideal * 0.8) 
                         
                         if match_atraso and match_freq and match_transicao:
                             alerta_dna = True
@@ -801,7 +798,6 @@ else:
             else:
                 st.info("⚠️ O Radar de Centenas não está ativo para esta banca.")
                     
-            # --- TABELA DO BANCO DE DADOS RESTAURADA ---
             st.markdown("---")
             st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
             df_show = pd.DataFrame(hist_milhar)
