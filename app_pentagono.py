@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V130.0 - Painel Absoluto", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V132.0 - Protocolo Quebra-Ciclo", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
+# --- 3. EXTRATOR UNIVERSAL ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -122,13 +122,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    if "TRADICIONAL" in banca_key:
-        url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    else:
-        if data_alvo == date.today(): 
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
-        else:
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
         headers = {
@@ -223,7 +217,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA (COM CACHE) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE RECUPERAÇÃO ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -311,7 +305,13 @@ def analisar_radar_centena(history_slice):
         "freq": top_data["freq"],
         "transicao": top_data["transicao"],
         "score": top_data["score"],
-        "rank_completo": rank
+        "rank_completo": rank,
+        # Salva o status de todos os números para a Engenharia Reversa
+        "all_stats": {
+            "atrasos": atrasos,
+            "freqs": freq_recente,
+            "transicoes": {str(d): (transicoes[str(d)] / total_transicoes * 100) if total_transicoes > 0 else 0.0 for d in range(10)}
+        }
     }
 
 @st.cache_data(show_spinner=False)
@@ -360,11 +360,17 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
 @st.cache_data(show_spinner=False)
 def calcular_dna_banca(history_slice, max_lookback=60):
     resultados_bt = rodar_backtest_centenas(history_slice, max_lookback)
-    if not resultados_bt: return None
+    if not resultados_bt: return None, None
     
     wins_atraso = []
     wins_freq = []
     wins_transicao = []
+    
+    # Variáveis para a Engenharia Reversa do Pós-Derrota
+    recuperacao_atraso = []
+    recuperacao_freq = []
+    recuperacao_transicao = []
+    consec_losses = 0
     
     for bt in resultados_bt:
         if bt['vitoria']:
@@ -372,14 +378,36 @@ def calcular_dna_banca(history_slice, max_lookback=60):
             wins_freq.append(bt['analise']['freq'])
             wins_transicao.append(bt['analise']['transicao'])
             
-    if len(wins_atraso) < 3: return None 
-    
-    return {
-        "avg_atraso": sum(wins_atraso) / len(wins_atraso),
-        "avg_freq": sum(wins_freq) / len(wins_freq),
-        "avg_transicao": sum(wins_transicao) / len(wins_transicao),
-        "total_vitorias_lidas": len(wins_atraso)
-    }
+            # Se ganhamos logo após uma sequência de 2 ou mais derrotas, analise o perfil do salvador!
+            if consec_losses >= 2:
+                centenas_que_sairam = bt['reais']
+                if centenas_que_sairam:
+                    salvador = centenas_que_sairam[0] # Pega o primeiro digito que salvou o dia
+                    recuperacao_atraso.append(bt['analise']['all_stats']['atrasos'][salvador])
+                    recuperacao_freq.append(bt['analise']['all_stats']['freqs'][salvador])
+                    recuperacao_transicao.append(bt['analise']['all_stats']['transicoes'][salvador])
+            consec_losses = 0
+        else:
+            consec_losses += 1
+            
+    dna_normal = None
+    dna_recuperacao = None
+            
+    if len(wins_atraso) >= 3: 
+        dna_normal = {
+            "avg_atraso": sum(wins_atraso) / len(wins_atraso),
+            "avg_freq": sum(wins_freq) / len(wins_freq),
+            "avg_transicao": sum(wins_transicao) / len(wins_transicao),
+        }
+        
+    if len(recuperacao_atraso) >= 1: # Se já teve pelo menos 1 quebra de ciclo salva
+        dna_recuperacao = {
+            "avg_atraso": sum(recuperacao_atraso) / len(recuperacao_atraso),
+            "avg_freq": sum(recuperacao_freq) / len(recuperacao_freq),
+            "avg_transicao": sum(recuperacao_transicao) / len(recuperacao_transicao),
+        }
+        
+    return dna_normal, dna_recuperacao
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -440,6 +468,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                     analise = analisar_radar_centena(hist_milhar)
                     if analise:
                         resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                        curr_streak = 0
                         if resultados_bt_15:
                             max_loss = 0
                             curr_loss = 0
@@ -449,8 +478,13 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                     max_loss = max(max_loss, curr_loss)
                                 else:
                                     curr_loss = 0
-                                    
+                            
+                            # Calcula a sequência de derrotas ATUAL (olhando de trás pra frente nos 5 últimos)
                             ultimos_5 = resultados_bt_15[-5:]
+                            for bt in reversed(ultimos_5):
+                                if not bt['vitoria']: curr_streak += 1
+                                else: break
+                                    
                             bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
                             bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
                             aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
@@ -458,21 +492,24 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                             bt_str = "Aguardando dados..."
                             aviso_risco = "Aguardando dados..."
                             
-                        # Processa o DNA para a tela Home
-                        dna_banca = calcular_dna_banca(hist_milhar, 60)
-                        if dna_banca:
-                            atraso_ideal = round(dna_banca['avg_atraso'])
-                            freq_ideal = round(dna_banca['avg_freq'])
-                            transicao_ideal = dna_banca['avg_transicao']
-                            dna_str = f"Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%"
+                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
+                        
+                        if dna_normal:
+                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%"
                         else:
                             dna_str = "Aguardando vitórias..."
+                            
+                        dna_rec_str = ""
+                        if dna_recuperacao:
+                            dna_rec_str = f"Atraso ~{round(dna_recuperacao['avg_atraso'])} | Freq ~{round(dna_recuperacao['avg_freq'])} | Atração ~{dna_recuperacao['avg_transicao']:.1f}%"
                             
                         analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "").replace(" (Vitorino)", "")
                         analise['banca_key'] = banca_key
                         analise['bt_str'] = bt_str
                         analise['aviso_risco'] = aviso_risco
                         analise['dna_str'] = dna_str
+                        analise['dna_rec_str'] = dna_rec_str
+                        analise['curr_streak'] = curr_streak
                         ranking_global.append(analise)
 
     if not ranking_global:
@@ -488,6 +525,18 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
             milhares_tropa = ", ".join(alvo['ultimas_milhares'])
             digito = alvo['top_digit']
             
+            rank_data = alvo['rank_completo']
+            top2_str = ""
+            top3_str = ""
+            if len(rank_data) >= 3:
+                r2, r3 = rank_data[1], rank_data[2]
+                top2_str = f"<b>2º Lugar:</b> Centena {r2[0]} (Atraso Atual: {r2[1]['atraso']} | Freq: {r2[1]['freq']} | Teto: {r2[1]['max_atraso']} | Atração: {r2[1]['transicao']:.1f}%)"
+                top3_str = f"<b>3º Lugar:</b> Centena {r3[0]} (Atraso Atual: {r3[1]['atraso']} | Freq: {r3[1]['freq']} | Teto: {r3[1]['max_atraso']} | Atração: {r3[1]['transicao']:.1f}%)"
+            
+            html_recuperacao = ""
+            if alvo['curr_streak'] >= 2 and alvo['dna_rec_str']:
+                html_recuperacao = f"<div style='background-color:#5c1e1e; padding:10px; border-radius:5px; margin: 10px 0; border-left: 4px solid #ff4444;'><p style='margin:0; color:#fff; font-size:1.0em;'>🚨 <b>ALERTA DE FADIGA: 2+ DERROTAS!</b> Esqueça o Alvo Principal teimoso. Historicamente, o número que quebra a sequência de erros nesta banca tem este perfil:<br><b>🚑 DNA DE RECUPERAÇÃO: {alvo['dna_rec_str']}</b><br><i>Procure no Top 3 o número que mais se aproxima deste DNA de Recuperação!</i></p></div>"
+            
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
@@ -497,6 +546,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">🧬 DNA Vencedor (Média): <b>{alvo["dna_str"]}</b></p>'
                 f'  <p style="margin:0 0 10px 0; color:#ffaa00; font-size:1.1em;">⚠️ Risco Histórico: <b>{alvo["aviso_risco"]}</b></p>'
+                f'  {html_recuperacao}'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
                 f'</div>'
@@ -504,6 +554,10 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios fora</span>'
                 f'  <span><b>🔁 Frequência:</b> {alvo["freq"]} (últ. 10 jogos)</span>'
                 f'  <span><b>🧲 Atração (Markov):</b> {alvo["transicao"]:.1f}%</span>'
+                f'</div>'
+                f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #333; font-size:0.85em; color:#aaa;">'
+                f'  <div style="margin-bottom:5px;">{top2_str}</div>'
+                f'  <div>{top3_str}</div>'
                 f'</div>'
                 f'</div>'
             )
@@ -732,6 +786,7 @@ else:
                     alvo_digito = res_centena['top_digit']
                     
                     resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                    curr_streak = 0
                     if resultados_bt_15:
                         max_loss = 0
                         curr_loss = 0
@@ -743,6 +798,10 @@ else:
                                 curr_loss = 0
                                 
                         ultimos_5 = resultados_bt_15[-5:]
+                        for bt in reversed(ultimos_5):
+                            if not bt['vitoria']: curr_streak += 1
+                            else: break
+                                
                         bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
                         bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
                         aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
@@ -750,13 +809,13 @@ else:
                         bt_str = "Aguardando dados..."
                         aviso_risco = "Aguardando dados..."
                         
-                    dna_banca = calcular_dna_banca(hist_milhar, 60)
+                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                     alerta_dna = False
                     
-                    if dna_banca:
-                        atraso_ideal = round(dna_banca['avg_atraso'])
-                        freq_ideal = round(dna_banca['avg_freq'])
-                        transicao_ideal = dna_banca['avg_transicao']
+                    if dna_normal:
+                        atraso_ideal = round(dna_normal['avg_atraso'])
+                        freq_ideal = round(dna_normal['avg_freq'])
+                        transicao_ideal = dna_normal['avg_transicao']
                         
                         match_atraso = abs(res_centena['atraso'] - atraso_ideal) <= 2
                         match_freq = abs(res_centena['freq'] - freq_ideal) <= 2
@@ -764,6 +823,10 @@ else:
                         
                         if match_atraso and match_freq and match_transicao:
                             alerta_dna = True
+                            
+                    dna_rec_str = ""
+                    if dna_recuperacao:
+                        dna_rec_str = f"Atraso ~{round(dna_recuperacao['avg_atraso'])} | Freq ~{round(dna_recuperacao['avg_freq'])} | Atração ~{dna_recuperacao['avg_transicao']:.1f}%"
                     
                     with st.container(border=True):
                         st.success(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
@@ -772,11 +835,14 @@ else:
                         st.warning(f"**⚠️ Risco Histórico:** {aviso_risco}")
                         st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
                         
-                        if dna_banca:
+                        if dna_normal:
                             st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
                             
                         if alerta_dna:
                             st.error("🚨 CENÁRIO IDEAL DETECTADO: O ALVO ATUAL BATE EXATAMENTE COM O DNA VENCEDOR DA BANCA! FOGO AUTORIZADO! 🚨")
+                            
+                        if curr_streak >= 2 and dna_rec_str:
+                            st.markdown(f"<div style='background-color:#5c1e1e; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 4px solid #ff4444;'><span style='color:#fff; font-size:1.0em;'>🚨 <b>ALERTA DE FADIGA: 2+ DERROTAS!</b> Esqueça o Alvo Principal teimoso. O número que quebra a sequência de erros tem este perfil:<br><b>🚑 DNA DE RECUPERAÇÃO: {dna_rec_str}</b><br><i>Procure no Top 3 o número que mais se aproxima deste DNA!</i></span></div>", unsafe_allow_html=True)
                         
                         st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
                         st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
