@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V126.0 - Velocidade Tática", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V127.0 - Rota PlayBicho Total", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
+# --- 3. EXTRATOR UNIVERSAL (ROTA PLAYBICHO 100%) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -122,13 +122,8 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    if "TRADICIONAL" in banca_key:
-        url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
-    else:
-        if data_alvo == date.today(): 
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
-        else:
-            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    # 🎯 ROTA UNIVERSAL PLAYBICHO PARA TODAS AS BANCAS
+    url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
         headers = {
@@ -223,7 +218,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA (COM CACHE DE VELOCIDADE) ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA (COM CACHE) ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -518,10 +513,8 @@ else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    if "TRADICIONAL" in banca_selecionada:
-        url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
-    else:
-        url_banca = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+    # 🔗 LINK DINÂMICO UNIVERSAL (PLAYBICHO PARA TODAS AS BANCAS)
+    url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
     
