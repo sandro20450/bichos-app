@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V129.0 - Ficha Top 3", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V130.0 - Painel Absoluto", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL (ROTA PLAYBICHO 100%) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -122,7 +122,13 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    if "TRADICIONAL" in banca_key:
+        url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
+    else:
+        if data_alvo == date.today(): 
+            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-de-hoje"
+        else:
+            url = f"https://www.resultadofacil.com.br/resultados-{config['slug']}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
         headers = {
@@ -452,10 +458,21 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                             bt_str = "Aguardando dados..."
                             aviso_risco = "Aguardando dados..."
                             
+                        # Processa o DNA para a tela Home
+                        dna_banca = calcular_dna_banca(hist_milhar, 60)
+                        if dna_banca:
+                            atraso_ideal = round(dna_banca['avg_atraso'])
+                            freq_ideal = round(dna_banca['avg_freq'])
+                            transicao_ideal = dna_banca['avg_transicao']
+                            dna_str = f"Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%"
+                        else:
+                            dna_str = "Aguardando vitórias..."
+                            
                         analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "").replace(" (Vitorino)", "")
                         analise['banca_key'] = banca_key
                         analise['bt_str'] = bt_str
                         analise['aviso_risco'] = aviso_risco
+                        analise['dna_str'] = dna_str
                         ranking_global.append(analise)
 
     if not ranking_global:
@@ -478,6 +495,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Milhares do Globo (1º ao 5º): <b>{milhares_tropa}</b></p>'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
                 f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
+                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">🧬 DNA Vencedor (Média): <b>{alvo["dna_str"]}</b></p>'
                 f'  <p style="margin:0 0 10px 0; color:#ffaa00; font-size:1.1em;">⚠️ Risco Histórico: <b>{alvo["aviso_risco"]}</b></p>'
                 f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
                 f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
