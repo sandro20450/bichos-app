@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V125.0 - Visão Adaptativa", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V126.0 - Velocidade Tática", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL (VISÃO ADAPTATIVA) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -168,12 +168,11 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                 
             if tabela.parent:
                 txt_parent = tabela.parent.get_text().lower()
-                # Tolerância aumentada para 4000 caracteres para aguentar anúncios e textos longos da banca
                 if len(txt_parent) < 4000:  
                     texto_analise += txt_parent + " "
             
             prev = tabela.previous_sibling
-            for _ in range(5): # Olhar estendido para 5 blocos acima
+            for _ in range(5):
                 if prev:
                     if prev.name == 'table': break 
                     if prev.name and prev.get_text():
@@ -224,9 +223,10 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA (COM CACHE DE VELOCIDADE) ---
 # =============================================================================
 
+@st.cache_data(show_spinner=False)
 def analisar_radar_centena(history_slice):
     if len(history_slice) < 15: return None
 
@@ -314,6 +314,7 @@ def analisar_radar_centena(history_slice):
         "rank_completo": rank
     }
 
+@st.cache_data(show_spinner=False)
 def rodar_backtest_centenas(history_slice, max_testes=15):
     min_history = 15
     available_tests = len(history_slice) - min_history
@@ -356,6 +357,7 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
         
     return resultados_bt
 
+@st.cache_data(show_spinner=False)
 def calcular_dna_banca(history_slice, max_lookback=60):
     resultados_bt = rodar_backtest_centenas(history_slice, max_lookback)
     if not resultados_bt: return None
