@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V128.0 - Correção de Rota", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V129.0 - Ficha Top 3", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -540,8 +540,6 @@ else:
             else: data_busca = st.date_input("Escolha:", date.today(), key=f"dt_pk_{banca_selecionada}")
             
             lista_horarios = config['horarios'].copy()
-            
-            # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                     
             horario_busca = st.selectbox("Horário:", lista_horarios, key=f"sel_hr_{banca_selecionada}")
             
@@ -609,8 +607,6 @@ else:
                 for dia in lista_datas:
                     for hora_base in config['horarios']:
                         hora_efetiva = hora_base
-                        
-                        # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                                 
                         op_atual += 1; bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora_efetiva}...")
@@ -650,8 +646,6 @@ else:
             else: data_busca_man = st.date_input("Escolha:", date.today(), key=f"dt_man_{banca_selecionada}")
             
             lista_horarios_man = config['horarios'].copy()
-            
-            # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                     
             horario_busca_man = st.selectbox("Horário:", lista_horarios_man, key=f"hr_man_{banca_selecionada}")
             
@@ -779,7 +773,7 @@ else:
                         rank = res_centena['rank_completo']
                         for i in range(min(3, len(rank))):
                             dig = rank[i][0]
-                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso Atual: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']} | Teto: {rank[i][1]['max_atraso']})")
+                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso Atual: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']} | Teto: {rank[i][1]['max_atraso']} | Atração: {rank[i][1]['transicao']:.1f}%)")
                 else:
                     st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
                     
