@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V131.0 - Raio-X Top 3", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V130.0 - Painel Absoluto", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -223,7 +223,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA ---
+# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE VITÓRIA (COM CACHE) ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -458,6 +458,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                             bt_str = "Aguardando dados..."
                             aviso_risco = "Aguardando dados..."
                             
+                        # Processa o DNA para a tela Home
                         dna_banca = calcular_dna_banca(hist_milhar, 60)
                         if dna_banca:
                             atraso_ideal = round(dna_banca['avg_atraso'])
@@ -487,14 +488,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
             milhares_tropa = ", ".join(alvo['ultimas_milhares'])
             digito = alvo['top_digit']
             
-            rank_data = alvo['rank_completo']
-            top2_str = ""
-            top3_str = ""
-            if len(rank_data) >= 3:
-                r2, r3 = rank_data[1], rank_data[2]
-                top2_str = f"<b>2º Lugar:</b> Centena {r2[0]} (Atraso Atual: {r2[1]['atraso']} | Freq: {r2[1]['freq']} | Teto: {r2[1]['max_atraso']} | Atração: {r2[1]['transicao']:.1f}%)"
-                top3_str = f"<b>3º Lugar:</b> Centena {r3[0]} (Atraso Atual: {r3[1]['atraso']} | Freq: {r3[1]['freq']} | Teto: {r3[1]['max_atraso']} | Atração: {r3[1]['transicao']:.1f}%)"
-            
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
@@ -511,10 +504,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                 f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios fora</span>'
                 f'  <span><b>🔁 Frequência:</b> {alvo["freq"]} (últ. 10 jogos)</span>'
                 f'  <span><b>🧲 Atração (Markov):</b> {alvo["transicao"]:.1f}%</span>'
-                f'</div>'
-                f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #333; font-size:0.85em; color:#aaa;">'
-                f'  <div style="margin-bottom:5px;">{top2_str}</div>'
-                f'  <div>{top3_str}</div>'
                 f'</div>'
                 f'</div>'
             )
