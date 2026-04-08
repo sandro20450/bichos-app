@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V127.0 - Rota PlayBicho Total", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V128.0 - Correção de Rota", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -122,7 +122,6 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     tipo_ext = config.get('tipo_extracao', config['tipo'])
     slug = config['slug']
     
-    # 🎯 ROTA UNIVERSAL PLAYBICHO PARA TODAS AS BANCAS
     url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
         
     try:
@@ -513,7 +512,6 @@ else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
     
-    # 🔗 LINK DINÂMICO UNIVERSAL (PLAYBICHO PARA TODAS AS BANCAS)
     url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
@@ -542,9 +540,8 @@ else:
             else: data_busca = st.date_input("Escolha:", date.today(), key=f"dt_pk_{banca_selecionada}")
             
             lista_horarios = config['horarios'].copy()
-            if "CAMINHO" in banca_selecionada and data_busca.weekday() in [2, 5]: 
-                if "20:00" in lista_horarios:
-                    lista_horarios[lista_horarios.index("20:00")] = "19:30"
+            
+            # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                     
             horario_busca = st.selectbox("Horário:", lista_horarios, key=f"sel_hr_{banca_selecionada}")
             
@@ -612,8 +609,8 @@ else:
                 for dia in lista_datas:
                     for hora_base in config['horarios']:
                         hora_efetiva = hora_base
-                        if "CAMINHO" in banca_selecionada and dia.weekday() in [2, 5]:
-                            if hora_base == "20:00": hora_efetiva = "19:30"
+                        
+                        # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                                 
                         op_atual += 1; bar.progress(op_atual / total_ops)
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora_efetiva}...")
@@ -653,9 +650,8 @@ else:
             else: data_busca_man = st.date_input("Escolha:", date.today(), key=f"dt_man_{banca_selecionada}")
             
             lista_horarios_man = config['horarios'].copy()
-            if "CAMINHO" in banca_selecionada and data_busca_man.weekday() in [2, 5]: 
-                if "20:00" in lista_horarios_man:
-                    lista_horarios_man[lista_horarios_man.index("20:00")] = "19:30"
+            
+            # ⚠️ REGRA FANTASMA DO 19:30 ELIMINADA DAQUI!
                     
             horario_busca_man = st.selectbox("Horário:", lista_horarios_man, key=f"hr_man_{banca_selecionada}")
             
