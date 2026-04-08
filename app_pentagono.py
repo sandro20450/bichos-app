@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V124.0 - Pelotão Completo", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V125.0 - Visão Adaptativa", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -29,7 +29,7 @@ CONFIG_BANCAS = {
     "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
     
-    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Hórus)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True }
+    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True }
 }
 
 st.markdown("""
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
+# --- 3. EXTRATOR UNIVERSAL (VISÃO ADAPTATIVA) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -168,11 +168,12 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                 
             if tabela.parent:
                 txt_parent = tabela.parent.get_text().lower()
-                if len(txt_parent) < 1500:  
+                # Tolerância aumentada para 4000 caracteres para aguentar anúncios e textos longos da banca
+                if len(txt_parent) < 4000:  
                     texto_analise += txt_parent + " "
             
             prev = tabela.previous_sibling
-            for _ in range(3):
+            for _ in range(5): # Olhar estendido para 5 blocos acima
                 if prev:
                     if prev.name == 'table': break 
                     if prev.name and prev.get_text():
@@ -250,7 +251,6 @@ def analisar_radar_centena(history_slice):
     ultimas_centenas = historico_centenas[-1]
     ultimas_milhares = historico_milhares[-1]
 
-    # 1. Atraso Atual e Teto Histórico
     atrasos = {str(d): 0 for d in range(10)}
     max_atrasos = {str(d): 0 for d in range(10)}
     current_atrasos = {str(d): 0 for d in range(10)}
@@ -269,14 +269,12 @@ def analisar_radar_centena(history_slice):
         max_atrasos[d_str] = max(max_atrasos[d_str], current_atrasos[d_str])
         atrasos[d_str] = current_atrasos[d_str]
 
-    # 2. Frequência
     freq_recente = {str(d): 0 for d in range(10)}
     ultimos_10 = historico_centenas[-10:]
     for draw in ultimos_10:
         for d_str in set(draw): 
             freq_recente[d_str] += 1
 
-    # 3. Transição (Markov)
     transicoes = {str(d): 0 for d in range(10)}
     total_transicoes = 0
     for i in range(len(historico_centenas) - 1):
@@ -287,7 +285,6 @@ def analisar_radar_centena(history_slice):
                 transicoes[c_next] += 1
             total_transicoes += 1
 
-    # 4. Pontuação Final
     scores = {}
     for d in range(10):
         d_str = str(d)
