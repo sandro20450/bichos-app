@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V133.0 - Anti-Teimosia Tática", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V134.0 - Disjuntor de Fadiga", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -217,7 +217,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: ANTI-TEIMOSIA (CURVA DE SINO) & BACKTEST ---
+# --- 4. CÉREBRO: ANTI-TEIMOSIA EXTREMA & DISJUNTOR DE FADIGA ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -279,7 +279,7 @@ def analisar_radar_centena(history_slice):
                 transicoes[c_next] += 1
             total_transicoes += 1
 
-    # --- PONTUAÇÃO FINAL COM CURVA DE FADIGA (ANTI-TEIMOSIA) ---
+    # --- O DISJUNTOR DE RUÍNA (FADIGA BRUTAL) ---
     scores = {}
     for d in range(10):
         d_str = str(d)
@@ -287,13 +287,16 @@ def analisar_radar_centena(history_slice):
         
         a = atrasos[d_str]
         
-        # O Pulo do Gato: Se passar de 3 sorteios ausentes, ele entra em FADIGA e perde força,
-        # obrigando o robô a descartar alvos teimosos e "surfar a onda" dos números mais frequentes/atraídos.
-        if a <= 3:
-            pts_atraso = a * 2.5
-        else:
-            pts_atraso = (3 * 2.5) - ((a - 3) * 2.0)
-            
+        # AQUI ESTÁ A CORREÇÃO DA TEIMOSIA.
+        # Se o atraso passar do limite saudável, ele não ganha pontos, ele toma uma marretada na nota
+        # para ser forçosamente ejetado do 1º lugar e obrigar o robô a indicar outro número.
+        if a == 0: pts_atraso = 0.0
+        elif a == 1: pts_atraso = 2.0
+        elif a == 2: pts_atraso = 4.0
+        elif a == 3: pts_atraso = 5.0 # Tensão máxima do elástico (Ponto ideal para atirar)
+        elif a == 4: pts_atraso = 0.0 # Passou do ponto, já começa a fadigada
+        else: pts_atraso = -50.0 # Atraso 5 pra cima: ELÁSTICO PODRE. Punição brutal para troca imediata de alvo.
+        
         score = (tx_transicao * 0.7) + (freq_recente[d_str] * 3.5) + pts_atraso
         
         scores[d_str] = {
@@ -318,7 +321,6 @@ def analisar_radar_centena(history_slice):
         "transicao": top_data["transicao"],
         "score": top_data["score"],
         "rank_completo": rank,
-        # Salva o status de todos os números para a Engenharia Reversa
         "all_stats": {
             "atrasos": atrasos,
             "freqs": freq_recente,
@@ -389,13 +391,13 @@ def calcular_dna_banca(history_slice, max_lookback=60):
             wins_freq.append(bt['analise']['freq'])
             wins_transicao.append(bt['analise']['transicao'])
             
-            # --- BLINDAGEM CONTRA KEYERROR DE CACHE ANTIGO ---
+            # --- BLINDAGEM CONTRA O ERRO VERMELHO DO CACHE ANTIGO ---
             if consec_losses >= 2:
                 centenas_que_sairam = bt['reais']
                 if centenas_que_sairam:
                     salvador = centenas_que_sairam[0] 
                     stats = bt['analise'].get('all_stats', {})
-                    if stats and salvador in stats.get('atrasos', {}):
+                    if stats and 'atrasos' in stats and salvador in stats['atrasos']:
                         recuperacao_atraso.append(stats['atrasos'][salvador])
                         recuperacao_freq.append(stats['freqs'][salvador])
                         recuperacao_transicao.append(stats['transicoes'][salvador])
