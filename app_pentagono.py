@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V132.0 - Protocolo Quebra-Ciclo", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V133.0 - Anti-Teimosia Tática", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -217,7 +217,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: OLHO DE HÓRUS, BACKTEST & DNA DE RECUPERAÇÃO ---
+# --- 4. CÉREBRO: ANTI-TEIMOSIA (CURVA DE SINO) & BACKTEST ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
@@ -279,11 +279,23 @@ def analisar_radar_centena(history_slice):
                 transicoes[c_next] += 1
             total_transicoes += 1
 
+    # --- PONTUAÇÃO FINAL COM CURVA DE FADIGA (ANTI-TEIMOSIA) ---
     scores = {}
     for d in range(10):
         d_str = str(d)
         tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
-        score = (tx_transicao * 0.5) + (freq_recente[d_str] * 2.0) + (min(atrasos[d_str], 15) * 1.5)
+        
+        a = atrasos[d_str]
+        
+        # O Pulo do Gato: Se passar de 3 sorteios ausentes, ele entra em FADIGA e perde força,
+        # obrigando o robô a descartar alvos teimosos e "surfar a onda" dos números mais frequentes/atraídos.
+        if a <= 3:
+            pts_atraso = a * 2.5
+        else:
+            pts_atraso = (3 * 2.5) - ((a - 3) * 2.0)
+            
+        score = (tx_transicao * 0.7) + (freq_recente[d_str] * 3.5) + pts_atraso
+        
         scores[d_str] = {
             "score": score,
             "atraso": atrasos[d_str],
@@ -366,7 +378,6 @@ def calcular_dna_banca(history_slice, max_lookback=60):
     wins_freq = []
     wins_transicao = []
     
-    # Variáveis para a Engenharia Reversa do Pós-Derrota
     recuperacao_atraso = []
     recuperacao_freq = []
     recuperacao_transicao = []
@@ -378,14 +389,16 @@ def calcular_dna_banca(history_slice, max_lookback=60):
             wins_freq.append(bt['analise']['freq'])
             wins_transicao.append(bt['analise']['transicao'])
             
-            # Se ganhamos logo após uma sequência de 2 ou mais derrotas, analise o perfil do salvador!
+            # --- BLINDAGEM CONTRA KEYERROR DE CACHE ANTIGO ---
             if consec_losses >= 2:
                 centenas_que_sairam = bt['reais']
                 if centenas_que_sairam:
-                    salvador = centenas_que_sairam[0] # Pega o primeiro digito que salvou o dia
-                    recuperacao_atraso.append(bt['analise']['all_stats']['atrasos'][salvador])
-                    recuperacao_freq.append(bt['analise']['all_stats']['freqs'][salvador])
-                    recuperacao_transicao.append(bt['analise']['all_stats']['transicoes'][salvador])
+                    salvador = centenas_que_sairam[0] 
+                    stats = bt['analise'].get('all_stats', {})
+                    if stats and salvador in stats.get('atrasos', {}):
+                        recuperacao_atraso.append(stats['atrasos'][salvador])
+                        recuperacao_freq.append(stats['freqs'][salvador])
+                        recuperacao_transicao.append(stats['transicoes'][salvador])
             consec_losses = 0
         else:
             consec_losses += 1
@@ -400,7 +413,7 @@ def calcular_dna_banca(history_slice, max_lookback=60):
             "avg_transicao": sum(wins_transicao) / len(wins_transicao),
         }
         
-    if len(recuperacao_atraso) >= 1: # Se já teve pelo menos 1 quebra de ciclo salva
+    if len(recuperacao_atraso) >= 1: 
         dna_recuperacao = {
             "avg_atraso": sum(recuperacao_atraso) / len(recuperacao_atraso),
             "avg_freq": sum(recuperacao_freq) / len(recuperacao_freq),
@@ -479,7 +492,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                 else:
                                     curr_loss = 0
                             
-                            # Calcula a sequência de derrotas ATUAL (olhando de trás pra frente nos 5 últimos)
                             ultimos_5 = resultados_bt_15[-5:]
                             for bt in reversed(ultimos_5):
                                 if not bt['vitoria']: curr_streak += 1
