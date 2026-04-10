@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V136.0 - Isolamento Tático", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V137.0 - Sincronização Temporal", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
+# --- 3. EXTRATOR UNIVERSAL ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -286,7 +286,6 @@ def analisar_radar_centena(history_slice):
         
         a = atrasos[d_str]
         
-        # Disjuntor de Ruína (Evita 4+ derrotas seguidas no mesmo alvo)
         if a == 0: pts_atraso = 0.0
         elif a == 1: pts_atraso = 2.0
         elif a == 2: pts_atraso = 4.0
@@ -421,6 +420,61 @@ def calcular_dna_banca(history_slice, max_lookback=60):
         
     return dna_normal, dna_recuperacao
 
+# --- FUNÇÃO AUXILIAR PARA APLICAR CLONAGEM NO BACKTEST E NA PREVISÃO ATUAL ---
+def aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal):
+    dna_a = dna_normal['avg_atraso']
+    dna_f = dna_normal['avg_freq']
+    dna_t = dna_normal['avg_transicao']
+    
+    # 1. Recalcula o Backtest do passado usando o Machine Learning
+    if resultados_bt_15:
+        for bt in resultados_bt_15:
+            rank_dna_bt = []
+            for d in range(10):
+                d_str = str(d)
+                a_bt = bt['analise']['all_stats']['atrasos'][d_str]
+                f_bt = bt['analise']['all_stats']['freqs'][d_str]
+                t_bt = bt['analise']['all_stats']['transicoes'][d_str]
+                
+                dist_bt = abs(a_bt - dna_a) * 5.0 + abs(f_bt - dna_f) * 5.0 + abs(t_bt - dna_t) * 1.0
+                rank_dna_bt.append((d_str, dist_bt))
+            rank_dna_bt.sort(key=lambda x: x[1])
+            
+            bt['previsto'] = rank_dna_bt[0][0]
+            bt['vitoria'] = bt['previsto'] in bt['reais']
+            
+    # 2. Recalcula a Análise Atual para a tela
+    rank_dna = []
+    for d in range(10):
+        d_str = str(d)
+        a = analise['all_stats']['atrasos'][d_str]
+        f = analise['all_stats']['freqs'][d_str]
+        t = analise['all_stats']['transicoes'][d_str]
+        ma = analise['all_stats']['max_atrasos'][d_str]
+        
+        dist_a = abs(a - dna_a) * 5.0
+        dist_f = abs(f - dna_f) * 5.0
+        dist_t = abs(t - dna_t) * 1.0
+        dist_total = dist_a + dist_f + dist_t
+        
+        rank_dna.append((d_str, dist_total, a, f, t, ma))
+        
+    rank_dna.sort(key=lambda x: x[1])
+    
+    analise['top_digit'] = rank_dna[0][0]
+    analise['atraso'] = rank_dna[0][2]
+    analise['freq'] = rank_dna[0][3]
+    analise['transicao'] = rank_dna[0][4]
+    analise['max_atraso'] = rank_dna[0][5]
+    
+    analise['rank_completo'] = [
+        (rank_dna[0][0], {"atraso": rank_dna[0][2], "freq": rank_dna[0][3], "transicao": rank_dna[0][4], "max_atraso": rank_dna[0][5]}),
+        (rank_dna[1][0], {"atraso": rank_dna[1][2], "freq": rank_dna[1][3], "transicao": rank_dna[1][4], "max_atraso": rank_dna[1][5]}),
+        (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
+    ]
+    
+    return analise, resultados_bt_15
+
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
 # =============================================================================
@@ -480,6 +534,17 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                     analise = analisar_radar_centena(hist_milhar)
                     if analise:
                         resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
+                        
+                        # --- ISOLAMENTO TÁTICO & SINCRONIZAÇÃO DE BACKTEST ---
+                        if dna_normal and "TRADICIONAL" in banca_key:
+                            analise, resultados_bt_15 = aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal)
+                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}% (CLONAGEM ATIVADA)"
+                        elif dna_normal:
+                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%"
+                        else:
+                            dna_str = "Aguardando vitórias..."
+
                         curr_streak = 0
                         if resultados_bt_15:
                             max_loss = 0
@@ -502,51 +567,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                         else:
                             bt_str = "Aguardando dados..."
                             aviso_risco = "Aguardando dados..."
-                            
-                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
-                        
-                        # --- ISOLAMENTO TÁTICO: CLONAGEM (ML) SOMENTE NA TRADICIONAL ---
-                        if dna_normal and "TRADICIONAL" in banca_key:
-                            dna_a = dna_normal['avg_atraso']
-                            dna_f = dna_normal['avg_freq']
-                            dna_t = dna_normal['avg_transicao']
-                            
-                            rank_dna = []
-                            for d in range(10):
-                                d_str = str(d)
-                                a = analise['all_stats']['atrasos'][d_str]
-                                f = analise['all_stats']['freqs'][d_str]
-                                t = analise['all_stats']['transicoes'][d_str]
-                                ma = analise['all_stats']['max_atrasos'][d_str]
-                                
-                                dist_a = abs(a - dna_a) * 5.0
-                                dist_f = abs(f - dna_f) * 5.0
-                                dist_t = abs(t - dna_t) * 1.0
-                                dist_total = dist_a + dist_f + dist_t
-                                
-                                rank_dna.append((d_str, dist_total, a, f, t, ma))
-                                
-                            rank_dna.sort(key=lambda x: x[1]) 
-                            
-                            analise['top_digit'] = rank_dna[0][0]
-                            analise['atraso'] = rank_dna[0][2]
-                            analise['freq'] = rank_dna[0][3]
-                            analise['transicao'] = rank_dna[0][4]
-                            analise['max_atraso'] = rank_dna[0][5]
-                            
-                            analise['rank_completo'] = [
-                                (rank_dna[0][0], {"atraso": rank_dna[0][2], "freq": rank_dna[0][3], "transicao": rank_dna[0][4], "max_atraso": rank_dna[0][5]}),
-                                (rank_dna[1][0], {"atraso": rank_dna[1][2], "freq": rank_dna[1][3], "transicao": rank_dna[1][4], "max_atraso": rank_dna[1][5]}),
-                                (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
-                            ]
-                            
-                            dna_str = f"Atraso ~{round(dna_a)} | Freq ~{round(dna_f)} | Atração ~{dna_t:.1f}% (CLONAGEM ATIVADA)"
-                        
-                        elif dna_normal:
-                            # As outras bancas mostram o DNA, mas rodam com o Disjuntor de Fadiga normal
-                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%"
-                        else:
-                            dna_str = "Aguardando vitórias..."
                             
                         dna_rec_str = ""
                         if dna_recuperacao:
@@ -835,6 +855,13 @@ else:
                     alvo_digito = res_centena['top_digit']
                     
                     resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
+                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
+                    
+                    # --- ISOLAMENTO TÁTICO & SINCRONIZAÇÃO DE BACKTEST ---
+                    if dna_normal and "TRADICIONAL" in banca_selecionada:
+                        res_centena, resultados_bt_15 = aplicar_clonagem_dna(res_centena, resultados_bt_15, dna_normal)
+                        alvo_digito = res_centena['top_digit'] # Atualiza a variável pra tela
+
                     curr_streak = 0
                     if resultados_bt_15:
                         max_loss = 0
@@ -858,43 +885,7 @@ else:
                         bt_str = "Aguardando dados..."
                         aviso_risco = "Aguardando dados..."
                         
-                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                     alerta_dna = False
-                    
-                    # --- ISOLAMENTO TÁTICO: CLONAGEM (ML) SOMENTE NA TRADICIONAL ---
-                    if dna_normal and "TRADICIONAL" in banca_selecionada:
-                        dna_a = dna_normal['avg_atraso']
-                        dna_f = dna_normal['avg_freq']
-                        dna_t = dna_normal['avg_transicao']
-                        
-                        rank_dna = []
-                        for d in range(10):
-                            d_str = str(d)
-                            a = res_centena['all_stats']['atrasos'][d_str]
-                            f = res_centena['all_stats']['freqs'][d_str]
-                            t = res_centena['all_stats']['transicoes'][d_str]
-                            ma = res_centena['all_stats']['max_atrasos'][d_str]
-                            
-                            dist_a = abs(a - dna_a) * 5.0
-                            dist_f = abs(f - dna_f) * 5.0
-                            dist_t = abs(t - dna_t) * 1.0
-                            dist_total = dist_a + dist_f + dist_t
-                            
-                            rank_dna.append((d_str, dist_total, a, f, t, ma))
-                            
-                        rank_dna.sort(key=lambda x: x[1])
-                        
-                        alvo_digito = rank_dna[0][0]
-                        res_centena['atraso'] = rank_dna[0][2]
-                        res_centena['freq'] = rank_dna[0][3]
-                        res_centena['transicao'] = rank_dna[0][4]
-                        res_centena['max_atraso'] = rank_dna[0][5]
-                        
-                        res_centena['rank_completo'] = [
-                            (rank_dna[0][0], {"atraso": rank_dna[0][2], "freq": rank_dna[0][3], "transicao": rank_dna[0][4], "max_atraso": rank_dna[0][5]}),
-                            (rank_dna[1][0], {"atraso": rank_dna[1][2], "freq": rank_dna[1][3], "transicao": rank_dna[1][4], "max_atraso": rank_dna[1][5]}),
-                            (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
-                        ]
                     
                     if dna_normal:
                         atraso_ideal = round(dna_normal['avg_atraso'])
