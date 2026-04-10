@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V135.0 - Clonagem de DNA", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V136.0 - Isolamento Tático", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -114,7 +114,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -286,6 +286,7 @@ def analisar_radar_centena(history_slice):
         
         a = atrasos[d_str]
         
+        # Disjuntor de Ruína (Evita 4+ derrotas seguidas no mesmo alvo)
         if a == 0: pts_atraso = 0.0
         elif a == 1: pts_atraso = 2.0
         elif a == 2: pts_atraso = 4.0
@@ -343,7 +344,6 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
         analise_passada = analisar_radar_centena(historico_passado)
         if not analise_passada: continue
             
-        # No backtest, ainda usamos a previsão base (já com anti-teimosia aplicada) para testar a performance do motor
         digito_previsto = analise_passada['top_digit']
         
         centenas_reais = []
@@ -505,8 +505,8 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                             
                         dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                         
-                        # AQUI ACONTECE A CLONAGEM (K-NEAREST NEIGHBORS) PARA A VISÃO FINAL
-                        if dna_normal:
+                        # --- ISOLAMENTO TÁTICO: CLONAGEM (ML) SOMENTE NA TRADICIONAL ---
+                        if dna_normal and "TRADICIONAL" in banca_key:
                             dna_a = dna_normal['avg_atraso']
                             dna_f = dna_normal['avg_freq']
                             dna_t = dna_normal['avg_transicao']
@@ -519,7 +519,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                 t = analise['all_stats']['transicoes'][d_str]
                                 ma = analise['all_stats']['max_atrasos'][d_str]
                                 
-                                # Calcula a "Distância Matemática" (quanto menor, mais idêntico ao DNA)
                                 dist_a = abs(a - dna_a) * 5.0
                                 dist_f = abs(f - dna_f) * 5.0
                                 dist_t = abs(t - dna_t) * 1.0
@@ -527,9 +526,8 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                 
                                 rank_dna.append((d_str, dist_total, a, f, t, ma))
                                 
-                            rank_dna.sort(key=lambda x: x[1]) # O Menor erro/distância assume o 1º lugar
+                            rank_dna.sort(key=lambda x: x[1]) 
                             
-                            # Substitui o painel com os Alvos Clonados
                             analise['top_digit'] = rank_dna[0][0]
                             analise['atraso'] = rank_dna[0][2]
                             analise['freq'] = rank_dna[0][3]
@@ -542,7 +540,11 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                                 (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
                             ]
                             
-                            dna_str = f"Atraso ~{round(dna_a)} | Freq ~{round(dna_f)} | Atração ~{dna_t:.1f}%"
+                            dna_str = f"Atraso ~{round(dna_a)} | Freq ~{round(dna_f)} | Atração ~{dna_t:.1f}% (CLONAGEM ATIVADA)"
+                        
+                        elif dna_normal:
+                            # As outras bancas mostram o DNA, mas rodam com o Disjuntor de Fadiga normal
+                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%"
                         else:
                             dna_str = "Aguardando vitórias..."
                             
@@ -859,7 +861,8 @@ else:
                     dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                     alerta_dna = False
                     
-                    if dna_normal:
+                    # --- ISOLAMENTO TÁTICO: CLONAGEM (ML) SOMENTE NA TRADICIONAL ---
+                    if dna_normal and "TRADICIONAL" in banca_selecionada:
                         dna_a = dna_normal['avg_atraso']
                         dna_f = dna_normal['avg_freq']
                         dna_t = dna_normal['avg_transicao']
@@ -892,10 +895,15 @@ else:
                             (rank_dna[1][0], {"atraso": rank_dna[1][2], "freq": rank_dna[1][3], "transicao": rank_dna[1][4], "max_atraso": rank_dna[1][5]}),
                             (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
                         ]
+                    
+                    if dna_normal:
+                        atraso_ideal = round(dna_normal['avg_atraso'])
+                        freq_ideal = round(dna_normal['avg_freq'])
+                        transicao_ideal = dna_normal['avg_transicao']
                         
-                        match_atraso = abs(res_centena['atraso'] - dna_a) <= 2
-                        match_freq = abs(res_centena['freq'] - dna_f) <= 2
-                        match_transicao = res_centena['transicao'] >= (dna_t * 0.8) 
+                        match_atraso = abs(res_centena['atraso'] - atraso_ideal) <= 2
+                        match_freq = abs(res_centena['freq'] - freq_ideal) <= 2
+                        match_transicao = res_centena['transicao'] >= (transicao_ideal * 0.8) 
                         
                         if match_atraso and match_freq and match_transicao:
                             alerta_dna = True
@@ -912,7 +920,10 @@ else:
                         st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
                         
                         if dna_normal:
-                            st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%</span></div>", unsafe_allow_html=True)
+                            if "TRADICIONAL" in banca_selecionada:
+                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}% (CLONAGEM ATIVADA)</span></div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
                             
                         if alerta_dna:
                             st.error("🚨 CENÁRIO IDEAL DETECTADO: O ALVO ATUAL BATE EXATAMENTE COM O DNA VENCEDOR DA BANCA! FOGO AUTORIZADO! 🚨")
