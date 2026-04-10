@@ -20,7 +20,7 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V138.0 - Tropa de Elite", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V139.0 - Tolerância Temporal", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
@@ -116,7 +116,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO (COM JANELA DE TOLERÂNCIA) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -177,11 +177,24 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         texto_analise += prev.lower() + " "
                     prev = prev.previous_sibling
 
-            times_found = re.findall(r'(?<!\d)(\d{1,2})[:hH]s?(\d{2})(?!\d)', texto_analise)
+            # A MÁGICA DA TOLERÂNCIA ACONTECE AQUI
+            times_parsed = []
+            
+            # 1. Procura formato completo (ex: 17:20 ou 17h20)
+            for h, m in re.findall(r'(?<!\d)(\d{1,2})[:hH]s?(\d{2})(?!\d)', texto_analise):
+                times_parsed.append((int(h), int(m)))
+                
+            # 2. Procura formato curto sem os minutos (ex: 17h ou 17hs)
+            for h in re.findall(r'(?<!\d)(\d{1,2})\s?[hH]s?(?!\w)', texto_analise):
+                times_parsed.append((int(h), 0))
             
             match_found = False
-            for h, m in times_found:
-                if int(h) == target_h and int(m) == target_m:
+            target_total_mins = target_h * 60 + target_m
+            
+            # Verifica se alguma das horas encontradas está dentro de 30 minutos de margem de erro
+            for h, m in times_parsed:
+                found_total_mins = h * 60 + m
+                if abs(found_total_mins - target_total_mins) <= 30:
                     match_found = True
                     break
             
@@ -528,7 +541,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
     
     with st.spinner("📡 Rastreiando fluxo de Centenas no globo..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            # AQUI FILTRAMOS A TELA HOME APENAS PARA AS BANCAS ATIVAS (Elite)
             if config.get('radar_centena') == True and config.get('ml_active') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 15:
@@ -854,7 +866,6 @@ else:
                     resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
                     dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                     
-                    # --- ISOLAMENTO TÁTICO & SINCRONIZAÇÃO DE BACKTEST ---
                     if dna_normal and config.get('ml_active'):
                         res_centena, resultados_bt_15 = aplicar_clonagem_dna(res_centena, resultados_bt_15, dna_normal)
                         alvo_digito = res_centena['top_digit'] 
