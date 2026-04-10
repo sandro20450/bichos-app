@@ -20,16 +20,16 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V139.0 - Tolerância Temporal", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V140.0 - Busca de Padrões", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     
-    # BANCAS COM CLONAGEM DE DNA ATIVADA (Elite)
+    # BANCAS COM MACHINE LEARNING (Padrão de Sequência) ATIVADO
     "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True, "ml_active": True },
     "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True, "ml_active": True },
     
-    # BANCAS EM HIBERNAÇÃO
+    # BANCAS EM HIBERNAÇÃO (Somente Motor Básico, Ocultas na Home)
     "LOTEP_MILHAR": { "display_name": "💤 LOTEP (Hibernando)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True, "ml_active": False },
     "MONTE_MILHAR": { "display_name": "💤 MONTE CARLOS (Hibernando)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True, "ml_active": False }
 }
@@ -116,7 +116,7 @@ def normalizar_hora(hora_str):
     except: return "00:00"
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO (COM JANELA DE TOLERÂNCIA) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO (TOLERÂNCIA TEMPORAL) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -177,21 +177,15 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         texto_analise += prev.lower() + " "
                     prev = prev.previous_sibling
 
-            # A MÁGICA DA TOLERÂNCIA ACONTECE AQUI
             times_parsed = []
-            
-            # 1. Procura formato completo (ex: 17:20 ou 17h20)
             for h, m in re.findall(r'(?<!\d)(\d{1,2})[:hH]s?(\d{2})(?!\d)', texto_analise):
                 times_parsed.append((int(h), int(m)))
-                
-            # 2. Procura formato curto sem os minutos (ex: 17h ou 17hs)
             for h in re.findall(r'(?<!\d)(\d{1,2})\s?[hH]s?(?!\w)', texto_analise):
                 times_parsed.append((int(h), 0))
             
             match_found = False
             target_total_mins = target_h * 60 + target_m
             
-            # Verifica se alguma das horas encontradas está dentro de 30 minutos de margem de erro
             for h, m in times_parsed:
                 found_total_mins = h * 60 + m
                 if abs(found_total_mins - target_total_mins) <= 30:
@@ -232,11 +226,11 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: ANTI-TEIMOSIA EXTREMA & DISJUNTOR DE FADIGA ---
+# --- 4. CÉREBRO: ML RECONHECIMENTO DE PADRÃO & BACKTEST NATIVO ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
-def analisar_radar_centena(history_slice):
+def analisar_radar_centena(history_slice, ml_active=False):
     if len(history_slice) < 15: return None
 
     historico_centenas = []
@@ -295,28 +289,63 @@ def analisar_radar_centena(history_slice):
             total_transicoes += 1
 
     scores = {}
-    for d in range(10):
-        d_str = str(d)
-        tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
+    
+    if not ml_active:
+        # MOTOR BÁSICO (Anti-Teimosia)
+        for d in range(10):
+            d_str = str(d)
+            tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
+            a = atrasos[d_str]
+            if a == 0: pts_atraso = 0.0
+            elif a == 1: pts_atraso = 2.0
+            elif a == 2: pts_atraso = 4.0
+            elif a == 3: pts_atraso = 5.0 
+            elif a == 4: pts_atraso = 0.0 
+            else: pts_atraso = -50.0 
+            
+            score = (tx_transicao * 0.7) + (freq_recente[d_str] * 3.5) + pts_atraso
+            scores[d_str] = {
+                "score": score, "atraso": a, "max_atraso": max_atrasos[d_str], 
+                "freq": freq_recente[d_str], "transicao": tx_transicao
+            }
+    else:
+        # MOTOR DE MACHINE LEARNING: Reconhecimento de Padrão Sequencial
+        contagem_proximos = {str(d): 0.0 for d in range(10)}
         
-        a = atrasos[d_str]
-        
-        if a == 0: pts_atraso = 0.0
-        elif a == 1: pts_atraso = 2.0
-        elif a == 2: pts_atraso = 4.0
-        elif a == 3: pts_atraso = 5.0 
-        elif a == 4: pts_atraso = 0.0 
-        else: pts_atraso = -50.0 
-        
-        score = (tx_transicao * 0.7) + (freq_recente[d_str] * 3.5) + pts_atraso
-        
-        scores[d_str] = {
-            "score": score,
-            "atraso": atrasos[d_str],
-            "max_atraso": max_atrasos[d_str],
-            "freq": freq_recente[d_str],
-            "transicao": tx_transicao
-        }
+        # 1. Varre o passado buscando "fotos" iguais ou parecidas à tropa atual
+        for i in range(len(historico_centenas) - 1):
+            past_draw = historico_centenas[i]
+            next_draw = historico_centenas[i+1]
+            
+            sim_score = 0.0
+            # Ganha ponto se os números apareceram (mesmo fora de ordem)
+            for c in ultimas_centenas:
+                if c in past_draw: sim_score += 1.0
+            # Ganha ponto triplo se a posição for exatamente a mesma
+            for j in range(min(len(ultimas_centenas), len(past_draw))):
+                if ultimas_centenas[j] == past_draw[j]: sim_score += 3.0
+                
+            # Se a sequência passada é parecida, olhe para o próximo sorteio dela!
+            if sim_score > 0:
+                for c in set(next_draw):
+                    contagem_proximos[c] += sim_score # O número ganha pontos baseado na similaridade do evento
+                    
+        for d in range(10):
+            d_str = str(d)
+            tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
+            
+            ml_score = contagem_proximos[d_str]
+            a = atrasos[d_str]
+            # O Disjuntor anti-teimosia continua ativo para evitar loops
+            pts_atraso = -50.0 if a > 4 else 0.0 
+            
+            # O ML domina o cálculo
+            score = ml_score + (freq_recente[d_str] * 2.0) + pts_atraso
+            
+            scores[d_str] = {
+                "score": score, "atraso": a, "max_atraso": max_atrasos[d_str], 
+                "freq": freq_recente[d_str], "transicao": tx_transicao
+            }
 
     rank = sorted(scores.items(), key=lambda x: x[1]['score'], reverse=True)
     top_digit = rank[0][0]
@@ -341,7 +370,7 @@ def analisar_radar_centena(history_slice):
     }
 
 @st.cache_data(show_spinner=False)
-def rodar_backtest_centenas(history_slice, max_testes=15):
+def rodar_backtest_centenas(history_slice, max_testes=15, ml_active=False):
     min_history = 15
     available_tests = len(history_slice) - min_history
     if available_tests <= 0: 
@@ -355,7 +384,8 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
         historico_passado = history_slice[:i]
         sorteio_real = history_slice[i]
         
-        analise_passada = analisar_radar_centena(historico_passado)
+        # O Backtest chama a função NATIVAMENTE com ou sem ML, gerando sincronia perfeita
+        analise_passada = analisar_radar_centena(historico_passado, ml_active)
         if not analise_passada: continue
             
         digito_previsto = analise_passada['top_digit']
@@ -384,8 +414,8 @@ def rodar_backtest_centenas(history_slice, max_testes=15):
     return resultados_bt
 
 @st.cache_data(show_spinner=False)
-def calcular_dna_banca(history_slice, max_lookback=60):
-    resultados_bt = rodar_backtest_centenas(history_slice, max_lookback)
+def calcular_dna_banca(history_slice, max_lookback=60, ml_active=False):
+    resultados_bt = rodar_backtest_centenas(history_slice, max_lookback, ml_active)
     if not resultados_bt: return None, None
     
     wins_atraso = []
@@ -434,59 +464,6 @@ def calcular_dna_banca(history_slice, max_lookback=60):
         }
         
     return dna_normal, dna_recuperacao
-
-# --- FUNÇÃO AUXILIAR PARA APLICAR CLONAGEM NO BACKTEST E NA PREVISÃO ATUAL ---
-def aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal):
-    dna_a = dna_normal['avg_atraso']
-    dna_f = dna_normal['avg_freq']
-    dna_t = dna_normal['avg_transicao']
-    
-    if resultados_bt_15:
-        for bt in resultados_bt_15:
-            rank_dna_bt = []
-            for d in range(10):
-                d_str = str(d)
-                a_bt = bt['analise']['all_stats']['atrasos'][d_str]
-                f_bt = bt['analise']['all_stats']['freqs'][d_str]
-                t_bt = bt['analise']['all_stats']['transicoes'][d_str]
-                
-                dist_bt = abs(a_bt - dna_a) * 5.0 + abs(f_bt - dna_f) * 5.0 + abs(t_bt - dna_t) * 1.0
-                rank_dna_bt.append((d_str, dist_bt))
-            rank_dna_bt.sort(key=lambda x: x[1])
-            
-            bt['previsto'] = rank_dna_bt[0][0]
-            bt['vitoria'] = bt['previsto'] in bt['reais']
-            
-    rank_dna = []
-    for d in range(10):
-        d_str = str(d)
-        a = analise['all_stats']['atrasos'][d_str]
-        f = analise['all_stats']['freqs'][d_str]
-        t = analise['all_stats']['transicoes'][d_str]
-        ma = analise['all_stats']['max_atrasos'][d_str]
-        
-        dist_a = abs(a - dna_a) * 5.0
-        dist_f = abs(f - dna_f) * 5.0
-        dist_t = abs(t - dna_t) * 1.0
-        dist_total = dist_a + dist_f + dist_t
-        
-        rank_dna.append((d_str, dist_total, a, f, t, ma))
-        
-    rank_dna.sort(key=lambda x: x[1])
-    
-    analise['top_digit'] = rank_dna[0][0]
-    analise['atraso'] = rank_dna[0][2]
-    analise['freq'] = rank_dna[0][3]
-    analise['transicao'] = rank_dna[0][4]
-    analise['max_atraso'] = rank_dna[0][5]
-    
-    analise['rank_completo'] = [
-        (rank_dna[0][0], {"atraso": rank_dna[0][2], "freq": rank_dna[0][3], "transicao": rank_dna[0][4], "max_atraso": rank_dna[0][5]}),
-        (rank_dna[1][0], {"atraso": rank_dna[1][2], "freq": rank_dna[1][3], "transicao": rank_dna[1][4], "max_atraso": rank_dna[1][5]}),
-        (rank_dna[2][0], {"atraso": rank_dna[2][2], "freq": rank_dna[2][3], "transicao": rank_dna[2][4], "max_atraso": rank_dna[2][5]})
-    ]
-    
-    return analise, resultados_bt_15
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -541,17 +518,20 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
     
     with st.spinner("📡 Rastreiando fluxo de Centenas no globo..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config.get('radar_centena') == True and config.get('ml_active') == True:
+            ml_active = config.get('ml_active', False)
+            
+            if config.get('radar_centena') == True and ml_active == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 15:
-                    analise = analisar_radar_centena(hist_milhar)
+                    
+                    analise = analisar_radar_centena(hist_milhar, ml_active=ml_active)
+                    
                     if analise:
-                        resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
-                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
-                        
+                        resultados_bt_15 = rodar_backtest_centenas(hist_milhar, max_testes=15, ml_active=ml_active)
+                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, max_lookback=60, ml_active=ml_active)
+
                         if dna_normal:
-                            analise, resultados_bt_15 = aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal)
-                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}% (CLONAGEM ATIVADA)"
+                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}% (ML: PADRÃO DE SEQUÊNCIA)"
                         else:
                             dna_str = "Aguardando vitórias..."
 
@@ -652,7 +632,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
         html_verdict = f"""
         <div style='background-color:#1e3d1e; border: 2px solid #00ff00; border-radius: 8px; padding: 20px; text-align: center;'>
             <h2 style='color:#00ff00; margin-top:0;'>FOGO AUTORIZADO: {melhor_alvo['banca']}</h2>
-            <p style='color:#fff; font-size:1.2em;'>A <b>{melhor_alvo['banca']}</b> está sob controle do Algoritmo de Clonagem. A matemática não é mais teimosa, ela acompanha o fluxo real da banca.</p>
+            <p style='color:#fff; font-size:1.2em;'>A <b>{melhor_alvo['banca']}</b> está sob controle do Algoritmo de Reconhecimento de Padrões. A máquina vasculhou o histórico procurando a mesma tropa de centenas atual para prever o futuro.</p>
             <h3 style='color:#ffd700; margin-bottom:0;'>🎯 FOCO TOTAL: Centena {melhor_alvo['top_digit']} do 1º ao 5º na {melhor_alvo['banca']}</h3>
         </div>
         """
@@ -855,20 +835,17 @@ else:
             st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
             
             if config.get('radar_centena'):
+                ml_active = config.get('ml_active', False)
                 st.markdown("### 👁️‍🗨️ OLHO DE HÓRUS (Análise 1º ao 5º Prêmio)")
-                res_centena = analisar_radar_centena(hist_milhar)
+                res_centena = analisar_radar_centena(hist_milhar, ml_active=ml_active)
                 
                 if res_centena:
                     tropa_atual = ", ".join(res_centena['ultimas'])
                     milhares_atual = ", ".join(res_centena['ultimas_milhares'])
                     alvo_digito = res_centena['top_digit']
                     
-                    resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
-                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
-                    
-                    if dna_normal and config.get('ml_active'):
-                        res_centena, resultados_bt_15 = aplicar_clonagem_dna(res_centena, resultados_bt_15, dna_normal)
-                        alvo_digito = res_centena['top_digit'] 
+                    resultados_bt_15 = rodar_backtest_centenas(hist_milhar, max_testes=15, ml_active=ml_active)
+                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, max_lookback=60, ml_active=ml_active)
 
                     curr_streak = 0
                     if resultados_bt_15:
@@ -919,8 +896,8 @@ else:
                         st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
                         
                         if dna_normal:
-                            if config.get('ml_active'):
-                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}% (CLONAGEM ATIVADA)</span></div>", unsafe_allow_html=True)
+                            if ml_active:
+                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}% (ML: PADRÃO DE SEQUÊNCIA)</span></div>", unsafe_allow_html=True)
                             else:
                                 st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
                             
