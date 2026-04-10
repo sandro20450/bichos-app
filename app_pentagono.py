@@ -20,16 +20,18 @@ except ImportError:
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V137.0 - Sincronização Temporal", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V138.0 - Tropa de Elite", page_icon="👁️", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
     
-    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True },
-    "LOTEP_MILHAR": { "display_name": "👁️ LOTEP (Hórus)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True },
-    "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True },
+    # BANCAS COM CLONAGEM DE DNA ATIVADA (Elite)
+    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True, "ml_active": True },
+    "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True, "ml_active": True },
     
-    "MONTE_MILHAR": { "display_name": "👑 MONTE CARLOS (Vitorino)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True }
+    # BANCAS EM HIBERNAÇÃO
+    "LOTEP_MILHAR": { "display_name": "💤 LOTEP (Hibernando)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True, "ml_active": False },
+    "MONTE_MILHAR": { "display_name": "💤 MONTE CARLOS (Hibernando)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True, "ml_active": False }
 }
 
 st.markdown("""
@@ -426,7 +428,6 @@ def aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal):
     dna_f = dna_normal['avg_freq']
     dna_t = dna_normal['avg_transicao']
     
-    # 1. Recalcula o Backtest do passado usando o Machine Learning
     if resultados_bt_15:
         for bt in resultados_bt_15:
             rank_dna_bt = []
@@ -443,7 +444,6 @@ def aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal):
             bt['previsto'] = rank_dna_bt[0][0]
             bt['vitoria'] = bt['previsto'] in bt['reais']
             
-    # 2. Recalcula a Análise Atual para a tela
     rank_dna = []
     for d in range(10):
         d_str = str(d)
@@ -522,13 +522,14 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 RADAR TÁTICO (Home)":
     st.title("👁️ OLHO DE HÓRUS (RADAR DE CENTENAS)")
-    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Monitorando as Bancas Selecionadas.")
+    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Somente a Tropa de Elite no radar.")
     
     ranking_global = []
     
     with st.spinner("📡 Rastreiando fluxo de Centenas no globo..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            if config.get('radar_centena') == True:
+            # AQUI FILTRAMOS A TELA HOME APENAS PARA AS BANCAS ATIVAS (Elite)
+            if config.get('radar_centena') == True and config.get('ml_active') == True:
                 hist_milhar = carregar_dados_hibridos(config['nome_aba'])
                 if len(hist_milhar) >= 15:
                     analise = analisar_radar_centena(hist_milhar)
@@ -536,12 +537,9 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
                         resultados_bt_15 = rodar_backtest_centenas(hist_milhar, 15)
                         dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                         
-                        # --- ISOLAMENTO TÁTICO & SINCRONIZAÇÃO DE BACKTEST ---
-                        if dna_normal and "TRADICIONAL" in banca_key:
+                        if dna_normal:
                             analise, resultados_bt_15 = aplicar_clonagem_dna(analise, resultados_bt_15, dna_normal)
                             dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}% (CLONAGEM ATIVADA)"
-                        elif dna_normal:
-                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}%"
                         else:
                             dna_str = "Aguardando vitórias..."
 
@@ -642,8 +640,7 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
         html_verdict = f"""
         <div style='background-color:#1e3d1e; border: 2px solid #00ff00; border-radius: 8px; padding: 20px; text-align: center;'>
             <h2 style='color:#00ff00; margin-top:0;'>FOGO AUTORIZADO: {melhor_alvo['banca']}</h2>
-            <p style='color:#fff; font-size:1.2em;'>De todas as opções, a <b>{melhor_alvo['banca']}</b> apresenta o alinhamento matemático mais letal neste momento.</p>
-            <p style='color:#ddd; font-size:1.1em;'>O <b>Algarismo {melhor_alvo['top_digit']}</b> tem <b>{melhor_alvo['transicao']:.1f}%</b> de força de atração (Markov). Pela Teoria do Elástico, o limite de tensão dele é <b>{melhor_alvo['max_atraso']}</b> sorteios, e ele já está pressionado com <b>{melhor_alvo['atraso']}</b> sorteios de atraso.</p>
+            <p style='color:#fff; font-size:1.2em;'>A <b>{melhor_alvo['banca']}</b> está sob controle do Algoritmo de Clonagem. A matemática não é mais teimosa, ela acompanha o fluxo real da banca.</p>
             <h3 style='color:#ffd700; margin-bottom:0;'>🎯 FOCO TOTAL: Centena {melhor_alvo['top_digit']} do 1º ao 5º na {melhor_alvo['banca']}</h3>
         </div>
         """
@@ -858,9 +855,9 @@ else:
                     dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, 60)
                     
                     # --- ISOLAMENTO TÁTICO & SINCRONIZAÇÃO DE BACKTEST ---
-                    if dna_normal and "TRADICIONAL" in banca_selecionada:
+                    if dna_normal and config.get('ml_active'):
                         res_centena, resultados_bt_15 = aplicar_clonagem_dna(res_centena, resultados_bt_15, dna_normal)
-                        alvo_digito = res_centena['top_digit'] # Atualiza a variável pra tela
+                        alvo_digito = res_centena['top_digit'] 
 
                     curr_streak = 0
                     if resultados_bt_15:
@@ -911,7 +908,7 @@ else:
                         st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
                         
                         if dna_normal:
-                            if "TRADICIONAL" in banca_selecionada:
+                            if config.get('ml_active'):
                                 st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}% (CLONAGEM ATIVADA)</span></div>", unsafe_allow_html=True)
                             else:
                                 st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
