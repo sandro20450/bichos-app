@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V142.0 - Visão de Raio-X", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V143.0 - Livro dos Recordes", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "🎯 TRADICIONAL", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "radar_ativo": True },
@@ -43,6 +43,7 @@ st.markdown("""
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
     .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #ff4b4b; }
     .card-alvo { background-color: #1a0000; border: 2px solid #ff0000; border-radius: 8px; padding: 20px; text-align: center; }
+    .card-recorde { background-color: #1a1a00; border: 1px solid #cca300; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 5px solid #ffcc00; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +126,7 @@ def get_grupo(milhar_str):
         return 0
 
 # =============================================================================
-# --- 3. EXTRATOR UNIVERSAL BLINDADO (TOLERÂNCIA TEMPORAL) ---
+# --- 3. EXTRATOR UNIVERSAL BLINDADO ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
@@ -221,12 +222,12 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO MATEMÁTICO: PERSEGUIÇÃO DE GRUPOS (23x1) ---
+# --- 4. CÉREBRO MATEMÁTICO: PERSEGUIÇÃO DE GRUPOS (23x1) E RECORDES ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
 def analisar_atraso_grupos(history_slice):
-    if len(history_slice) < 20: return None
+    if len(history_slice) < 20: return None, None
 
     # Estrutura: 5 prêmios (0 a 4). Para cada prêmio, 25 grupos.
     stats = {
@@ -250,33 +251,37 @@ def analisar_atraso_grupos(history_slice):
                     # O grupo não saiu neste prêmio, soma 1 no atraso
                     stats[premio_idx][g]['atraso'] += 1
 
-    # Após o loop, garantir que o atraso final não seja maior que o max histórico sem atualizar
+    # Após o loop, garantir que o atraso final não seja maior que o max histórico
     for premio_idx in range(5):
         for g in range(1, 26):
             if stats[premio_idx][g]['atraso'] > stats[premio_idx][g]['max_atraso']:
                 stats[premio_idx][g]['max_atraso'] = stats[premio_idx][g]['atraso']
 
-    # Filtrar os Melhores Alvos (Os grupos mais "tensionados")
-    alvos = []
+    # Compilar a lista de todos os grupos com suas estatísticas
+    todos_grupos = []
     for premio_idx in range(5):
         for g in range(1, 26):
             a_atual = stats[premio_idx][g]['atraso']
             max_a = stats[premio_idx][g]['max_atraso']
+            tensao = (a_atual / max_a * 100) if max_a > 0 else 0.0
             
-            if a_atual >= 12 and max_a > 0:
-                tensao = (a_atual / max_a) * 100
-                alvos.append({
-                    "premio": premio_idx + 1,
-                    "grupo": g,
-                    "nome_grupo": NOME_GRUPOS[g],
-                    "atraso": a_atual,
-                    "max_atraso": max_a,
-                    "tensao": tensao
-                })
+            todos_grupos.append({
+                "premio": premio_idx + 1,
+                "grupo": g,
+                "nome_grupo": NOME_GRUPOS[g],
+                "atraso": a_atual,
+                "max_atraso": max_a,
+                "tensao": tensao
+            })
 
-    # Ordena pelos grupos mais atrasados no geral
-    alvos.sort(key=lambda x: x['atraso'], reverse=True)
-    return alvos
+    # Filtrar os Melhores Alvos Atuais (Atrasos reais rodando agora)
+    alvos_ativos = [g for g in todos_grupos if g['atraso'] >= 12 and g['max_atraso'] > 0]
+    alvos_ativos.sort(key=lambda x: x['atraso'], reverse=True)
+    
+    # Extrair os Recordes Históricos (Os maiores 'max_atraso' registrados na história da banca)
+    recordes = sorted(todos_grupos, key=lambda x: x['max_atraso'], reverse=True)
+
+    return alvos_ativos, recordes[:5] # Retorna os alvos ativos e o Top 5 de recordes da banca
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
@@ -292,30 +297,36 @@ st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 ALVOS DE CAÇADA (Grupos)":
     st.title("🎯 COMANDO CENTRAL (Perseguição 23x1)")
-    st.markdown("O sistema vasculha **todos os prêmios isoladamente** (do 1º ao 5º) buscando o **Grupo** que atingiu o limite de tensão e está prestes a estourar. Gerencie seu capital para perseguições de até 22 tiros.")
+    st.markdown("O sistema vasculha **todos os prêmios isoladamente** buscando o **Grupo** que atingiu o limite de tensão.")
     
     ranking_global = []
+    recordes_globais = []
     
-    with st.spinner("📡 Rastreiando Grupos Atrasados em todas as frentes..."):
+    with st.spinner("📡 Rastreiando Grupos Atrasados e Quebras de Recorde..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config.get('radar_ativo') == True:
                 historico = carregar_dados_hibridos(config['nome_aba'])
                 if len(historico) >= 20:
-                    alvos_banca = analisar_atraso_grupos(historico)
+                    alvos_banca, recordes_banca = analisar_atraso_grupos(historico)
+                    
                     if alvos_banca:
-                        # Pega apenas os 2 melhores alvos absolutos da banca
+                        # Pega os 2 melhores alvos absolutos da banca
                         melhores = alvos_banca[:2]
                         for alvo in melhores:
                             alvo['banca'] = config['display_name'].replace("🎯 ", "")
                             ranking_global.append(alvo)
+                            
+                    if recordes_banca:
+                        for rec in recordes_banca:
+                            rec['banca'] = config['display_name'].replace("🎯 ", "")
+                            recordes_globais.append(rec)
 
+    # --- ABA DE ALVOS ATIVOS ---
+    st.markdown("### 🚨 TOP 5 ALVOS EM PERSEGUIÇÃO")
     if not ranking_global:
-        st.info("⚠️ Sem dados suficientes ou sem grupos com atrasos expressivos.")
+        st.info("⚠️ Sem dados suficientes ou sem grupos com atrasos críticos no momento.")
     else:
-        # Ordena o painel global pelos maiores atrasos (maior tensão)
         ranking_global.sort(key=lambda x: x['atraso'], reverse=True)
-        
-        st.markdown("### 🚨 TOP 5 ALVOS MAIS CRÍTICOS DO BRASIL")
         
         html_final = ""
         for idx, alvo in enumerate(ranking_global[:5]):
@@ -346,6 +357,27 @@ if escolha_menu == "🏠 ALVOS DE CAÇADA (Grupos)":
             html_final += html_ranking
             
         st.markdown(html_final, unsafe_allow_html=True)
+        
+    st.markdown("---")
+    
+    # --- NOVO: O LIVRO DOS RECORDES ---
+    st.markdown("### 🏆 HALL DA FAMA DOS ATRASOS (O Limite da Máquina)")
+    st.markdown("Use esta tabela como sua régua de medição. Aqui estão os **5 maiores atrasos já registrados na história** do seu banco de dados. Nunca inicie uma perseguição muito longe destes limites.")
+    
+    if not recordes_globais:
+        st.info("⚠️ Dados insuficientes para gerar os recordes.")
+    else:
+        recordes_globais.sort(key=lambda x: x['max_atraso'], reverse=True)
+        
+        html_recordes = ""
+        for idx, rec in enumerate(recordes_globais[:5]): # Pega os Top 5 gerais do Brasil
+            html_recordes += (
+                f'<div class="card-recorde">'
+                f'  <span style="font-size:1.2em; font-weight:bold; color:#ffd700;">#{idx+1} - {rec["max_atraso"]} Sorteios Seguidos</span><br>'
+                f'  <span style="color:#ccc;">Aconteceu na <b>{rec["banca"]}</b>, no <b>{rec["premio"]}º Prêmio</b>. O alvo foi o <b>Grupo {rec["grupo"]} ({rec["nome_grupo"]})</b>.</span>'
+                f'</div>'
+            )
+        st.markdown(html_recordes, unsafe_allow_html=True)
         
 else:
     banca_selecionada = escolha_menu
@@ -486,7 +518,7 @@ else:
         st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
         
         # --- ALARME DE PERSEGUIÇÃO LOCAL ---
-        alvos_locais = analisar_atraso_grupos(historico)
+        alvos_locais, _ = analisar_atraso_grupos(historico)
         if alvos_locais:
             st.markdown("### 🚨 ALVOS EM PERSEGUIÇÃO ATIVA NESTA BANCA")
             for alvo in alvos_locais:
