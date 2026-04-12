@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V141.0 - Caçador de Grupos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V142.0 - Visão de Raio-X", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "🎯 TRADICIONAL", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "radar_ativo": True },
@@ -27,6 +27,12 @@ NOME_GRUPOS = [
     "16-Leão", "17-Macaco", "18-Porco", "19-Pavão", "20-Peru",
     "21-Touro", "22-Tigre", "23-Urso", "24-Veado", "25-Vaca"
 ]
+
+def get_dezenas_grupo(grupo):
+    if grupo == 25: return "97, 98, 99, 00"
+    if 1 <= grupo <= 24:
+        return f"{(grupo*4)-3:02d}, {(grupo*4)-2:02d}, {(grupo*4)-1:02d}, {grupo*4:02d}"
+    return ""
 
 st.markdown("""
 <style>
@@ -223,7 +229,6 @@ def analisar_atraso_grupos(history_slice):
     if len(history_slice) < 20: return None
 
     # Estrutura: 5 prêmios (0 a 4). Para cada prêmio, 25 grupos.
-    # Guardamos o atraso atual e o máximo histórico.
     stats = {
         premio_idx: {grupo: {'atraso': 0, 'max_atraso': 0} for grupo in range(1, 26)}
         for premio_idx in range(5)
@@ -258,8 +263,6 @@ def analisar_atraso_grupos(history_slice):
             a_atual = stats[premio_idx][g]['atraso']
             max_a = stats[premio_idx][g]['max_atraso']
             
-            # Condição Tática: O Atraso atual tem que ser expressivo (ex: > 15 jogos) 
-            # e estar muito perto do Teto Máximo Histórico do grupo.
             if a_atual >= 12 and max_a > 0:
                 tensao = (a_atual / max_a) * 100
                 alvos.append({
@@ -323,17 +326,15 @@ if escolha_menu == "🏠 ALVOS DE CAÇADA (Grupos)":
             atraso = alvo['atraso']
             teto = alvo['max_atraso']
             tensao = alvo['tensao']
-            
-            # Matemática da Perseguição
-            tiros_restantes = max(22 - atraso, 0)
-            status_tiro = "🟢 EXCELENTE" if tiros_restantes > 5 else ("🟡 CUIDADO" if tiros_restantes > 0 else "🔴 LIMITE ESTOURADO")
+            dezenas_do_grupo = get_dezenas_grupo(grupo)
             
             html_ranking = (
                 f'<div class="card-ranking">'
                 f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | BANCA: {banca} | {premio}º PRÊMIO</h3>'
                 f'<div class="card-alvo">'
                 f'  <h1 style="margin:0; color:#ff3333; font-size:2.5em;">GRUPO {grupo} ({nome})</h1>'
-                f'  <p style="margin:10px 0 0 0; color:#fff; font-size:1.2em;">Aposte o <b>Grupo {grupo}</b> isoladamente no <b>{premio}º Prêmio</b>.</p>'
+                f'  <p style="margin:5px 0 0 0; color:#ffcc00; font-size:1.1em;">Dezenas: <b>{dezenas_do_grupo}</b></p>'
+                f'  <p style="margin:15px 0 0 0; color:#fff; font-size:1.1em;">Aposte o <b>Grupo {grupo}</b> isoladamente no <b>{premio}º Prêmio</b>.</p>'
                 f'</div>'
                 f'<div style="margin-top:15px; display:flex; justify-content:space-around; font-size:1.1em; color:#ddd; background:#222; padding:10px; border-radius:5px;">'
                 f'  <span style="color:#ffaa00;"><b>⏳ Atraso Atual:</b> {atraso} sorteios</span>'
@@ -483,6 +484,22 @@ else:
     if len(historico) > 0:
         ult = historico[-1]
         st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
+        
+        # --- ALARME DE PERSEGUIÇÃO LOCAL ---
+        alvos_locais = analisar_atraso_grupos(historico)
+        if alvos_locais:
+            st.markdown("### 🚨 ALVOS EM PERSEGUIÇÃO ATIVA NESTA BANCA")
+            for alvo in alvos_locais:
+                dez_str = get_dezenas_grupo(alvo['grupo'])
+                st.markdown(f"""
+                <div style='background-color:#4a0000; border-left: 4px solid #ff0000; padding: 15px; margin-bottom: 10px; border-radius: 4px;'>
+                    <span style='color:#fff; font-size:1.2em;'><b>{alvo['premio']}º PRÊMIO</b> ➔ <b>Grupo {alvo['grupo']} ({alvo['nome_grupo']})</b></span><br>
+                    <span style='color:#ffcc00; font-size:1.0em;'>Dezenas Associadas: <b>{dez_str}</b></span><br>
+                    <span style='color:#aaa; font-size:0.95em;'>⏳ Atraso Atual: {alvo['atraso']} sorteios | 🛑 Teto Histórico: {alvo['max_atraso']} sorteios</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("✅ Área limpa. Nenhum grupo em estado crítico de perseguição nesta banca no momento.")
         
         st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
         df_show = pd.DataFrame(historico)
