@@ -8,31 +8,25 @@ import re
 from datetime import datetime, date, timedelta
 import time
 
-# --- IMPORTAÇÃO DA INTELIGÊNCIA ARTIFICIAL ---
-try:
-    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-    from sklearn.linear_model import LogisticRegression
-    import numpy as np
-    HAS_AI = True
-except ImportError:
-    HAS_AI = False
-
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V140.0 - Busca de Padrões", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V141.0 - Caçador de Grupos", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
-    "TRADICIONAL": { "display_name": "TRADICIONAL (Dezenas)", "nome_aba": "BASE_TRADICIONAL_DEZ", "slug": "tradicional", "tipo": "DUAL_SOLO", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"] },
-    
-    # BANCAS COM MACHINE LEARNING (Padrão de Sequência) ATIVADO
-    "TRADICIONAL_MILHAR": { "display_name": "👁️ TRADICIONAL (Hórus)", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "base_dez": "BASE_TRADICIONAL_DEZ", "radar_centena": True, "ml_active": True },
-    "CAMINHO_MILHAR": { "display_name": "👁️ CAMINHO (Hórus)", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "base_dez": "CAMINHO_TOP5", "radar_centena": True, "ml_active": True },
-    
-    # BANCAS EM HIBERNAÇÃO (Somente Motor Básico, Ocultas na Home)
-    "LOTEP_MILHAR": { "display_name": "💤 LOTEP (Hibernando)", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "base_dez": "LOTEP_TOP5", "radar_centena": True, "ml_active": False },
-    "MONTE_MILHAR": { "display_name": "💤 MONTE CARLOS (Hibernando)", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo": "MILHAR_VIEW", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "base_dez": "MONTE_TOP5", "radar_centena": True, "ml_active": False }
+    "TRADICIONAL": { "display_name": "🎯 TRADICIONAL", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "radar_ativo": True },
+    "LOTEP": { "display_name": "🎯 LOTEP", "nome_aba": "LOTEP_MILHAR", "slug": "lotep", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:45", "12:45", "15:45", "18:00"], "radar_ativo": True },
+    "CAMINHO": { "display_name": "🎯 CAMINHO DA SORTE", "nome_aba": "CAMINHO_MILHAR", "slug": "caminho-da-sorte", "tipo_extracao": "DUAL_PENTA", "horarios": ["09:40", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "20:00", "21:00"], "radar_ativo": True },
+    "MONTE": { "display_name": "🎯 MONTE CARLOS", "nome_aba": "MONTE_MILHAR", "slug": "nordeste-monte-carlos", "tipo_extracao": "DUAL_PENTA", "horarios": ["10:00", "11:00", "12:40", "14:00", "15:40", "17:00", "18:30", "21:00"], "radar_ativo": True }
 }
+
+NOME_GRUPOS = [
+    "0-Erro", "1-Avestruz", "2-Águia", "3-Burro", "4-Borboleta", "5-Cachorro",
+    "6-Cabra", "7-Carneiro", "8-Camelo", "9-Cobra", "10-Coelho",
+    "11-Cavalo", "12-Elefante", "13-Galo", "14-Gato", "15-Jacaré",
+    "16-Leão", "17-Macaco", "18-Porco", "19-Pavão", "20-Peru",
+    "21-Touro", "22-Tigre", "23-Urso", "24-Veado", "25-Vaca"
+]
 
 st.markdown("""
 <style>
@@ -41,7 +35,8 @@ st.markdown("""
     .stMetric label { color: #aaaaaa !important; }
     h1, h2, h3 { color: #ffd700 !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
-    .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #00ff00; }
+    .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #ff4b4b; }
+    .card-alvo { background-color: #1a0000; border: 2px solid #ff0000; border-radius: 8px; padding: 20px; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,8 +79,8 @@ def carregar_dados_hibridos(nome_aba):
                     for i in range(2, 7):
                         if i < len(row):
                             p_str = str(row[i]).strip()
-                            premios.append(p_str.zfill(2) if p_str.isdigit() else "00")
-                        else: premios.append("00")
+                            premios.append(p_str.zfill(4) if p_str.isdigit() else "0000")
+                        else: premios.append("0000")
                     
                     dados_unicos[chave] = {
                         "data": data_str,
@@ -115,13 +110,21 @@ def normalizar_hora(hora_str):
         else: return f"{int(h_clean):02}:00"
     except: return "00:00"
 
+def get_grupo(milhar_str):
+    try:
+        dezena = int(str(milhar_str)[-2:])
+        if dezena == 0: return 25
+        return (dezena - 1) // 4 + 1
+    except:
+        return 0
+
 # =============================================================================
 # --- 3. EXTRATOR UNIVERSAL BLINDADO (TOLERÂNCIA TEMPORAL) ---
 # =============================================================================
 
 def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
     config = CONFIG_BANCAS[banca_key]
-    tipo_ext = config.get('tipo_extracao', config['tipo'])
+    tipo_ext = config.get('tipo_extracao', 'DUAL_PENTA')
     slug = config['slug']
     
     url = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}-do-dia-{data_alvo.strftime('%Y-%m-%d')}"
@@ -144,7 +147,7 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             url_fallback = f"https://playbicho.com/resultado-jogo-do-bicho/{slug}"
             r = requests.get(url_fallback, headers=headers, timeout=10)
             
-        if r.status_code != 200: return None, f"Acesso negado. O servidor retornou erro {r.status_code}."
+        if r.status_code != 200: return None, f"Acesso negado. Servidor {r.status_code}."
             
         soup = BeautifulSoup(r.text, 'html.parser')
         tabelas = soup.find_all('table')
@@ -157,10 +160,8 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             if "federal" in txt_tabela and "federal" not in banca_key.lower(): continue 
             
             texto_analise = txt_tabela + " "
-            
             cabecalho = tabela.find_previous(['h2', 'h3', 'h4', 'h5', 'caption'])
-            if cabecalho:
-                texto_analise += cabecalho.get_text().lower() + " "
+            if cabecalho: texto_analise += cabecalho.get_text().lower() + " "
                 
             if tabela.parent:
                 txt_parent = tabela.parent.get_text().lower()
@@ -171,10 +172,8 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
             for _ in range(5):
                 if prev:
                     if prev.name == 'table': break 
-                    if prev.name and prev.get_text():
-                        texto_analise += prev.get_text().lower() + " "
-                    elif isinstance(prev, str):
-                        texto_analise += prev.lower() + " "
+                    if prev.name and prev.get_text(): texto_analise += prev.get_text().lower() + " "
+                    elif isinstance(prev, str): texto_analise += prev.lower() + " "
                     prev = prev.previous_sibling
 
             times_parsed = []
@@ -202,421 +201,144 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
                         nums_premio = re.findall(r'\d+', cols[0].get_text())
                         if nums_premio:
                             p_idx = int(nums_premio[0])
-                            limite = 5 if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW", "PENTA"] else 1
+                            limite = 5
                             if 1 <= p_idx <= limite:
                                 clean_num = re.sub(r'\D', '', numero_txt)
                                 if len(clean_num) >= 2: 
-                                    if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]: 
-                                        dezenas_encontradas.append(clean_num[-4:].zfill(4))
-                                    else: 
-                                        dezenas_encontradas.append(clean_num[-2:])
+                                    dezenas_encontradas.append(clean_num[-4:].zfill(4))
                 
-                if tipo_ext in ["DUAL_SOLO", "DUAL_PENTA", "MILHAR_VIEW"]:
-                    if len(dezenas_encontradas) >= 1: 
-                        return dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas)), "Sucesso"
-                else:
-                    if tipo_ext == "SOLO" and len(dezenas_encontradas) >= 1: 
-                        return [dezenas_encontradas[0], "00", "00", "00", "00"], "Sucesso"
-                    elif len(dezenas_encontradas) >= 5: 
-                        return dezenas_encontradas[:5], "Sucesso"
-                
+                if len(dezenas_encontradas) >= 1: 
+                    return dezenas_encontradas + ["0000"]*(5-len(dezenas_encontradas)), "Sucesso"
                 return None, "Tabela Encontrada, mas falha ao ler as milhares."
                 
-        return None, f"Horário ({horario_alvo}) não encontrado na página. A banca ainda não publicou."
+        return None, f"Horário ({horario_alvo}) não encontrado na página."
     except Exception as e: return None, f"Erro de Varredura: {e}"
 
 # =============================================================================
-# --- 4. CÉREBRO: ML RECONHECIMENTO DE PADRÃO & BACKTEST NATIVO ---
+# --- 4. CÉREBRO MATEMÁTICO: PERSEGUIÇÃO DE GRUPOS (23x1) ---
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
-def analisar_radar_centena(history_slice, ml_active=False):
-    if len(history_slice) < 15: return None
+def analisar_atraso_grupos(history_slice):
+    if len(history_slice) < 20: return None
 
-    historico_centenas = []
-    historico_milhares = [] 
-    for draw in history_slice:
-        centenas_draw = []
-        milhares_draw = []
-        for p in range(5):
-            try:
-                m = str(draw['premios'][p]).zfill(4)
-                if m != "0000" and m != "00" and len(m) == 4:
-                    centenas_draw.append(m[1]) 
-                    milhares_draw.append(m)
-            except: continue
-        if centenas_draw:
-            historico_centenas.append(centenas_draw)
-            historico_milhares.append(milhares_draw)
-
-    if len(historico_centenas) < 2: return None
-
-    ultimas_centenas = historico_centenas[-1]
-    ultimas_milhares = historico_milhares[-1]
-
-    atrasos = {str(d): 0 for d in range(10)}
-    max_atrasos = {str(d): 0 for d in range(10)}
-    current_atrasos = {str(d): 0 for d in range(10)}
-
-    for draw in historico_centenas:
-        for d in range(10):
-            d_str = str(d)
-            if d_str in draw:
-                max_atrasos[d_str] = max(max_atrasos[d_str], current_atrasos[d_str])
-                current_atrasos[d_str] = 0
-            else:
-                current_atrasos[d_str] += 1
-                
-    for d in range(10):
-        d_str = str(d)
-        max_atrasos[d_str] = max(max_atrasos[d_str], current_atrasos[d_str])
-        atrasos[d_str] = current_atrasos[d_str]
-
-    freq_recente = {str(d): 0 for d in range(10)}
-    ultimos_10 = historico_centenas[-10:]
-    for draw in ultimos_10:
-        for d_str in set(draw): 
-            freq_recente[d_str] += 1
-
-    transicoes = {str(d): 0 for d in range(10)}
-    total_transicoes = 0
-    for i in range(len(historico_centenas) - 1):
-        draw_atual = historico_centenas[i]
-        draw_next = historico_centenas[i+1]
-        if any(c in ultimas_centenas for c in draw_atual):
-            for c_next in set(draw_next):
-                transicoes[c_next] += 1
-            total_transicoes += 1
-
-    scores = {}
-    
-    if not ml_active:
-        # MOTOR BÁSICO (Anti-Teimosia)
-        for d in range(10):
-            d_str = str(d)
-            tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
-            a = atrasos[d_str]
-            if a == 0: pts_atraso = 0.0
-            elif a == 1: pts_atraso = 2.0
-            elif a == 2: pts_atraso = 4.0
-            elif a == 3: pts_atraso = 5.0 
-            elif a == 4: pts_atraso = 0.0 
-            else: pts_atraso = -50.0 
-            
-            score = (tx_transicao * 0.7) + (freq_recente[d_str] * 3.5) + pts_atraso
-            scores[d_str] = {
-                "score": score, "atraso": a, "max_atraso": max_atrasos[d_str], 
-                "freq": freq_recente[d_str], "transicao": tx_transicao
-            }
-    else:
-        # MOTOR DE MACHINE LEARNING: Reconhecimento de Padrão Sequencial
-        contagem_proximos = {str(d): 0.0 for d in range(10)}
-        
-        # 1. Varre o passado buscando "fotos" iguais ou parecidas à tropa atual
-        for i in range(len(historico_centenas) - 1):
-            past_draw = historico_centenas[i]
-            next_draw = historico_centenas[i+1]
-            
-            sim_score = 0.0
-            # Ganha ponto se os números apareceram (mesmo fora de ordem)
-            for c in ultimas_centenas:
-                if c in past_draw: sim_score += 1.0
-            # Ganha ponto triplo se a posição for exatamente a mesma
-            for j in range(min(len(ultimas_centenas), len(past_draw))):
-                if ultimas_centenas[j] == past_draw[j]: sim_score += 3.0
-                
-            # Se a sequência passada é parecida, olhe para o próximo sorteio dela!
-            if sim_score > 0:
-                for c in set(next_draw):
-                    contagem_proximos[c] += sim_score # O número ganha pontos baseado na similaridade do evento
-                    
-        for d in range(10):
-            d_str = str(d)
-            tx_transicao = (transicoes[d_str] / total_transicoes * 100) if total_transicoes > 0 else 0.0
-            
-            ml_score = contagem_proximos[d_str]
-            a = atrasos[d_str]
-            # O Disjuntor anti-teimosia continua ativo para evitar loops
-            pts_atraso = -50.0 if a > 4 else 0.0 
-            
-            # O ML domina o cálculo
-            score = ml_score + (freq_recente[d_str] * 2.0) + pts_atraso
-            
-            scores[d_str] = {
-                "score": score, "atraso": a, "max_atraso": max_atrasos[d_str], 
-                "freq": freq_recente[d_str], "transicao": tx_transicao
-            }
-
-    rank = sorted(scores.items(), key=lambda x: x[1]['score'], reverse=True)
-    top_digit = rank[0][0]
-    top_data = rank[0][1]
-
-    return {
-        "ultimas": ultimas_centenas,
-        "ultimas_milhares": ultimas_milhares,
-        "top_digit": top_digit,
-        "atraso": top_data["atraso"],
-        "max_atraso": top_data["max_atraso"],
-        "freq": top_data["freq"],
-        "transicao": top_data["transicao"],
-        "score": top_data["score"],
-        "rank_completo": rank,
-        "all_stats": {
-            "atrasos": atrasos,
-            "max_atrasos": max_atrasos,
-            "freqs": freq_recente,
-            "transicoes": {str(d): (transicoes[str(d)] / total_transicoes * 100) if total_transicoes > 0 else 0.0 for d in range(10)}
-        }
+    # Estrutura: 5 prêmios (0 a 4). Para cada prêmio, 25 grupos.
+    # Guardamos o atraso atual e o máximo histórico.
+    stats = {
+        premio_idx: {grupo: {'atraso': 0, 'max_atraso': 0} for grupo in range(1, 26)}
+        for premio_idx in range(5)
     }
 
-@st.cache_data(show_spinner=False)
-def rodar_backtest_centenas(history_slice, max_testes=15, ml_active=False):
-    min_history = 15
-    available_tests = len(history_slice) - min_history
-    if available_tests <= 0: 
-        return None 
-        
-    qtd_testes = min(max_testes, available_tests)
-    resultados_bt = []
-    inicio_teste = len(history_slice) - qtd_testes
-    
-    for i in range(inicio_teste, len(history_slice)):
-        historico_passado = history_slice[:i]
-        sorteio_real = history_slice[i]
-        
-        # O Backtest chama a função NATIVAMENTE com ou sem ML, gerando sincronia perfeita
-        analise_passada = analisar_radar_centena(historico_passado, ml_active)
-        if not analise_passada: continue
+    # Varredura do Histórico do mais antigo ao mais novo
+    for draw in history_slice:
+        for premio_idx in range(5):
+            milhar = draw['premios'][premio_idx]
+            grupo_sorteado = get_grupo(milhar)
             
-        digito_previsto = analise_passada['top_digit']
-        
-        centenas_reais = []
-        for p in range(5):
-            try:
-                m = str(sorteio_real['premios'][p]).zfill(4)
-                if m != "0000" and m != "00" and len(m) == 4:
-                    centenas_reais.append(m[1])
-            except: pass
-            
-        if not centenas_reais: continue
-            
-        vitoria = digito_previsto in centenas_reais
-        
-        resultados_bt.append({
-            'data': sorteio_real['data'],
-            'horario': sorteio_real['horario'],
-            'previsto': digito_previsto,
-            'reais': centenas_reais,
-            'vitoria': vitoria,
-            'analise': analise_passada 
-        })
-        
-    return resultados_bt
+            for g in range(1, 26):
+                if g == grupo_sorteado:
+                    # O grupo saiu, atualizamos o teto máximo e zeramos o atraso
+                    if stats[premio_idx][g]['atraso'] > stats[premio_idx][g]['max_atraso']:
+                        stats[premio_idx][g]['max_atraso'] = stats[premio_idx][g]['atraso']
+                    stats[premio_idx][g]['atraso'] = 0
+                else:
+                    # O grupo não saiu neste prêmio, soma 1 no atraso
+                    stats[premio_idx][g]['atraso'] += 1
 
-@st.cache_data(show_spinner=False)
-def calcular_dna_banca(history_slice, max_lookback=60, ml_active=False):
-    resultados_bt = rodar_backtest_centenas(history_slice, max_lookback, ml_active)
-    if not resultados_bt: return None, None
-    
-    wins_atraso = []
-    wins_freq = []
-    wins_transicao = []
-    
-    recuperacao_atraso = []
-    recuperacao_freq = []
-    recuperacao_transicao = []
-    consec_losses = 0
-    
-    for bt in resultados_bt:
-        if bt['vitoria']:
-            wins_atraso.append(bt['analise']['atraso'])
-            wins_freq.append(bt['analise']['freq'])
-            wins_transicao.append(bt['analise']['transicao'])
+    # Após o loop, garantir que o atraso final não seja maior que o max histórico sem atualizar
+    for premio_idx in range(5):
+        for g in range(1, 26):
+            if stats[premio_idx][g]['atraso'] > stats[premio_idx][g]['max_atraso']:
+                stats[premio_idx][g]['max_atraso'] = stats[premio_idx][g]['atraso']
+
+    # Filtrar os Melhores Alvos (Os grupos mais "tensionados")
+    alvos = []
+    for premio_idx in range(5):
+        for g in range(1, 26):
+            a_atual = stats[premio_idx][g]['atraso']
+            max_a = stats[premio_idx][g]['max_atraso']
             
-            if consec_losses >= 2:
-                centenas_que_sairam = bt['reais']
-                if centenas_que_sairam:
-                    salvador = centenas_que_sairam[0] 
-                    stats = bt['analise'].get('all_stats', {})
-                    if stats and 'atrasos' in stats and salvador in stats['atrasos']:
-                        recuperacao_atraso.append(stats['atrasos'][salvador])
-                        recuperacao_freq.append(stats['freqs'][salvador])
-                        recuperacao_transicao.append(stats['transicoes'][salvador])
-            consec_losses = 0
-        else:
-            consec_losses += 1
-            
-    dna_normal = None
-    dna_recuperacao = None
-            
-    if len(wins_atraso) >= 3: 
-        dna_normal = {
-            "avg_atraso": sum(wins_atraso) / len(wins_atraso),
-            "avg_freq": sum(wins_freq) / len(wins_freq),
-            "avg_transicao": sum(wins_transicao) / len(wins_transicao),
-        }
-        
-    if len(recuperacao_atraso) >= 1: 
-        dna_recuperacao = {
-            "avg_atraso": sum(recuperacao_atraso) / len(recuperacao_atraso),
-            "avg_freq": sum(recuperacao_freq) / len(recuperacao_freq),
-            "avg_transicao": sum(recuperacao_transicao) / len(recuperacao_transicao),
-        }
-        
-    return dna_normal, dna_recuperacao
+            # Condição Tática: O Atraso atual tem que ser expressivo (ex: > 15 jogos) 
+            # e estar muito perto do Teto Máximo Histórico do grupo.
+            if a_atual >= 12 and max_a > 0:
+                tensao = (a_atual / max_a) * 100
+                alvos.append({
+                    "premio": premio_idx + 1,
+                    "grupo": g,
+                    "nome_grupo": NOME_GRUPOS[g],
+                    "atraso": a_atual,
+                    "max_atraso": max_a,
+                    "tensao": tensao
+                })
+
+    # Ordena pelos grupos mais atrasados no geral
+    alvos.sort(key=lambda x: x['atraso'], reverse=True)
+    return alvos
 
 # =============================================================================
 # --- 5. INTERFACE NAVEGAÇÃO E TELAS ---
 # =============================================================================
 
 if "menu_nav" not in st.session_state:
-    st.session_state.menu_nav = "🏠 RADAR TÁTICO (Home)"
+    st.session_state.menu_nav = "🏠 ALVOS DE CAÇADA (Grupos)"
 
-def acionar_teletransporte(destino):
-    st.session_state.menu_nav = destino
-
-menu_opcoes = ["🏠 RADAR TÁTICO (Home)"] + list(CONFIG_BANCAS.keys())
+menu_opcoes = ["🏠 ALVOS DE CAÇADA (Grupos)"] + list(CONFIG_BANCAS.keys())
 escolha_menu = st.sidebar.selectbox("Navegação Principal", menu_opcoes, key="menu_nav")
-
-def acao_limpar_banco(nome_aba):
-    ws = conectar_planilha(nome_aba)
-    if ws:
-        try:
-            raw = ws.get_all_values()
-            if len(raw) < 2: return "Banco vazio"
-            cabecalho = raw[0]
-            dados_unicos = {}
-            for row in raw[1:]:
-                if len(row) >= 2:
-                    dt = row[0].strip()
-                    hr = row[1].strip()
-                    if dt:
-                        chave = f"{dt}|{hr}"
-                        dados_unicos[chave] = row
-            lista_final = list(dados_unicos.values())
-            
-            def get_sort_key(r):
-                try: return datetime.strptime(f"{r[0]} {r[1]}", "%Y-%m-%d %H:%M")
-                except: return datetime.min
-            lista_final.sort(key=get_sort_key)
-            
-            ws.clear()
-            ws.append_row(cabecalho)
-            if lista_final: ws.append_rows(lista_final)
-            st.cache_data.clear()
-            return f"Sucesso! Reduzido de {len(raw)-1} para {len(lista_final)} registros."
-        except Exception as e: return f"Erro: {e}"
-    return "Erro Conexão"
 
 st.sidebar.markdown("---")
 
-if escolha_menu == "🏠 RADAR TÁTICO (Home)":
-    st.title("👁️ OLHO DE HÓRUS (RADAR DE CENTENAS)")
-    st.markdown("O sistema escaneia cirurgicamente a coluna das **CENTENAS do 1º ao 5º Prêmio**. Somente a Tropa de Elite no radar.")
+if escolha_menu == "🏠 ALVOS DE CAÇADA (Grupos)":
+    st.title("🎯 COMANDO CENTRAL (Perseguição 23x1)")
+    st.markdown("O sistema vasculha **todos os prêmios isoladamente** (do 1º ao 5º) buscando o **Grupo** que atingiu o limite de tensão e está prestes a estourar. Gerencie seu capital para perseguições de até 22 tiros.")
     
     ranking_global = []
     
-    with st.spinner("📡 Rastreiando fluxo de Centenas no globo..."):
+    with st.spinner("📡 Rastreiando Grupos Atrasados em todas as frentes..."):
         for banca_key, config in CONFIG_BANCAS.items():
-            ml_active = config.get('ml_active', False)
-            
-            if config.get('radar_centena') == True and ml_active == True:
-                hist_milhar = carregar_dados_hibridos(config['nome_aba'])
-                if len(hist_milhar) >= 15:
-                    
-                    analise = analisar_radar_centena(hist_milhar, ml_active=ml_active)
-                    
-                    if analise:
-                        resultados_bt_15 = rodar_backtest_centenas(hist_milhar, max_testes=15, ml_active=ml_active)
-                        dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, max_lookback=60, ml_active=ml_active)
-
-                        if dna_normal:
-                            dna_str = f"Atraso ~{round(dna_normal['avg_atraso'])} | Freq ~{round(dna_normal['avg_freq'])} | Atração ~{dna_normal['avg_transicao']:.1f}% (ML: PADRÃO DE SEQUÊNCIA)"
-                        else:
-                            dna_str = "Aguardando vitórias..."
-
-                        curr_streak = 0
-                        if resultados_bt_15:
-                            max_loss = 0
-                            curr_loss = 0
-                            for bt in resultados_bt_15:
-                                if not bt['vitoria']:
-                                    curr_loss += 1
-                                    max_loss = max(max_loss, curr_loss)
-                                else:
-                                    curr_loss = 0
-                            
-                            ultimos_5 = resultados_bt_15[-5:]
-                            for bt in reversed(ultimos_5):
-                                if not bt['vitoria']: curr_streak += 1
-                                else: break
-                                    
-                            bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
-                            bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
-                            aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
-                        else:
-                            bt_str = "Aguardando dados..."
-                            aviso_risco = "Aguardando dados..."
-                            
-                        dna_rec_str = ""
-                        if dna_recuperacao:
-                            dna_rec_str = f"Atraso ~{round(dna_recuperacao['avg_atraso'])} | Freq ~{round(dna_recuperacao['avg_freq'])} | Atração ~{dna_recuperacao['avg_transicao']:.1f}%"
-                            
-                        analise['banca'] = config['display_name'].replace("👁️ ", "").replace(" (Hórus)", "").replace(" (Vitorino)", "")
-                        analise['banca_key'] = banca_key
-                        analise['bt_str'] = bt_str
-                        analise['aviso_risco'] = aviso_risco
-                        analise['dna_str'] = dna_str
-                        analise['dna_rec_str'] = dna_rec_str
-                        analise['curr_streak'] = curr_streak
-                        ranking_global.append(analise)
+            if config.get('radar_ativo') == True:
+                historico = carregar_dados_hibridos(config['nome_aba'])
+                if len(historico) >= 20:
+                    alvos_banca = analisar_atraso_grupos(historico)
+                    if alvos_banca:
+                        # Pega apenas os 2 melhores alvos absolutos da banca
+                        melhores = alvos_banca[:2]
+                        for alvo in melhores:
+                            alvo['banca'] = config['display_name'].replace("🎯 ", "")
+                            ranking_global.append(alvo)
 
     if not ranking_global:
-        st.info("⚠️ Sem dados suficientes ou bancas vazias.")
+        st.info("⚠️ Sem dados suficientes ou sem grupos com atrasos expressivos.")
     else:
-        ranking_global.sort(key=lambda x: x['score'], reverse=True)
-        st.markdown("### 🏆 ALVOS DE DISPARO (CENTENAS 1º AO 5º)")
+        # Ordena o painel global pelos maiores atrasos (maior tensão)
+        ranking_global.sort(key=lambda x: x['atraso'], reverse=True)
+        
+        st.markdown("### 🚨 TOP 5 ALVOS MAIS CRÍTICOS DO BRASIL")
         
         html_final = ""
-        for idx, alvo in enumerate(ranking_global):
-            banca_nome = alvo['banca']
-            tropa = ", ".join(alvo['ultimas'])
-            milhares_tropa = ", ".join(alvo['ultimas_milhares'])
-            digito = alvo['top_digit']
+        for idx, alvo in enumerate(ranking_global[:5]):
+            banca = alvo['banca']
+            premio = alvo['premio']
+            grupo = alvo['grupo']
+            nome = alvo['nome_grupo']
+            atraso = alvo['atraso']
+            teto = alvo['max_atraso']
+            tensao = alvo['tensao']
             
-            rank_data = alvo['rank_completo']
-            top2_str = ""
-            top3_str = ""
-            if len(rank_data) >= 3:
-                r2, r3 = rank_data[1], rank_data[2]
-                top2_str = f"<b>2º Lugar:</b> Centena {r2[0]} (Atraso Atual: {r2[1]['atraso']} | Freq: {r2[1]['freq']} | Teto: {r2[1]['max_atraso']} | Atração: {r2[1]['transicao']:.1f}%)"
-                top3_str = f"<b>3º Lugar:</b> Centena {r3[0]} (Atraso Atual: {r3[1]['atraso']} | Freq: {r3[1]['freq']} | Teto: {r3[1]['max_atraso']} | Atração: {r3[1]['transicao']:.1f}%)"
-            
-            html_recuperacao = ""
-            if alvo['curr_streak'] >= 2 and alvo['dna_rec_str']:
-                html_recuperacao = f"<div style='background-color:#5c1e1e; padding:10px; border-radius:5px; margin: 10px 0; border-left: 4px solid #ff4444;'><p style='margin:0; color:#fff; font-size:1.0em;'>🚨 <b>ALERTA DE FADIGA: 2+ DERROTAS!</b> Esqueça o Alvo Principal teimoso. Historicamente, o número que quebra a sequência de erros nesta banca tem este perfil:<br><b>🚑 DNA DE RECUPERAÇÃO: {alvo['dna_rec_str']}</b><br><i>Procure no Top 3 o número que mais se aproxima deste DNA de Recuperação!</i></p></div>"
+            # Matemática da Perseguição
+            tiros_restantes = max(22 - atraso, 0)
+            status_tiro = "🟢 EXCELENTE" if tiros_restantes > 5 else ("🟡 CUIDADO" if tiros_restantes > 0 else "🔴 LIMITE ESTOURADO")
             
             html_ranking = (
                 f'<div class="card-ranking">'
-                f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | Banca: {banca_nome}</h3>'
-                f'<div style="background-color:#222; padding:15px; border-radius:8px;">'
-                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Milhares do Globo (1º ao 5º): <b>{milhares_tropa}</b></p>'
-                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Últimas Centenas (1º ao 5º): <b>{tropa}</b></p>'
-                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">Backtest (5 Últimos): <b>{alvo["bt_str"]}</b></p>'
-                f'  <p style="margin:0 0 5px 0; color:#aaa; font-size:1.1em;">🧬 DNA Vencedor (Média): <b>{alvo["dna_str"]}</b></p>'
-                f'  <p style="margin:0 0 10px 0; color:#ffaa00; font-size:1.1em;">⚠️ Risco Histórico: <b>{alvo["aviso_risco"]}</b></p>'
-                f'  {html_recuperacao}'
-                f'  <h2 style="margin:0; color:#00ff00; text-align:center;">🎯 ALVO RECOMENDADO: CENTENA ({digito})</h2>'
-                f'  <p style="margin:5px 0 0 0; color:#fff; text-align:center;">Jogue a Centena com o algarismo <b>{digito}</b> do 1º ao 5º Prêmio.</p>'
+                f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | BANCA: {banca} | {premio}º PRÊMIO</h3>'
+                f'<div class="card-alvo">'
+                f'  <h1 style="margin:0; color:#ff3333; font-size:2.5em;">GRUPO {grupo} ({nome})</h1>'
+                f'  <p style="margin:10px 0 0 0; color:#fff; font-size:1.2em;">Aposte o <b>Grupo {grupo}</b> isoladamente no <b>{premio}º Prêmio</b>.</p>'
                 f'</div>'
-                f'<div style="margin-top:10px; display:flex; justify-content:space-around; font-size:0.9em; color:#ddd;">'
-                f'  <span><b>⏳ Atraso:</b> {alvo["atraso"]} sorteios fora</span>'
-                f'  <span><b>🔁 Frequência:</b> {alvo["freq"]} (últ. 10 jogos)</span>'
-                f'  <span><b>🧲 Atração (Markov):</b> {alvo["transicao"]:.1f}%</span>'
-                f'</div>'
-                f'<div style="margin-top:15px; padding-top:10px; border-top:1px solid #333; font-size:0.85em; color:#aaa;">'
-                f'  <div style="margin-bottom:5px;">{top2_str}</div>'
-                f'  <div>{top3_str}</div>'
+                f'<div style="margin-top:15px; display:flex; justify-content:space-around; font-size:1.1em; color:#ddd; background:#222; padding:10px; border-radius:5px;">'
+                f'  <span style="color:#ffaa00;"><b>⏳ Atraso Atual:</b> {atraso} sorteios</span>'
+                f'  <span><b>🛑 Teto Histórico:</b> {teto} sorteios</span>'
+                f'  <span><b>🔥 Tensão:</b> {tensao:.1f}%</span>'
                 f'</div>'
                 f'</div>'
             )
@@ -624,20 +346,6 @@ if escolha_menu == "🏠 RADAR TÁTICO (Home)":
             
         st.markdown(html_final, unsafe_allow_html=True)
         
-        melhor_alvo = ranking_global[0]
-        
-        st.markdown("---")
-        st.markdown("### 👑 VEREDITO DO PENTÁGONO (O Tiro de Sniper)")
-        
-        html_verdict = f"""
-        <div style='background-color:#1e3d1e; border: 2px solid #00ff00; border-radius: 8px; padding: 20px; text-align: center;'>
-            <h2 style='color:#00ff00; margin-top:0;'>FOGO AUTORIZADO: {melhor_alvo['banca']}</h2>
-            <p style='color:#fff; font-size:1.2em;'>A <b>{melhor_alvo['banca']}</b> está sob controle do Algoritmo de Reconhecimento de Padrões. A máquina vasculhou o histórico procurando a mesma tropa de centenas atual para prever o futuro.</p>
-            <h3 style='color:#ffd700; margin-bottom:0;'>🎯 FOCO TOTAL: Centena {melhor_alvo['top_digit']} do 1º ao 5º na {melhor_alvo['banca']}</h3>
-        </div>
-        """
-        st.markdown(html_verdict, unsafe_allow_html=True)
-
 else:
     banca_selecionada = escolha_menu
     config = CONFIG_BANCAS[banca_selecionada]
@@ -645,17 +353,6 @@ else:
     url_banca = f"https://playbicho.com/resultado-jogo-do-bicho/{config['slug']}-do-dia-{date.today().strftime('%Y-%m-%d')}"
         
     st.sidebar.markdown(f"<a href='{url_banca}' target='_blank'><button style='width: 100%; border-radius: 5px; font-weight: bold; background-color: #007bff; color: white; padding: 8px 10px; border: none; cursor: pointer; margin-bottom: 10px;'>🌐 Visitar Site da Banca</button></a>", unsafe_allow_html=True)
-    
-    if st.sidebar.button("🧹 EXECUTAR FAXINA NO BANCO DE DADOS", key=f"btn_fax_stb_{banca_selecionada}"):
-        with st.spinner("Limpando e reescrevendo planilha..."):
-            res_principal = acao_limpar_banco(config['nome_aba'])
-            if 'base_dez' in config: acao_limpar_banco(config['base_dez'])
-            if "Sucesso" in res_principal: st.sidebar.success("Faxina Dupla Concluída com Sucesso!")
-            else: st.sidebar.error(res_principal)
-            time.sleep(2)
-            st.rerun()
-            
-    st.sidebar.markdown("---")
     
     modo_extracao = st.sidebar.radio("🔧 Modo de Extração:", ["🎯 Unitária", "🌪️ Em Massa (Turbo)", "✍️ Manual"])
     
@@ -670,21 +367,14 @@ else:
             else: data_busca = st.date_input("Escolha:", date.today(), key=f"dt_pk_{banca_selecionada}")
             
             lista_horarios = config['horarios'].copy()
-                    
             horario_busca = st.selectbox("Horário:", lista_horarios, key=f"sel_hr_{banca_selecionada}")
             
             if st.button("🚀 Baixar & Salvar", key=f"btn_b_stb_{banca_selecionada}"):
-                aba_dez = config.get('base_dez', config['nome_aba'])
-                aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
-                tipo_ext = config.get('tipo_extracao', config['tipo'])
-                
-                ws_dez = conectar_planilha(aba_dez)
-                ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
-                
-                if ws_dez:
+                ws_milhar = conectar_planilha(config['nome_aba'])
+                if ws_milhar:
                     with st.spinner(f"Buscando {horario_busca}..."):
                         try: 
-                            existentes = ws_dez.get_all_values()
+                            existentes = ws_milhar.get_all_values()
                             chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in existentes if len(r) >= 2 and normalizar_data(r[0])]
                         except: chaves = []
                         chave_atual = f"{data_busca.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca)}"
@@ -693,16 +383,8 @@ else:
                         else:
                             premios, msg = raspar_dados_hibrido(banca_selecionada, data_busca, horario_busca)
                             if premios:
-                                if tipo_ext == "DUAL_SOLO":
-                                    row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca, premios[0][-2:], "00", "00", "00", "00"]
-                                    ws_dez.append_row(row_dez)
-                                    if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
-                                    st.toast(f"Sucesso!", icon="✅")
-                                elif tipo_ext == "DUAL_PENTA":
-                                    row_dez = [data_busca.strftime('%Y-%m-%d'), horario_busca] + [p[-2:] for p in premios]
-                                    ws_dez.append_row(row_dez)
-                                    if ws_milhar: ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
-                                    st.toast(f"Sucesso Total!", icon="✅")
+                                ws_milhar.append_row([data_busca.strftime('%Y-%m-%d'), horario_busca] + premios)
+                                st.toast(f"Sucesso!", icon="✅")
                                 st.cache_data.clear() 
                                 time.sleep(1); st.rerun()
                             else: st.error(msg)
@@ -715,24 +397,16 @@ else:
         with col2: data_fim = st.sidebar.date_input("Fim:", date.today(), key=f"dt_fim_{banca_selecionada}")
         
         if st.sidebar.button("🚀 INICIAR TURBO", key=f"btn_tb_stb_{banca_selecionada}"):
-            aba_dez = config.get('base_dez', config['nome_aba'])
-            aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
-            tipo_ext = config.get('tipo_extracao', config['tipo'])
-            
-            ws_dez = conectar_planilha(aba_dez)
-            ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
-            
-            if ws_dez:
+            ws_milhar = conectar_planilha(config['nome_aba'])
+            if ws_milhar:
                 status = st.sidebar.empty(); bar = st.sidebar.progress(0)
-                try: chaves_d = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_dez.get_all_values() if len(r) >= 2 and normalizar_data(r[0])]
-                except: chaves_d = []
-                try: chaves_m = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_milhar.get_all_values() if len(r) >= 2 and normalizar_data(r[0])] if ws_milhar else []
+                try: chaves_m = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in ws_milhar.get_all_values() if len(r) >= 2 and normalizar_data(r[0])]
                 except: chaves_m = []
                 
                 delta = data_fim - data_ini
                 lista_datas = [data_ini + timedelta(days=i) for i in range(delta.days + 1)]
                 total_ops = len(lista_datas) * len(config['horarios']); op_atual = 0; sucessos = 0
-                buffer_dez = []; buffer_m = []
+                buffer_m = []
                 
                 for dia in lista_datas:
                     for hora_base in config['horarios']:
@@ -742,32 +416,23 @@ else:
                         status.text(f"🔍 Buscando: {dia.strftime('%d/%m')} às {hora_efetiva}...")
                         chave_atual = f"{dia.strftime('%Y-%m-%d')}|{normalizar_hora(hora_efetiva)}"
                         
-                        if chave_atual in chaves_d: continue
+                        if chave_atual in chaves_m: continue
                         if dia > date.today(): continue
                         if dia == date.today() and hora_efetiva > datetime.now().strftime("%H:%M"): continue
                         
                         premios, msg = raspar_dados_hibrido(banca_selecionada, dia, hora_efetiva)
                         if premios:
-                            if tipo_ext == "DUAL_SOLO":
-                                row_d = [dia.strftime('%Y-%m-%d'), hora_efetiva, premios[0][-2:], "00", "00", "00", "00"]
-                                buffer_dez.append(row_d); chaves_d.append(chave_atual)
-                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
-                            elif tipo_ext == "DUAL_PENTA":
-                                row_d = [dia.strftime('%Y-%m-%d'), hora_efetiva] + [p[-2:] for p in premios]
-                                buffer_dez.append(row_d); chaves_d.append(chave_atual)
-                                if ws_milhar and chave_atual not in chaves_m: buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
+                            buffer_m.append([dia.strftime('%Y-%m-%d'), hora_efetiva] + premios); chaves_m.append(chave_atual)
                             sucessos += 1
                         time.sleep(1.0) 
-                status.text("🚚 Sincronizando Matrizes...")
-                if buffer_dez: ws_dez.append_rows(buffer_dez)
-                if buffer_m and ws_milhar: ws_milhar.append_rows(buffer_m)
+                status.text("🚚 Salvando no Banco de Dados...")
+                if buffer_m: ws_milhar.append_rows(buffer_m)
                 st.cache_data.clear() 
                 bar.progress(100); status.success(f"🏁 Concluído! {sucessos} novos registros."); time.sleep(2); st.rerun()
             else: st.sidebar.error("Erro Conexão Google")
 
     elif modo_extracao == "✍️ Manual":
         data_busca_man = date.today()
-        horario_busca_man = config['horarios'][0]
         
         with st.sidebar.expander("📝 Lançar Manualmente", expanded=True):
             opcao_data_man = st.radio("Data:", ["Hoje", "Ontem", "Outra"], key=f"rad_man_{banca_selecionada}")
@@ -776,7 +441,6 @@ else:
             else: data_busca_man = st.date_input("Escolha:", date.today(), key=f"dt_man_{banca_selecionada}")
             
             lista_horarios_man = config['horarios'].copy()
-                    
             horario_busca_man = st.selectbox("Horário:", lista_horarios_man, key=f"hr_man_{banca_selecionada}")
             
             st.markdown("🎯 **Preencha as Milhares (4 dígitos):**")
@@ -792,189 +456,36 @@ else:
                     return num.zfill(4) if num else "0000"
                 
                 premios_finais = [limpar_milhar(p1), limpar_milhar(p2), limpar_milhar(p3), limpar_milhar(p4), limpar_milhar(p5)]
-                aba_dez = config.get('base_dez', config['nome_aba'])
-                aba_milhar = config['nome_aba'] if 'MILHAR' in config['nome_aba'] else f"{banca_selecionada}_MILHAR"
-                tipo_ext = config.get('tipo_extracao', config['tipo'])
-                ws_dez = conectar_planilha(aba_dez)
-                ws_milhar = conectar_planilha(aba_milhar) if 'MILHAR' in aba_milhar else None
+                ws_milhar = conectar_planilha(config['nome_aba'])
                 
-                if ws_dez:
+                if ws_milhar:
                     with st.spinner(f"Salvando {horario_busca_man} manualmente..."):
                         try: 
-                            existentes = ws_dez.get_all_values()
+                            existentes = ws_milhar.get_all_values()
                             chaves = [f"{normalizar_data(r[0]).strftime('%Y-%m-%d')}|{normalizar_hora(r[1])}" for r in existentes if len(r) >= 2 and normalizar_data(r[0])]
                         except: chaves = []
                         chave_atual_man = f"{data_busca_man.strftime('%Y-%m-%d')}|{normalizar_hora(horario_busca_man)}"
                         
                         if chave_atual_man in chaves: st.warning("Resultado já existe no banco de dados!")
                         else:
-                            if tipo_ext == "DUAL_SOLO":
-                                row_dez = [data_busca_man.strftime('%Y-%m-%d'), horario_busca_man, premios_finais[0][-2:], "00", "00", "00", "00"]
-                                ws_dez.append_row(row_dez)
-                                if ws_milhar: ws_milhar.append_row([data_busca_man.strftime('%Y-%m-%d'), horario_busca_man] + premios_finais)
-                                st.toast(f"Salvo!", icon="✅")
-                            elif tipo_ext == "DUAL_PENTA":
-                                row_dez = [data_busca_man.strftime('%Y-%m-%d'), horario_busca_man] + [p[-2:] for p in premios_finais]
-                                ws_dez.append_row(row_dez)
-                                if ws_milhar: ws_milhar.append_row([data_busca_man.strftime('%Y-%m-%d'), horario_busca_man] + premios_finais)
-                                st.toast(f"Salvo Total!", icon="✅")
+                            ws_milhar.append_row([data_busca_man.strftime('%Y-%m-%d'), horario_busca_man] + premios_finais)
+                            st.toast(f"Salvo!", icon="✅")
                             st.cache_data.clear() 
                             time.sleep(1); st.rerun()
                 else: st.error("Erro na Planilha")
 
     # --- PÁGINA DA BANCA ---
+    st.header(f"{config['display_name']} - Status dos Grupos")
     
-    if config['tipo'] == "MILHAR_VIEW":
-        st.header(f"👁️ {config['display_name']}")
+    with st.spinner("Analisando Atrasos em 5 Dimensões..."):
+        historico = carregar_dados_hibridos(config['nome_aba'])
         
-        with st.spinner("Processando Radar de Centenas e DNA..."):
-            hist_milhar = carregar_dados_hibridos(config['nome_aba'])
-            
-        if len(hist_milhar) > 0:
-            ult = hist_milhar[-1]
-            st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
-            
-            if config.get('radar_centena'):
-                ml_active = config.get('ml_active', False)
-                st.markdown("### 👁️‍🗨️ OLHO DE HÓRUS (Análise 1º ao 5º Prêmio)")
-                res_centena = analisar_radar_centena(hist_milhar, ml_active=ml_active)
-                
-                if res_centena:
-                    tropa_atual = ", ".join(res_centena['ultimas'])
-                    milhares_atual = ", ".join(res_centena['ultimas_milhares'])
-                    alvo_digito = res_centena['top_digit']
-                    
-                    resultados_bt_15 = rodar_backtest_centenas(hist_milhar, max_testes=15, ml_active=ml_active)
-                    dna_normal, dna_recuperacao = calcular_dna_banca(hist_milhar, max_lookback=60, ml_active=ml_active)
-
-                    curr_streak = 0
-                    if resultados_bt_15:
-                        max_loss = 0
-                        curr_loss = 0
-                        for bt in resultados_bt_15:
-                            if not bt['vitoria']:
-                                curr_loss += 1
-                                max_loss = max(max_loss, curr_loss)
-                            else:
-                                curr_loss = 0
-                                
-                        ultimos_5 = resultados_bt_15[-5:]
-                        for bt in reversed(ultimos_5):
-                            if not bt['vitoria']: curr_streak += 1
-                            else: break
-                                
-                        bt_items = [f"{bt['previsto']}{'🟢' if bt['vitoria'] else '❌'}" for bt in reversed(ultimos_5)]
-                        bt_str = ", ".join(bt_items) + " ⬅️ (Mais recente)"
-                        aviso_risco = f"Máximo de {max_loss} derrotas seguidas (em {len(resultados_bt_15)} jogos)"
-                    else:
-                        bt_str = "Aguardando dados..."
-                        aviso_risco = "Aguardando dados..."
-                        
-                    alerta_dna = False
-                    
-                    if dna_normal:
-                        atraso_ideal = round(dna_normal['avg_atraso'])
-                        freq_ideal = round(dna_normal['avg_freq'])
-                        transicao_ideal = dna_normal['avg_transicao']
-                        
-                        match_atraso = abs(res_centena['atraso'] - atraso_ideal) <= 2
-                        match_freq = abs(res_centena['freq'] - freq_ideal) <= 2
-                        match_transicao = res_centena['transicao'] >= (transicao_ideal * 0.8) 
-                        
-                        if match_atraso and match_freq and match_transicao:
-                            alerta_dna = True
-                            
-                    dna_rec_str = ""
-                    if dna_recuperacao:
-                        dna_rec_str = f"Atraso ~{round(dna_recuperacao['avg_atraso'])} | Freq ~{round(dna_recuperacao['avg_freq'])} | Atração ~{dna_recuperacao['avg_transicao']:.1f}%"
-                    
-                    with st.container(border=True):
-                        st.success(f"**Milhares Sorteadas no Globo (1º ao 5º):** {milhares_atual}")
-                        st.success(f"**Tropa de Centenas Atual no Globo (1º ao 5º):** {tropa_atual}")
-                        st.success(f"**Backtest (5 Últimos):** {bt_str}")
-                        st.warning(f"**⚠️ Risco Histórico:** {aviso_risco}")
-                        st.info(f"**⚠️ Recorde de Atraso do ({alvo_digito}):** {res_centena['max_atraso']} sorteios")
-                        
-                        if dna_normal:
-                            if ml_active:
-                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}% (ML: PADRÃO DE SEQUÊNCIA)</span></div>", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"<div style='background-color:#2a2a2a; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 3px solid #888;'><span style='color:#ccc; font-size:0.9em;'>🧬 <b>DNA VENCEDOR DESTA BANCA (Média das últimas vitórias):</b> Atraso ~{atraso_ideal} | Freq ~{freq_ideal} | Atração ~{transicao_ideal:.1f}%</span></div>", unsafe_allow_html=True)
-                            
-                        if alerta_dna:
-                            st.error("🚨 CENÁRIO IDEAL DETECTADO: O ALVO ATUAL BATE EXATAMENTE COM O DNA VENCEDOR DA BANCA! FOGO AUTORIZADO! 🚨")
-                            
-                        if curr_streak >= 2 and dna_rec_str:
-                            st.markdown(f"<div style='background-color:#5c1e1e; padding:10px; border-radius:5px; margin-bottom:15px; border-left: 4px solid #ff4444;'><span style='color:#fff; font-size:1.0em;'>🚨 <b>ALERTA DE FADIGA: 2+ DERROTAS!</b> Esqueça o Alvo Principal teimoso. O número que quebra a sequência de erros tem este perfil:<br><b>🚑 DNA DE RECUPERAÇÃO: {dna_rec_str}</b><br><i>Procure no Top 3 o número que mais se aproxima deste DNA!</i></span></div>", unsafe_allow_html=True)
-                        
-                        st.markdown(f"<h2 style='color:#00ff00; text-align:center;'>🎯 ALVO DE OURO: APOSTE NO ALGARISMO ({alvo_digito})</h2>", unsafe_allow_html=True)
-                        st.markdown(f"<p style='text-align:center; color:#ccc; font-size:1.1em;'>Jogue a Centena com o algarismo <b>{alvo_digito}</b> do 1º ao 5º Prêmio.</p>", unsafe_allow_html=True)
-                        
-                        col_c1, col_c2, col_c3 = st.columns(3)
-                        col_c1.metric("Atraso Atual (Sorteios)", res_centena['atraso'])
-                        col_c2.metric("Frequência (Últimos 10)", res_centena['freq'])
-                        col_c3.metric("Poder de Transição (Atração)", f"{res_centena['transicao']:.1f}%")
-                        
-                        st.markdown("---")
-                        st.markdown("#### 📊 Posição Completa do Globo (Top 3)")
-                        rank = res_centena['rank_completo']
-                        for i in range(min(3, len(rank))):
-                            dig = rank[i][0]
-                            st.write(f"**{i+1}º Lugar:** Centena **{dig}** (Atraso Atual: {rank[i][1]['atraso']} | Freq: {rank[i][1]['freq']} | Teto: {rank[i][1]['max_atraso']} | Atração: {rank[i][1]['transicao']:.1f}%)")
-                else:
-                    st.info("Sem dados suficientes para o Radar de Centenas. Extraia mais resultados.")
-                    
-            else:
-                st.info("⚠️ O Radar de Centenas não está ativo para esta banca.")
-                    
-            st.markdown("---")
-            st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
-            df_show = pd.DataFrame(hist_milhar)
-            st.dataframe(df_show.tail(15), use_container_width=True)
-
-        else:
-            st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
-
-    # ==========================================
-    # PAINEL DE EXTRAÇÃO BASE (DEZENAS/DUAL)
-    # ==========================================
+    if len(historico) > 0:
+        ult = historico[-1]
+        st.success(f"📅 **Último Sorteio Lido:** {ult['data']} às {ult['horario']}")
+        
+        st.markdown("### 📊 Banco de Dados Bruto (Últimos Sorteios)")
+        df_show = pd.DataFrame(historico)
+        st.dataframe(df_show.tail(15), use_container_width=True)
     else:
-        st.header(f"🔭 {config['display_name']} - Oracle 46")
-        with st.spinner("Carregando e Limpando dados..."):
-            historico = carregar_dados_hibridos(config['nome_aba'])
-            
-        if len(historico) > 0:
-            ult = historico[-1]
-            if config['tipo'] == "DUAL_SOLO": st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **1º Prêmio:** {str(ult['premios'][0])[-2:]}")
-            else: st.info(f"📅 **Último Sorteio:** {ult['data']} às {ult['horario']} | **P1:** {ult['premios'][0]} ... **P5:** {ult['premios'][4]}")
-            
-            range_abas = [0, 1] 
-            abas = st.tabs(["🔮 Oracle 46", "🎯 Unidades"])
-            
-            for idx_aba in range_abas:
-                with abas[idx_aba]:
-                    if idx_aba == 1:
-                        st.markdown("### 🏹 The Chaser (Perseguição de Ciclo de 8 Jogos)")
-                        estado_chaser = rastrear_estado_chaser(historico, 0)
-                        if estado_chaser['target'] is not None:
-                            col_gold, col_info = st.columns([1, 2])
-                            with col_gold: st.metric("🌟 Alvo Principal", f"Final {estado_chaser['target']}")
-                            with col_info:
-                                if estado_chaser['status'] == 'ativo': st.warning(f"🔒 **PERSEGUIÇÃO (TENTATIVA {estado_chaser['attempts']+1} DE 8)**")
-                                else: st.success("🎯 **NOVO CICLO (TENTATIVA 1 DE 8)**")
-                                st.caption(f"Base Matemática: {estado_chaser['prob']:.1f}%")
-                        st.markdown("---")
-                        markov, ciclo, quente = calcular_3_estrategias_unidade(historico, 0)
-                        c_m, c_c, c_q = st.columns(3)
-                        c_m.metric('1. Ímã (Markov)', f"Final {markov}", "Maior atração")
-                        c_c.metric('2. Fechamento Ciclo', f"Final {ciclo}", "Mais atrasada", delta_color="off")
-                        c_q.metric('3. Tendência Quente', f"Final {quente}", "Moda repetição")
-                    else:
-                        lista_matrix, conf_total, info_predator, dados_oracle = gerar_estrategia_oracle_46(historico, idx_aba)
-                        if HAS_AI:
-                            c_ima, c_rep = st.columns(2)
-                            with c_ima: st.success(f"🧲 **ÍMÃS:** {dados_oracle['imas']}")
-                            with c_rep: st.error(f"⛔ **REPELIDOS:** {dados_oracle['repelidos']}")
-                        with st.container(border=True): st.code(", ".join(lista_matrix), language="text")
-        else:
-            st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
+        st.warning("⚠️ Base vazia. Extraia os dados primeiro através do menu ao lado.")
