@@ -11,7 +11,7 @@ import time
 # =============================================================================
 # --- 1. CONFIGURAÇÕES GERAIS ---
 # =============================================================================
-st.set_page_config(page_title="PENTÁGONO V144.0 - Ponto de Fervura", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="PENTÁGONO V145.0 - Seca Absoluta", page_icon="🎯", layout="wide")
 
 CONFIG_BANCAS = {
     "TRADICIONAL": { "display_name": "🎯 TRADICIONAL", "nome_aba": "TRADICIONAL_MILHAR", "slug": "tradicional", "tipo_extracao": "DUAL_PENTA", "horarios": ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"], "radar_ativo": True },
@@ -41,6 +41,7 @@ st.markdown("""
     h1, h2, h3 { color: #ffd700 !important; }
     .stButton>button { width: 100%; border-radius: 5px; font-weight: bold; }
     .card-ranking { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #ff4b4b; }
+    .card-seca { background-color: #001a33; border: 1px solid #0055ff; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 5px solid #00aaff; }
     .card-alvo { background-color: #1a0000; border: 2px solid #ff0000; border-radius: 8px; padding: 20px; text-align: center; }
     .card-recorde { background-color: #1a1a00; border: 1px solid #cca300; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 5px solid #ffcc00; }
 </style>
@@ -161,14 +162,14 @@ def raspar_dados_hibrido(banca_key, data_alvo, horario_alvo):
         return None, "Horário não encontrado."
     except Exception as e: return None, f"Erro: {e}"
 
-@st.cache_data(show_spinner=False)
-def analisar_atraso_grupos(history_slice):
-    if len(history_slice) < 20: return None, None
+# =============================================================================
+# --- 4. CÉREBRO MATEMÁTICO: ISOLADO E 1º AO 5º ---
+# =============================================================================
 
-    stats = {
-        p_idx: {g: {'atraso': 0, 'max_atraso': 0, 'soma_ciclos': 0, 'qtd_ciclos': 0} for g in range(1, 26)}
-        for p_idx in range(5)
-    }
+@st.cache_data(show_spinner=False)
+def analisar_atraso_grupos_isolado(history_slice):
+    if len(history_slice) < 20: return None, None
+    stats = { p_idx: {g: {'atraso': 0, 'max_atraso': 0, 'soma_ciclos': 0, 'qtd_ciclos': 0} for g in range(1, 26)} for p_idx in range(5) }
 
     for draw in history_slice:
         for p_idx in range(5):
@@ -185,85 +186,153 @@ def analisar_atraso_grupos(history_slice):
 
     for p_idx in range(5):
         for g in range(1, 26):
-            if stats[p_idx][g]['atraso'] > stats[p_idx][g]['max_atraso']:
-                stats[p_idx][g]['max_atraso'] = stats[p_idx][g]['atraso']
+            if stats[p_idx][g]['atraso'] > stats[p_idx][g]['max_atraso']: stats[p_idx][g]['max_atraso'] = stats[p_idx][g]['atraso']
 
     todos_grupos = []
     for p_idx in range(5):
         for g in range(1, 26):
             a_atual = stats[p_idx][g]['atraso']
-            max_a = stats[p_idx][g]['max_atraso']
             media = (stats[p_idx][g]['soma_ciclos'] / stats[p_idx][g]['qtd_ciclos']) if stats[p_idx][g]['qtd_ciclos'] > 0 else 25.0
-            tensao = (a_atual / max_a * 100) if max_a > 0 else 0.0
-            
             todos_grupos.append({
                 "premio": p_idx + 1, "grupo": g, "nome_grupo": NOME_GRUPOS[g],
-                "atraso": a_atual, "max_atraso": max_a, "media": media, "tensao": tensao
+                "atraso": a_atual, "max_atraso": stats[p_idx][g]['max_atraso'], "media": media
             })
 
-    # A NOVA REGRA DE ENGAJAMENTO: Só avisa se o atraso for maior que 75 sorteios!
-    alvos_ativos = [g for g in todos_grupos if g['atraso'] >= 75 and g['max_atraso'] > 0]
+    alvos_ativos = [g for g in todos_grupos if g['atraso'] >= 75]
     alvos_ativos.sort(key=lambda x: x['atraso'], reverse=True)
     recordes = sorted(todos_grupos, key=lambda x: x['max_atraso'], reverse=True)
-
     return alvos_ativos, recordes[:5]
+
+@st.cache_data(show_spinner=False)
+def analisar_atraso_1_ao_5(history_slice):
+    if len(history_slice) < 5: return []
+    stats = {g: {'atraso': 0, 'max_atraso': 0, 'soma_ciclos': 0, 'qtd_ciclos': 0} for g in range(1, 26)}
+    
+    for draw in history_slice:
+        grupos_sorteio = set()
+        for p_idx in range(5):
+            try:
+                g = get_grupo(draw['premios'][p_idx])
+                if g > 0: grupos_sorteio.add(g)
+            except: pass
+            
+        for g in range(1, 26):
+            if g in grupos_sorteio:
+                if stats[g]['atraso'] > stats[g]['max_atraso']: stats[g]['max_atraso'] = stats[g]['atraso']
+                stats[g]['soma_ciclos'] += stats[g]['atraso']
+                stats[g]['qtd_ciclos'] += 1
+                stats[g]['atraso'] = 0
+            else:
+                stats[g]['atraso'] += 1
+                
+    for g in range(1, 26):
+        if stats[g]['atraso'] > stats[g]['max_atraso']: stats[g]['max_atraso'] = stats[g]['atraso']
+            
+    resultado = []
+    for g in range(1, 26):
+        media = (stats[g]['soma_ciclos'] / stats[g]['qtd_ciclos']) if stats[g]['qtd_ciclos'] > 0 else 5.0
+        resultado.append({
+            "grupo": g, "nome_grupo": NOME_GRUPOS[g],
+            "atraso": stats[g]['atraso'], "max_atraso": stats[g]['max_atraso'], "media": media
+        })
+        
+    resultado.sort(key=lambda x: x['atraso'], reverse=True)
+    return resultado
 
 if "menu_nav" not in st.session_state: st.session_state.menu_nav = "🏠 ALVOS DE CAÇADA (Grupos)"
 escolha_menu = st.sidebar.selectbox("Navegação Principal", ["🏠 ALVOS DE CAÇADA (Grupos)"] + list(CONFIG_BANCAS.keys()), key="menu_nav")
 st.sidebar.markdown("---")
 
 if escolha_menu == "🏠 ALVOS DE CAÇADA (Grupos)":
-    st.title("🎯 COMANDO CENTRAL (Perseguição 23x1)")
-    st.markdown("A zona de Fervura (Kill Zone) foi ajustada para **75 sorteios**. Nunca persiga um grupo cedo demais.")
+    st.title("🎯 COMANDO CENTRAL (Perseguição de Grupos)")
     
-    ranking_global = []
+    aba_seca, aba_sniper, aba_recordes = st.tabs(["🌪️ SECA ABSOLUTA (1º ao 5º - 4x1)", "🎯 TIRO DE SNIPER (Isolado - 23x1)", "🏆 RECORDES (Isolado)"])
+    
+    ranking_isolado = []
+    ranking_seca = []
     recordes_globais = []
     
-    with st.spinner("📡 Rastreiando Grupos no Ponto Crítico de Fervura (>75 atrasos)..."):
+    with st.spinner("📡 Rastreiando 1º ao 5º e Prêmios Isolados simultaneamente..."):
         for banca_key, config in CONFIG_BANCAS.items():
             if config.get('radar_ativo') == True:
                 historico = carregar_dados_hibridos(config['nome_aba'])
                 if len(historico) >= 20:
-                    alvos_banca, recordes_banca = analisar_atraso_grupos(historico)
-                    if alvos_banca:
-                        for alvo in alvos_banca[:2]:
+                    # Análise Isolada
+                    alvos_isolados, rec_banca = analisar_atraso_grupos_isolado(historico)
+                    if alvos_isolados:
+                        for alvo in alvos_isolados[:2]:
                             alvo['banca'] = config['display_name'].replace("🎯 ", "")
-                            ranking_global.append(alvo)
-                    if recordes_banca:
-                        for rec in recordes_banca:
+                            ranking_isolado.append(alvo)
+                    if rec_banca:
+                        for rec in rec_banca:
                             rec['banca'] = config['display_name'].replace("🎯 ", "")
                             recordes_globais.append(rec)
+                            
+                    # Análise Seca Absoluta 1 ao 5
+                    alvos_seca = analisar_atraso_1_ao_5(historico)
+                    if alvos_seca:
+                        # Filtro da seca: Ponto de fervura 1 ao 5 é > 18 sorteios (Média natural é ~5)
+                        top_seca = [s for s in alvos_seca if s['atraso'] >= 18]
+                        for s in top_seca[:2]:
+                            s['banca'] = config['display_name'].replace("🎯 ", "")
+                            ranking_seca.append(s)
 
-    st.markdown("### 🚨 TOP 5 ALVOS EM PERSEGUIÇÃO CRÍTICA (>75 Sorteios)")
-    if not ranking_global: st.success("✅ Nenhum alvo no Ponto de Fervura no momento. Aguarde os números amadurecerem.")
-    else:
-        ranking_global.sort(key=lambda x: x['atraso'], reverse=True)
-        html_final = ""
-        for idx, alvo in enumerate(ranking_global[:5]):
-            dez_str = get_dezenas_grupo(alvo['grupo'])
-            html_final += (
-                f'<div class="card-ranking">'
-                f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | BANCA: {alvo["banca"]} | {alvo["premio"]}º PRÊMIO</h3>'
-                f'<div class="card-alvo">'
-                f'  <h1 style="margin:0; color:#ff3333; font-size:2.5em;">GRUPO {alvo["grupo"]} ({alvo["nome_grupo"]})</h1>'
-                f'  <p style="margin:5px 0 0 0; color:#ffcc00; font-size:1.1em;">Dezenas: <b>{dez_str}</b></p>'
-                f'</div>'
-                f'<div style="margin-top:15px; display:flex; justify-content:space-around; font-size:1.1em; color:#ddd; background:#222; padding:10px; border-radius:5px;">'
-                f'  <span style="color:#ffaa00;"><b>⏳ Atraso:</b> {alvo["atraso"]} </span>'
-                f'  <span style="color:#00ff00;"><b>📊 Média Normal:</b> {alvo["media"]:.0f} </span>'
-                f'  <span><b>🛑 Recorde da Banca:</b> {alvo["max_atraso"]} </span>'
-                f'</div></div>'
-            )
-        st.markdown(html_final, unsafe_allow_html=True)
-        
-    st.markdown("---")
-    st.markdown("### 🏆 HALL DA FAMA DOS ATRASOS (O Limite da Máquina)")
-    if recordes_globais:
-        recordes_globais.sort(key=lambda x: x['max_atraso'], reverse=True)
-        html_recordes = ""
-        for idx, rec in enumerate(recordes_globais[:5]):
-            html_recordes += f'<div class="card-recorde"><span style="font-size:1.2em; font-weight:bold; color:#ffd700;">#{idx+1} - {rec["max_atraso"]} Sorteios Seguidos</span><br><span style="color:#ccc;">Aconteceu na <b>{rec["banca"]}</b>, no <b>{rec["premio"]}º Prêmio</b>. O alvo foi o <b>Grupo {rec["grupo"]} ({rec["nome_grupo"]})</b>.</span></div>'
-        st.markdown(html_recordes, unsafe_allow_html=True)
+    # --- ABA SECA ABSOLUTA (1 AO 5) ---
+    with aba_seca:
+        st.markdown("O sistema vasculha o placar inteiro. Mostra grupos que não aparecem em **nenhum dos 5 prêmios**. O ciclo normal é sair a cada ~5 sorteios. Entramos apenas quando o atraso bate o triplo (Fervura: > 18 atrasos).")
+        if not ranking_seca: st.success("✅ Nenhum alvo no Ponto de Fervura 1 ao 5 no momento.")
+        else:
+            ranking_seca.sort(key=lambda x: x['atraso'], reverse=True)
+            html_seca = ""
+            for idx, alvo in enumerate(ranking_seca[:5]):
+                dez_str = get_dezenas_grupo(alvo['grupo'])
+                html_seca += (
+                    f'<div class="card-seca">'
+                    f'<h3 style="margin:0 0 10px 0; color:#00aaff;">#{idx+1} | BANCA: {alvo["banca"]} | 1º AO 5º PRÊMIO</h3>'
+                    f'<div style="background-color:#000d1a; padding:15px; border-radius:5px; text-align:center;">'
+                    f'  <h2 style="margin:0; color:#fff;">GRUPO {alvo["grupo"]} ({alvo["nome_grupo"]})</h2>'
+                    f'  <p style="margin:5px 0 0 0; color:#00aaff; font-size:1.1em;">Dezenas: <b>{dez_str}</b></p>'
+                    f'</div>'
+                    f'<div style="margin-top:10px; display:flex; justify-content:space-around; font-size:1.0em; color:#ddd;">'
+                    f'  <span style="color:#ffaa00;">⏳ Seca Atual: {alvo["atraso"]} sorteios </span>'
+                    f'  <span style="color:#00ff00;">📊 Média: {alvo["media"]:.1f} sorteios </span>'
+                    f'  <span>🛑 Teto da Banca: {alvo["max_atraso"]} sorteios </span>'
+                    f'</div></div>'
+                )
+            st.markdown(html_seca, unsafe_allow_html=True)
+
+    # --- ABA TIRO DE SNIPER (ISOLADO) ---
+    with aba_sniper:
+        st.markdown("Busca grupos atrasados em **prêmios específicos** (Pagamento maior: 23x1). Zona de Fervura calibrada para **> 75 sorteios**.")
+        if not ranking_isolado: st.success("✅ Nenhum alvo isolado no Ponto de Fervura no momento.")
+        else:
+            ranking_isolado.sort(key=lambda x: x['atraso'], reverse=True)
+            html_isolado = ""
+            for idx, alvo in enumerate(ranking_isolado[:5]):
+                dez_str = get_dezenas_grupo(alvo['grupo'])
+                html_isolado += (
+                    f'<div class="card-ranking">'
+                    f'<h3 style="margin:0 0 10px 0; color:#fff;">#{idx+1} | BANCA: {alvo["banca"]} | {alvo["premio"]}º PRÊMIO</h3>'
+                    f'<div class="card-alvo">'
+                    f'  <h1 style="margin:0; color:#ff3333; font-size:2.5em;">GRUPO {alvo["grupo"]} ({alvo["nome_grupo"]})</h1>'
+                    f'  <p style="margin:5px 0 0 0; color:#ffcc00; font-size:1.1em;">Dezenas: <b>{dez_str}</b></p>'
+                    f'</div>'
+                    f'<div style="margin-top:15px; display:flex; justify-content:space-around; font-size:1.1em; color:#ddd; background:#222; padding:10px; border-radius:5px;">'
+                    f'  <span style="color:#ffaa00;"><b>⏳ Atraso:</b> {alvo["atraso"]} </span>'
+                    f'  <span style="color:#00ff00;"><b>📊 Média:</b> {alvo["media"]:.0f} </span>'
+                    f'  <span><b>🛑 Teto Banca:</b> {alvo["max_atraso"]} </span>'
+                    f'</div></div>'
+                )
+            st.markdown(html_isolado, unsafe_allow_html=True)
+            
+    # --- ABA RECORDES ---
+    with aba_recordes:
+        if recordes_globais:
+            recordes_globais.sort(key=lambda x: x['max_atraso'], reverse=True)
+            html_recordes = ""
+            for idx, rec in enumerate(recordes_globais[:5]):
+                html_recordes += f'<div class="card-recorde"><span style="font-size:1.2em; font-weight:bold; color:#ffd700;">#{idx+1} - {rec["max_atraso"]} Sorteios Seguidos</span><br><span style="color:#ccc;">Aconteceu na <b>{rec["banca"]}</b>, no <b>{rec["premio"]}º Prêmio</b>. O alvo foi o <b>Grupo {rec["grupo"]} ({rec["nome_grupo"]})</b>.</span></div>'
+            st.markdown(html_recordes, unsafe_allow_html=True)
         
 else:
     banca_selecionada = escolha_menu
@@ -305,10 +374,18 @@ else:
     with st.spinner("Analisando..."): historico = carregar_dados_hibridos(config['nome_aba'])
     if len(historico) > 0:
         st.success(f"📅 **Último Sorteio:** {historico[-1]['data']} às {historico[-1]['horario']}")
-        alvos_locais, _ = analisar_atraso_grupos(historico)
+        
+        alvos_seca = analisar_atraso_1_ao_5(historico)
+        top_seca_local = [s for s in alvos_seca if s['atraso'] >= 18]
+        if top_seca_local:
+            st.markdown("### 🌪️ ALVOS EM SECA ABSOLUTA NESTA BANCA (1º ao 5º)")
+            for alvo in top_seca_local[:3]:
+                st.markdown(f"<div style='background-color:#001a33; border-left: 4px solid #0055ff; padding: 15px; margin-bottom: 10px;'><span style='color:#00aaff; font-size:1.2em;'><b>1º AO 5º PRÊMIO</b> ➔ <b>Grupo {alvo['grupo']} ({alvo['nome_grupo']})</b></span><br><span style='color:#ffcc00;'>Dezenas: <b>{get_dezenas_grupo(alvo['grupo'])}</b></span><br><span style='color:#aaa;'>⏳ Seca: {alvo['atraso']} | 📊 Média: {alvo['media']:.1f} | 🛑 Teto: {alvo['max_atraso']}</span></div>", unsafe_allow_html=True)
+                
+        alvos_locais, _ = analisar_atraso_grupos_isolado(historico)
         if alvos_locais:
-            st.markdown("### 🚨 ALVOS EM PERSEGUIÇÃO CRÍTICA NESTA BANCA")
+            st.markdown("### 🚨 ALVOS ISOLADOS NESTA BANCA (>75 Atrasos)")
             for alvo in alvos_locais:
                 st.markdown(f"<div style='background-color:#4a0000; border-left: 4px solid #ff0000; padding: 15px; margin-bottom: 10px;'><span style='color:#fff; font-size:1.2em;'><b>{alvo['premio']}º PRÊMIO</b> ➔ <b>Grupo {alvo['grupo']} ({alvo['nome_grupo']})</b></span><br><span style='color:#ffcc00;'>Dezenas: <b>{get_dezenas_grupo(alvo['grupo'])}</b></span><br><span style='color:#aaa;'>⏳ Atraso: {alvo['atraso']} | 📊 Média: {alvo['media']:.0f} | 🛑 Teto: {alvo['max_atraso']}</span></div>", unsafe_allow_html=True)
-        else: st.info("✅ Nenhum grupo com atraso maior que 75 sorteios nesta banca.")
+
         st.dataframe(pd.DataFrame(historico).tail(15), use_container_width=True)
