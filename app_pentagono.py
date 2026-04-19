@@ -19,14 +19,38 @@ st.markdown("""
     div[data-testid="metric-container"] { background-color: #2b2b2b; border-left: 5px solid #4CAF50; padding: 15px; border-radius: 5px; }
     .btn-extrator > button { background-color: #008CBA !important; color: white !important; }
     div[data-baseweb="input"] { background-color: #2b2b2b !important; color: white !important;}
+    
+    .alerta-sniper {
+        background-color: #2b0000;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        color: #ff4b4b;
+        font-size: 1.3em;
+        border: 2px solid #ff4b4b;
+        box-shadow: 0px 0px 20px rgba(255, 75, 75, 0.4);
+        margin-top: 20px;
+    }
+    .alerta-calmo {
+        background-color: #002b0c;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        color: #4CAF50;
+        border: 1px solid #4CAF50;
+        margin-top: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
+# MAPEAMENTO TÁTICO DE HORÁRIOS DEFINIDO PELO COMANDANTE (Exatamente 10 sorteios)
+HORARIOS_FIXOS = ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"]
+
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (HORÁRIOS FIXOS DO COMANDANTE) ---
+# --- 2. O EXTRATOR CIBERNÉTICO (INVERTIDO E CORRIGIDO) ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
     data_formatada = data_alvo.strftime("%Y-%m-%d")
@@ -36,35 +60,16 @@ def extrair_resultados_web(data_alvo):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
     }
     
-    # MAPEAMENTO TÁTICO DE HORÁRIOS DEFINIDO PELO COMANDANTE
-    horarios_fixos = {
-        1: "11:20",
-        2: "12:20",
-        3: "13:20",
-        4: "14:20",
-        5: "18:20",
-        6: "19:20",
-        7: "20:20",
-        8: "21:20",
-        9: "22:20",
-        10: "23:20",
-        11: "Ext. 11" # Margem de segurança caso haja 11 sorteios
-    }
-    
     try:
         resposta = requests.get(url, headers=headers, timeout=10)
         if resposta.status_code != 200:
             return None, f"O radar foi bloqueado ou a data não existe (Erro {resposta.status_code})."
 
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        
-        novos_dados = {
-            "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
-            "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []
-        }
-        
         tabelas = soup.find_all('table')
-        count = 1
+        
+        # Primeiro, extraímos todos os grupos válidos encontrados no site para uma lista temporária
+        dados_temporarios = []
         
         for tabela in tabelas:
             linhas = tabela.find_all('tr')
@@ -79,13 +84,11 @@ def extrair_resultados_web(data_alvo):
                 primeira_col = textos[0].lower()
                 if any(x in primeira_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     grupo = ""
-                    # TENTA TÁTICA A
                     for txt in textos[1:]:
                         nums = ''.join(filter(str.isdigit, txt))
                         if 0 < len(nums) <= 2:
                             grupo = nums.zfill(2)
                             break
-                    # TENTA TÁTICA B
                     if not grupo:
                         for txt in textos[1:]:
                             nums = ''.join(filter(str.isdigit, txt))
@@ -97,29 +100,41 @@ def extrair_resultados_web(data_alvo):
                     if grupo: grupos_extraidos.append(grupo)
             
             if len(grupos_extraidos) >= 5:
-                # =========================================================
-                # NOVO: APLICAÇÃO DO HORÁRIO FIXO
-                # =========================================================
-                hora_str = horarios_fixos.get(count, f"Ext. {count}")
-                nome_sorteio = f"{hora_str} ({data_alvo.strftime('%d/%m')})"
+                dados_temporarios.append(grupos_extraidos)
                 
-                novos_dados["Sorteio"].append(nome_sorteio)
-                novos_dados["1º Prêmio"].append(grupos_extraidos[0])
-                novos_dados["2º Prêmio"].append(grupos_extraidos[1])
-                novos_dados["3º Prêmio"].append(grupos_extraidos[2])
-                novos_dados["4º Prêmio"].append(grupos_extraidos[3])
-                novos_dados["5º Prêmio"].append(grupos_extraidos[4])
-                novos_dados["Status"].append("⏳")
-                count += 1
-                if count > 11: break
+        # O PULO DO GATO: O site mostra o mais recente primeiro. Nós precisamos inverter
+        # para que o sorteio mais antigo do dia (11:20) seja o primeiro da lista.
+        dados_temporarios.reverse()
         
-        if len(novos_dados["Sorteio"]) > 0:
-            while len(novos_dados["Sorteio"]) < 11:
-                idx = len(novos_dados["Sorteio"]) + 1
-                hora_str = horarios_fixos.get(idx, f"Ext. {idx}")
-                novos_dados["Sorteio"].append(f"{hora_str} (Pendente)")
-                for pr in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio", "Status"]:
-                    novos_dados[pr].append("⏳" if pr == "Status" else "")
+        # Agora montamos a estrutura final com exatamente 10 linhas
+        novos_dados = {
+            "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
+            "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []
+        }
+        
+        for i in range(10):
+            hora_fixa = HORARIOS_FIXOS[i]
+            nome_sorteio = f"{hora_fixa} ({data_alvo.strftime('%d/%m')})"
+            novos_dados["Sorteio"].append(nome_sorteio)
+            
+            if i < len(dados_temporarios):
+                grupos = dados_temporarios[i]
+                novos_dados["1º Prêmio"].append(grupos[0])
+                novos_dados["2º Prêmio"].append(grupos[1])
+                novos_dados["3º Prêmio"].append(grupos[2])
+                novos_dados["4º Prêmio"].append(grupos[3])
+                novos_dados["5º Prêmio"].append(grupos[4])
+                novos_dados["Status"].append("⏳")
+            else:
+                novos_dados["1º Prêmio"].append("")
+                novos_dados["2º Prêmio"].append("")
+                novos_dados["3º Prêmio"].append("")
+                novos_dados["4º Prêmio"].append("")
+                novos_dados["5º Prêmio"].append("")
+                novos_dados["Status"].append("⏳")
+                
+        # Se achou pelo menos 1 tabela, retorna sucesso
+        if len(dados_temporarios) > 0:
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
             return None, f"Não há resultados registados para o dia {data_alvo.strftime('%d/%m/%Y')}."
@@ -131,11 +146,12 @@ def extrair_resultados_web(data_alvo):
 # --- 3. DADOS INICIAIS E INTERFACE ---
 # =============================================================================
 if 'df_backtest' not in st.session_state:
+    data_hoje = date.today().strftime('%d/%m')
     dados_iniciais = {
-        "Sorteio": [f"Ext. {i}" for i in range(1, 12)],
-        "1º Prêmio": [""] * 11, "2º Prêmio": [""] * 11,
-        "3º Prêmio": [""] * 11, "4º Prêmio": [""] * 11, "5º Prêmio": [""] * 11,
-        "Status": ["⏳"] * 11
+        "Sorteio": [f"{h} ({data_hoje})" for h in HORARIOS_FIXOS],
+        "1º Prêmio": [""] * 10, "2º Prêmio": [""] * 10,
+        "3º Prêmio": [""] * 10, "4º Prêmio": [""] * 10, "5º Prêmio": [""] * 10,
+        "Status": ["⏳"] * 10
     }
     st.session_state.df_backtest = pd.DataFrame(dados_iniciais)
 
@@ -154,26 +170,27 @@ with c2:
             time.sleep(1) 
             if df_novo is not None:
                 st.session_state.df_backtest = df_novo
-                st.success("✅ Radar sincronizado com sucesso!")
+                st.success("✅ Radar sincronizado perfeitamente!")
                 st.rerun()
             else:
                 st.error(f"⚠️ Alerta: {msg}")
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator injeta a data no servidor alvo, carrega os horários táticos fixos e recalcula a sua taxa de vitória automaticamente.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator fixa as 10 extrações diárias e procura ativamente a Janela de Oportunidade.</span>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 # =============================================================================
-# --- 4. MOTOR DE BACKTEST EM TEMPO REAL ---
+# --- 4. MOTOR DE BACKTEST (COM CONTADOR DE DERROTAS) ---
 # =============================================================================
 df_atual = st.session_state.df_backtest.copy()
-vitorias = 0
-derrotas = 0
 
 if len(df_atual) > 0:
     df_atual.at[0, "Status"] = "---"
+
+# Variável estratégica para contar as derrotas seguidas
+derrotas_consecutivas = 0
 
 for i in range(1, len(df_atual)):
     linha_anterior = df_atual.iloc[i-1]
@@ -184,7 +201,6 @@ for i in range(1, len(df_atual)):
         continue
         
     try:
-        # A regra tática: Os 5 grupos da Extração Anterior
         grupos_base = [
             str(linha_anterior["1º Prêmio"]).strip().zfill(2),
             str(linha_anterior["2º Prêmio"]).strip().zfill(2),
@@ -193,17 +209,15 @@ for i in range(1, len(df_atual)):
             str(linha_anterior["5º Prêmio"]).strip().zfill(2)
         ]
         
-        # O Ataque: O 1º e 2º Prêmio da Extração Atual
         alvo_1 = str(linha_atual["1º Prêmio"]).strip().zfill(2)
         alvo_2 = str(linha_atual["2º Prêmio"]).strip().zfill(2)
         
-        # Condição de Vitória: Se o alvo 1 ou o alvo 2 estiverem dentro dos grupos base
         if alvo_1 in grupos_base or alvo_2 in grupos_base:
             df_atual.at[i, "Status"] = "🟢 Vitória"
-            vitorias += 1
+            derrotas_consecutivas = 0 # O ciclo zerou!
         else:
             df_atual.at[i, "Status"] = "❌ Derrota"
-            derrotas += 1
+            derrotas_consecutivas += 1 # Conta mais uma derrota seguida
     except:
         df_atual.at[i, "Status"] = "⏳"
 
@@ -221,27 +235,34 @@ df_editado = st.data_editor(
 st.session_state.df_backtest = df_editado
 
 # =============================================================================
-# --- 5. RESULTADO FINANCEIRO AUTOMÁTICO ---
+# --- 5. O GATILHO DE OPORTUNIDADE (SNIPER) ---
 # =============================================================================
-total_jogos = vitorias + derrotas
-
-if total_jogos > 0:
-    custo_por_rodada = 125.00
-    premio_por_vitoria = 255.00
-    
-    custo_total = total_jogos * custo_por_rodada
-    retorno_total = vitorias * premio_por_vitoria
-    lucro_liquido = retorno_total - custo_total
-    assertividade = (vitorias / total_jogos) * 100
-    
-    st.markdown("### 💰 Balanço do Dia Selecionado")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Batalhas Travadas", f"{total_jogos}")
-    col2.metric("Taxa de Sucesso", f"{assertividade:.1f}%")
-    col3.metric("Investimento Total", f"R$ {custo_total:.2f}")
-    
-    if lucro_liquido > 0:
-        col4.metric("Lucro Líquido", f"R$ {lucro_liquido:.2f}", "Lucro")
-    else:
-        col4.metric("Prejuízo", f"R$ {lucro_liquido:.2f}", "- Perda")
+# Removemos o painel financeiro e colocamos o Alerta Tático
+if derrotas_consecutivas >= 4:
+    st.markdown(f"""
+    <div class="alerta-sniper">
+        <b>🚨 ALERTA DE OPORTUNIDADE TÁTICA 🚨</b><br>
+        O radar detectou <b>{derrotas_consecutivas} derrotas consecutivas</b> no histórico recente!<br>
+        A janela estatística de acerto está aberta. Prepare-se para atacar no próximo sorteio!
+    </div>
+    """, unsafe_allow_html=True)
+elif derrotas_consecutivas > 0:
+    st.markdown(f"""
+    <div class="alerta-calmo" style="color: #ffb74d; border-color: #ffb74d;">
+        <b>Aviso de Monitoramento:</b> A acumular {derrotas_consecutivas} derrota(s) seguida(s). Aguardando a quebra do padrão...
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # Se a última foi Vitória ou se ainda não tem dados
+    tem_dados = False
+    for s in df_atual["Status"]:
+        if s == "🟢 Vitória" or s == "❌ Derrota":
+            tem_dados = True
+            break
+            
+    if tem_dados:
+        st.markdown("""
+        <div class="alerta-calmo">
+            <b>Status Verde:</b> Tabela estabilizada após Vitória. Mantenha as armas em repouso até nova janela de oportunidade.
+        </div>
+        """, unsafe_allow_html=True)
