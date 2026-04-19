@@ -40,25 +40,23 @@ st.markdown("""
         border: 1px solid #4CAF50;
         margin-top: 20px;
     }
+    hr { border-color: #4CAF50; opacity: 0.3; }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
-# MAPEAMENTO TÁTICO DE HORÁRIOS DEFINIDO PELO COMANDANTE (Exatamente 10 sorteios)
+# MAPEAMENTO TÁTICO DE HORÁRIOS
 HORARIOS_FIXOS = ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"]
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (CORRIGIDO PARA LER DE CIMA PARA BAIXO) ---
+# --- 2. O MOTOR EXTRATOR CIBERNÉTICO ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
     data_formatada = data_alvo.strftime("%Y-%m-%d")
     url = f"https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-{data_formatada}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
     try:
         resposta = requests.get(url, headers=headers, timeout=10)
@@ -67,7 +65,6 @@ def extrair_resultados_web(data_alvo):
 
         soup = BeautifulSoup(resposta.text, 'html.parser')
         tabelas = soup.find_all('table')
-        
         dados_temporarios = []
         
         for tabela in tabelas:
@@ -77,7 +74,6 @@ def extrair_resultados_web(data_alvo):
             for linha in linhas:
                 colunas = linha.find_all(['td', 'th'])
                 textos = [c.get_text(strip=True) for c in colunas]
-                
                 if not textos: continue
                 
                 primeira_col = textos[0].lower()
@@ -101,13 +97,7 @@ def extrair_resultados_web(data_alvo):
             if len(grupos_extraidos) >= 5:
                 dados_temporarios.append(grupos_extraidos)
                 
-        # REMOVIDA A INVERSÃO. O Playbicho já lista do mais antigo (topo) para o mais novo (fundo).
-        # dados_temporarios.reverse() <- Este era o vilão!
-        
-        novos_dados = {
-            "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
-            "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []
-        }
+        novos_dados = {"Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []}
         
         for i in range(10):
             hora_fixa = HORARIOS_FIXOS[i]
@@ -123,121 +113,160 @@ def extrair_resultados_web(data_alvo):
                 novos_dados["5º Prêmio"].append(grupos[4])
                 novos_dados["Status"].append("⏳")
             else:
-                novos_dados["1º Prêmio"].append("")
-                novos_dados["2º Prêmio"].append("")
-                novos_dados["3º Prêmio"].append("")
-                novos_dados["4º Prêmio"].append("")
-                novos_dados["5º Prêmio"].append("")
-                novos_dados["Status"].append("⏳")
+                for col in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio", "Status"]:
+                    novos_dados[col].append("⏳" if col == "Status" else "")
                 
         if len(dados_temporarios) > 0:
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
-            return None, f"Não há resultados registados para o dia {data_alvo.strftime('%d/%m/%Y')}."
+            return None, f"Sem dados para o dia {data_alvo.strftime('%d/%m/%Y')}."
             
     except Exception as e:
         return None, f"Falha crítica nos motores de busca: {e}"
 
 # =============================================================================
-# --- 3. DADOS INICIAIS E INTERFACE ---
+# --- 3. INICIALIZAÇÃO DAS TABELAS NO COFRE ---
 # =============================================================================
-if 'df_backtest' not in st.session_state:
-    data_hoje = date.today().strftime('%d/%m')
-    dados_iniciais = {
-        "Sorteio": [f"{h} ({data_hoje})" for h in HORARIOS_FIXOS],
-        "1º Prêmio": [""] * 10, "2º Prêmio": [""] * 10,
-        "3º Prêmio": [""] * 10, "4º Prêmio": [""] * 10, "5º Prêmio": [""] * 10,
-        "Status": ["⏳"] * 10
-    }
-    st.session_state.df_backtest = pd.DataFrame(dados_iniciais)
+def criar_df_vazio(horarios, data_str):
+    return pd.DataFrame({
+        "Sorteio": [f"{h} ({data_str})" for h in horarios],
+        "1º Prêmio": [""] * len(horarios), "2º Prêmio": [""] * len(horarios),
+        "3º Prêmio": [""] * len(horarios), "4º Prêmio": [""] * len(horarios),
+        "5º Prêmio": [""] * len(horarios), "Status": ["⏳"] * len(horarios)
+    })
 
-st.markdown("### 📅 Painel de Extração")
-c1, c2, c3 = st.columns([1, 1, 2])
+if 'df_anterior' not in st.session_state:
+    st.session_state.df_anterior = criar_df_vazio(HORARIOS_FIXOS[-5:], (date.today() - timedelta(days=2)).strftime('%d/%m'))
 
-with c1:
-    data_selecionada = st.date_input("Data do Sorteio:", value=date.today() - timedelta(days=1))
+if 'df_atual' not in st.session_state:
+    st.session_state.df_atual = criar_df_vazio(HORARIOS_FIXOS, (date.today() - timedelta(days=1)).strftime('%d/%m'))
 
-with c2:
+
+# =============================================================================
+# --- 4. INTERFACE: PAINEL SUPERIOR (DIA ANTERIOR) ---
+# =============================================================================
+st.markdown("### ⏪ 1. O Elo de Ligação (Fechamento de Ontem)")
+c_ant1, c_ant2, c_ant3 = st.columns([1, 1, 2])
+with c_ant1:
+    data_anterior = st.date_input("Data do Dia Anterior:", value=date.today() - timedelta(days=2), key="data_ant")
+with c_ant2:
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div class='btn-extrator'>", unsafe_allow_html=True)
-    if st.button("📡 Puxar Resultados", use_container_width=True):
-        with st.spinner(f"A varrer dados do dia {data_selecionada.strftime('%d/%m')}..."):
-            df_novo, msg = extrair_resultados_web(data_selecionada)
-            time.sleep(1) 
+    if st.button("📡 Puxar Fechamento Anterior", use_container_width=True):
+        with st.spinner("Puxando o histórico de ontem..."):
+            df_novo, msg = extrair_resultados_web(data_anterior)
             if df_novo is not None:
-                st.session_state.df_backtest = df_novo
-                st.success("✅ Radar sincronizado perfeitamente!")
+                # O PULO DO GATO: Corta apenas as últimas 5 linhas (da 19:20 às 23:20)
+                st.session_state.df_anterior = df_novo.tail(5).reset_index(drop=True)
                 st.rerun()
             else:
-                st.error(f"⚠️ Alerta: {msg}")
+                st.error(f"⚠️ {msg}")
+with c_ant3:
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Puxa apenas os últimos 5 sorteios para sabermos como a banca fechou o dia. O resultado das 23:20 alimentará o cálculo das 11:20 de hoje.</span>", unsafe_allow_html=True)
+
+df_ant_editado = st.data_editor(st.session_state.df_anterior, use_container_width=True, hide_index=True, column_config={"Status": st.column_config.TextColumn("Resultado", disabled=True)})
+st.session_state.df_anterior = df_ant_editado
+
+st.markdown("<hr>", unsafe_allow_html=True)
+
+# =============================================================================
+# --- 5. INTERFACE: PAINEL INFERIOR (DIA ATUAL) ---
+# =============================================================================
+st.markdown("### 🎯 2. Painel de Operação (Dia de Hoje)")
+c_atu1, c_atu2, c_atu3 = st.columns([1, 1, 2])
+with c_atu1:
+    data_atual = st.date_input("Data do Dia Principal:", value=date.today() - timedelta(days=1), key="data_atu")
+with c_atu2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div class='btn-extrator'>", unsafe_allow_html=True)
+    if st.button("📡 Puxar Dia Principal", use_container_width=True):
+        with st.spinner("Puxando extrações completas..."):
+            df_novo, msg = extrair_resultados_web(data_atual)
+            if df_novo is not None:
+                st.session_state.df_atual = df_novo
+                st.rerun()
+            else:
+                st.error(f"⚠️ {msg}")
     st.markdown("</div>", unsafe_allow_html=True)
-
-with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator fixa as 10 extrações diárias cronologicamente e procura ativamente a Janela de Oportunidade.</span>", unsafe_allow_html=True)
-
-st.markdown("---")
+with c_atu3:
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela principal com 10 extrações e controle de Sniper.</span>", unsafe_allow_html=True)
 
 # =============================================================================
-# --- 4. MOTOR DE BACKTEST (COM CONTADOR DE DERROTAS E SNIPER) ---
+# --- 6. MOTOR LÓGICO DE FUSÃO E BACKTEST ---
 # =============================================================================
-df_atual = st.session_state.df_backtest.copy()
-
-if len(df_atual) > 0:
-    df_atual.at[0, "Status"] = "---"
+df_ant = st.session_state.df_anterior.copy()
+df_atu = st.session_state.df_atual.copy()
 
 derrotas_consecutivas = 0
 
-for i in range(1, len(df_atual)):
-    linha_anterior = df_atual.iloc[i-1]
-    linha_atual = df_atual.iloc[i]
+# AVALIA A TABELA SUPERIOR (Para acumular as derrotas antes de o dia começar)
+if len(df_ant) > 0:
+    df_ant.at[0, "Status"] = "---" # A primeira visível do dia anterior não avaliamos
+    for i in range(1, len(df_ant)):
+        l_ant = df_ant.iloc[i-1]
+        l_atu = df_ant.iloc[i]
+        
+        if not l_ant["1º Prêmio"] or not l_atu["1º Prêmio"]:
+            df_ant.at[i, "Status"] = "⏳"
+            continue
+            
+        g_base = [str(l_ant[f"{p}º Prêmio"]).strip().zfill(2) for p in range(1, 6)]
+        a_1, a_2 = str(l_atu["1º Prêmio"]).strip().zfill(2), str(l_atu["2º Prêmio"]).strip().zfill(2)
+        
+        if a_1 in g_base or a_2 in g_base:
+            df_ant.at[i, "Status"] = "🟢 Vitória"
+            derrotas_consecutivas = 0
+        else:
+            df_ant.at[i, "Status"] = "❌ Derrota"
+            derrotas_consecutivas += 1
+
+# AVALIA A TABELA INFERIOR (O Dia Principal - Interligado!)
+vitorias_dia = 0
+derrotas_dia = 0
+
+for i in range(len(df_atu)):
+    # A MÁGICA DA CONEXÃO: Se for a linha 0 (11:20), a linha anterior é a última das 23:20 da tabela de cima!
+    if i == 0:
+        linha_anterior = df_ant.iloc[-1]
+    else:
+        linha_anterior = df_atu.iloc[i-1]
+        
+    linha_atual = df_atu.iloc[i]
     
     if not linha_anterior["1º Prêmio"] or not linha_atual["1º Prêmio"]:
-        df_atual.at[i, "Status"] = "⏳"
+        df_atu.at[i, "Status"] = "⏳"
         continue
         
     try:
-        grupos_base = [
-            str(linha_anterior["1º Prêmio"]).strip().zfill(2),
-            str(linha_anterior["2º Prêmio"]).strip().zfill(2),
-            str(linha_anterior["3º Prêmio"]).strip().zfill(2),
-            str(linha_anterior["4º Prêmio"]).strip().zfill(2),
-            str(linha_anterior["5º Prêmio"]).strip().zfill(2)
-        ]
-        
-        alvo_1 = str(linha_atual["1º Prêmio"]).strip().zfill(2)
-        alvo_2 = str(linha_atual["2º Prêmio"]).strip().zfill(2)
+        grupos_base = [str(linha_anterior[f"{p}º Prêmio"]).strip().zfill(2) for p in range(1, 6)]
+        alvo_1, alvo_2 = str(linha_atual["1º Prêmio"]).strip().zfill(2), str(linha_atual["2º Prêmio"]).strip().zfill(2)
         
         if alvo_1 in grupos_base or alvo_2 in grupos_base:
-            df_atual.at[i, "Status"] = "🟢 Vitória"
+            df_atu.at[i, "Status"] = "🟢 Vitória"
             derrotas_consecutivas = 0 
+            vitorias_dia += 1
         else:
-            df_atual.at[i, "Status"] = "❌ Derrota"
+            df_atu.at[i, "Status"] = "❌ Derrota"
             derrotas_consecutivas += 1 
+            derrotas_dia += 1
     except:
-        df_atual.at[i, "Status"] = "⏳"
+        df_atu.at[i, "Status"] = "⏳"
 
-# Exibe a tabela na tela
-st.markdown("#### 📝 Placard Tático Interativo")
-df_editado = st.data_editor(
-    df_atual,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Status": st.column_config.TextColumn("Resultado", disabled=True)
-    }
-)
+# Exibe a tabela inferior
+df_atu_editado = st.data_editor(df_atu, use_container_width=True, hide_index=True, column_config={"Status": st.column_config.TextColumn("Resultado", disabled=True)})
+st.session_state.df_atual = df_atu_editado
 
-st.session_state.df_backtest = df_editado
+# Atualiza os displays para refletir a matemática da fusão
+st.session_state.df_anterior = df_ant
 
 # =============================================================================
-# --- 5. O GATILHO DE OPORTUNIDADE (SNIPER) ---
+# --- 7. O GATILHO DE OPORTUNIDADE (SNIPER) ---
 # =============================================================================
 if derrotas_consecutivas >= 4:
     st.markdown(f"""
     <div class="alerta-sniper">
         <b>🚨 ALERTA DE OPORTUNIDADE TÁTICA 🚨</b><br>
-        O radar detectou <b>{derrotas_consecutivas} derrotas consecutivas</b> no histórico recente!<br>
-        A janela estatística de acerto está aberta. Prepare-se para atacar no próximo sorteio!
+        O radar detectou <b>{derrotas_consecutivas} derrotas consecutivas</b> acumuladas na passagem dos sorteios!<br>
+        A janela estatística de acerto está aberta. Prepare-se para atacar no próximo horário!
     </div>
     """, unsafe_allow_html=True)
 elif derrotas_consecutivas > 0:
@@ -247,13 +276,8 @@ elif derrotas_consecutivas > 0:
     </div>
     """, unsafe_allow_html=True)
 else:
-    tem_dados = False
-    for s in df_atual["Status"]:
-        if s == "🟢 Vitória" or s == "❌ Derrota":
-            tem_dados = True
-            break
-            
-    if tem_dados:
+    # Checa se há vitórias recentes
+    if vitorias_dia > 0 or (len(df_ant) > 0 and df_ant.iloc[-1]["Status"] == "🟢 Vitória"):
         st.markdown("""
         <div class="alerta-calmo">
             <b>Status Verde:</b> Tabela estabilizada após Vitória. Mantenha as armas em repouso até nova janela de oportunidade.
