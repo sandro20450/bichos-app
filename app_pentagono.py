@@ -27,7 +27,7 @@ st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO COM LEITOR DE HORÁRIOS ---
+# --- 2. O EXTRATOR CIBERNÉTICO (COM SCANNER DE HORAS) ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
     data_formatada = data_alvo.strftime("%Y-%m-%d")
@@ -65,13 +65,13 @@ def extrair_resultados_web(data_alvo):
                 primeira_col = textos[0].lower()
                 if any(x in primeira_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     grupo = ""
-                    # Acha o grupo pelos dígitos diretos
+                    # TENTA TÁTICA A
                     for txt in textos[1:]:
                         nums = ''.join(filter(str.isdigit, txt))
                         if 0 < len(nums) <= 2:
                             grupo = nums.zfill(2)
                             break
-                    # Acha o grupo por cálculo matemático (se o site esconder)
+                    # TENTA TÁTICA B
                     if not grupo:
                         for txt in textos[1:]:
                             nums = ''.join(filter(str.isdigit, txt))
@@ -84,21 +84,22 @@ def extrair_resultados_web(data_alvo):
             
             if len(grupos_extraidos) >= 5:
                 # =========================================================
-                # NOVO: MOTOR DE EXTRAÇÃO DE HORAS (RegEx)
+                # SCANNER AGRESSIVO DE HORAS (Correção V6)
                 # =========================================================
                 hora_str = ""
-                # Procura a hora dentro da própria tabela
-                match = re.search(r'\b([01]?[0-9]|2[0-3])[:hH]([0-5][0-9])\b', tabela.text)
-                if match:
-                    hora_str = match.group(0).replace('h', ':').replace('H', ':')
-                else:
-                    # Se não achar, procura no cabeçalho acima da tabela
-                    header = tabela.find_previous(['h2', 'h3', 'h4', 'caption', 'th', 'div'])
-                    if header:
-                        match = re.search(r'\b([01]?[0-9]|2[0-3])[:hH]([0-5][0-9])\b', header.text)
-                        if match:
-                            hora_str = match.group(0).replace('h', ':').replace('H', ':')
+                # O robô junta o texto da tabela inteira e dos 2 elementos logo acima dela
+                texto_busca = tabela.text
+                for elemento_anterior in tabela.find_all_previous(['h2', 'h3', 'h4', 'th', 'div', 'p'], limit=3):
+                    texto_busca += " " + elemento_anterior.text
                 
+                # Procura padrões como 11:20, 14h30, 21:00
+                match = re.search(r'([0-2]?[0-9])\s*[:hH]\s*([0-5][0-9])', texto_busca)
+                if match:
+                    hora = match.group(1).zfill(2)
+                    minuto = match.group(2)
+                    hora_str = f"{hora}:{minuto}"
+                
+                # Se achou a hora, coloca no nome. Se não, usa "Ext. X"
                 nome_sorteio = f"{hora_str} ({data_alvo.strftime('%d/%m')})" if hora_str else f"Ext. {count} ({data_alvo.strftime('%d/%m')})"
                 
                 novos_dados["Sorteio"].append(nome_sorteio)
@@ -125,7 +126,7 @@ def extrair_resultados_web(data_alvo):
         return None, f"Falha crítica nos motores de busca: {e}"
 
 # =============================================================================
-# --- 3. DADOS INICIAIS ---
+# --- 3. DADOS INICIAIS E INTERFACE ---
 # =============================================================================
 if 'df_backtest' not in st.session_state:
     dados_iniciais = {
@@ -158,33 +159,30 @@ with c2:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O sistema injeta a data direto no servidor e descobre os horários de forma automática usando RegEx.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator injeta a data no servidor alvo, extrai os horários e recalcula a sua taxa de vitória automaticamente.</span>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 # =============================================================================
 # --- 4. MOTOR DE BACKTEST EM TEMPO REAL ---
 # =============================================================================
-# O sistema agora calcula tudo instantaneamente sem precisar de botão "Executar"!
 df_atual = st.session_state.df_backtest.copy()
 vitorias = 0
 derrotas = 0
 
-# A primeira linha não tem como ter status de aposta, pois não sabemos o resultado anterior a ela
 if len(df_atual) > 0:
-    df_atual.at[0, "Status"] = "---"
+    df_atual.at[0, "Status"] = "---" # A 1ª extração não tem base anterior para comparar
 
 for i in range(1, len(df_atual)):
     linha_anterior = df_atual.iloc[i-1]
     linha_atual = df_atual.iloc[i]
     
-    # Se uma das linhas estiver vazia, o status fica pendente
     if not linha_anterior["1º Prêmio"] or not linha_atual["1º Prêmio"]:
         df_atual.at[i, "Status"] = "⏳"
         continue
         
     try:
-        # A regra: Os 5 grupos da Extração Anterior
+        # A regra tática: Os 5 grupos da Extração Anterior
         grupos_base = [
             str(linha_anterior["1º Prêmio"]).strip().zfill(2),
             str(linha_anterior["2º Prêmio"]).strip().zfill(2),
@@ -193,10 +191,11 @@ for i in range(1, len(df_atual)):
             str(linha_anterior["5º Prêmio"]).strip().zfill(2)
         ]
         
-        # Contra: O 1º e 2º Prêmio da Extração Atual
+        # O Ataque: O 1º e 2º Prêmio da Extração Atual
         alvo_1 = str(linha_atual["1º Prêmio"]).strip().zfill(2)
         alvo_2 = str(linha_atual["2º Prêmio"]).strip().zfill(2)
         
+        # Condição de Vitória: Se o alvo 1 ou o alvo 2 estiverem dentro dos grupos base
         if alvo_1 in grupos_base or alvo_2 in grupos_base:
             df_atual.at[i, "Status"] = "🟢 Vitória"
             vitorias += 1
@@ -206,7 +205,7 @@ for i in range(1, len(df_atual)):
     except:
         df_atual.at[i, "Status"] = "⏳"
 
-# Exibe a tabela na tela (a coluna Status é bloqueada para edição manual)
+# Exibe a tabela na tela
 st.markdown("#### 📝 Placard Tático Interativo")
 df_editado = st.data_editor(
     df_atual,
@@ -217,7 +216,6 @@ df_editado = st.data_editor(
     }
 )
 
-# Salva as edições do utilizador (se houver) para manter o ecrã atualizado
 st.session_state.df_backtest = df_editado
 
 # =============================================================================
