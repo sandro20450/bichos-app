@@ -50,7 +50,7 @@ st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 HORARIOS_FIXOS = ["11:20", "12:20", "13:20", "14:20", "18:20", "19:20", "20:20", "21:20", "22:20", "23:20"]
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (INVERTIDO E CORRIGIDO) ---
+# --- 2. O EXTRATOR CIBERNÉTICO (CORRIGIDO PARA LER DE CIMA PARA BAIXO) ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
     data_formatada = data_alvo.strftime("%Y-%m-%d")
@@ -68,7 +68,6 @@ def extrair_resultados_web(data_alvo):
         soup = BeautifulSoup(resposta.text, 'html.parser')
         tabelas = soup.find_all('table')
         
-        # Primeiro, extraímos todos os grupos válidos encontrados no site para uma lista temporária
         dados_temporarios = []
         
         for tabela in tabelas:
@@ -102,11 +101,9 @@ def extrair_resultados_web(data_alvo):
             if len(grupos_extraidos) >= 5:
                 dados_temporarios.append(grupos_extraidos)
                 
-        # O PULO DO GATO: O site mostra o mais recente primeiro. Nós precisamos inverter
-        # para que o sorteio mais antigo do dia (11:20) seja o primeiro da lista.
-        dados_temporarios.reverse()
+        # REMOVIDA A INVERSÃO. O Playbicho já lista do mais antigo (topo) para o mais novo (fundo).
+        # dados_temporarios.reverse() <- Este era o vilão!
         
-        # Agora montamos a estrutura final com exatamente 10 linhas
         novos_dados = {
             "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
             "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []
@@ -133,7 +130,6 @@ def extrair_resultados_web(data_alvo):
                 novos_dados["5º Prêmio"].append("")
                 novos_dados["Status"].append("⏳")
                 
-        # Se achou pelo menos 1 tabela, retorna sucesso
         if len(dados_temporarios) > 0:
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
@@ -177,19 +173,18 @@ with c2:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator fixa as 10 extrações diárias e procura ativamente a Janela de Oportunidade.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator fixa as 10 extrações diárias cronologicamente e procura ativamente a Janela de Oportunidade.</span>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 # =============================================================================
-# --- 4. MOTOR DE BACKTEST (COM CONTADOR DE DERROTAS) ---
+# --- 4. MOTOR DE BACKTEST (COM CONTADOR DE DERROTAS E SNIPER) ---
 # =============================================================================
 df_atual = st.session_state.df_backtest.copy()
 
 if len(df_atual) > 0:
     df_atual.at[0, "Status"] = "---"
 
-# Variável estratégica para contar as derrotas seguidas
 derrotas_consecutivas = 0
 
 for i in range(1, len(df_atual)):
@@ -214,10 +209,10 @@ for i in range(1, len(df_atual)):
         
         if alvo_1 in grupos_base or alvo_2 in grupos_base:
             df_atual.at[i, "Status"] = "🟢 Vitória"
-            derrotas_consecutivas = 0 # O ciclo zerou!
+            derrotas_consecutivas = 0 
         else:
             df_atual.at[i, "Status"] = "❌ Derrota"
-            derrotas_consecutivas += 1 # Conta mais uma derrota seguida
+            derrotas_consecutivas += 1 
     except:
         df_atual.at[i, "Status"] = "⏳"
 
@@ -237,7 +232,6 @@ st.session_state.df_backtest = df_editado
 # =============================================================================
 # --- 5. O GATILHO DE OPORTUNIDADE (SNIPER) ---
 # =============================================================================
-# Removemos o painel financeiro e colocamos o Alerta Tático
 if derrotas_consecutivas >= 4:
     st.markdown(f"""
     <div class="alerta-sniper">
@@ -253,7 +247,6 @@ elif derrotas_consecutivas > 0:
     </div>
     """, unsafe_allow_html=True)
 else:
-    # Se a última foi Vitória ou se ainda não tem dados
     tem_dados = False
     for s in df_atual["Status"]:
         if s == "🟢 Vitória" or s == "❌ Derrota":
