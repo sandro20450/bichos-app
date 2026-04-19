@@ -4,7 +4,6 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import math
-import re
 from datetime import date, timedelta
 
 # =============================================================================
@@ -27,7 +26,7 @@ st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (COM SCANNER DE HORAS) ---
+# --- 2. O EXTRATOR CIBERNÉTICO (HORÁRIOS FIXOS DO COMANDANTE) ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
     data_formatada = data_alvo.strftime("%Y-%m-%d")
@@ -35,6 +34,21 @@ def extrair_resultados_web(data_alvo):
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    }
+    
+    # MAPEAMENTO TÁTICO DE HORÁRIOS DEFINIDO PELO COMANDANTE
+    horarios_fixos = {
+        1: "11:20",
+        2: "12:20",
+        3: "13:20",
+        4: "14:20",
+        5: "18:20",
+        6: "19:20",
+        7: "20:20",
+        8: "21:20",
+        9: "22:20",
+        10: "23:20",
+        11: "Ext. 11" # Margem de segurança caso haja 11 sorteios
     }
     
     try:
@@ -84,23 +98,10 @@ def extrair_resultados_web(data_alvo):
             
             if len(grupos_extraidos) >= 5:
                 # =========================================================
-                # SCANNER AGRESSIVO DE HORAS (Correção V6)
+                # NOVO: APLICAÇÃO DO HORÁRIO FIXO
                 # =========================================================
-                hora_str = ""
-                # O robô junta o texto da tabela inteira e dos 2 elementos logo acima dela
-                texto_busca = tabela.text
-                for elemento_anterior in tabela.find_all_previous(['h2', 'h3', 'h4', 'th', 'div', 'p'], limit=3):
-                    texto_busca += " " + elemento_anterior.text
-                
-                # Procura padrões como 11:20, 14h30, 21:00
-                match = re.search(r'([0-2]?[0-9])\s*[:hH]\s*([0-5][0-9])', texto_busca)
-                if match:
-                    hora = match.group(1).zfill(2)
-                    minuto = match.group(2)
-                    hora_str = f"{hora}:{minuto}"
-                
-                # Se achou a hora, coloca no nome. Se não, usa "Ext. X"
-                nome_sorteio = f"{hora_str} ({data_alvo.strftime('%d/%m')})" if hora_str else f"Ext. {count} ({data_alvo.strftime('%d/%m')})"
+                hora_str = horarios_fixos.get(count, f"Ext. {count}")
+                nome_sorteio = f"{hora_str} ({data_alvo.strftime('%d/%m')})"
                 
                 novos_dados["Sorteio"].append(nome_sorteio)
                 novos_dados["1º Prêmio"].append(grupos_extraidos[0])
@@ -115,7 +116,8 @@ def extrair_resultados_web(data_alvo):
         if len(novos_dados["Sorteio"]) > 0:
             while len(novos_dados["Sorteio"]) < 11:
                 idx = len(novos_dados["Sorteio"]) + 1
-                novos_dados["Sorteio"].append(f"Extração Pendente")
+                hora_str = horarios_fixos.get(idx, f"Ext. {idx}")
+                novos_dados["Sorteio"].append(f"{hora_str} (Pendente)")
                 for pr in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio", "Status"]:
                     novos_dados[pr].append("⏳" if pr == "Status" else "")
             return pd.DataFrame(novos_dados), "Sucesso"
@@ -130,7 +132,7 @@ def extrair_resultados_web(data_alvo):
 # =============================================================================
 if 'df_backtest' not in st.session_state:
     dados_iniciais = {
-        "Sorteio": [f"Extração {i}" for i in range(1, 12)],
+        "Sorteio": [f"Ext. {i}" for i in range(1, 12)],
         "1º Prêmio": [""] * 11, "2º Prêmio": [""] * 11,
         "3º Prêmio": [""] * 11, "4º Prêmio": [""] * 11, "5º Prêmio": [""] * 11,
         "Status": ["⏳"] * 11
@@ -152,14 +154,14 @@ with c2:
             time.sleep(1) 
             if df_novo is not None:
                 st.session_state.df_backtest = df_novo
-                st.success("✅ Radar sincronizado!")
+                st.success("✅ Radar sincronizado com sucesso!")
                 st.rerun()
             else:
                 st.error(f"⚠️ Alerta: {msg}")
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator injeta a data no servidor alvo, extrai os horários e recalcula a sua taxa de vitória automaticamente.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O Extrator injeta a data no servidor alvo, carrega os horários táticos fixos e recalcula a sua taxa de vitória automaticamente.</span>", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -171,7 +173,7 @@ vitorias = 0
 derrotas = 0
 
 if len(df_atual) > 0:
-    df_atual.at[0, "Status"] = "---" # A 1ª extração não tem base anterior para comparar
+    df_atual.at[0, "Status"] = "---"
 
 for i in range(1, len(df_atual)):
     linha_anterior = df_atual.iloc[i-1]
