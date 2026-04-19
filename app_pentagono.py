@@ -4,12 +4,13 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import math
+import re
 from datetime import date, timedelta
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono - Backtest Auto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono - Tático", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -26,10 +27,9 @@ st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (MÁQUINA DO TEMPO) ---
+# --- 2. O EXTRATOR CIBERNÉTICO COM LEITOR DE HORÁRIOS ---
 # =============================================================================
 def extrair_resultados_web(data_alvo):
-    # Formata a data para o padrão do link (YYYY-MM-DD)
     data_formatada = data_alvo.strftime("%Y-%m-%d")
     url = f"https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-{data_formatada}"
     
@@ -39,7 +39,6 @@ def extrair_resultados_web(data_alvo):
     
     try:
         resposta = requests.get(url, headers=headers, timeout=10)
-        
         if resposta.status_code != 200:
             return None, f"O radar foi bloqueado ou a data não existe (Erro {resposta.status_code})."
 
@@ -47,7 +46,7 @@ def extrair_resultados_web(data_alvo):
         
         novos_dados = {
             "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
-            "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": []
+            "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": [], "Status": []
         }
         
         tabelas = soup.find_all('table')
@@ -64,66 +63,76 @@ def extrair_resultados_web(data_alvo):
                 if not textos: continue
                 
                 primeira_col = textos[0].lower()
-                # Verifica se a linha pertence ao 1º ao 5º prémio
                 if any(x in primeira_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     grupo = ""
-                    
-                    # TENTA TÁTICA A: Achar uma coluna que seja apenas o grupo (1 ou 2 dígitos)
+                    # Acha o grupo pelos dígitos diretos
                     for txt in textos[1:]:
                         nums = ''.join(filter(str.isdigit, txt))
                         if 0 < len(nums) <= 2:
                             grupo = nums.zfill(2)
                             break
-                            
-                    # TENTA TÁTICA B (Matemática): Calcula o grupo pela Milhar/Centena
+                    # Acha o grupo por cálculo matemático (se o site esconder)
                     if not grupo:
                         for txt in textos[1:]:
                             nums = ''.join(filter(str.isdigit, txt))
                             if len(nums) >= 3: 
                                 dezena = int(nums[-2:])
-                                if dezena == 0:
-                                    grupo_calc = 25
-                                else:
-                                    grupo_calc = math.ceil(dezena / 4)
+                                grupo_calc = 25 if dezena == 0 else math.ceil(dezena / 4)
                                 grupo = str(grupo_calc).zfill(2)
                                 break
-                                
-                    if grupo:
-                        grupos_extraidos.append(grupo)
+                    if grupo: grupos_extraidos.append(grupo)
             
-            # Se capturou os 5 prémios desta extração, guarda
             if len(grupos_extraidos) >= 5:
-                novos_dados["Sorteio"].append(f"Ext. {count} ({data_alvo.strftime('%d/%m')})")
+                # =========================================================
+                # NOVO: MOTOR DE EXTRAÇÃO DE HORAS (RegEx)
+                # =========================================================
+                hora_str = ""
+                # Procura a hora dentro da própria tabela
+                match = re.search(r'\b([01]?[0-9]|2[0-3])[:hH]([0-5][0-9])\b', tabela.text)
+                if match:
+                    hora_str = match.group(0).replace('h', ':').replace('H', ':')
+                else:
+                    # Se não achar, procura no cabeçalho acima da tabela
+                    header = tabela.find_previous(['h2', 'h3', 'h4', 'caption', 'th', 'div'])
+                    if header:
+                        match = re.search(r'\b([01]?[0-9]|2[0-3])[:hH]([0-5][0-9])\b', header.text)
+                        if match:
+                            hora_str = match.group(0).replace('h', ':').replace('H', ':')
+                
+                nome_sorteio = f"{hora_str} ({data_alvo.strftime('%d/%m')})" if hora_str else f"Ext. {count} ({data_alvo.strftime('%d/%m')})"
+                
+                novos_dados["Sorteio"].append(nome_sorteio)
                 novos_dados["1º Prêmio"].append(grupos_extraidos[0])
                 novos_dados["2º Prêmio"].append(grupos_extraidos[1])
                 novos_dados["3º Prêmio"].append(grupos_extraidos[2])
                 novos_dados["4º Prêmio"].append(grupos_extraidos[3])
                 novos_dados["5º Prêmio"].append(grupos_extraidos[4])
+                novos_dados["Status"].append("⏳")
                 count += 1
-                if count > 11: break # Limite de 11 extrações
+                if count > 11: break
         
         if len(novos_dados["Sorteio"]) > 0:
             while len(novos_dados["Sorteio"]) < 11:
                 idx = len(novos_dados["Sorteio"]) + 1
-                novos_dados["Sorteio"].append(f"Extração {idx} (Pendente)")
-                for pr in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]:
-                    novos_dados[pr].append("")
-                    
+                novos_dados["Sorteio"].append(f"Extração Pendente")
+                for pr in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio", "Status"]:
+                    novos_dados[pr].append("⏳" if pr == "Status" else "")
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
-            return None, f"Não há resultados registados no PlayBicho para o dia {data_alvo.strftime('%d/%m/%Y')}."
+            return None, f"Não há resultados registados para o dia {data_alvo.strftime('%d/%m/%Y')}."
             
     except Exception as e:
         return None, f"Falha crítica nos motores de busca: {e}"
 
 # =============================================================================
-# --- 3. DADOS INICIAIS E INTERFACE ---
+# --- 3. DADOS INICIAIS ---
 # =============================================================================
 if 'df_backtest' not in st.session_state:
     dados_iniciais = {
         "Sorteio": [f"Extração {i}" for i in range(1, 12)],
         "1º Prêmio": [""] * 11, "2º Prêmio": [""] * 11,
-        "3º Prêmio": [""] * 11, "4º Prêmio": [""] * 11, "5º Prêmio": [""] * 11
+        "3º Prêmio": [""] * 11, "4º Prêmio": [""] * 11, "5º Prêmio": [""] * 11,
+        "Status": ["⏳"] * 11
     }
     st.session_state.df_backtest = pd.DataFrame(dados_iniciais)
 
@@ -131,11 +140,10 @@ st.markdown("### 📅 Painel de Extração")
 c1, c2, c3 = st.columns([1, 1, 2])
 
 with c1:
-    # Como hoje cedo ainda não tem resultado, o padrão do calendário vem para ONTEM
     data_selecionada = st.date_input("Data do Sorteio:", value=date.today() - timedelta(days=1))
 
 with c2:
-    st.markdown("<br>", unsafe_allow_html=True) # Espaçamento para alinhar com o calendário
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<div class='btn-extrator'>", unsafe_allow_html=True)
     if st.button("📡 Puxar Resultados", use_container_width=True):
         with st.spinner(f"A varrer dados do dia {data_selecionada.strftime('%d/%m')}..."):
@@ -150,86 +158,90 @@ with c2:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>Escolha o dia e clique em puxar. O sistema vai injetar a data escolhida direto no link do PlayBicho e raspar os 11 primeiros sorteios do dia.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>O sistema injeta a data direto no servidor e descobre os horários de forma automática usando RegEx.</span>", unsafe_allow_html=True)
 
-st.markdown("#### 📝 Base de Dados (Editável):")
-df_editado = st.data_editor(st.session_state.df_backtest, use_container_width=True, hide_index=True)
+st.markdown("---")
 
 # =============================================================================
-# --- 4. MOTOR DE BACKTEST (LÓGICA) ---
+# --- 4. MOTOR DE BACKTEST EM TEMPO REAL ---
 # =============================================================================
-if st.button("🚀 Executar Backtest", use_container_width=True):
-    vitorias = 0
-    derrotas = 0
+# O sistema agora calcula tudo instantaneamente sem precisar de botão "Executar"!
+df_atual = st.session_state.df_backtest.copy()
+vitorias = 0
+derrotas = 0
+
+# A primeira linha não tem como ter status de aposta, pois não sabemos o resultado anterior a ela
+if len(df_atual) > 0:
+    df_atual.at[0, "Status"] = "---"
+
+for i in range(1, len(df_atual)):
+    linha_anterior = df_atual.iloc[i-1]
+    linha_atual = df_atual.iloc[i]
+    
+    # Se uma das linhas estiver vazia, o status fica pendente
+    if not linha_anterior["1º Prêmio"] or not linha_atual["1º Prêmio"]:
+        df_atual.at[i, "Status"] = "⏳"
+        continue
+        
+    try:
+        # A regra: Os 5 grupos da Extração Anterior
+        grupos_base = [
+            str(linha_anterior["1º Prêmio"]).strip().zfill(2),
+            str(linha_anterior["2º Prêmio"]).strip().zfill(2),
+            str(linha_anterior["3º Prêmio"]).strip().zfill(2),
+            str(linha_anterior["4º Prêmio"]).strip().zfill(2),
+            str(linha_anterior["5º Prêmio"]).strip().zfill(2)
+        ]
+        
+        # Contra: O 1º e 2º Prêmio da Extração Atual
+        alvo_1 = str(linha_atual["1º Prêmio"]).strip().zfill(2)
+        alvo_2 = str(linha_atual["2º Prêmio"]).strip().zfill(2)
+        
+        if alvo_1 in grupos_base or alvo_2 in grupos_base:
+            df_atual.at[i, "Status"] = "🟢 Vitória"
+            vitorias += 1
+        else:
+            df_atual.at[i, "Status"] = "❌ Derrota"
+            derrotas += 1
+    except:
+        df_atual.at[i, "Status"] = "⏳"
+
+# Exibe a tabela na tela (a coluna Status é bloqueada para edição manual)
+st.markdown("#### 📝 Placard Tático Interativo")
+df_editado = st.data_editor(
+    df_atual,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Status": st.column_config.TextColumn("Resultado", disabled=True)
+    }
+)
+
+# Salva as edições do utilizador (se houver) para manter o ecrã atualizado
+st.session_state.df_backtest = df_editado
+
+# =============================================================================
+# --- 5. RESULTADO FINANCEIRO AUTOMÁTICO ---
+# =============================================================================
+total_jogos = vitorias + derrotas
+
+if total_jogos > 0:
     custo_por_rodada = 125.00
     premio_por_vitoria = 255.00
     
-    st.markdown("---")
-    st.markdown("### 📊 Relatório de Transições")
+    custo_total = total_jogos * custo_por_rodada
+    retorno_total = vitorias * premio_por_vitoria
+    lucro_liquido = retorno_total - custo_total
+    assertividade = (vitorias / total_jogos) * 100
     
-    # Processa as transições invertendo a tabela para ficar cronológica
-    df_cronologico = df_editado.iloc[::-1].reset_index(drop=True)
+    st.markdown("### 💰 Balanço do Dia Selecionado")
     
-    for i in range(len(df_cronologico)-1):
-        linha_atual = df_cronologico.iloc[i]
-        linha_futura = df_cronologico.iloc[i+1]
-        
-        if linha_atual["1º Prêmio"] == "" or linha_futura["1º Prêmio"] == "":
-            continue 
-            
-        try:
-            grupos_base = [
-                str(linha_atual["1º Prêmio"]).strip().zfill(2),
-                str(linha_atual["2º Prêmio"]).strip().zfill(2),
-                str(linha_atual["3º Prêmio"]).strip().zfill(2),
-                str(linha_atual["4º Prêmio"]).strip().zfill(2),
-                str(linha_atual["5º Prêmio"]).strip().zfill(2)
-            ]
-            
-            alvo_1 = str(linha_futura["1º Prêmio"]).strip().zfill(2)
-            alvo_2 = str(linha_futura["2º Prêmio"]).strip().zfill(2)
-            
-            if alvo_1 in grupos_base or alvo_2 in grupos_base:
-                status = "VITÓRIA"
-                vitorias += 1
-                cor = "#4CAF50"
-            else:
-                status = "DERROTA"
-                derrotas += 1
-                cor = "#FF5252"
-                
-            st.markdown(f"<div style='background-color: #2b2b2b; padding: 10px; margin-bottom: 5px; border-radius: 5px; border-left: 4px solid {cor};'>"
-                        f"Base <b style='color:#aaa;'>{linha_atual['Sorteio']}</b> ➔ Sorteio <b style='color:#aaa;'>{linha_futura['Sorteio']}</b> <br>"
-                        f"Os 5 grupos base: {grupos_base} <br>"
-                        f"Veio no novo 1º ou 2º: ['{alvo_1}', '{alvo_2}'] <br>"
-                        f"Resultado: <b style='color: {cor};'>{status}</b></div>", 
-                        unsafe_allow_html=True)
-                        
-        except Exception as e:
-            pass
-
-    # =============================================================================
-    # --- 5. RESULTADO FINANCEIRO ---
-    # =============================================================================
-    total_jogos = vitorias + derrotas
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Batalhas Travadas", f"{total_jogos}")
+    col2.metric("Taxa de Sucesso", f"{assertividade:.1f}%")
+    col3.metric("Investimento Total", f"R$ {custo_total:.2f}")
     
-    if total_jogos > 0:
-        custo_total = total_jogos * custo_por_rodada
-        retorno_total = vitorias * premio_por_vitoria
-        lucro_liquido = retorno_total - custo_total
-        assertividade = (vitorias / total_jogos) * 100
-        
-        st.markdown("---")
-        st.markdown("### 💰 Balanço Geral Simulado")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Batalhas Travadas", f"{total_jogos}")
-        col2.metric("Taxa de Sucesso", f"{assertividade:.1f}%")
-        col3.metric("Investimento Total", f"R$ {custo_total:.2f}")
-        
-        if lucro_liquido > 0:
-            col4.metric("Lucro Líquido", f"R$ {lucro_liquido:.2f}", "Positivo")
-        else:
-            col4.metric("Prejuízo", f"R$ {lucro_liquido:.2f}", "Negativo")
+    if lucro_liquido > 0:
+        col4.metric("Lucro Líquido", f"R$ {lucro_liquido:.2f}", "Lucro")
     else:
-        st.info("Aguardando dados suficientes para gerar o balanço financeiro.")
+        col4.metric("Prejuízo", f"R$ {lucro_liquido:.2f}", "- Perda")
