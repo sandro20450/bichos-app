@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import time
+import math
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
@@ -23,79 +24,92 @@ st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (WEB SCRAPING) ---
+# --- 2. O EXTRATOR CIBERNÉTICO (ALVO: PLAYBICHO) ---
 # =============================================================================
 def extrair_resultados_web():
-    url = "https://www.resultadofacil.com.br/resultados-da-banca-loteria-tradicional"
+    # Novo alvo definido pelo Comandante
+    url = "https://playbicho.com/resultado-jogo-do-bicho/tradicional-de-hoje"
     
-    # Disfarce para o site achar que somos um navegador normal e não um robô
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
     }
     
     try:
         resposta = requests.get(url, headers=headers, timeout=10)
         
         if resposta.status_code != 200:
-            return None, "O radar foi bloqueado pelo site (Erro de Conexão)."
+            return None, f"O novo radar foi bloqueado pelo servidor (Erro {resposta.status_code})."
 
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        
-        # Como não temos acesso aos bastidores exatos do site agora, 
-        # o robô vai tentar varrer as tabelas de resultados procurando os grupos.
-        # (Se a estrutura HTML do site for muito blindada, faremos um ajuste fino depois).
         
         novos_dados = {
             "Sorteio": [], "1º Prêmio": [], "2º Prêmio": [], 
             "3º Prêmio": [], "4º Prêmio": [], "5º Prêmio": []
         }
         
-        # Tentativa genérica de raspagem de tabelas de bicho (1º ao 5º)
         tabelas = soup.find_all('table')
-        
-        if not tabelas:
-            return None, "O site mudou a camuflagem HTML. Nenhuma tabela encontrada."
-            
         count = 1
-        for tabela in tabelas[:11]: # Pega as últimas 11 tabelas (extrações)
+        
+        for tabela in tabelas:
             linhas = tabela.find_all('tr')
+            grupos_extraidos = []
             
-            # Precisamos de pelo menos 5 linhas de prêmio para ser uma tabela válida
-            if len(linhas) >= 5:
-                grupos_extraidos = []
-                for linha in linhas:
-                    colunas = linha.find_all('td')
-                    # Geralmente a última coluna de uma tabela de bicho é o Grupo
-                    if len(colunas) >= 2:
-                        texto_grupo = colunas[-1].text.strip()
-                        # Pega só os números
-                        numeros = ''.join(filter(str.isdigit, texto_grupo))
-                        if numeros:
-                            grupos_extraidos.append(numeros[-2:]) # Pega as duas últimas casas (Grupo)
+            for linha in linhas:
+                colunas = linha.find_all(['td', 'th'])
+                textos = [c.get_text(strip=True) for c in colunas]
                 
-                if len(grupos_extraidos) >= 5:
-                    novos_dados["Sorteio"].append(f"Extração Web {count}")
-                    novos_dados["1º Prêmio"].append(grupos_extraidos[0].zfill(2))
-                    novos_dados["2º Prêmio"].append(grupos_extraidos[1].zfill(2))
-                    novos_dados["3º Prêmio"].append(grupos_extraidos[2].zfill(2))
-                    novos_dados["4º Prêmio"].append(grupos_extraidos[3].zfill(2))
-                    novos_dados["5º Prêmio"].append(grupos_extraidos[4].zfill(2))
-                    count += 1
+                if not textos: continue
+                
+                primeira_col = textos[0].lower()
+                # Verifica se a linha pertence ao 1º ao 5º prémio
+                if any(x in primeira_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                    grupo = ""
+                    
+                    # TENTA TÁTICA A: Achar uma coluna que seja apenas o grupo (1 ou 2 dígitos isolados)
+                    for txt in textos[1:]:
+                        nums = ''.join(filter(str.isdigit, txt))
+                        if 0 < len(nums) <= 2:
+                            grupo = nums.zfill(2)
+                            break
+                            
+                    # TENTA TÁTICA B (Matemática): Se o site escondeu o grupo, calcula através da Milhar
+                    if not grupo:
+                        for txt in textos[1:]:
+                            nums = ''.join(filter(str.isdigit, txt))
+                            if len(nums) >= 3: # Identificou a centena/milhar
+                                dezena = int(nums[-2:]) # Pega as duas últimas casas
+                                if dezena == 0:
+                                    grupo_calc = 25
+                                else:
+                                    grupo_calc = math.ceil(dezena / 4)
+                                grupo = str(grupo_calc).zfill(2)
+                                break
+                                
+                    if grupo:
+                        grupos_extraidos.append(grupo)
+            
+            # Se capturou os 5 prémios desta extração, guarda os dados
+            if len(grupos_extraidos) >= 5:
+                novos_dados["Sorteio"].append(f"Extração {count} (PlayBicho)")
+                novos_dados["1º Prêmio"].append(grupos_extraidos[0])
+                novos_dados["2º Prêmio"].append(grupos_extraidos[1])
+                novos_dados["3º Prêmio"].append(grupos_extraidos[2])
+                novos_dados["4º Prêmio"].append(grupos_extraidos[3])
+                novos_dados["5º Prêmio"].append(grupos_extraidos[4])
+                count += 1
+                if count > 11: break # Precisamos apenas de 11 extrações para 10 testes
         
         if len(novos_dados["Sorteio"]) > 0:
-            # Preenche o resto com vazio se não achou 11 tabelas
+            # Preenche o resto com linhas vazias caso o dia ainda esteja a começar e não haja 11 sorteios
             while len(novos_dados["Sorteio"]) < 11:
                 idx = len(novos_dados["Sorteio"]) + 1
-                novos_dados["Sorteio"].append(f"Extração {idx} (Manual)")
-                novos_dados["1º Prêmio"].append("")
-                novos_dados["2º Prêmio"].append("")
-                novos_dados["3º Prêmio"].append("")
-                novos_dados["4º Prêmio"].append("")
-                novos_dados["5º Prêmio"].append("")
-                
+                novos_dados["Sorteio"].append(f"Extração {idx} (Pendente)")
+                for pr in ["1º Prêmio", "2º Prêmio", "3º Prêmio", "4º Prêmio", "5º Prêmio"]:
+                    novos_dados[pr].append("")
+                    
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
-            return None, "Tabelas encontradas, mas o formato dos números estava protegido."
+            return None, "As tabelas do PlayBicho foram encontradas, mas os números estão ilegíveis para o radar."
             
     except Exception as e:
         return None, f"Falha crítica nos motores de busca: {e}"
@@ -115,19 +129,19 @@ c1, c2 = st.columns([1, 3])
 with c1:
     st.markdown("<div class='btn-extrator'>", unsafe_allow_html=True)
     if st.button("📡 Puxar Resultados (Auto)"):
-        with st.spinner("Invadindo servidores do site alvo..."):
+        with st.spinner("A invadir os servidores do PlayBicho..."):
             df_novo, msg = extrair_resultados_web()
             time.sleep(1) # Efeito de processamento tático
             if df_novo is not None:
                 st.session_state.df_backtest = df_novo
-                st.success("✅ Radar sincronizado! Tabela atualizada.")
+                st.success("✅ Radar sincronizado! Tabela actualizada.")
                 st.rerun()
             else:
                 st.error(f"⚠️ Alerta: {msg}")
                 st.info("Pode preencher a tabela manualmente enquanto os engenheiros ajustam a frequência do radar.")
     st.markdown("</div>", unsafe_allow_html=True)
 with c2:
-    st.markdown("<span style='color:#aaa; font-size: 0.9em;'>*O Extrator busca as últimas 11 extrações no site Resultado Fácil. Você também pode digitar/editar na tabela abaixo à vontade.*</span>", unsafe_allow_html=True)
+    st.markdown("<span style='color:#aaa; font-size: 0.9em;'>*O Extrator varre as últimas 11 extrações no site PlayBicho. Você também pode digitar/editar na tabela abaixo à vontade.*</span>", unsafe_allow_html=True)
 
 st.markdown("#### 📝 Base de Dados (Editável):")
 df_editado = st.data_editor(st.session_state.df_backtest, use_container_width=True, hide_index=True)
@@ -144,15 +158,15 @@ if st.button("🚀 Executar Backtest", use_container_width=True):
     st.markdown("---")
     st.markdown("### 📊 Relatório de Transições")
     
-    # Processa as transições da linha i para a linha i-1 (ou i+1)
-    # Como o Extrator puxa do MAIS RECENTE pro MAIS ANTIGO, a linha 1 é o futuro da linha 2.
-    # Vamos inverter a lógica para ler de baixo para cima (cronológico)
+    # Processa as transições. O site mais recente fica no topo da tabela (linha 0).
+    # Vamos inverter a tabela para ler cronologicamente (do mais antigo para o mais recente)
     df_cronologico = df_editado.iloc[::-1].reset_index(drop=True)
     
     for i in range(len(df_cronologico)-1):
         linha_atual = df_cronologico.iloc[i]
         linha_futura = df_cronologico.iloc[i+1]
         
+        # Ignora se não houver dados (ex: sorteios que ainda não aconteceram hoje)
         if linha_atual["1º Prêmio"] == "" or linha_futura["1º Prêmio"] == "":
             continue 
             
@@ -210,3 +224,5 @@ if st.button("🚀 Executar Backtest", use_container_width=True):
             col4.metric("Lucro Líquido", f"R$ {lucro_liquido:.2f}", "Positivo")
         else:
             col4.metric("Prejuízo", f"R$ {lucro_liquido:.2f}", "Negativo")
+    else:
+        st.info("Aguardando dados suficientes para gerar o balanço financeiro.")
