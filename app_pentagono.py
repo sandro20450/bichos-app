@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import math
+from datetime import date, timedelta
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES VISUAIS ---
@@ -17,6 +18,7 @@ st.markdown("""
     .stButton > button { background-color: #4CAF50; color: white; font-weight: bold; border-radius: 8px; }
     div[data-testid="metric-container"] { background-color: #2b2b2b; border-left: 5px solid #4CAF50; padding: 15px; border-radius: 5px; }
     .btn-extrator > button { background-color: #008CBA !important; color: white !important; }
+    div[data-baseweb="input"] { background-color: #2b2b2b !important; color: white !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -24,11 +26,12 @@ st.title("🎯 Pentágono - Laboratório de Táticas")
 st.markdown("### Estratégia: Cerco de Repetição (125 Duques)")
 
 # =============================================================================
-# --- 2. O EXTRATOR CIBERNÉTICO (ALVO: PLAYBICHO) ---
+# --- 2. O EXTRATOR CIBERNÉTICO (MÁQUINA DO TEMPO) ---
 # =============================================================================
-def extrair_resultados_web():
-    # Novo alvo definido pelo Comandante
-    url = "https://playbicho.com/resultado-jogo-do-bicho/tradicional-de-hoje"
+def extrair_resultados_web(data_alvo):
+    # Formata a data para o padrão do link (YYYY-MM-DD)
+    data_formatada = data_alvo.strftime("%Y-%m-%d")
+    url = f"https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-{data_formatada}"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
@@ -38,7 +41,7 @@ def extrair_resultados_web():
         resposta = requests.get(url, headers=headers, timeout=10)
         
         if resposta.status_code != 200:
-            return None, f"O novo radar foi bloqueado pelo servidor (Erro {resposta.status_code})."
+            return None, f"O radar foi bloqueado ou a data não existe (Erro {resposta.status_code})."
 
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
@@ -65,19 +68,19 @@ def extrair_resultados_web():
                 if any(x in primeira_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     grupo = ""
                     
-                    # TENTA TÁTICA A: Achar uma coluna que seja apenas o grupo (1 ou 2 dígitos isolados)
+                    # TENTA TÁTICA A: Achar uma coluna que seja apenas o grupo (1 ou 2 dígitos)
                     for txt in textos[1:]:
                         nums = ''.join(filter(str.isdigit, txt))
                         if 0 < len(nums) <= 2:
                             grupo = nums.zfill(2)
                             break
                             
-                    # TENTA TÁTICA B (Matemática): Se o site escondeu o grupo, calcula através da Milhar
+                    # TENTA TÁTICA B (Matemática): Calcula o grupo pela Milhar/Centena
                     if not grupo:
                         for txt in textos[1:]:
                             nums = ''.join(filter(str.isdigit, txt))
-                            if len(nums) >= 3: # Identificou a centena/milhar
-                                dezena = int(nums[-2:]) # Pega as duas últimas casas
+                            if len(nums) >= 3: 
+                                dezena = int(nums[-2:])
                                 if dezena == 0:
                                     grupo_calc = 25
                                 else:
@@ -88,19 +91,18 @@ def extrair_resultados_web():
                     if grupo:
                         grupos_extraidos.append(grupo)
             
-            # Se capturou os 5 prémios desta extração, guarda os dados
+            # Se capturou os 5 prémios desta extração, guarda
             if len(grupos_extraidos) >= 5:
-                novos_dados["Sorteio"].append(f"Extração {count} (PlayBicho)")
+                novos_dados["Sorteio"].append(f"Ext. {count} ({data_alvo.strftime('%d/%m')})")
                 novos_dados["1º Prêmio"].append(grupos_extraidos[0])
                 novos_dados["2º Prêmio"].append(grupos_extraidos[1])
                 novos_dados["3º Prêmio"].append(grupos_extraidos[2])
                 novos_dados["4º Prêmio"].append(grupos_extraidos[3])
                 novos_dados["5º Prêmio"].append(grupos_extraidos[4])
                 count += 1
-                if count > 11: break # Precisamos apenas de 11 extrações para 10 testes
+                if count > 11: break # Limite de 11 extrações
         
         if len(novos_dados["Sorteio"]) > 0:
-            # Preenche o resto com linhas vazias caso o dia ainda esteja a começar e não haja 11 sorteios
             while len(novos_dados["Sorteio"]) < 11:
                 idx = len(novos_dados["Sorteio"]) + 1
                 novos_dados["Sorteio"].append(f"Extração {idx} (Pendente)")
@@ -109,7 +111,7 @@ def extrair_resultados_web():
                     
             return pd.DataFrame(novos_dados), "Sucesso"
         else:
-            return None, "As tabelas do PlayBicho foram encontradas, mas os números estão ilegíveis para o radar."
+            return None, f"Não há resultados registados no PlayBicho para o dia {data_alvo.strftime('%d/%m/%Y')}."
             
     except Exception as e:
         return None, f"Falha crítica nos motores de busca: {e}"
@@ -125,23 +127,30 @@ if 'df_backtest' not in st.session_state:
     }
     st.session_state.df_backtest = pd.DataFrame(dados_iniciais)
 
-c1, c2 = st.columns([1, 3])
+st.markdown("### 📅 Painel de Extração")
+c1, c2, c3 = st.columns([1, 1, 2])
+
 with c1:
+    # Como hoje cedo ainda não tem resultado, o padrão do calendário vem para ONTEM
+    data_selecionada = st.date_input("Data do Sorteio:", value=date.today() - timedelta(days=1))
+
+with c2:
+    st.markdown("<br>", unsafe_allow_html=True) # Espaçamento para alinhar com o calendário
     st.markdown("<div class='btn-extrator'>", unsafe_allow_html=True)
-    if st.button("📡 Puxar Resultados (Auto)"):
-        with st.spinner("A invadir os servidores do PlayBicho..."):
-            df_novo, msg = extrair_resultados_web()
-            time.sleep(1) # Efeito de processamento tático
+    if st.button("📡 Puxar Resultados", use_container_width=True):
+        with st.spinner(f"A varrer dados do dia {data_selecionada.strftime('%d/%m')}..."):
+            df_novo, msg = extrair_resultados_web(data_selecionada)
+            time.sleep(1) 
             if df_novo is not None:
                 st.session_state.df_backtest = df_novo
-                st.success("✅ Radar sincronizado! Tabela actualizada.")
+                st.success("✅ Radar sincronizado!")
                 st.rerun()
             else:
                 st.error(f"⚠️ Alerta: {msg}")
-                st.info("Pode preencher a tabela manualmente enquanto os engenheiros ajustam a frequência do radar.")
     st.markdown("</div>", unsafe_allow_html=True)
-with c2:
-    st.markdown("<span style='color:#aaa; font-size: 0.9em;'>*O Extrator varre as últimas 11 extrações no site PlayBicho. Você também pode digitar/editar na tabela abaixo à vontade.*</span>", unsafe_allow_html=True)
+
+with c3:
+    st.markdown("<br><span style='color:#aaa; font-size: 0.85em;'>Escolha o dia e clique em puxar. O sistema vai injetar a data escolhida direto no link do PlayBicho e raspar os 11 primeiros sorteios do dia.</span>", unsafe_allow_html=True)
 
 st.markdown("#### 📝 Base de Dados (Editável):")
 df_editado = st.data_editor(st.session_state.df_backtest, use_container_width=True, hide_index=True)
@@ -158,15 +167,13 @@ if st.button("🚀 Executar Backtest", use_container_width=True):
     st.markdown("---")
     st.markdown("### 📊 Relatório de Transições")
     
-    # Processa as transições. O site mais recente fica no topo da tabela (linha 0).
-    # Vamos inverter a tabela para ler cronologicamente (do mais antigo para o mais recente)
+    # Processa as transições invertendo a tabela para ficar cronológica
     df_cronologico = df_editado.iloc[::-1].reset_index(drop=True)
     
     for i in range(len(df_cronologico)-1):
         linha_atual = df_cronologico.iloc[i]
         linha_futura = df_cronologico.iloc[i+1]
         
-        # Ignora se não houver dados (ex: sorteios que ainda não aconteceram hoje)
         if linha_atual["1º Prêmio"] == "" or linha_futura["1º Prêmio"] == "":
             continue 
             
