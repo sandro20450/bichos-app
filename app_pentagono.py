@@ -66,12 +66,20 @@ def extrair_dados(banca_nome, data_alvo):
         count = 1
         
         for tab in tabelas:
-            # Tenta achar o nome/horário blindado contra falhas
             nome_sorteio = ""
             prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
+            txt_prev = prev.get_text(strip=True) if prev else ""
+            
+            # =========================================================
+            # ESCUDO ANTI-FEDERAL (Ignora tabelas da Loteria Federal)
+            # =========================================================
+            texto_tabela = tab.get_text().upper()
+            if "FEDERAL" in txt_prev.upper() or "FEDERAL" in texto_tabela:
+                continue # Aborta a extração desta tabela e vai para a próxima
+                
             if prev: 
-                txt = prev.get_text(strip=True)
-                txt_limpo = re.split(r'[-|Resultado]', txt)[0].strip()
+                # Limpeza inteligente do título
+                txt_limpo = txt_prev.upper().replace("RESULTADO", "-").split("-")[0].strip()
                 if txt_limpo: nome_sorteio = txt_limpo
             
             if not nome_sorteio:
@@ -127,7 +135,6 @@ if 'memoria' not in st.session_state:
 # =============================================================================
 # --- 4. MOTOR LÓGICO DE BACKTEST (EXECUÇÃO PRÉ-RENDER) ---
 # =============================================================================
-# A MÁGICA: O cálculo agora acontece ANTES de desenhar as tabelas na tela
 df_ant = st.session_state.memoria["ant"].copy()
 df_atu = st.session_state.memoria["atu"].copy()
 derrotas_consecutivas = 0
@@ -180,7 +187,6 @@ if not df_atu.empty:
             df_atu.at[i, "Status"] = "❌ Derrota"
             derrotas_consecutivas += 1
 
-# Salva os status calculados de volta na memória
 st.session_state.memoria["ant"] = df_ant
 st.session_state.memoria["atu"] = df_atu
 
@@ -204,9 +210,8 @@ with c2:
 with c3:
     st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Puxa apenas os últimos 5 sorteios.</span>", unsafe_allow_html=True)
 
-# Tabela superior finalmente desenhada
 df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", column_config={"Status": st.column_config.TextColumn(disabled=True)})
-if not df_ant.equals(df_ant_edit): # Se o usuário editar, recalcula
+if not df_ant.equals(df_ant_edit): 
     st.session_state.memoria["ant"] = df_ant_edit
     st.rerun()
 
@@ -227,11 +232,10 @@ with c5:
                 st.rerun()
             else: st.error(msg)
 with c6:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela principal da operação.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela principal da operação. Filtro Federal Ativado.</span>", unsafe_allow_html=True)
 
-# Tabela inferior finalmente desenhada
 df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", column_config={"Status": st.column_config.TextColumn(disabled=True)})
-if not df_atu.equals(df_atu_edit): # Se o usuário editar, recalcula
+if not df_atu.equals(df_atu_edit): 
     st.session_state.memoria["atu"] = df_atu_edit
     st.rerun()
 
@@ -241,6 +245,5 @@ if derrotas_consecutivas >= 4:
 elif derrotas_consecutivas > 0:
     st.markdown(f'<div class="alerta-calmo" style="color:#ffb74d; border-color:#ffb74d;">Monitorando: {derrotas_consecutivas} derrota(s) consecutiva(s)...</div>', unsafe_allow_html=True)
 else:
-    # Mostra verde se houver dados
     if not df_atu.empty or not df_ant.empty:
         st.markdown('<div class="alerta-calmo">Status Estável. Aguardando nova janela estatística.</div>', unsafe_allow_html=True)
