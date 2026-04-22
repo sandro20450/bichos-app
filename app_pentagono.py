@@ -13,18 +13,10 @@ from datetime import date, timedelta
 st.set_page_config(page_title="Pentágono Multi-Bancas", page_icon="🎯", layout="wide")
 
 BANCAS_CONFIG = {
-    "Tradicional": {
-        "url": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-",
-    },
-    "Caminho da Sorte": {
-        "url": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-",
-    },
-    "Monte Carlos": {
-        "url": "https://playbicho.com/resultado-jogo-do-bicho/nordeste-montes-claros-do-dia-",
-    },
-    "Lotep": {
-        "url": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-",
-    }
+    "Tradicional": {"url": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-"},
+    "Caminho da Sorte": {"url": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-"},
+    "Monte Carlos": {"url": "https://playbicho.com/resultado-jogo-do-bicho/nordeste-montes-claros-do-dia-"},
+    "Lotep": {"url": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"}
 }
 
 st.markdown("""
@@ -48,7 +40,7 @@ st.markdown("""
 st.title("🎯 Pentágono - Laboratório Multi-Bancas")
 
 # =============================================================================
-# --- 2. MOTOR EXTRATOR UNIVERSAL (AGORA COM MILHARES) ---
+# --- 2. MOTOR EXTRATOR UNIVERSAL ---
 # =============================================================================
 def extrair_dados(banca_nome, data_alvo):
     config = BANCAS_CONFIG[banca_nome]
@@ -78,9 +70,7 @@ def extrair_dados(banca_nome, data_alvo):
             if prev: 
                 txt_limpo = txt_prev.upper().replace("RESULTADO", "-").split("-")[0].strip()
                 if txt_limpo: nome_sorteio = txt_limpo
-            
-            if not nome_sorteio:
-                nome_sorteio = f"Ext. {count}"
+            if not nome_sorteio: nome_sorteio = f"Ext. {count}"
                 
             grupos_completos = []
             for row in tab.find_all('tr'):
@@ -89,20 +79,14 @@ def extrair_dados(banca_nome, data_alvo):
                 
                 txt_col = cols[0].lower()
                 if any(x in txt_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
-                    # Extração Dupla: Milhar e Grupo usando Expressões Regulares
                     numeros = []
-                    for c in cols[1:]:
-                        numeros.extend(re.findall(r'\d+', c))
+                    for c in cols[1:]: numeros.extend(re.findall(r'\d+', c))
                     
-                    milhar = ""
-                    grupo = ""
+                    milhar, grupo = "", ""
                     for n in numeros:
-                        if len(n) >= 3 and not milhar:
-                            milhar = n.zfill(4) # Garante formato de milhar
-                        elif 0 < len(n) <= 2 and not grupo:
-                            grupo = n.zfill(2)
+                        if len(n) >= 3 and not milhar: milhar = n.zfill(4)
+                        elif 0 < len(n) <= 2 and not grupo: grupo = n.zfill(2)
                             
-                    # Tática B: Calcular Grupo se a banca esconder
                     if not grupo and milhar:
                         dez = int(milhar[-2:])
                         grupo = str(25 if dez == 0 else math.ceil(dez/4)).zfill(2)
@@ -110,20 +94,19 @@ def extrair_dados(banca_nome, data_alvo):
                     if not milhar: milhar = "----"
                     if not grupo: grupo = "--"
                     
-                    # Formato Blindado: Milhar (Grupo)
                     grupos_completos.append(f"{milhar} ({grupo})")
             
             if len(grupos_completos) >= 5:
                 resultados.append({
                     "Sorteio": f"{nome_sorteio} ({data_alvo.strftime('%d/%m')})",
                     "1º": grupos_completos[0], "2º": grupos_completos[1], "3º": grupos_completos[2], "4º": grupos_completos[3], "5º": grupos_completos[4],
-                    "Status": "⏳"
+                    "Status": "⏳",
+                    "Atraso": "⏳"
                 })
                 count += 1
         
         if not resultados: return None, "Nenhuma tabela válida encontrada."
         return pd.DataFrame(resultados), "Sucesso"
-        
     except Exception as e:
         return None, f"Falha no radar: {e}"
 
@@ -133,64 +116,98 @@ def extrair_dados(banca_nome, data_alvo):
 with st.sidebar:
     st.header("🎮 Configurações")
     banca_selecionada = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    st.info(f"O sistema irá adaptar os horários para {banca_selecionada}.")
 
 if 'memoria' not in st.session_state:
     st.session_state.memoria = {"ant": pd.DataFrame(), "atu": pd.DataFrame()}
 
-# Função para fatiar o texto e extrair apenas o grupo para o cálculo matemático
+# --- Funções de Extração para os Cálculos ---
 def extrair_grupo(texto):
     txt = str(texto)
-    if "(" in txt:
-        return txt.split('(')[-1].replace(')', '').strip().zfill(2)
-    else:
-        # Se o usuário digitar na mão só "15", o sistema acha os números
-        nums = re.findall(r'\d+', txt)
-        if nums: return nums[-1].zfill(2)
-        return "00"
+    if "(" in txt: return txt.split('(')[-1].replace(')', '').strip().zfill(2)
+    nums = re.findall(r'\d+', txt)
+    return nums[-1].zfill(2) if nums else "00"
+
+def extrair_unidades(linha):
+    """Extrai o último dígito (unidade) de cada milhar da linha (1º ao 5º)."""
+    unidades = []
+    for p in ["1º", "2º", "3º", "4º", "5º"]:
+        v = str(linha.get(p, "")).strip()
+        m = re.search(r'^(\d+)', v) # Pega o primeiro bloco numérico (a milhar)
+        if m: unidades.append(m.group(1)[-1]) # Extrai a última casa da milhar
+    return unidades
 
 # =============================================================================
-# --- 4. MOTOR LÓGICO DE BACKTEST (EXECUÇÃO PRÉ-RENDER) ---
+# --- 4. MOTOR LÓGICO (BACKTEST + RADAR DE ATRASOS) ---
 # =============================================================================
 df_ant = st.session_state.memoria["ant"].copy()
 df_atu = st.session_state.memoria["atu"].copy()
-derrotas_consecutivas = 0
 
-# Avalia Tabela Anterior
+derrotas_consecutivas = 0
+# Radar de Atrasos focando exclusivamente nos alvos do Comandante
+atrasos_unidades = {'0': 0, '1': 0, '2': 0, '9': 0}
+
+# --- Processa Tabela Anterior ---
 if not df_ant.empty:
     df_ant.at[0, "Status"] = "---"
-    for i in range(1, len(df_ant)):
-        linha_base = df_ant.iloc[i-1]
+    for i in range(len(df_ant)):
         linha_alvo = df_ant.iloc[i]
+        valida = linha_alvo["1º"] and "⏳" not in str(linha_alvo["1º"])
         
-        if not linha_base["1º"] or not linha_alvo["1º"]:
-            df_ant.at[i, "Status"] = "⏳"
-            continue
+        # 1. Atualiza Atrasos da Milhar
+        if valida:
+            unidades_sorteadas = extrair_unidades(linha_alvo)
+            for digito in atrasos_unidades.keys():
+                if digito in unidades_sorteadas: atrasos_unidades[digito] = 0
+                else: atrasos_unidades[digito] += 1
             
-        base = [extrair_grupo(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
-        a1, a2 = extrair_grupo(linha_alvo["1º"]), extrair_grupo(linha_alvo["2º"])
-        
-        if a1 in base or a2 in base:
-            df_ant.at[i, "Status"] = "🟢 Vitória"
-            derrotas_consecutivas = 0
+            digito_mais_atrasado = max(sorted(atrasos_unidades.keys()), key=lambda k: atrasos_unidades[k])
+            df_ant.at[i, "Atraso"] = f"{digito_mais_atrasado}-({atrasos_unidades[digito_mais_atrasado]})"
         else:
-            df_ant.at[i, "Status"] = "❌ Derrota"
-            derrotas_consecutivas += 1
+            df_ant.at[i, "Atraso"] = "⏳"
+            
+        # 2. Atualiza Status Duque (Só do 2º jogo em diante)
+        if i > 0:
+            linha_base = df_ant.iloc[i-1]
+            if not linha_base["1º"] or not valida:
+                df_ant.at[i, "Status"] = "⏳"
+            else:
+                base = [extrair_grupo(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
+                a1, a2 = extrair_grupo(linha_alvo["1º"]), extrair_grupo(linha_alvo["2º"])
+                if a1 in base or a2 in base:
+                    df_ant.at[i, "Status"] = "🟢 Vitória"
+                    derrotas_consecutivas = 0
+                else:
+                    df_ant.at[i, "Status"] = "❌ Derrota"
+                    derrotas_consecutivas += 1
 
-# Avalia Tabela Atual
+# --- Processa Tabela Atual ---
 if not df_atu.empty:
     for i in range(len(df_atu)):
+        linha_alvo = df_atu.iloc[i]
+        valida = linha_alvo["1º"] and "⏳" not in str(linha_alvo["1º"])
+        
+        # 1. Atualiza Atrasos da Milhar (Herdando os atrasos do dia anterior)
+        if valida:
+            unidades_sorteadas = extrair_unidades(linha_alvo)
+            for digito in atrasos_unidades.keys():
+                if digito in unidades_sorteadas: atrasos_unidades[digito] = 0
+                else: atrasos_unidades[digito] += 1
+            
+            digito_mais_atrasado = max(sorted(atrasos_unidades.keys()), key=lambda k: atrasos_unidades[k])
+            df_atu.at[i, "Atraso"] = f"{digito_mais_atrasado}-({atrasos_unidades[digito_mais_atrasado]})"
+        else:
+            df_atu.at[i, "Atraso"] = "⏳"
+
+        # 2. Atualiza Status Duque
         if i == 0:
-            if not df_ant.empty: linha_base = df_ant.iloc[-1]
+            if not df_ant.empty and "⏳" not in str(df_ant.iloc[-1]["1º"]): linha_base = df_ant.iloc[-1]
             else: 
                 df_atu.at[i, "Status"] = "---"
                 continue
         else: 
             linha_base = df_atu.iloc[i-1]
         
-        linha_alvo = df_atu.iloc[i]
-        
-        if not linha_base["1º"] or not linha_alvo["1º"]:
+        if not linha_base["1º"] or not valida:
             df_atu.at[i, "Status"] = "⏳"
             continue
             
@@ -208,37 +225,34 @@ st.session_state.memoria["ant"] = df_ant
 st.session_state.memoria["atu"] = df_atu
 
 # =============================================================================
-# --- 5. RENDERIZAÇÃO DA INTERFACE (TELAS) ---
+# --- 5. RENDERIZAÇÃO DAS TELAS ---
 # =============================================================================
-# --- Painel Anterior ---
 st.markdown(f"### ⏪ 1. Fechamento Anterior ({banca_selecionada})")
 c1, c2, c3 = st.columns([1, 1, 2])
-with c1: 
-    data_ant = st.date_input("Data Anterior:", value=date.today() - timedelta(days=2))
+with c1: data_ant = st.date_input("Data Anterior:", value=date.today() - timedelta(days=2))
 with c2: 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📡 Puxar Histórico", use_container_width=True):
-        with st.spinner("Puxando o histórico de ontem..."):
+        with st.spinner("Puxando o histórico..."):
             df, msg = extrair_dados(banca_selecionada, data_ant)
             if df is not None:
                 st.session_state.memoria["ant"] = df.tail(5).reset_index(drop=True)
                 st.rerun()
             else: st.error(msg)
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Puxa apenas os últimos 5 sorteios com Milhar e Grupo.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Atraso focado nas unidades (0, 1, 2, 9).</span>", unsafe_allow_html=True)
 
-df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", column_config={"Status": st.column_config.TextColumn(disabled=True)})
+df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", 
+                             column_config={"Status": st.column_config.TextColumn(disabled=True), "Atraso": st.column_config.TextColumn(disabled=True)})
 if not df_ant.equals(df_ant_edit): 
     st.session_state.memoria["ant"] = df_ant_edit
     st.rerun()
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- Painel Principal ---
 st.markdown(f"### 🎯 2. Operação Atual ({banca_selecionada})")
 c4, c5, c6 = st.columns([1, 1, 2])
-with c4: 
-    data_atu = st.date_input("Data Principal:", value=date.today() - timedelta(days=1))
+with c4: data_atu = st.date_input("Data Principal:", value=date.today() - timedelta(days=1))
 with c5:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📡 Puxar Dia Principal", use_container_width=True):
@@ -248,15 +262,13 @@ with c5:
                 st.session_state.memoria["atu"] = df
                 st.rerun()
             else: st.error(msg)
-with c6:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela da operação exibindo formato Milhar (Grupo).</span>", unsafe_allow_html=True)
 
-df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", column_config={"Status": st.column_config.TextColumn(disabled=True)})
+df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", 
+                             column_config={"Status": st.column_config.TextColumn(disabled=True), "Atraso": st.column_config.TextColumn("Atraso (0,1,2,9)", disabled=True)})
 if not df_atu.equals(df_atu_edit): 
     st.session_state.memoria["atu"] = df_atu_edit
     st.rerun()
 
-# --- Alerta Sniper ---
 if derrotas_consecutivas >= 4:
     st.markdown(f'<div class="alerta-sniper"><b>🚨 OPORTUNIDADE EM {banca_selecionada} 🚨</b><br>{derrotas_consecutivas} derrotas seguidas! Prepare o ataque.</div>', unsafe_allow_html=True)
 elif derrotas_consecutivas > 0:
