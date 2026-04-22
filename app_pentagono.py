@@ -48,7 +48,7 @@ st.markdown("""
 st.title("🎯 Pentágono - Laboratório Multi-Bancas")
 
 # =============================================================================
-# --- 2. MOTOR EXTRATOR UNIVERSAL ---
+# --- 2. MOTOR EXTRATOR UNIVERSAL (AGORA COM MILHARES) ---
 # =============================================================================
 def extrair_dados(banca_nome, data_alvo):
     config = BANCAS_CONFIG[banca_nome]
@@ -70,47 +70,53 @@ def extrair_dados(banca_nome, data_alvo):
             prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
             txt_prev = prev.get_text(strip=True) if prev else ""
             
-            # =========================================================
-            # ESCUDO ANTI-FEDERAL (Ignora tabelas da Loteria Federal)
-            # =========================================================
+            # Escudo Anti-Federal
             texto_tabela = tab.get_text().upper()
             if "FEDERAL" in txt_prev.upper() or "FEDERAL" in texto_tabela:
-                continue # Aborta a extração desta tabela e vai para a próxima
+                continue 
                 
             if prev: 
-                # Limpeza inteligente do título
                 txt_limpo = txt_prev.upper().replace("RESULTADO", "-").split("-")[0].strip()
                 if txt_limpo: nome_sorteio = txt_limpo
             
             if not nome_sorteio:
                 nome_sorteio = f"Ext. {count}"
                 
-            grupos = []
+            grupos_completos = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
                 if not cols: continue
                 
                 txt_col = cols[0].lower()
                 if any(x in txt_col for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
-                    g = ""
+                    # Extração Dupla: Milhar e Grupo usando Expressões Regulares
+                    numeros = []
                     for c in cols[1:]:
-                        n = ''.join(filter(str.isdigit, c))
-                        if 0 < len(n) <= 2:
-                            g = n.zfill(2)
-                            break
-                    if not g:
-                        for c in cols[1:]:
-                            n = ''.join(filter(str.isdigit, c))
-                            if len(n) >= 3:
-                                dez = int(n[-2:])
-                                g = str(25 if dez == 0 else math.ceil(dez/4)).zfill(2)
-                                break
-                    if g: grupos.append(g)
+                        numeros.extend(re.findall(r'\d+', c))
+                    
+                    milhar = ""
+                    grupo = ""
+                    for n in numeros:
+                        if len(n) >= 3 and not milhar:
+                            milhar = n.zfill(4) # Garante formato de milhar
+                        elif 0 < len(n) <= 2 and not grupo:
+                            grupo = n.zfill(2)
+                            
+                    # Tática B: Calcular Grupo se a banca esconder
+                    if not grupo and milhar:
+                        dez = int(milhar[-2:])
+                        grupo = str(25 if dez == 0 else math.ceil(dez/4)).zfill(2)
+                        
+                    if not milhar: milhar = "----"
+                    if not grupo: grupo = "--"
+                    
+                    # Formato Blindado: Milhar (Grupo)
+                    grupos_completos.append(f"{milhar} ({grupo})")
             
-            if len(grupos) >= 5:
+            if len(grupos_completos) >= 5:
                 resultados.append({
                     "Sorteio": f"{nome_sorteio} ({data_alvo.strftime('%d/%m')})",
-                    "1º": grupos[0], "2º": grupos[1], "3º": grupos[2], "4º": grupos[3], "5º": grupos[4],
+                    "1º": grupos_completos[0], "2º": grupos_completos[1], "3º": grupos_completos[2], "4º": grupos_completos[3], "5º": grupos_completos[4],
                     "Status": "⏳"
                 })
                 count += 1
@@ -132,6 +138,17 @@ with st.sidebar:
 if 'memoria' not in st.session_state:
     st.session_state.memoria = {"ant": pd.DataFrame(), "atu": pd.DataFrame()}
 
+# Função para fatiar o texto e extrair apenas o grupo para o cálculo matemático
+def extrair_grupo(texto):
+    txt = str(texto)
+    if "(" in txt:
+        return txt.split('(')[-1].replace(')', '').strip().zfill(2)
+    else:
+        # Se o usuário digitar na mão só "15", o sistema acha os números
+        nums = re.findall(r'\d+', txt)
+        if nums: return nums[-1].zfill(2)
+        return "00"
+
 # =============================================================================
 # --- 4. MOTOR LÓGICO DE BACKTEST (EXECUÇÃO PRÉ-RENDER) ---
 # =============================================================================
@@ -150,8 +167,8 @@ if not df_ant.empty:
             df_ant.at[i, "Status"] = "⏳"
             continue
             
-        base = [str(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
-        a1, a2 = str(linha_alvo["1º"]), str(linha_alvo["2º"])
+        base = [extrair_grupo(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
+        a1, a2 = extrair_grupo(linha_alvo["1º"]), extrair_grupo(linha_alvo["2º"])
         
         if a1 in base or a2 in base:
             df_ant.at[i, "Status"] = "🟢 Vitória"
@@ -177,8 +194,8 @@ if not df_atu.empty:
             df_atu.at[i, "Status"] = "⏳"
             continue
             
-        base = [str(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
-        a1, a2 = str(linha_alvo["1º"]), str(linha_alvo["2º"])
+        base = [extrair_grupo(linha_base[f"{p}º"]) for p in [1, 2, 3, 4, 5]]
+        a1, a2 = extrair_grupo(linha_alvo["1º"]), extrair_grupo(linha_alvo["2º"])
         
         if a1 in base or a2 in base:
             df_atu.at[i, "Status"] = "🟢 Vitória"
@@ -208,7 +225,7 @@ with c2:
                 st.rerun()
             else: st.error(msg)
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Puxa apenas os últimos 5 sorteios.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Puxa apenas os últimos 5 sorteios com Milhar e Grupo.</span>", unsafe_allow_html=True)
 
 df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", column_config={"Status": st.column_config.TextColumn(disabled=True)})
 if not df_ant.equals(df_ant_edit): 
@@ -232,7 +249,7 @@ with c5:
                 st.rerun()
             else: st.error(msg)
 with c6:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela principal da operação. Filtro Federal Ativado.</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Tabela da operação exibindo formato Milhar (Grupo).</span>", unsafe_allow_html=True)
 
 df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", column_config={"Status": st.column_config.TextColumn(disabled=True)})
 if not df_atu.equals(df_atu_edit): 
