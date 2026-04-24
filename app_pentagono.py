@@ -101,7 +101,8 @@ def extrair_dados(banca_nome, data_alvo):
                     "Sorteio": f"{nome_sorteio} ({data_alvo.strftime('%d/%m')})",
                     "1º": grupos_completos[0], "2º": grupos_completos[1], "3º": grupos_completos[2], "4º": grupos_completos[3], "5º": grupos_completos[4],
                     "Status": "⏳",
-                    "Atraso": "⏳"
+                    "Atraso 1": "⏳",
+                    "Atraso 2": "⏳"
                 })
                 count += 1
         
@@ -137,14 +138,15 @@ def extrair_unidades(linha):
     return unidades
 
 # =============================================================================
-# --- 4. MOTOR LÓGICO (BACKTEST + RADAR DE ATRASOS) ---
+# --- 4. MOTOR LÓGICO (BACKTEST + RADAR DUPLO DE ATRASOS) ---
 # =============================================================================
 df_ant = st.session_state.memoria["ant"].copy()
 df_atu = st.session_state.memoria["atu"].copy()
 
 derrotas_consecutivas = 0
-# Radar de Atrasos focando exclusivamente nos alvos do Comandante
-atrasos_unidades = {'0': 0, '1': 0, '2': 0, '9': 0}
+# Radar Duplo
+atrasos_grupo_1 = {'0': 0, '1': 0, '2': 0, '9': 0}
+atrasos_grupo_2 = {'3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0}
 
 # --- Processa Tabela Anterior ---
 if not df_ant.empty:
@@ -153,17 +155,27 @@ if not df_ant.empty:
         linha_alvo = df_ant.iloc[i]
         valida = linha_alvo["1º"] and "⏳" not in str(linha_alvo["1º"])
         
-        # 1. Atualiza Atrasos da Milhar
+        # 1. Atualiza Atrasos da Milhar (Radar Duplo)
         if valida:
             unidades_sorteadas = extrair_unidades(linha_alvo)
-            for digito in atrasos_unidades.keys():
-                if digito in unidades_sorteadas: atrasos_unidades[digito] = 0
-                else: atrasos_unidades[digito] += 1
             
-            digito_mais_atrasado = max(sorted(atrasos_unidades.keys()), key=lambda k: atrasos_unidades[k])
-            df_ant.at[i, "Atraso"] = f"{digito_mais_atrasado}-({atrasos_unidades[digito_mais_atrasado]})"
+            # Esquadrão 1 (0, 1, 2, 9)
+            for digito in atrasos_grupo_1.keys():
+                if digito in unidades_sorteadas: atrasos_grupo_1[digito] = 0
+                else: atrasos_grupo_1[digito] += 1
+            digito_atrasado_1 = max(sorted(atrasos_grupo_1.keys()), key=lambda k: atrasos_grupo_1[k])
+            df_ant.at[i, "Atraso 1"] = f"{digito_atrasado_1}-({atrasos_grupo_1[digito_atrasado_1]})"
+            
+            # Esquadrão 2 (3, 4, 5, 6, 7, 8)
+            for digito in atrasos_grupo_2.keys():
+                if digito in unidades_sorteadas: atrasos_grupo_2[digito] = 0
+                else: atrasos_grupo_2[digito] += 1
+            digito_atrasado_2 = max(sorted(atrasos_grupo_2.keys()), key=lambda k: atrasos_grupo_2[k])
+            df_ant.at[i, "Atraso 2"] = f"{digito_atrasado_2}-({atrasos_grupo_2[digito_atrasado_2]})"
+            
         else:
-            df_ant.at[i, "Atraso"] = "⏳"
+            df_ant.at[i, "Atraso 1"] = "⏳"
+            df_ant.at[i, "Atraso 2"] = "⏳"
             
         # 2. Atualiza Status Duque (Só do 2º jogo em diante)
         if i > 0:
@@ -186,17 +198,27 @@ if not df_atu.empty:
         linha_alvo = df_atu.iloc[i]
         valida = linha_alvo["1º"] and "⏳" not in str(linha_alvo["1º"])
         
-        # 1. Atualiza Atrasos da Milhar (Herdando os atrasos do dia anterior)
+        # 1. Atualiza Atrasos da Milhar (Herdando do dia anterior)
         if valida:
             unidades_sorteadas = extrair_unidades(linha_alvo)
-            for digito in atrasos_unidades.keys():
-                if digito in unidades_sorteadas: atrasos_unidades[digito] = 0
-                else: atrasos_unidades[digito] += 1
             
-            digito_mais_atrasado = max(sorted(atrasos_unidades.keys()), key=lambda k: atrasos_unidades[k])
-            df_atu.at[i, "Atraso"] = f"{digito_mais_atrasado}-({atrasos_unidades[digito_mais_atrasado]})"
+            # Esquadrão 1
+            for digito in atrasos_grupo_1.keys():
+                if digito in unidades_sorteadas: atrasos_grupo_1[digito] = 0
+                else: atrasos_grupo_1[digito] += 1
+            digito_atrasado_1 = max(sorted(atrasos_grupo_1.keys()), key=lambda k: atrasos_grupo_1[k])
+            df_atu.at[i, "Atraso 1"] = f"{digito_atrasado_1}-({atrasos_grupo_1[digito_atrasado_1]})"
+            
+            # Esquadrão 2
+            for digito in atrasos_grupo_2.keys():
+                if digito in unidades_sorteadas: atrasos_grupo_2[digito] = 0
+                else: atrasos_grupo_2[digito] += 1
+            digito_atrasado_2 = max(sorted(atrasos_grupo_2.keys()), key=lambda k: atrasos_grupo_2[k])
+            df_atu.at[i, "Atraso 2"] = f"{digito_atrasado_2}-({atrasos_grupo_2[digito_atrasado_2]})"
+            
         else:
-            df_atu.at[i, "Atraso"] = "⏳"
+            df_atu.at[i, "Atraso 1"] = "⏳"
+            df_atu.at[i, "Atraso 2"] = "⏳"
 
         # 2. Atualiza Status Duque
         if i == 0:
@@ -240,10 +262,16 @@ with c2:
                 st.rerun()
             else: st.error(msg)
 with c3:
-    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Atraso focado nas unidades (0, 1, 2, 9).</span>", unsafe_allow_html=True)
+    st.markdown("<br><span style='color:#aaa; font-size: 0.8em;'>Atrasos monitorados separadamente.</span>", unsafe_allow_html=True)
 
-df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", 
-                             column_config={"Status": st.column_config.TextColumn(disabled=True), "Atraso": st.column_config.TextColumn(disabled=True)})
+# Configura as colunas para o editor de dados
+config_colunas = {
+    "Status": st.column_config.TextColumn(disabled=True), 
+    "Atraso 1": st.column_config.TextColumn("Atraso (0,1,2,9)", disabled=True),
+    "Atraso 2": st.column_config.TextColumn("Atraso (3 a 8)", disabled=True)
+}
+
+df_ant_edit = st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, key="ed_ant", column_config=config_colunas)
 if not df_ant.equals(df_ant_edit): 
     st.session_state.memoria["ant"] = df_ant_edit
     st.rerun()
@@ -263,8 +291,7 @@ with c5:
                 st.rerun()
             else: st.error(msg)
 
-df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", 
-                             column_config={"Status": st.column_config.TextColumn(disabled=True), "Atraso": st.column_config.TextColumn("Atraso (0,1,2,9)", disabled=True)})
+df_atu_edit = st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, key="ed_atu", column_config=config_colunas)
 if not df_atu.equals(df_atu_edit): 
     st.session_state.memoria["atu"] = df_atu_edit
     st.rerun()
