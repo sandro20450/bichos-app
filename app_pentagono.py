@@ -10,7 +10,7 @@ from datetime import date, timedelta
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E ESTILIZAÇÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V19 - Posições Alinhadas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V19.1 - Posições Alinhadas", page_icon="🎯", layout="wide")
 
 BANCAS_CONFIG = {
     "Tradicional": {"url": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-"},
@@ -29,7 +29,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 Pentágono - Inteligência de Posições V19")
+st.title("🎯 Pentágono - Inteligência de Posições V19.1")
 
 # =============================================================================
 # --- 2. MEMÓRIA HISTÓRICA (UNIDADES E DEZENAS) ---
@@ -67,7 +67,6 @@ def extrair_dados(banca_nome, data_alvo):
                     g = str(25 if dez == 0 else math.ceil(dez/4)).zfill(2) if milhar != "----" else "--"
                     grupos.append(f"{milhar} ({g})")
             if len(grupos) >= 5:
-                # ORDEM DE COLUNAS AJUSTADA: Dezena primeiro, Unidade depois
                 resultados.append({
                     "Sorteio": f"{nome} ({data_alvo.strftime('%d/%m')})", 
                     "1º": grupos[0], "2º": grupos[1], "3º": grupos[2], "4º": grupos[3], "5º": grupos[4], 
@@ -97,15 +96,12 @@ def processar(df, hu, hd):
         if not linha["1º"] or "⏳" in str(linha["1º"]): continue
         unids, dezs = extrair_digitos(linha)
         
-        # Atualiza Frequências
         for u in unids: st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Frequência"] += 1
         for d in dezs: st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Frequência"] += 1
         
-        # Atualiza Atrasos Correntes
         for u in hu: hu[u] = 0 if u in unids else hu[u]+1
         for d in hd: hd[d] = 0 if d in dezs else hd[d]+1
         
-        # Atualiza Recordes
         for u, a in hu.items():
             if a > st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"].values[0]:
                 st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"] = a
@@ -113,31 +109,57 @@ def processar(df, hu, hd):
             if a > st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"].values[0]:
                 st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"] = a
         
-        # Insere Colunas de Atraso
         md = max(hd, key=hd.get); df.at[i, "Atraso Dez"] = f"{md}-({hd[md]})"
         mu = max(hu, key=hu.get); df.at[i, "Atraso Unid"] = f"{mu}-({hu[mu]})"
     return df
 
-# Processamento
 st.session_state.memoria["ant"] = processar(st.session_state.memoria["ant"].copy(), atr_unid, atr_dez)
 st.session_state.memoria["atu"] = processar(st.session_state.memoria["atu"].copy(), atr_unid, atr_dez)
 
 # =============================================================================
-# --- 5. INTERFACE ---
+# --- 5. INTERFACE (CALENDÁRIOS RESTAURADOS) ---
 # =============================================================================
 with st.sidebar:
     banca_selecionada = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("Resetar Recordes"): st.session_state.stats_unid["Frequência"]=0; st.session_state.stats_unid["Recorde"]=0; st.session_state.stats_dez["Frequência"]=0; st.session_state.stats_dez["Recorde"]=0; st.rerun()
+    if st.button("Resetar Recordes"): 
+        st.session_state.stats_unid["Frequência"]=0; st.session_state.stats_unid["Recorde"]=0
+        st.session_state.stats_dez["Frequência"]=0; st.session_state.stats_dez["Recorde"]=0
+        st.rerun()
 
+# --- Painel Anterior ---
 st.markdown("### ⏪ 1. Fechamento Anterior")
-if st.button("📡 Puxar Ontem"):
-    d, m = extrair_dados(banca_selecionada, date.today()-timedelta(days=2))
-    if d is not None: st.session_state.memoria["ant"] = d.tail(5).reset_index(drop=True); st.rerun()
+c1, c2, c3 = st.columns([1, 1, 2])
+with c1: 
+    data_ant = st.date_input("Data Anterior:", value=date.today() - timedelta(days=2))
+with c2: 
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("📡 Puxar Ontem", use_container_width=True):
+        with st.spinner("Puxando o histórico..."):
+            d, m = extrair_dados(banca_selecionada, data_ant)
+            if d is not None: 
+                st.session_state.memoria["ant"] = d.tail(5).reset_index(drop=True)
+                st.rerun()
+            else: st.error(m)
+
 st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, column_config={"Atraso Dez": st.column_config.TextColumn("Atraso Dez", disabled=True), "Atraso Unid": st.column_config.TextColumn("Atraso Unid (0 a 9)", disabled=True)})
 
+st.markdown("---")
+
+# --- Painel Atual ---
 st.markdown("### 🎯 2. Operação Atual")
-if st.button("📡 Puxar Hoje"):
-    d, m = extrair_dados(banca_selecionada, date.today()-timedelta(days=1)); st.session_state.memoria["atu"] = d; st.rerun()
+c4, c5, c6 = st.columns([1, 1, 2])
+with c4: 
+    data_atu = st.date_input("Data Principal:", value=date.today() - timedelta(days=1))
+with c5:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("📡 Puxar Hoje", use_container_width=True):
+        with st.spinner("Puxando extrações completas..."):
+            d, m = extrair_dados(banca_selecionada, data_atu)
+            if d is not None:
+                st.session_state.memoria["atu"] = d
+                st.rerun()
+            else: st.error(m)
+
 st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, column_config={"Atraso Dez": st.column_config.TextColumn("Atraso Dez", disabled=True), "Atraso Unid": st.column_config.TextColumn("Atraso Unid (0 a 9)", disabled=True)})
 
 st.markdown("---")
