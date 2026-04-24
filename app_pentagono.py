@@ -10,7 +10,7 @@ from datetime import date, timedelta
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E ESTILIZAÇÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V18 - Posições", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V19 - Posições Alinhadas", page_icon="🎯", layout="wide")
 
 BANCAS_CONFIG = {
     "Tradicional": {"url": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-"},
@@ -29,7 +29,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 Pentágono - Inteligência de Posições V18")
+st.title("🎯 Pentágono - Inteligência de Posições V19")
 
 # =============================================================================
 # --- 2. MEMÓRIA HISTÓRICA (UNIDADES E DEZENAS) ---
@@ -67,7 +67,13 @@ def extrair_dados(banca_nome, data_alvo):
                     g = str(25 if dez == 0 else math.ceil(dez/4)).zfill(2) if milhar != "----" else "--"
                     grupos.append(f"{milhar} ({g})")
             if len(grupos) >= 5:
-                resultados.append({"Sorteio": f"{nome} ({data_alvo.strftime('%d/%m')})", "1º": grupos[0], "2º": grupos[1], "3º": grupos[2], "4º": grupos[3], "5º": grupos[4], "Atraso U1": "⏳", "Atraso U2": "⏳", "Atraso Dez": "⏳"})
+                # ORDEM DE COLUNAS AJUSTADA: Dezena primeiro, Unidade depois
+                resultados.append({
+                    "Sorteio": f"{nome} ({data_alvo.strftime('%d/%m')})", 
+                    "1º": grupos[0], "2º": grupos[1], "3º": grupos[2], "4º": grupos[3], "5º": grupos[4], 
+                    "Atraso Dez": "⏳", 
+                    "Atraso Unid": "⏳"
+                })
         return pd.DataFrame(resultados), "Sucesso"
     except: return None, "Erro"
 
@@ -83,39 +89,38 @@ def extrair_digitos(linha):
 # =============================================================================
 # --- 4. MOTOR LÓGICO DE ATRASOS E RECORDES ---
 # =============================================================================
-atr_u1 = {'0':0,'1':0,'2':0,'9':0}; atr_u2 = {'3':0,'4':0,'5':0,'6':0,'7':0,'8':0}; atr_dez = {str(i):0 for i in range(10)}
+atr_unid = {str(i):0 for i in range(10)}; atr_dez = {str(i):0 for i in range(10)}
 
-def processar(df, h1, h2, hd):
+def processar(df, hu, hd):
     for i in range(len(df)):
         linha = df.iloc[i]
         if not linha["1º"] or "⏳" in str(linha["1º"]): continue
         unids, dezs = extrair_digitos(linha)
         
-        # Atualiza Frequências e Atrasos
+        # Atualiza Frequências
         for u in unids: st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Frequência"] += 1
         for d in dezs: st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Frequência"] += 1
         
-        for d in h1: h1[d] = 0 if d in unids else h1[d]+1
-        for d in h2: h2[d] = 0 if d in unids else h2[d]+1
+        # Atualiza Atrasos Correntes
+        for u in hu: hu[u] = 0 if u in unids else hu[u]+1
         for d in hd: hd[d] = 0 if d in dezs else hd[d]+1
         
         # Atualiza Recordes
-        for d, a in {**h1, **h2}.items():
-            if a > st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==d, "Recorde"].values[0]:
-                st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==d, "Recorde"] = a
+        for u, a in hu.items():
+            if a > st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"].values[0]:
+                st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"] = a
         for d, a in hd.items():
             if a > st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"].values[0]:
                 st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"] = a
         
-        # Colunas de Atraso
-        m1 = max(h1, key=h1.get); df.at[i, "Atraso U1"] = f"{m1}-({h1[m1]})"
-        m2 = max(h2, key=h2.get); df.at[i, "Atraso U2"] = f"{m2}-({h2[m2]})"
+        # Insere Colunas de Atraso
         md = max(hd, key=hd.get); df.at[i, "Atraso Dez"] = f"{md}-({hd[md]})"
+        mu = max(hu, key=hu.get); df.at[i, "Atraso Unid"] = f"{mu}-({hu[mu]})"
     return df
 
 # Processamento
-st.session_state.memoria["ant"] = processar(st.session_state.memoria["ant"].copy(), atr_u1, atr_u2, atr_dez)
-st.session_state.memoria["atu"] = processar(st.session_state.memoria["atu"].copy(), atr_u1, atr_u2, atr_dez)
+st.session_state.memoria["ant"] = processar(st.session_state.memoria["ant"].copy(), atr_unid, atr_dez)
+st.session_state.memoria["atu"] = processar(st.session_state.memoria["atu"].copy(), atr_unid, atr_dez)
 
 # =============================================================================
 # --- 5. INTERFACE ---
@@ -128,19 +133,19 @@ st.markdown("### ⏪ 1. Fechamento Anterior")
 if st.button("📡 Puxar Ontem"):
     d, m = extrair_dados(banca_selecionada, date.today()-timedelta(days=2))
     if d is not None: st.session_state.memoria["ant"] = d.tail(5).reset_index(drop=True); st.rerun()
-st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True)
+st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True, column_config={"Atraso Dez": st.column_config.TextColumn("Atraso Dez", disabled=True), "Atraso Unid": st.column_config.TextColumn("Atraso Unid (0 a 9)", disabled=True)})
 
 st.markdown("### 🎯 2. Operação Atual")
 if st.button("📡 Puxar Hoje"):
     d, m = extrair_dados(banca_selecionada, date.today()-timedelta(days=1)); st.session_state.memoria["atu"] = d; st.rerun()
-st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True)
+st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True, column_config={"Atraso Dez": st.column_config.TextColumn("Atraso Dez", disabled=True), "Atraso Unid": st.column_config.TextColumn("Atraso Unid (0 a 9)", disabled=True)})
 
 st.markdown("---")
 st.markdown("### 📊 Relatório de Inteligência de Posições (Unidades vs Dezenas)")
 col1, col2 = st.columns(2)
 with col1:
-    st.write("**Estatística: UNIDADES (Último Dígito)**")
-    st.dataframe(st.session_state.stats_unid.sort_values("Frequência", ascending=False), use_container_width=True, hide_index=True)
-with col2:
     st.write("**Estatística: DEZENAS (Penúltimo Dígito)**")
     st.dataframe(st.session_state.stats_dez.sort_values("Frequência", ascending=False), use_container_width=True, hide_index=True)
+with col2:
+    st.write("**Estatística: UNIDADES (Último Dígito)**")
+    st.dataframe(st.session_state.stats_unid.sort_values("Frequência", ascending=False), use_container_width=True, hide_index=True)
