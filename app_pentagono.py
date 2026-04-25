@@ -10,7 +10,7 @@ from datetime import date, timedelta
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E ESTILIZAÇÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V21 - Continuidade", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V22 - Sniper de Grupos", page_icon="🎯", layout="wide")
 
 BANCAS_CONFIG = {
     "Tradicional": {"url": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-"},
@@ -24,24 +24,21 @@ st.markdown("""
     .stApp { background-color: #1e1e1e; color: #f0f0f0; }
     h1, h2, h3 { color: #4CAF50 !important; }
     .stButton > button { background-color: #4CAF50; color: white; font-weight: bold; border-radius: 8px; }
-    .panel-sniper { background-color: #001a00; padding: 20px; border-radius: 15px; border: 2px solid #4CAF50; text-align: center; }
-    .numero-destaque { font-size: 2.5em; font-weight: bold; color: #4CAF50; }
-    .sub-texto { color: #aaa; font-size: 0.9em; }
+    .panel-sniper { background-color: #001a00; padding: 20px; border-radius: 15px; border: 2px solid #4CAF50; text-align: center; margin-bottom: 10px; }
+    .numero-destaque { font-size: 2.2em; font-weight: bold; color: #4CAF50; }
+    .sub-texto { color: #aaa; font-size: 0.85em; }
     hr { border-color: #4CAF50; opacity: 0.3; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 Pentágono - Relatório Sniper V21")
+st.title("🎯 Pentágono - Estratégia de Grupos V22")
 
 # =============================================================================
-# --- 2. GERENCIAMENTO DE MEMÓRIA BRUTA E ESTADOS ---
+# --- 2. MEMÓRIA E ESTADOS SNIPER ---
 # =============================================================================
-# Guarda os dados puros extraídos da web antes do cálculo para não duplicar contagens
 if 'raw_ant' not in st.session_state: st.session_state.raw_ant = pd.DataFrame()
 if 'raw_atu' not in st.session_state: st.session_state.raw_atu = pd.DataFrame()
-
-if 'memoria' not in st.session_state:
-    st.session_state.memoria = {"ant": pd.DataFrame(), "atu": pd.DataFrame()}
+if 'memoria' not in st.session_state: st.session_state.memoria = {"ant": pd.DataFrame(), "atu": pd.DataFrame()}
 
 # =============================================================================
 # --- 3. MOTORES DE EXTRAÇÃO ---
@@ -76,95 +73,92 @@ def extrair_dados(banca_nome, data_alvo):
         return pd.DataFrame(resultados), "Sucesso"
     except: return None, "Erro"
 
-def extrair_digito_especifico(val, posicao):
-    m = re.search(r'^(\d+)', str(val))
+def extrair_v22(val, tipo):
+    # tipo: 'u' unidade, 'd' dezena, 'g' grupo
+    txt = str(val)
+    m = re.search(r'^(\d+)', txt)
     if m:
         num = m.group(1).zfill(4)
-        return num[posicao]
+        if tipo == 'u': return num[-1]
+        if tipo == 'd': return num[-2]
+    if tipo == 'g' and "(" in txt:
+        return txt.split('(')[-1].replace(')', '').strip()
     return None
 
 # =============================================================================
-# --- 4. MOTOR LÓGICO CONTÍNUO (Fio de Ariadne) ---
+# --- 4. MOTOR LÓGICO CONTÍNUO V22 ---
 # =============================================================================
-def recalcular_tudo():
-    # 1. Zera todas as estatísticas para recalcular limpo e sem duplicações
+def recalcular_v22():
+    # Reinicialização de Stats
     st.session_state.stats_unid = pd.DataFrame({"Dígito": [str(i) for i in range(10)], "Frequência": [0]*10, "Recorde": [0]*10})
     st.session_state.stats_dez = pd.DataFrame({"Dígito": [str(i) for i in range(10)], "Frequência": [0]*10, "Recorde": [0]*10})
-    st.session_state.atraso_p1_dez = {str(i): 0 for i in range(10)}
-    st.session_state.atraso_p2_dez = {str(i): 0 for i in range(10)}
-    st.session_state.freq_p1_p2_dez = {str(i): 0 for i in range(10)}
+    # Sniper Dezenas
+    st.session_state.at_p1_d = {str(i): 0 for i in range(10)}; st.session_state.at_p2_d = {str(i): 0 for i in range(10)}
+    st.session_state.fr_p12_d = {str(i): 0 for i in range(10)}
+    # Sniper Grupos (01-25)
+    st.session_state.at_p1_g = {str(i).zfill(2): 0 for i in range(1, 26)}; st.session_state.at_p2_g = {str(i).zfill(2): 0 for i in range(1, 26)}
+    st.session_state.fr_p12_g = {str(i).zfill(2): 0 for i in range(1, 26)}
 
-    # Controladores de atraso contínuo (não resetam entre as tabelas)
-    hu = {str(i): 0 for i in range(10)}
-    hd = {str(i): 0 for i in range(10)}
+    hu, hd = {str(i): 0 for i in range(10)}, {str(i): 0 for i in range(10)}
 
-    def processar_tabela(df_raw):
+    def processar(df_raw):
         if df_raw.empty: return pd.DataFrame()
         df = df_raw.copy()
-        
         for i in range(len(df)):
             linha = df.iloc[i]
             if not linha["1º"] or "⏳" in str(linha["1º"]): continue
             
-            unids_linha, dezs_linha = [], []
+            u_l, d_l = [], []
             for p in ["1º", "2º", "3º", "4º", "5º"]:
-                u = extrair_digito_especifico(linha[p], -1)
-                d = extrair_digito_especifico(linha[p], -2)
-                if u: unids_linha.append(u)
-                if d: dezs_linha.append(d)
+                u, d = extrair_v22(linha[p], 'u'), extrair_v22(linha[p], 'd')
+                if u: u_l.append(u); st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Frequência"] += 1
+                if d: d_l.append(d); st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Frequência"] += 1
             
-            # Atualiza frequências gerais
-            for u in unids_linha: st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Frequência"] += 1
-            for d in dezs_linha: st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Frequência"] += 1
+            for d in hu: hu[d] = 0 if d in u_l else hu[d]+1
+            for d in hd: hd[d] = 0 if d in d_l else hd[d]+1
             
-            # Atualiza atrasos correntes
-            for u in hu: hu[u] = 0 if u in unids_linha else hu[u]+1
-            for d in hd: hd[d] = 0 if d in dezs_linha else hd[d]+1
-            
-            # Atualiza Recordes
             for u, a in hu.items():
-                rec = st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"].values[0]
-                if a > rec: st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"] = a
+                if a > st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"].values[0]:
+                    st.session_state.stats_unid.loc[st.session_state.stats_unid["Dígito"]==u, "Recorde"] = a
             for d, a in hd.items():
-                rec = st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"].values[0]
-                if a > rec: st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"] = a
-                
-            # Preenche Colunas
-            md = max(hd, key=hd.get); df.at[i, "Atraso Dez"] = f"{md}-({hd[md]})"
-            mu = max(hu, key=hu.get); df.at[i, "Atraso Unid"] = f"{mu}-({hu[mu]})"
-
-            # Monitoramento Sniper (Dezenas do 1º e 2º Prêmio)
-            dez_p1 = extrair_digito_especifico(linha["1º"], -2)
-            dez_p2 = extrair_digito_especifico(linha["2º"], -2)
+                if a > st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"].values[0]:
+                    st.session_state.stats_dez.loc[st.session_state.stats_dez["Dígito"]==d, "Recorde"] = a
             
-            if dez_p1:
-                for dk in st.session_state.atraso_p1_dez:
-                    st.session_state.atraso_p1_dez[dk] = 0 if dk == dez_p1 else st.session_state.atraso_p1_dez[dk] + 1
-                st.session_state.freq_p1_p2_dez[dez_p1] += 1
-                
-            if dez_p2:
-                for dk in st.session_state.atraso_p2_dez:
-                    st.session_state.atraso_p2_dez[dk] = 0 if dk == dez_p2 else st.session_state.atraso_p2_dez[dk] + 1
-                st.session_state.freq_p1_p2_dez[dez_p2] += 1
+            df.at[i, "Atraso Dez"] = f"{max(hd, key=hd.get)}-({hd[max(hd, key=hd.get)]})"
+            df.at[i, "Atraso Unid"] = f"{max(hu, key=hu.get)}-({hu[max(hu, key=hu.get)]})"
 
+            # Sniper Lógica (1º e 2º)
+            d1, d2 = extrair_v22(linha["1º"], 'd'), extrair_v22(linha["2º"], 'd')
+            g1, g2 = extrair_v22(linha["1º"], 'g'), extrair_v22(linha["2º"], 'g')
+
+            if d1: 
+                for k in st.session_state.at_p1_d: st.session_state.at_p1_d[k] = 0 if k==d1 else st.session_state.at_p1_d[k]+1
+                st.session_state.fr_p12_d[d1] += 1
+            if d2:
+                for k in st.session_state.at_p2_d: st.session_state.at_p2_d[k] = 0 if k==d2 else st.session_state.at_p2_d[k]+1
+                st.session_state.fr_p12_d[d2] += 1
+            
+            if g1:
+                for k in st.session_state.at_p1_g: st.session_state.at_p1_g[k] = 0 if k==g1 else st.session_state.at_p1_g[k]+1
+                st.session_state.fr_p12_g[g1] += 1
+            if g2:
+                for k in st.session_state.at_p2_g: st.session_state.at_p2_g[k] = 0 if k==g2 else st.session_state.at_p2_g[k]+1
+                st.session_state.fr_p12_g[g2] += 1
         return df
 
-    # O Segredo da Continuidade: Processa 'Ontem' e o controle (hu, hd) continua intacto para processar 'Hoje'
-    st.session_state.memoria["ant"] = processar_tabela(st.session_state.raw_ant)
-    st.session_state.memoria["atu"] = processar_tabela(st.session_state.raw_atu)
+    st.session_state.memoria["ant"] = processar(st.session_state.raw_ant)
+    st.session_state.memoria["atu"] = processar(st.session_state.raw_atu)
 
-# Garantir primeira renderização vazia segura
-if st.session_state.raw_ant.empty and st.session_state.raw_atu.empty:
-    recalcular_tudo()
+if st.session_state.raw_ant.empty and st.session_state.raw_atu.empty: recalcular_v22()
 
 # =============================================================================
 # --- 5. INTERFACE ---
 # =============================================================================
 with st.sidebar:
     banca = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("Limpar Sistema Todo"):
+    if st.button("Limpar Tudo"):
         st.session_state.raw_ant = pd.DataFrame(); st.session_state.raw_atu = pd.DataFrame()
-        recalcular_tudo(); st.rerun()
+        recalcular_v22(); st.rerun()
 
 st.markdown("### ⏪ 1. Fechamento Anterior")
 c1, c2, _ = st.columns([1, 1, 2])
@@ -173,15 +167,10 @@ with c2:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📡 Puxar Ontem"):
         d, m = extrair_dados(banca, dt_ant)
-        if d is not None: 
-            st.session_state.raw_ant = d.tail(5).reset_index(drop=True)
-            recalcular_tudo()
-            st.rerun()
-
+        if d is not None: st.session_state.raw_ant = d.tail(5).reset_index(drop=True); recalcular_v22(); st.rerun()
 st.data_editor(st.session_state.memoria["ant"], use_container_width=True, hide_index=True)
 
 st.markdown("---")
-
 st.markdown("### 🎯 2. Operação Atual")
 c3, c4, _ = st.columns([1, 1, 2])
 with c3: dt_atu = st.date_input("Data Hoje:", value=date.today()-timedelta(days=1))
@@ -189,37 +178,30 @@ with c4:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📡 Puxar Hoje"):
         d, m = extrair_dados(banca, dt_atu)
-        if d is not None: 
-            st.session_state.raw_atu = d
-            recalcular_tudo()
-            st.rerun()
-
+        if d is not None: st.session_state.raw_atu = d; recalcular_v22(); st.rerun()
 st.data_editor(st.session_state.memoria["atu"], use_container_width=True, hide_index=True)
 
 # =============================================================================
-# --- 6. RELATÓRIO SNIPER ---
+# --- 6. RELATÓRIOS SNIPER (DEZENAS E GRUPOS) ---
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🔭 RELATÓRIO ESTRATÉGICO SNIPER (Dezenas 1º e 2º)")
+def render_sniper(titulo, atraso_p1, atraso_p2, freq_p12):
+    st.markdown(f"#### {titulo}")
+    if sum(freq_p12.values()) > 0:
+        r1 = sorted(atraso_p1.items(), key=lambda x: x[1], reverse=True)
+        r2 = sorted(atraso_p2.items(), key=lambda x: x[1], reverse=True)
+        mt = max(freq_p12.items(), key=lambda x: x[1])[0]
+        s1, s2, s3 = st.columns(3)
+        with s1: st.markdown(f'<div class="panel-sniper"><div class="sub-texto">1º PRÊMIO</div><div class="numero-destaque">{r1[0][0]} e {r1[1][0]}</div><div class="sub-texto">Atraso: ({r1[0][1]}) e ({r1[1][1]})</div></div>', unsafe_allow_html=True)
+        with s2: st.markdown(f'<div class="panel-sniper"><div class="sub-texto">2º PRÊMIO</div><div class="numero-destaque">{r2[0][0]} e {r2[1][0]}</div><div class="sub-texto">Atraso: ({r2[0][1]}) e ({r2[1][1]})</div></div>', unsafe_allow_html=True)
+        with s3: st.markdown(f'<div class="panel-sniper" style="border-color:#ffb74d;"><div class="sub-texto" style="color:#ffb74d;">MEIO TERMO (QUENTE)</div><div class="numero-destaque" style="color:#ffb74d;">{mt}</div><div class="sub-texto">Tendência no Top 2</div></div>', unsafe_allow_html=True)
+    else: st.info("Aguardando dados para análise Sniper.")
 
-# Prevenção de erro caso não haja dados
-if sum(st.session_state.freq_p1_p2_dez.values()) > 0:
-    p1_rank = sorted(st.session_state.atraso_p1_dez.items(), key=lambda x: x[1], reverse=True)
-    p2_rank = sorted(st.session_state.atraso_p2_dez.items(), key=lambda x: x[1], reverse=True)
-    meio_termo_num = max(st.session_state.freq_p1_p2_dez.items(), key=lambda x: x[1])[0]
-
-    col_s1, col_s2, col_s3 = st.columns(3)
-    with col_s1:
-        st.markdown(f"""<div class="panel-sniper"><div class="sub-texto">MAIS ATRASADOS 1º PRÊMIO</div><div class="numero-destaque">{p1_rank[0][0]} e {p1_rank[1][0]}</div><div class="sub-texto">Atraso: ({p1_rank[0][1]}) e ({p1_rank[1][1]})</div></div>""", unsafe_allow_html=True)
-    with col_s2:
-        st.markdown(f"""<div class="panel-sniper"><div class="sub-texto">MAIS ATRASADOS 2º PRÊMIO</div><div class="numero-destaque">{p2_rank[0][0]} e {p2_rank[1][0]}</div><div class="sub-texto">Atraso: ({p2_rank[0][1]}) e ({p2_rank[1][1]})</div></div>""", unsafe_allow_html=True)
-    with col_s3:
-        st.markdown(f"""<div class="panel-sniper" style="border-color: #ffb74d;"><div class="sub-texto" style="color: #ffb74d;">NÚMERO MEIO TERMO (QUENTE)</div><div class="numero-destaque" style="color: #ffb74d;">{meio_termo_num}</div><div class="sub-texto">Maior frequência no Top 2</div></div>""", unsafe_allow_html=True)
-else:
-    st.info("Puxe os dados de ontem e de hoje para gerar o Relatório Sniper.")
+render_sniper("🔭 SNIPER DE DEZENAS (1º e 2º)", st.session_state.at_p1_d, st.session_state.at_p2_d, st.session_state.fr_p12_d)
+render_sniper("🦁 SNIPER DE GRUPOS (1º e 2º)", st.session_state.at_p1_g, st.session_state.at_p2_g, st.session_state.fr_p12_g)
 
 st.markdown("---")
-st.markdown("### 📊 Relatório Geral de Inteligência (Todas as Posições)")
+st.markdown("### 📊 Inteligência Geral")
 ca, cb = st.columns(2)
-with ca: st.write("**DEZENAS (Geral 1-5)**"); st.dataframe(st.session_state.stats_dez.sort_values("Frequência", ascending=False), hide_index=True)
-with cb: st.write("**UNIDADES (Geral 1-5)**"); st.dataframe(st.session_state.stats_unid.sort_values("Frequência", ascending=False), hide_index=True)
+with ca: st.write("**FREQUÊNCIA DEZENAS**"); st.dataframe(st.session_state.stats_dez.sort_values("Frequência", ascending=False), hide_index=True)
+with cb: st.write("**FREQUÊNCIA UNIDADES**"); st.dataframe(st.session_state.stats_unid.sort_values("Frequência", ascending=False), hide_index=True)
