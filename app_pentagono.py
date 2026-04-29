@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V33 - Markov 1-5", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V33.1 - Markov 1-5", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -86,11 +86,11 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V33")
+    st.header("🎯 Pentágono V33.1")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
-# --- 4. TELA 1: EXTRAÇÃO ---
+# --- 4. TELA 1: EXTRAÇÃO MULTI-MODAL ---
 # =============================================================================
 if menu == "📡 Extração & Automação":
     st.title("📡 Automação CentralBichos")
@@ -169,9 +169,7 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                     ult_g = get_grupo(ult_m)
                     
-                    # Listas para o 1º prêmio (Seco)
                     seco_g, seco_um = [], []
-                    # Listas para o 1º ao 5º prêmio (Cercado)
                     cercado_g, cercado_um = [], []
 
                     for i in range(len(df)-1):
@@ -188,39 +186,33 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                                     cercado_g.append(get_grupo(p_m_all))
                                     cercado_um.append(p_m_all[0])
                             
-                    # Processando resultados frequentes
                     top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
                     top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
                     
-                    # Para o cercado, pegamos os 3 mais frequentes para dar mais opções
                     top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
                     top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
 
                     st.success(f"Base Carregada! Analisando após: {ult_m} (Grupo {ult_g})")
 
-                    # PAINEL MARKOV REESTRUTURADO
+                    # PAINEL MARKOV (SEM RECUOS PARA EVITAR BLOCO DE CÓDIGO)
                     st.markdown(f"""
-                    <div class="card-tatico">
-                        <div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <span class="label-destaque">🎯 ALVO SECO (Para o 1º Prêmio):</span><br>
-                            Grupo Alvo: <span class="dado-destaque">{top_seco_g}</span> | 
-                            Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
-                        </div>
-                        
-                        <hr>
-                        
-                        <div style="margin-top: 10px;">
-                            <span class="label-destaque">🛡️ ALVOS CERCADOS (Para sair do 1º ao 5º):</span><br>
-                            <p style="color:#aaa; font-size:0.9em;">Estes são os números que mais aparecem em qualquer posição após o grupo gatilho.</p>
-                            <b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
-                            <b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+<div class="card-tatico">
+<div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
+<div style="margin-bottom: 20px;">
+<span class="label-destaque">🎯 ALVO SECO (Para o 1º Prêmio):</span><br>
+Grupo Alvo: <span class="dado-destaque">{top_seco_g}</span> | 
+Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
+</div>
+<hr>
+<div style="margin-top: 10px;">
+<span class="label-destaque">🛡️ ALVOS CERCADOS (Para sair do 1º ao 5º):</span><br>
+<p style="color:#aaa; font-size:0.9em;">Estes são os números que mais aparecem em qualquer posição após o grupo gatilho.</p>
+<b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
+<b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
+</div>
+</div>
+""", unsafe_allow_html=True)
 
-                    # PAINEL ALERTA (PONTO CRÍTICO)
                     def gerar_alertas(dic, pref):
                         alertas = []
                         for k, v in dic.items():
@@ -228,13 +220,14 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                                 alertas.append(f"• {pref} **{k}** <span class='sub-dado'>(Atraso: {v['t']} | Recorde: {v['max']})</span>")
                         return "<br>".join(alertas) if alertas else "Sem rupturas iminentes."
 
+                    # PAINEL ALERTA (SEM RECUOS)
                     st.markdown(f"""
-                    <div class="card-alerta">
-                        <div class="titulo-card" style="color:#ff4b4b;">⏳ 2. Alerta de Ponto Crítico (Ruptura)</div>
-                        <b style="color:#ffb74d;">🦁 GRUPOS (1º Prêmio):</b><br>{gerar_alertas(atr_g, "Grupo")}<br><br>
-                        <b style="color:#ffb74d;">🥇 UNID. MILHAR (1º Prêmio):</b><br>{gerar_alertas(atr_um, "UM")}
-                    </div>
-                    """, unsafe_allow_html=True)
+<div class="card-alerta">
+<div class="titulo-card" style="color:#ff4b4b;">⏳ 2. Alerta de Ponto Crítico (Ruptura)</div>
+<b style="color:#ffb74d;">🦁 GRUPOS (1º Prêmio):</b><br>{gerar_alertas(atr_g, "Grupo")}<br><br>
+<b style="color:#ffb74d;">🥇 UNID. MILHAR (1º Prêmio):</b><br>{gerar_alertas(atr_um, "UM")}
+</div>
+""", unsafe_allow_html=True)
 
                 except Exception as e:
                     st.error(f"Erro no processamento: {e}")
