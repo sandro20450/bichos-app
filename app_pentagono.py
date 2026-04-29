@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V36 - Tempo Real", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V37 - Milhar de Ouro", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -23,7 +23,6 @@ def conectar_sheets():
         st.error(f"Erro na conexão com Google Sheets: {e}")
         return None
 
-# --- MOTOR DE SALVAMENTO SEGURO (ANTI-DUPLICAÇÃO) ---
 def salvar_sem_duplicar(ws, dados_novos):
     try:
         existentes = ws.get_all_values()
@@ -65,12 +64,14 @@ st.markdown("""
     hr { border-color: #4CAF50; opacity: 0.3; }
     .card-tatico { background-color: #001a00; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50; margin-bottom: 15px; }
     .card-alerta { background-color: #2b0000; padding: 20px; border-radius: 10px; border: 1px solid #ff4b4b; margin-bottom: 15px; }
+    .card-ouro { background-color: #1a1a00; padding: 15px; border-radius: 8px; border: 1px dashed #ffeb3b; margin-top: 15px; text-align: center; }
     .titulo-card { color: #ffb74d; font-weight: bold; font-size: 1.25em; margin-bottom: 10px;}
     .dado-destaque { font-size: 1.8em; font-weight: bold; color: #fff; }
     .label-destaque { color: #4CAF50; font-weight: bold; font-size: 1.1em; }
     .sub-dado { color: #aaa; font-size: 0.85em; margin-left: 10px; }
     .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; display: inline-block; margin-right: 5px; }
     .badge-duque { background-color: #4b3800; padding: 5px 10px; border-radius: 5px; color: #ffb74d; font-weight: bold; border: 1px solid #ffb74d; display: inline-block; margin-right: 5px; }
+    .milhar-ouro { font-size: 2.8em; font-weight: bold; color: #ffeb3b; letter-spacing: 5px; text-shadow: 0px 0px 10px rgba(255, 235, 59, 0.4); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,7 +115,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V36")
+    st.header("🎯 Pentágono V37")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -209,7 +210,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
     st.title("🔮 Inteligência Artificial de Combate")
     st.markdown("O Pentágono agora puxa os seus dados **diretamente da API em tempo real**, sem atrasos de cache!")
     
-    # AGORA SELECIONA A BANCA EM VEZ DE COLAR O LINK
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     if st.button("Gerar Relatórios de Ataque", use_container_width=True):
@@ -224,13 +224,10 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                         st.error("A aba selecionada está vazia.")
                     else:
                         df = pd.DataFrame(dados_brutos)
-                        
-                        # Garante que tenha pelo menos 7 colunas e nomeia
                         for i in range(len(df.columns), 7): df[i] = ""
                         df = df.iloc[:, :7]
                         df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
                         
-                        # Limpeza Pesada: Remove cabeçalhos e linhas vazias
                         df = df[df["P1"].astype(str).str.strip() != ""]
                         df = df[df["P1"].astype(str).str.lower() != "nan"]
                         df = df[df["P1"].astype(str).str.lower() != "none"]
@@ -260,14 +257,13 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                                     atr_um[k]['t'] = 0 if k == um_v else atr_um[k]['t'] + 1
                                     if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
 
-                            # Pegando o ÚLTIMO SORTEIO REAL
                             ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                             ult_nome = str(df.iloc[-1]["Sorteio"])
                             ult_g = get_grupo(ult_m)
                             
                             seco_g, seco_um = [], []
                             duque_g = [] 
-                            cercado_g, cercado_um = [], []
+                            cercado_g, cercado_um, cercado_c, cercado_dz = [], [], [], []
 
                             for i in range(len(df)-1):
                                 if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
@@ -283,16 +279,28 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                                             
                                     for p in ["P1", "P2", "P3", "P4", "P5"]:
                                         p_m_all = str(df.iloc[i+1][p]).zfill(4)
-                                        if p_m_all != "nan" and "---" not in p_m_all and p_m_all != "":
+                                        if p_m_all != "nan" and "---" not in p_m_all and len(p_m_all) == 4:
                                             g_cerc = get_grupo(p_m_all)
                                             if g_cerc: cercado_g.append(g_cerc)
                                             cercado_um.append(p_m_all[0])
+                                            cercado_c.append(p_m_all[1]) # Centena
+                                            cercado_dz.append(p_m_all[2:]) # Dezena
                                     
                             top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
                             top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
                             top_duq_g = pd.Series(duque_g).value_counts().head(2).index.tolist() if duque_g else []
+                            
                             top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
                             top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
+                            
+                            # --- A FORJA DA MILHAR DE OURO ---
+                            try:
+                                t_um_ouro = top_cerc_um[0] if top_cerc_um else "0"
+                                t_c_ouro = pd.Series(cercado_c).mode()[0] if cercado_c else "0"
+                                t_dz_ouro = pd.Series(cercado_dz).mode()[0] if cercado_dz else "00"
+                                milhar_ouro = f"{t_um_ouro}{t_c_ouro}{t_dz_ouro}"
+                            except:
+                                milhar_ouro = "0000"
 
                             st.success(f"Base Sincronizada ao Vivo! Último Sorteio Encontrado: {ult_nome} - Milhar {ult_m} (Grupo {ult_g})")
 
@@ -322,6 +330,13 @@ Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
 <b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
 <b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
 </div>
+
+<div class="card-ouro">
+<span class="label-destaque" style="color:#ffeb3b; font-size: 1.2em;">💎 A MILHAR DE OURO (Cercado 1º ao 5º)</span><br>
+<p style="color:#aaa; font-size:0.85em; margin-top:5px; margin-bottom:10px;">Forjada unindo matematicamente a Unidade, Centena e Dezena mais frequentes do histórico de repetições pós-gatilho.</p>
+<div class="milhar-ouro">{milhar_ouro}</div>
+</div>
+
 </div>
 """, unsafe_allow_html=True)
 
