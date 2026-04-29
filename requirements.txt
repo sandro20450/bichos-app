@@ -1,11 +1,6 @@
 streamlit
 pandas
-gspread
-google-auth
 requests
-pytz
 beautifulsoup4
-scikit-learn
-openpyxl
-
-
+gspread
+oauth2client
