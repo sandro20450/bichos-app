@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V31 - Especialista em Milhar", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V32 - Arsenal Completo", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -87,34 +87,107 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V31")
+    st.header("🎯 Pentágono V32")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
-# --- 4. TELA 1: EXTRAÇÃO ---
+# --- 4. TELA 1: EXTRAÇÃO MULTI-MODAL ---
 # =============================================================================
 if menu == "📡 Extração & Automação":
     st.title("📡 Automação CentralBichos")
     banca_sel = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    dt_alvo = st.date_input("Data do Sorteio:", value=date.today())
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔍 Apenas Visualizar", use_container_width=True):
-            dados = extrair_dia(banca_sel, dt_alvo)
-            if dados: st.table(pd.DataFrame(dados, columns=["Data", "Horário", "1º", "2º", "3º", "4º", "5º"]))
-            else: st.error("Nenhum dado encontrado.")
-    with col2:
-        if st.button("🚀 EXTRAIR E SALVAR", use_container_width=True):
-            with st.spinner("Conectando e salvando..."):
+    # NOVAS ABAS DE EXTRAÇÃO
+    tab1, tab2, tab3 = st.tabs(["📅 Dia Específico", "🚀 Extração em Massa", "✍️ Inserção Manual"])
+    
+    # -------------------------------------------------------------------------
+    # ABA 1: DIA ESPECÍFICO
+    # -------------------------------------------------------------------------
+    with tab1:
+        dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔍 Apenas Visualizar", use_container_width=True, key="btn_vis_1"):
                 dados = extrair_dia(banca_sel, dt_alvo)
-                if dados:
+                if dados: st.table(pd.DataFrame(dados, columns=["Data", "Sorteio", "1º", "2º", "3º", "4º", "5º"]))
+                else: st.error("Nenhum dado encontrado.")
+        with c2:
+            if st.button("🚀 EXTRAIR E SALVAR (1 DIA)", use_container_width=True, key="btn_salv_1"):
+                with st.spinner("Conectando e salvando..."):
+                    dados = extrair_dia(banca_sel, dt_alvo)
+                    if dados:
+                        sh = conectar_sheets()
+                        if sh:
+                            ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                            ws.append_rows(dados)
+                            st.success(f"✅ {len(dados)} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
+                    else: st.error("Erro ao extrair.")
+
+    # -------------------------------------------------------------------------
+    # ABA 2: EXTRAÇÃO EM MASSA
+    # -------------------------------------------------------------------------
+    with tab2:
+        col_m1, col_m2 = st.columns(2)
+        with col_m1: dt_inicio = st.date_input("Data Inicial:", value=date.today() - timedelta(days=2))
+        with col_m2: dt_fim = st.date_input("Data Final:", value=date.today())
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            if st.button("🔍 Visualizar Massa", use_container_width=True):
+                with st.spinner("Varrendo histórico..."):
+                    todos_dados = []
+                    delta = dt_fim - dt_inicio
+                    for i in range(delta.days + 1):
+                        dia_atual = dt_inicio + timedelta(days=i)
+                        todos_dados.extend(extrair_dia(banca_sel, dia_atual))
+                    if todos_dados: st.dataframe(pd.DataFrame(todos_dados, columns=["Data", "Sorteio", "1º", "2º", "3º", "4º", "5º"]), use_container_width=True)
+                    else: st.warning("Nenhum dado no período.")
+        with c4:
+            if st.button("🚀 SALVAR MASSA NA PLANILHA", use_container_width=True):
+                with st.spinner("Varrendo servidores e enviando para o Google..."):
+                    todos_dados = []
+                    delta = dt_fim - dt_inicio
+                    for i in range(delta.days + 1):
+                        dia_atual = dt_inicio + timedelta(days=i)
+                        todos_dados.extend(extrair_dia(banca_sel, dia_atual))
+                    
+                    if todos_dados:
+                        sh = conectar_sheets()
+                        if sh:
+                            ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                            ws.append_rows(todos_dados)
+                            st.success(f"✅ {len(todos_dados)} sorteios (múltiplos dias) salvos na aba {MAPA_ABAS[banca_sel]}!")
+                    else: st.error("Nenhum dado encontrado no período.")
+
+    # -------------------------------------------------------------------------
+    # ABA 3: INSERÇÃO MANUAL
+    # -------------------------------------------------------------------------
+    with tab3:
+        st.write("Digite os resultados manualmente. Linhas em branco ou sem nome de sorteio serão ignoradas.")
+        df_manual = pd.DataFrame([{
+            "Data": date.today().strftime('%Y-%m-%d'), 
+            "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""
+        }])
+        
+        df_editado = st.data_editor(df_manual, num_rows="dynamic", use_container_width=True)
+        
+        if st.button("💾 SALVAR DADOS MANUAIS", use_container_width=True):
+            with st.spinner("Gravando..."):
+                # Converte o dataframe editado para lista e remove linhas vazias
+                dados_limpos = []
+                for row in df_editado.values.tolist():
+                    # Verifica se o campo Sorteio foi preenchido
+                    if str(row[1]).strip() != "" and str(row[1]).strip() != "nan":
+                        dados_limpos.append(row)
+                
+                if dados_limpos:
                     sh = conectar_sheets()
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                        ws.append_rows(dados)
-                        st.success(f"✅ {len(dados)} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
-                else: st.error("Erro ao extrair.")
+                        ws.append_rows(dados_limpos)
+                        st.success(f"✅ {len(dados_limpos)} sorteio(s) manuais inseridos na aba {MAPA_ABAS[banca_sel]}!")
+                else:
+                    st.warning("Preencha ao menos o campo 'Sorteio' e os prêmios para salvar.")
 
 # =============================================================================
 # --- 5. TELA 2: CONSELHEIRO TÁTICO ---
@@ -138,18 +211,16 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
                         except: return None
                     
-                    # ---------------------------------------------------------
                     # CÁLCULO DE ATRASOS E RECORDES
-                    # ---------------------------------------------------------
                     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-                    atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} # Unidade de Milhar (1º dígito)
+                    atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
                     
                     for i in range(len(df)):
                         m_str = str(df.iloc[i]["P1"]).zfill(4)
                         if m_str == "nan" or "---" in m_str: continue
                         
                         g_val = get_grupo(m_str)
-                        um_val = m_str[0] # 1º dígito
+                        um_val = m_str[0]
                         
                         if g_val:
                             for k in atr_g:
@@ -159,9 +230,7 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             atr_um[k]['t'] = 0 if k == um_val else atr_um[k]['t'] + 1
                             if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
 
-                    # ---------------------------------------------------------
                     # MARKOV AUTOMÁTICO (ULTIMO SORTEIO)
-                    # ---------------------------------------------------------
                     ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                     ult_g = get_grupo(ult_m)
                     
@@ -175,12 +244,9 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     t_g = pd.Series(prox_g).mode()[0] if prox_g else "N/A"
                     t_um = pd.Series(prox_um).mode()[0] if prox_um else "N/A"
 
-                    # ---------------------------------------------------------
                     # RENDERS DOS RELATÓRIOS
-                    # ---------------------------------------------------------
                     st.success(f"Base Carregada! Analisando após: {ult_m} (Grupo {ult_g})")
 
-                    # PAINEL 1: MARKOV (PREVISÃO)
                     st.markdown(f"""
                     <div class="card-tatico">
                         <div class="titulo-card">🔮 1. Previsor Markov (Próximo Sorteio no 1º Prêmio)</div>
@@ -190,7 +256,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # PAINEL 2: PONTO CRÍTICO (ATRASOS)
                     def gerar_alertas(dic, pref):
                         alertas = []
                         for k, v in dic.items():
