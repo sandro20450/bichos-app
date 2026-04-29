@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V32 - Arsenal Completo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V32.1 - Arsenal Completo", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -87,7 +87,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V32")
+    st.header("🎯 Pentágono V32.1")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -97,7 +97,6 @@ if menu == "📡 Extração & Automação":
     st.title("📡 Automação CentralBichos")
     banca_sel = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
-    # NOVAS ABAS DE EXTRAÇÃO
     tab1, tab2, tab3 = st.tabs(["📅 Dia Específico", "🚀 Extração em Massa", "✍️ Inserção Manual"])
     
     # -------------------------------------------------------------------------
@@ -119,7 +118,8 @@ if menu == "📡 Extração & Automação":
                         sh = conectar_sheets()
                         if sh:
                             ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                            ws.append_rows(dados)
+                            # Modo RAW força o Google a aceitar zeros à esquerda
+                            ws.append_rows(dados, value_input_option="RAW")
                             st.success(f"✅ {len(dados)} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
                     else: st.error("Erro ao extrair.")
 
@@ -155,37 +155,48 @@ if menu == "📡 Extração & Automação":
                         sh = conectar_sheets()
                         if sh:
                             ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                            ws.append_rows(todos_dados)
-                            st.success(f"✅ {len(todos_dados)} sorteios (múltiplos dias) salvos na aba {MAPA_ABAS[banca_sel]}!")
+                            ws.append_rows(todos_dados, value_input_option="RAW")
+                            st.success(f"✅ {len(todos_dados)} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
                     else: st.error("Nenhum dado encontrado no período.")
 
     # -------------------------------------------------------------------------
-    # ABA 3: INSERÇÃO MANUAL
+    # ABA 3: INSERÇÃO MANUAL (CORRIGIDA)
     # -------------------------------------------------------------------------
     with tab3:
-        st.write("Digite os resultados manualmente. Linhas em branco ou sem nome de sorteio serão ignoradas.")
+        st.write("Digite os resultados manualmente. O sistema forçará 4 dígitos (ex: '911' vira '0911').")
+        
+        # dtype=str blinda a tabela contra interpretações matemáticas indesejadas
         df_manual = pd.DataFrame([{
             "Data": date.today().strftime('%Y-%m-%d'), 
             "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""
-        }])
+        }], dtype=str)
         
         df_editado = st.data_editor(df_manual, num_rows="dynamic", use_container_width=True)
         
         if st.button("💾 SALVAR DADOS MANUAIS", use_container_width=True):
-            with st.spinner("Gravando..."):
-                # Converte o dataframe editado para lista e remove linhas vazias
+            with st.spinner("Formatando e Gravando..."):
                 dados_limpos = []
                 for row in df_editado.values.tolist():
-                    # Verifica se o campo Sorteio foi preenchido
                     if str(row[1]).strip() != "" and str(row[1]).strip() != "nan":
-                        dados_limpos.append(row)
+                        linha_formatada = [str(row[0]).strip(), str(row[1]).strip()]
+                        
+                        # Blinda cada milhar, remove ".0" se o pandas tiver convertido, e força 4 zeros
+                        for val in row[2:7]:
+                            v_str = str(val).replace(".0", "").strip()
+                            if v_str == "nan" or v_str == "":
+                                linha_formatada.append("")
+                            else:
+                                linha_formatada.append(v_str.zfill(4)) # Transforma 911 em 0911
+                                
+                        dados_limpos.append(linha_formatada)
                 
                 if dados_limpos:
                     sh = conectar_sheets()
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                        ws.append_rows(dados_limpos)
-                        st.success(f"✅ {len(dados_limpos)} sorteio(s) manuais inseridos na aba {MAPA_ABAS[banca_sel]}!")
+                        # value_input_option="RAW" impede o Sheets de deletar o zero inicial
+                        ws.append_rows(dados_limpos, value_input_option="RAW")
+                        st.success(f"✅ {len(dados_limpos)} sorteio(s) manuais inseridos perfeitamente!")
                 else:
                     st.warning("Preencha ao menos o campo 'Sorteio' e os prêmios para salvar.")
 
@@ -211,7 +222,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
                         except: return None
                     
-                    # CÁLCULO DE ATRASOS E RECORDES
                     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
                     atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
                     
@@ -230,7 +240,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             atr_um[k]['t'] = 0 if k == um_val else atr_um[k]['t'] + 1
                             if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
 
-                    # MARKOV AUTOMÁTICO (ULTIMO SORTEIO)
                     ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                     ult_g = get_grupo(ult_m)
                     
@@ -244,7 +253,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     t_g = pd.Series(prox_g).mode()[0] if prox_g else "N/A"
                     t_um = pd.Series(prox_um).mode()[0] if prox_um else "N/A"
 
-                    # RENDERS DOS RELATÓRIOS
                     st.success(f"Base Carregada! Analisando após: {ult_m} (Grupo {ult_g})")
 
                     st.markdown(f"""
