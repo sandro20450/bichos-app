@@ -11,33 +11,27 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V28 - Automação Sheets", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V28.1 - Automação Sheets", page_icon="🎯", layout="wide")
 
 # Função para conectar na planilha CentralBichos
 def conectar_sheets():
     try:
-        # Tenta pegar as credenciais dos Secrets do Streamlit
+        # Pega as credenciais dos Secrets do Streamlit
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        
-        # Se você estiver usando localmente com arquivo json:
-        # creds = ServiceAccountCredentials.from_json_keyfile_name("seu_arquivo_creds.json", scope)
-        
-        # Padrão Streamlit Cloud (Recomendado):
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-        
         client = gspread.authorize(creds)
-        # Abre a planilha pelo nome exato que vimos na sua imagem
+        # Abre a planilha
         return client.open("CentralBichos")
     except Exception as e:
         st.error(f"Erro na conexão com Google Sheets: {e}")
         return None
 
-# Mapeamento das Abas da Planilha conforme a imagem enviada
+# --- CORREÇÃO TÁTICA: NOVO MAPA DE ABAS (FOCO EM MILHAR) ---
 MAPA_ABAS = {
-    "Tradicional": "BASE_TRADICIONAL_DEZ",
-    "Caminho da Sorte": "BASE_CAMINHO_DEZ",
-    "Monte Carlos": "BASE_MONTE_CARLOS_DEZ",
-    "Lotep": "BASE_LOTEP_DEZ"
+    "Tradicional": "TRADICIONAL_MILHAR",
+    "Caminho da Sorte": "CAMINHO_MILHAR",
+    "Monte Carlos": "MONTE_MILHAR",
+    "Lotep": "LOTEP_MILHAR"
 }
 
 st.markdown("""
@@ -82,7 +76,7 @@ def extrair_dia(banca, data_alvo):
                     milhares.append(milhar)
                     
             if len(milhares) >= 5:
-                # Retorna no formato exato da sua planilha: Data, Horário, 1, 2, 3, 4, 5
+                # Formato final para a planilha: Data, Horário, 1º, 2º, 3º, 4º, 5º
                 resultados.append([
                     data_alvo.strftime('%Y-%m-%d'),
                     nome,
@@ -96,7 +90,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V28")
+    st.header("🎯 Pentágono V28.1")
     menu = st.radio("Selecione a Operação:", ["📡 Extração & Automação", "🧠 Oráculo de Padrões"])
 
 # =============================================================================
@@ -126,13 +120,12 @@ if menu == "📡 Extração & Automação":
                     if sh:
                         aba_nome = MAPA_ABAS[banca_sel]
                         ws = sh.worksheet(aba_nome)
-                        # Salva todas as linhas encontradas de uma vez
                         ws.append_rows(dados)
                         st.success(f"✅ {len(dados)} sorteios salvos com sucesso na aba {aba_nome}!")
                 else: st.error("Erro ao extrair dados do site.")
 
 # =============================================================================
-# --- 5. TELA 2: ORÁCULO (REUTILIZANDO O CSV PARA ANÁLISE) ---
+# --- 5. TELA 2: ORÁCULO DE MARKOV ---
 # =============================================================================
 elif menu == "🧠 Oráculo de Padrões":
     st.title("🧠 Oráculo de Markov")
@@ -143,18 +136,23 @@ elif menu == "🧠 Oráculo de Padrões":
             df_sheets.columns = [f"Col {i}" for i in range(len(df_sheets.columns))]
             st.success(f"✅ Histórico Carregado: {len(df_sheets)} linhas.")
             
-            # (Aqui continua a lógica de Markov da V27...)
             col_gat = st.selectbox("Coluna do Gatilho:", df_sheets.columns)
             val_gat = st.text_input("Número Gatilho:")
             col_som = st.selectbox("Coluna da Sombra (Próximo Jogo):", df_sheets.columns)
             
             if st.button("Caçar Padrões"):
-                resultados = []
-                for i in range(len(df_sheets)-1):
-                    if str(val_gat) in str(df_sheets.iloc[i][col_gat]):
-                        res = str(df_sheets.iloc[i+1][col_som])
-                        if res != 'nan': resultados.append(res)
-                if resultados:
-                    st.write(pd.Series(resultados).value_counts().head(10))
-                else: st.warning("Nada encontrado.")
-        except: st.error("Erro ao carregar.")
+                if val_gat:
+                    resultados = []
+                    for i in range(len(df_sheets)-1):
+                        if str(val_gat) in str(df_sheets.iloc[i][col_gat]):
+                            res = str(df_sheets.iloc[i+1][col_som])
+                            if res and res.lower() != 'nan': resultados.append(res)
+                    if resultados:
+                        freq = pd.Series(resultados).value_counts().reset_index()
+                        freq.columns = ["O Que Saiu no Sorteio Seguinte", "Frequência (Vezes)"]
+                        st.markdown(f"**ALERTA:** Gatilho encontrado {len(resultados)} vezes!")
+                        st.dataframe(freq.head(10), use_container_width=True, hide_index=True)
+                    else: st.warning("Nada encontrado para este gatilho no sorteio seguinte.")
+                else:
+                    st.error("Digite o número do gatilho!")
+        except Exception as e: st.error(f"Erro ao carregar link CSV: {e}")
