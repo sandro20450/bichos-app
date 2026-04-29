@@ -9,7 +9,7 @@ import math
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E ESTILIZAÇÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V26 - Oráculo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V27 - Oráculo Markov", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -17,7 +17,8 @@ st.markdown("""
     h1, h2, h3 { color: #4CAF50 !important; }
     .stButton > button { background-color: #4CAF50; color: white; font-weight: bold; border-radius: 8px; }
     hr { border-color: #4CAF50; opacity: 0.3; }
-    .destaque-markov { background-color: #002b0c; padding: 15px; border-radius: 10px; border: 1px solid #4CAF50; text-align: center; }
+    .markov-card { background-color: #001a00; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50; }
+    .alerta-markov { color: #ffb74d; font-weight: bold; font-size: 1.2em; text-align: center; margin-bottom: 15px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -69,7 +70,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V26")
+    st.header("🎯 Pentágono V27")
     menu = st.radio("Selecione a Operação:", ["📡 Máquina de Extração", "🧠 Oráculo de Padrões (Sheets)"])
 
 # =============================================================================
@@ -81,7 +82,6 @@ if menu == "📡 Máquina de Extração":
     
     tab1, tab2, tab3 = st.tabs(["📅 Dia Específico", "🚀 Extração em Massa", "✍️ Inserção Manual"])
     
-    # Aba 1: Dia Específico
     with tab1:
         dt_alvo = st.date_input("Escolha a Data:")
         if st.button("Puxar Resultados do Dia"):
@@ -90,7 +90,6 @@ if menu == "📡 Máquina de Extração":
                 if dados: st.dataframe(pd.DataFrame(dados), use_container_width=True)
                 else: st.warning("Nenhum dado encontrado para esta data.")
                 
-    # Aba 2: Extração em Massa
     with tab2:
         col1, col2 = st.columns(2)
         with col1: dt_inicio = st.date_input("Data Inicial:", value=date.today() - timedelta(days=5))
@@ -107,12 +106,10 @@ if menu == "📡 Máquina de Extração":
                 if todos_dados:
                     df_massa = pd.DataFrame(todos_dados)
                     st.dataframe(df_massa, use_container_width=True)
-                    # Botão para baixar em CSV (Para colar na sua planilha)
                     csv = df_massa.to_csv(index=False).encode('utf-8')
                     st.download_button("📥 Baixar Dados (CSV)", data=csv, file_name=f"extracao_{banca_selecionada}.csv", mime="text/csv")
                 else: st.warning("Nenhum dado encontrado no período.")
 
-    # Aba 3: Inserção Manual
     with tab3:
         st.write("Insira os dados manualmente caso o site da banca esteja fora do ar.")
         df_manual = pd.DataFrame([{"Data": "", "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""}])
@@ -123,36 +120,69 @@ if menu == "📡 Máquina de Extração":
 # =============================================================================
 elif menu == "🧠 Oráculo de Padrões (Sheets)":
     st.title("🧠 Oráculo de Padrões (Cadeias de Markov)")
-    st.markdown("Conecte a sua planilha **CentralBichos** para o app procurar sequências ocultas.")
-    
-    st.info("""
-    **Como conectar sua planilha do Google Sheets:**
-    1. Abra sua planilha 'CentralBichos' no Google.
-    2. Vá em **Arquivo > Compartilhar > Publicar na Web**.
-    3. Escolha a aba desejada (ex: Lotep) e o formato **CSV (Valores separados por vírgula)**.
-    4. Clique em Publicar e **copie o link gerado**. Cole o link no campo abaixo.
-    """)
+    st.markdown("Conecte a sua planilha confidencial para caçar as **Sombras e Repetições** da Banca.")
     
     link_csv = st.text_input("🔗 Link Público CSV do Google Sheets:", placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv")
     
     if link_csv:
-        if st.button("📡 Analisar Padrões Históricos"):
-            with st.spinner("Baixando histórico e processando matriz de probabilidades..."):
-                try:
-                    # Lê os dados diretos da sua planilha do Google!
-                    df_sheets = pd.read_csv(link_csv)
-                    st.success(f"✅ Planilha conectada! {len(df_sheets)} linhas carregadas.")
-                    
-                    st.dataframe(df_sheets.head(5), use_container_width=True)
-                    
-                    st.markdown("---")
-                    st.markdown("### 🕵️‍♂️ Algoritmo de Markov (Exemplo Tático)")
-                    st.markdown("""
-                    <div class="destaque-markov">
-                        <h4 style="color: #ffb74d;">O MOTOR ESTÁ LIGADO!</h4>
-                        <p style="color: #ccc;">O aplicativo agora consegue ler o seu histórico inteiro. A partir daqui, na próxima atualização, vamos programar os comandos de busca (Ex: "Quando sai Vaca no 1º, qual bicho sai depois?").</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                except Exception as e:
-                    st.error(f"Erro ao ler a planilha. Verifique se o link é o CSV correto. Erro: {e}")
+        try:
+            # header=None evita que a primeira linha de dados vire título da coluna!
+            # Adicionamos um prefixo genérico para você saber qual coluna é qual
+            df_sheets = pd.read_csv(link_csv, header=None)
+            df_sheets.columns = [f"Coluna {i}" for i in range(len(df_sheets.columns))]
+            
+            st.success(f"✅ Planilha conectada! {len(df_sheets)} sorteios carregados para análise.")
+            
+            with st.expander("👀 Ver Dados Brutos Carregados"):
+                st.dataframe(df_sheets.head(10), use_container_width=True)
+            
+            st.markdown("---")
+            
+            # --- MOTOR DE MARKOV ---
+            st.markdown("### 🕵️‍♂️ Rastreador de Sombras (Algoritmo Preditor)")
+            st.markdown("Configure o radar: O que você quer procurar no passado para prever o futuro?")
+            
+            colunas_disponiveis = df_sheets.columns.tolist()
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                col_gatilho = st.selectbox("1. Onde ocorre o GATILHO?", colunas_disponiveis, help="A coluna onde o evento inicial acontece. Ex: Coluna do 1º Prêmio.")
+            with c2:
+                val_gatilho = st.text_input("2. Qual o NÚMERO do Gatilho?", placeholder="Ex: 15 (Grupo) ou 34 (Dezena)")
+            with c3:
+                col_sombra = st.selectbox("3. Onde a SOMBRA vai aparecer?", colunas_disponiveis, help="A coluna que você quer prever no JOGO SEGUINTE.")
+
+            if st.button("Executar Varredura Histórica", use_container_width=True):
+                if not val_gatilho:
+                    st.error("⚠️ Você precisa digitar um número de Gatilho para iniciar a caçada.")
+                else:
+                    with st.spinner("Analisando cadeia de eventos em todo o histórico..."):
+                        resultados_sombra = []
+                        # O loop vai até o penúltimo para podermos olhar o "jogo seguinte" (i + 1)
+                        for i in range(len(df_sheets) - 1):
+                            # Verifica se o gatilho aconteceu nesta linha
+                            valor_linha_atual = str(df_sheets.iloc[i][col_gatilho]).strip()
+                            
+                            # Se o gatilho for encontrado, olha para a próxima linha (O Sorteio Seguinte)
+                            if valor_gatilho in valor_linha_atual:
+                                sombra_encontrada = str(df_sheets.iloc[i+1][col_sombra]).strip()
+                                # Limpeza básica para não pegar valores vazios
+                                if sombra_encontrada and sombra_encontrada.lower() != 'nan':
+                                    resultados_sombra.append(sombra_encontrada)
+                        
+                        st.markdown(f'<div class="markov-card">', unsafe_allow_html=True)
+                        if resultados_sombra:
+                            freq = pd.Series(resultados_sombra).value_counts().reset_index()
+                            freq.columns = ["O Que Saiu no Sorteio Seguinte", "Frequência (Vezes)"]
+                            
+                            st.markdown(f'<div class="alerta-markov">🚨 GATILHO "{val_gatilho}" ENCONTRADO {len(resultados_sombra)} VEZES!</div>', unsafe_allow_html=True)
+                            st.markdown("Sempre que o seu gatilho saiu, estes foram os números que a banca soltou logo em seguida na posição que você escolheu:")
+                            
+                            # Mostra o Top 10 mais frequentes no jogo seguinte
+                            st.dataframe(freq.head(10), use_container_width=True, hide_index=True)
+                        else:
+                            st.warning(f"O radar não encontrou o gatilho '{val_gatilho}' no histórico fornecido ou não houve sorteio seguinte para ele.")
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"Erro ao ler a planilha. Verifique o link. Erro técnico: {e}")
