@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V34 - Escudo Anti-Duplicação", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V35 - Tática de Duque", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -28,7 +28,6 @@ def salvar_sem_duplicar(ws, dados_novos):
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
-        # Mapeia o que já existe usando Data + Sorteio
         for row in existentes:
             if len(row) >= 2:
                 set_existentes.add(f"{str(row[0]).strip()}_{str(row[1]).strip()}")
@@ -41,7 +40,7 @@ def salvar_sem_duplicar(ws, dados_novos):
                 duplicados += 1
             else:
                 para_inserir.append(linha)
-                set_existentes.add(chave) # Adiciona à memória para não duplicar na mesma remessa
+                set_existentes.add(chave)
                 
         if para_inserir:
             ws.append_rows(para_inserir, value_input_option="RAW")
@@ -70,7 +69,8 @@ st.markdown("""
     .dado-destaque { font-size: 1.8em; font-weight: bold; color: #fff; }
     .label-destaque { color: #4CAF50; font-weight: bold; font-size: 1.1em; }
     .sub-dado { color: #aaa; font-size: 0.85em; margin-left: 10px; }
-    .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; }
+    .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; display: inline-block; margin-right: 5px; }
+    .badge-duque { background-color: #4b3800; padding: 5px 10px; border-radius: 5px; color: #ffb74d; font-weight: bold; border: 1px solid #ffb74d; display: inline-block; margin-right: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,7 +114,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V34")
+    st.header("🎯 Pentágono V35")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -178,11 +178,10 @@ if menu == "📡 Extração & Automação":
                     sort_v = str(r[1]).strip()
                     if sort_v != "" and sort_v != "nan" and sort_v != "None":
                         linha = [data_v, sort_v]
-                        # Correção do Bug do 0000 (Ignora células vazias corretamente)
                         for v in r[2:7]: 
                             v_str = str(v).replace(".0", "").strip()
                             if v_str == "" or v_str.lower() == "nan" or v_str == "none":
-                                linha.append("") # Deixa vazio ao invés de 0000
+                                linha.append("") 
                             else:
                                 linha.append(v_str.zfill(4))
                         limpos.append(linha)
@@ -241,21 +240,38 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     ult_g = get_grupo(ult_m)
                     
                     seco_g, seco_um = [], []
+                    duque_g = [] # Nova lista para 1º e 2º
                     cercado_g, cercado_um = [], []
 
                     for i in range(len(df)-1):
                         if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
+                            
+                            # 1. Alvo Seco (Próximo 1º Prêmio)
                             p_m_seco = str(df.iloc[i+1]["P1"]).zfill(4)
                             seco_g.append(get_grupo(p_m_seco))
                             seco_um.append(p_m_seco[0])
+                            
+                            # 2. Alvo Duque (Próximo 1º e 2º Prêmio)
+                            for p in ["P1", "P2"]:
+                                p_m_duq = str(df.iloc[i+1][p]).zfill(4)
+                                if p_m_duq != "nan" and "---" not in p_m_duq:
+                                    g_duq = get_grupo(p_m_duq)
+                                    if g_duq: duque_g.append(g_duq)
+                            
+                            # 3. Alvo Cercado (Próximo 1º ao 5º Prêmio)
                             for p in ["P1", "P2", "P3", "P4", "P5"]:
                                 p_m_all = str(df.iloc[i+1][p]).zfill(4)
                                 if p_m_all != "nan" and "---" not in p_m_all:
-                                    cercado_g.append(get_grupo(p_m_all))
+                                    g_cerc = get_grupo(p_m_all)
+                                    if g_cerc: cercado_g.append(g_cerc)
                                     cercado_um.append(p_m_all[0])
                             
                     top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
                     top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
+                    
+                    # Top 2 para Duque
+                    top_duq_g = pd.Series(duque_g).value_counts().head(2).index.tolist() if duque_g else []
+                    
                     top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
                     top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
 
@@ -264,18 +280,30 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                     st.markdown(f"""
 <div class="card-tatico">
 <div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
+
 <div style="margin-bottom: 20px;">
 <span class="label-destaque">🎯 ALVO SECO (Para o 1º Prêmio):</span><br>
 Grupo Alvo: <span class="dado-destaque">{top_seco_g}</span> | 
 Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
 </div>
+
 <hr>
+
+<div style="margin-bottom: 20px; margin-top: 10px;">
+<span class="label-destaque" style="color:#ffb74d;">⚔️ DUQUE DE GRUPO (Para sair no 1º ou 2º Prêmio):</span><br>
+<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Aposte casando estes dois grupos na cabeça e segundo.</p>
+<b>TOP 2 GRUPOS:</b> {' '.join([f'<span class="badge-duque">{x}</span>' for x in top_duq_g])}
+</div>
+
+<hr>
+
 <div style="margin-top: 10px;">
 <span class="label-destaque">🛡️ ALVOS CERCADOS (Para sair do 1º ao 5º):</span><br>
-<p style="color:#aaa; font-size:0.9em;">Estes são os números que mais aparecem em qualquer posição após o grupo gatilho.</p>
+<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Estes são os números que mais aparecem em qualquer posição após o grupo gatilho.</p>
 <b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
 <b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
 </div>
+
 </div>
 """, unsafe_allow_html=True)
 
