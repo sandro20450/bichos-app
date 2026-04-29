@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V35 - Tática de Duque", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V36 - Tempo Real", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -114,7 +114,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V35")
+    st.header("🎯 Pentágono V36")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -195,7 +195,7 @@ if menu == "📡 Extração & Automação":
                             st.toast(f"🎯 Salvo com sucesso! ({inseridos})", icon="✅")
                             st.success(f"✅ {inseridos} resultados manuais inseridos!")
                         if repetidos > 0:
-                            st.toast(f"🚫 {repetidos} sorteios duplicados bloqueados.", icon="🚫")
+                            st.toast(f"🚫 {repetidos} duplicados bloqueados.", icon="🚫")
                             st.warning(f"⚠️ {repetidos} sorteio(s) já constavam na planilha.")
                         if inseridos == 0 and repetidos == 0:
                             st.toast("Erro inesperado ou tabela vazia.", icon="❌")
@@ -203,81 +203,100 @@ if menu == "📡 Extração & Automação":
                     st.toast("Preencha ao menos o Sorteio!", icon="⚠️")
 
 # =============================================================================
-# --- 5. TELA 2: CONSELHEIRO TÁTICO ---
+# --- 5. TELA 2: CONSELHEIRO TÁTICO (TEMPO REAL VIA API) ---
 # =============================================================================
 elif menu == "🔮 Conselheiro Tático (IA)":
     st.title("🔮 Inteligência Artificial de Combate")
-    link_csv = st.text_input("🔗 Link Público CSV do Google Sheets:")
+    st.markdown("O Pentágono agora puxa os seus dados **diretamente da API em tempo real**, sem atrasos de cache!")
     
-    if link_csv:
-        if st.button("Gerar Relatórios de Ataque", use_container_width=True):
-            with st.spinner("Analisando sequências 1º ao 5º..."):
-                try:
-                    df = pd.read_csv(link_csv, header=None)
-                    df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
+    # AGORA SELECIONA A BANCA EM VEZ DE COLAR O LINK
+    banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
+    
+    if st.button("Gerar Relatórios de Ataque", use_container_width=True):
+        with st.spinner("Puxando histórico em tempo real da CentralBichos..."):
+            try:
+                sh = conectar_sheets()
+                if sh:
+                    ws = sh.worksheet(MAPA_ABAS[banca_ia])
+                    dados_brutos = ws.get_all_values()
                     
-                    def get_grupo(m):
-                        try:
-                            d = int(str(m)[-2:])
-                            return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
-                        except: return None
-                    
-                    atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-                    atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
-                    for i in range(len(df)):
-                        m_str = str(df.iloc[i]["P1"]).zfill(4)
-                        if m_str == "nan" or "---" in m_str: continue
-                        g_v, um_v = get_grupo(m_str), m_str[0]
-                        if g_v:
-                            for k in atr_g:
-                                atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
-                                if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-                        for k in atr_um:
-                            atr_um[k]['t'] = 0 if k == um_v else atr_um[k]['t'] + 1
-                            if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
+                    if not dados_brutos:
+                        st.error("A aba selecionada está vazia.")
+                    else:
+                        df = pd.DataFrame(dados_brutos)
+                        
+                        # Garante que tenha pelo menos 7 colunas e nomeia
+                        for i in range(len(df.columns), 7): df[i] = ""
+                        df = df.iloc[:, :7]
+                        df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
+                        
+                        # Limpeza Pesada: Remove cabeçalhos e linhas vazias
+                        df = df[df["P1"].astype(str).str.strip() != ""]
+                        df = df[df["P1"].astype(str).str.lower() != "nan"]
+                        df = df[df["P1"].astype(str).str.lower() != "none"]
+                        df = df[df["P1"].astype(str).str.lower() != "p1"]
+                        df = df[~df["P1"].astype(str).str.contains("---")]
 
-                    ult_m = str(df.iloc[-1]["P1"]).zfill(4)
-                    ult_g = get_grupo(ult_m)
-                    
-                    seco_g, seco_um = [], []
-                    duque_g = [] # Nova lista para 1º e 2º
-                    cercado_g, cercado_um = [], []
+                        if df.empty:
+                            st.warning("Não há dados válidos de prêmios nesta aba para analisar.")
+                        else:
+                            def get_grupo(m):
+                                try:
+                                    d = int(str(m)[-2:])
+                                    return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
+                                except: return None
+                            
+                            atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
+                            atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
+                            
+                            for i in range(len(df)):
+                                m_str = str(df.iloc[i]["P1"]).zfill(4)
+                                g_v, um_v = get_grupo(m_str), m_str[0]
+                                if g_v:
+                                    for k in atr_g:
+                                        atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
+                                        if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
+                                for k in atr_um:
+                                    atr_um[k]['t'] = 0 if k == um_v else atr_um[k]['t'] + 1
+                                    if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
 
-                    for i in range(len(df)-1):
-                        if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
+                            # Pegando o ÚLTIMO SORTEIO REAL
+                            ult_m = str(df.iloc[-1]["P1"]).zfill(4)
+                            ult_nome = str(df.iloc[-1]["Sorteio"])
+                            ult_g = get_grupo(ult_m)
                             
-                            # 1. Alvo Seco (Próximo 1º Prêmio)
-                            p_m_seco = str(df.iloc[i+1]["P1"]).zfill(4)
-                            seco_g.append(get_grupo(p_m_seco))
-                            seco_um.append(p_m_seco[0])
-                            
-                            # 2. Alvo Duque (Próximo 1º e 2º Prêmio)
-                            for p in ["P1", "P2"]:
-                                p_m_duq = str(df.iloc[i+1][p]).zfill(4)
-                                if p_m_duq != "nan" and "---" not in p_m_duq:
-                                    g_duq = get_grupo(p_m_duq)
-                                    if g_duq: duque_g.append(g_duq)
-                            
-                            # 3. Alvo Cercado (Próximo 1º ao 5º Prêmio)
-                            for p in ["P1", "P2", "P3", "P4", "P5"]:
-                                p_m_all = str(df.iloc[i+1][p]).zfill(4)
-                                if p_m_all != "nan" and "---" not in p_m_all:
-                                    g_cerc = get_grupo(p_m_all)
-                                    if g_cerc: cercado_g.append(g_cerc)
-                                    cercado_um.append(p_m_all[0])
-                            
-                    top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
-                    top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
-                    
-                    # Top 2 para Duque
-                    top_duq_g = pd.Series(duque_g).value_counts().head(2).index.tolist() if duque_g else []
-                    
-                    top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
-                    top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
+                            seco_g, seco_um = [], []
+                            duque_g = [] 
+                            cercado_g, cercado_um = [], []
 
-                    st.success(f"Base Carregada! Analisando após: {ult_m} (Grupo {ult_g})")
+                            for i in range(len(df)-1):
+                                if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
+                                    p_m_seco = str(df.iloc[i+1]["P1"]).zfill(4)
+                                    seco_g.append(get_grupo(p_m_seco))
+                                    seco_um.append(p_m_seco[0])
+                                    
+                                    for p in ["P1", "P2"]:
+                                        p_m_duq = str(df.iloc[i+1][p]).zfill(4)
+                                        if p_m_duq != "nan" and "---" not in p_m_duq and p_m_duq != "":
+                                            g_duq = get_grupo(p_m_duq)
+                                            if g_duq: duque_g.append(g_duq)
+                                            
+                                    for p in ["P1", "P2", "P3", "P4", "P5"]:
+                                        p_m_all = str(df.iloc[i+1][p]).zfill(4)
+                                        if p_m_all != "nan" and "---" not in p_m_all and p_m_all != "":
+                                            g_cerc = get_grupo(p_m_all)
+                                            if g_cerc: cercado_g.append(g_cerc)
+                                            cercado_um.append(p_m_all[0])
+                                    
+                            top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
+                            top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
+                            top_duq_g = pd.Series(duque_g).value_counts().head(2).index.tolist() if duque_g else []
+                            top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
+                            top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
 
-                    st.markdown(f"""
+                            st.success(f"Base Sincronizada ao Vivo! Último Sorteio Encontrado: {ult_nome} - Milhar {ult_m} (Grupo {ult_g})")
+
+                            st.markdown(f"""
 <div class="card-tatico">
 <div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
 
@@ -303,18 +322,17 @@ Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
 <b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
 <b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
 </div>
-
 </div>
 """, unsafe_allow_html=True)
 
-                    def gerar_alertas(dic, pref):
-                        alertas = []
-                        for k, v in dic.items():
-                            if v['t'] > 0 and v['t'] >= (v['max'] - 2):
-                                alertas.append(f"• {pref} **{k}** <span class='sub-dado'>(Atraso: {v['t']} | Recorde: {v['max']})</span>")
-                        return "<br>".join(alertas) if alertas else "Sem rupturas iminentes."
+                            def gerar_alertas(dic, pref):
+                                alertas = []
+                                for k, v in dic.items():
+                                    if v['t'] > 0 and v['t'] >= (v['max'] - 2):
+                                        alertas.append(f"• {pref} **{k}** <span class='sub-dado'>(Atraso: {v['t']} | Recorde: {v['max']})</span>")
+                                return "<br>".join(alertas) if alertas else "Sem rupturas iminentes."
 
-                    st.markdown(f"""
+                            st.markdown(f"""
 <div class="card-alerta">
 <div class="titulo-card" style="color:#ff4b4b;">⏳ 2. Alerta de Ponto Crítico (Ruptura)</div>
 <b style="color:#ffb74d;">🦁 GRUPOS (1º Prêmio):</b><br>{gerar_alertas(atr_g, "Grupo")}<br><br>
@@ -322,5 +340,5 @@ Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
 </div>
 """, unsafe_allow_html=True)
 
-                except Exception as e:
-                    st.error(f"Erro no processamento: {e}")
+            except Exception as e:
+                st.error(f"Erro na conexão em tempo real: {e}")
