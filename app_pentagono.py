@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V33.1 - Markov 1-5", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V34 - Escudo Anti-Duplicação", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     try:
@@ -22,6 +22,34 @@ def conectar_sheets():
     except Exception as e:
         st.error(f"Erro na conexão com Google Sheets: {e}")
         return None
+
+# --- MOTOR DE SALVAMENTO SEGURO (ANTI-DUPLICAÇÃO) ---
+def salvar_sem_duplicar(ws, dados_novos):
+    try:
+        existentes = ws.get_all_values()
+        set_existentes = set()
+        # Mapeia o que já existe usando Data + Sorteio
+        for row in existentes:
+            if len(row) >= 2:
+                set_existentes.add(f"{str(row[0]).strip()}_{str(row[1]).strip()}")
+        
+        para_inserir = []
+        duplicados = 0
+        for linha in dados_novos:
+            chave = f"{str(linha[0]).strip()}_{str(linha[1]).strip()}"
+            if chave in set_existentes:
+                duplicados += 1
+            else:
+                para_inserir.append(linha)
+                set_existentes.add(chave) # Adiciona à memória para não duplicar na mesma remessa
+                
+        if para_inserir:
+            ws.append_rows(para_inserir, value_input_option="RAW")
+            
+        return len(para_inserir), duplicados
+    except Exception as e:
+        st.error(f"Erro ao salvar na planilha: {e}")
+        return 0, 0
 
 MAPA_ABAS = {
     "Tradicional": "TRADICIONAL_MILHAR",
@@ -86,7 +114,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V33.1")
+    st.header("🎯 Pentágono V34")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -100,35 +128,80 @@ if menu == "📡 Extração & Automação":
     with tab1:
         dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
         if st.button("🚀 EXTRAIR E SALVAR (1 DIA)", use_container_width=True):
-            dados = extrair_dia(banca_sel, dt_alvo)
-            if dados:
-                sh = conectar_sheets(); ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                ws.append_rows(dados, value_input_option="RAW")
-                st.success(f"✅ Salvo na aba {MAPA_ABAS[banca_sel]}!")
+            with st.spinner("Conectando e verificando duplicatas..."):
+                dados = extrair_dia(banca_sel, dt_alvo)
+                if dados:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                        inseridos, repetidos = salvar_sem_duplicar(ws, dados)
+                        if inseridos > 0:
+                            st.toast(f"✅ {inseridos} sorteios salvos!", icon="✅")
+                            st.success(f"✅ {inseridos} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
+                        if repetidos > 0:
+                            st.toast(f"⚠️ {repetidos} já existiam.", icon="⚠️")
+                            st.warning(f"⚠️ {repetidos} sorteio(s) já existiam e foram ignorados para não duplicar.")
+                else: st.error("Nenhum dado encontrado no site.")
+                
     with tab2:
         col_m1, col_m2 = st.columns(2)
         with col_m1: dt_inicio = st.date_input("Data Inicial:", value=date.today() - timedelta(days=2))
         with col_m2: dt_fim = st.date_input("Data Final:", value=date.today())
         if st.button("🚀 SALVAR MASSA NA PLANILHA", use_container_width=True):
-            todos = []
-            for i in range((dt_fim - dt_inicio).days + 1): todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
-            if todos:
-                sh = conectar_sheets(); ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                ws.append_rows(todos, value_input_option="RAW")
-                st.success(f"✅ {len(todos)} sorteios salvos!")
+            with st.spinner("Varrendo servidores e validando dados..."):
+                todos = []
+                for i in range((dt_fim - dt_inicio).days + 1): 
+                    todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
+                if todos:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                        inseridos, repetidos = salvar_sem_duplicar(ws, todos)
+                        if inseridos > 0:
+                            st.toast(f"✅ Massa concluída: {inseridos} novos.", icon="✅")
+                            st.success(f"✅ {inseridos} novos sorteios salvos!")
+                        if repetidos > 0:
+                            st.toast(f"⚠️ {repetidos} ignorados (duplicados).", icon="⚠️")
+                            st.warning(f"⚠️ {repetidos} sorteios ignorados (já estavam na planilha).")
+                else: st.error("Nenhum dado no período.")
+                
     with tab3:
+        st.info("💡 **DICA:** Após digitar o último número, clique fora da tabela ou aperte ENTER antes de clicar em Salvar.")
         df_manual = pd.DataFrame([{"Data": date.today().strftime('%Y-%m-%d'), "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""}], dtype=str)
         df_editado = st.data_editor(df_manual, num_rows="dynamic", use_container_width=True)
+        
         if st.button("💾 SALVAR DADOS MANUAIS", use_container_width=True):
-            limpos = []
-            for r in df_editado.values.tolist():
-                if str(r[1]).strip() != "" and str(r[1]).strip() != "nan":
-                    linha = [str(r[0]), str(r[1])]
-                    for v in r[2:7]: linha.append(str(v).replace(".0", "").strip().zfill(4))
-                    limpos.append(linha)
-            if limpos:
-                sh = conectar_sheets(); ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                ws.append_rows(limpos, value_input_option="RAW"); st.success("✅ Salvo!")
+            with st.spinner("Analisando células..."):
+                limpos = []
+                for r in df_editado.values.tolist():
+                    data_v = str(r[0]).strip()
+                    sort_v = str(r[1]).strip()
+                    if sort_v != "" and sort_v != "nan" and sort_v != "None":
+                        linha = [data_v, sort_v]
+                        # Correção do Bug do 0000 (Ignora células vazias corretamente)
+                        for v in r[2:7]: 
+                            v_str = str(v).replace(".0", "").strip()
+                            if v_str == "" or v_str.lower() == "nan" or v_str == "none":
+                                linha.append("") # Deixa vazio ao invés de 0000
+                            else:
+                                linha.append(v_str.zfill(4))
+                        limpos.append(linha)
+                
+                if limpos:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                        inseridos, repetidos = salvar_sem_duplicar(ws, limpos)
+                        if inseridos > 0:
+                            st.toast(f"🎯 Salvo com sucesso! ({inseridos})", icon="✅")
+                            st.success(f"✅ {inseridos} resultados manuais inseridos!")
+                        if repetidos > 0:
+                            st.toast(f"🚫 {repetidos} sorteios duplicados bloqueados.", icon="🚫")
+                            st.warning(f"⚠️ {repetidos} sorteio(s) já constavam na planilha.")
+                        if inseridos == 0 and repetidos == 0:
+                            st.toast("Erro inesperado ou tabela vazia.", icon="❌")
+                else:
+                    st.toast("Preencha ao menos o Sorteio!", icon="⚠️")
 
 # =============================================================================
 # --- 5. TELA 2: CONSELHEIRO TÁTICO ---
@@ -150,7 +223,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
                         except: return None
                     
-                    # --- CÁLCULO DE ATRASOS ---
                     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
                     atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
                     for i in range(len(df)):
@@ -165,7 +237,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             atr_um[k]['t'] = 0 if k == um_v else atr_um[k]['t'] + 1
                             if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
 
-                    # --- MARKOV EXPANDIDO (1º ao 5º) ---
                     ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                     ult_g = get_grupo(ult_m)
                     
@@ -174,12 +245,9 @@ elif menu == "🔮 Conselheiro Tático (IA)":
 
                     for i in range(len(df)-1):
                         if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
-                            # 1. Alvo Seco (Próximo 1º Prêmio)
                             p_m_seco = str(df.iloc[i+1]["P1"]).zfill(4)
                             seco_g.append(get_grupo(p_m_seco))
                             seco_um.append(p_m_seco[0])
-                            
-                            # 2. Alvo Cercado (Próximo 1º ao 5º Prêmio)
                             for p in ["P1", "P2", "P3", "P4", "P5"]:
                                 p_m_all = str(df.iloc[i+1][p]).zfill(4)
                                 if p_m_all != "nan" and "---" not in p_m_all:
@@ -188,13 +256,11 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             
                     top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
                     top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
-                    
                     top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
                     top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
 
                     st.success(f"Base Carregada! Analisando após: {ult_m} (Grupo {ult_g})")
 
-                    # PAINEL MARKOV (SEM RECUOS PARA EVITAR BLOCO DE CÓDIGO)
                     st.markdown(f"""
 <div class="card-tatico">
 <div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
@@ -220,7 +286,6 @@ Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
                                 alertas.append(f"• {pref} **{k}** <span class='sub-dado'>(Atraso: {v['t']} | Recorde: {v['max']})</span>")
                         return "<br>".join(alertas) if alertas else "Sem rupturas iminentes."
 
-                    # PAINEL ALERTA (SEM RECUOS)
                     st.markdown(f"""
 <div class="card-alerta">
 <div class="titulo-card" style="color:#ff4b4b;">⏳ 2. Alerta de Ponto Crítico (Ruptura)</div>
