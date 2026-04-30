@@ -11,11 +11,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-# Documentação: Configuração inicial da página usando componentes nativos do Streamlit
-st.set_page_config(page_title="Pentágono V38 - Duque 5 Alvos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V39 - Duque Expandido", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
-    """Cria a conexão autenticada com o Google Sheets usando as credenciais do Streamlit Secrets."""
+    """Cria a conexão com o Google Sheets usando as credenciais do Streamlit."""
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
@@ -26,7 +25,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Verifica as linhas existentes para impedir que sorteios repetidos sejam salvos na planilha."""
+    """Garante que sorteios não sejam duplicados na planilha."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -59,7 +58,6 @@ MAPA_ABAS = {
     "Lotep": "LOTEP_MILHAR"
 }
 
-# Estilização CSS Nativa e Injeção de HTML para o modo Dark do Streamlit
 st.markdown("""
 <style>
     .stApp { background-color: #1e1e1e; color: #f0f0f0; }
@@ -73,8 +71,9 @@ st.markdown("""
     .dado-destaque { font-size: 1.8em; font-weight: bold; color: #fff; }
     .label-destaque { color: #4CAF50; font-weight: bold; font-size: 1.1em; }
     .sub-dado { color: #aaa; font-size: 0.85em; margin-left: 10px; }
-    .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; display: inline-block; margin-right: 5px; }
-    .badge-duque { background-color: #4b3800; padding: 5px 10px; border-radius: 5px; color: #ffb74d; font-weight: bold; border: 1px solid #ffb74d; display: inline-block; margin-right: 5px; }
+    .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
+    .badge-duque { background-color: #4b3800; padding: 5px 10px; border-radius: 5px; color: #ffb74d; font-weight: bold; border: 1px solid #ffb74d; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
+    .badge-dezena { background-color: #4a148c; padding: 5px 10px; border-radius: 5px; color: #e1bee7; font-weight: bold; border: 1px solid #9c27b0; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
     .milhar-ouro { font-size: 2.8em; font-weight: bold; color: #ffeb3b; letter-spacing: 5px; text-shadow: 0px 0px 10px rgba(255, 235, 59, 0.4); }
 </style>
 """, unsafe_allow_html=True)
@@ -90,7 +89,6 @@ BANCAS_CONFIG = {
 # --- 2. MOTORES DE EXTRAÇÃO ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Faz a raspagem (web scraping) dos resultados no site da banca escolhida."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -120,7 +118,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V38")
+    st.header("🎯 Pentágono V39")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
 
 # =============================================================================
@@ -213,7 +211,7 @@ if menu == "📡 Extração & Automação":
 # =============================================================================
 elif menu == "🔮 Conselheiro Tático (IA)":
     st.title("🔮 Inteligência Artificial de Combate")
-    st.markdown("O Pentágono agora puxa os seus dados **diretamente da API em tempo real**, sem atrasos de cache!")
+    st.info("O Pentágono puxa os seus dados **diretamente da API em tempo real**, garantindo que a análise seja feita no milissegundo seguinte à inserção!")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
@@ -268,6 +266,7 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             
                             seco_g, seco_um = [], []
                             duque_g = [] 
+                            duque_dz = [] # Nova lista para as Dezenas do 1º e 2º
                             cercado_g, cercado_um, cercado_c, cercado_dz = [], [], [], []
 
                             for i in range(len(df)-1):
@@ -276,12 +275,18 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                                     seco_g.append(get_grupo(p_m_seco))
                                     seco_um.append(p_m_seco[0])
                                     
+                                    # Analisa o 1º e 2º Prêmio para o Duque (Grupos e Dezenas)
                                     for p in ["P1", "P2"]:
                                         p_m_duq = str(df.iloc[i+1][p]).zfill(4)
                                         if p_m_duq != "nan" and "---" not in p_m_duq and p_m_duq != "":
+                                            # Extrai o Grupo
                                             g_duq = get_grupo(p_m_duq)
                                             if g_duq: duque_g.append(g_duq)
+                                            # Extrai a Dezena (Últimos 2 dígitos)
+                                            if len(p_m_duq) >= 2:
+                                                duque_dz.append(p_m_duq[-2:])
                                             
+                                    # Analisa o Cercado (1º ao 5º)
                                     for p in ["P1", "P2", "P3", "P4", "P5"]:
                                         p_m_all = str(df.iloc[i+1][p]).zfill(4)
                                         if p_m_all != "nan" and "---" not in p_m_all and len(p_m_all) == 4:
@@ -294,8 +299,9 @@ elif menu == "🔮 Conselheiro Tático (IA)":
                             top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
                             top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
                             
-                            # DOCUMENTAÇÃO: Aqui ocorre a alteração de .head(2) para .head(5) para exibir o Top 5 Grupos do Duque
-                            top_duq_g = pd.Series(duque_g).value_counts().head(5).index.tolist() if duque_g else []
+                            # RANKING EXPANDIDO: Top 10 Grupos e Top 5 Dezenas
+                            top_duq_g = pd.Series(duque_g).value_counts().head(10).index.tolist() if duque_g else []
+                            top_duq_dz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
                             
                             top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
                             top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
@@ -311,7 +317,6 @@ elif menu == "🔮 Conselheiro Tático (IA)":
 
                             st.success(f"Base Sincronizada ao Vivo! Último Sorteio Encontrado: {ult_nome} - Milhar {ult_m} (Grupo {ult_g})")
 
-                            # DOCUMENTAÇÃO: Painel HTML nativo renderizando as informações ajustadas de TOP 2 para TOP 5.
                             st.markdown(f"""
 <div class="card-tatico">
 <div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
@@ -325,9 +330,10 @@ Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
 <hr>
 
 <div style="margin-bottom: 20px; margin-top: 10px;">
-<span class="label-destaque" style="color:#ffb74d;">⚔️ DUQUE DE GRUPO (Para sair no 1º ou 2º Prêmio):</span><br>
-<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Aposte escolhendo entre estes grupos para cruzar na cabeça e no segundo.</p>
-<b>TOP 5 GRUPOS:</b> {' '.join([f'<span class="badge-duque">{x}</span>' for x in top_duq_g])}
+<span class="label-destaque" style="color:#ffb74d;">⚔️ COMBINAÇÕES PARA O 1º OU 2º PRÊMIO (Duque):</span><br>
+<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Aposte escolhendo entre as Dezenas e Grupos mais fortes cruzados na cabeça e no segundo prêmio.</p>
+<b>TOP 10 GRUPOS:</b><br> {' '.join([f'<span class="badge-duque">{x}</span>' for x in top_duq_g])}<br><br>
+<b>TOP 5 DEZENAS (Dezena do Bicho):</b><br> {' '.join([f'<span class="badge-dezena">{x}</span>' for x in top_duq_dz])}
 </div>
 
 <hr>
