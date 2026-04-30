@@ -11,12 +11,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-# Documentação: Utilização de componentes nativos, sem injeção de HTML/CSS pesado,
-# garantindo compatibilidade total com o Dark Mode e zero erros de renderização.
-st.set_page_config(page_title="Pentágono V41 - Algoritmo de Pontuação", page_icon="🎯", layout="wide")
+# Documentação: Configuração inicial da página.
+st.set_page_config(page_title="Pentágono V41.1 - Cérebro IA Correção", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
-    """Etapa 1: Autenticação segura na API do Google Sheets."""
+    """Autenticação segura na API do Google Sheets."""
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
@@ -27,7 +26,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Etapa 2: Filtro Anti-Clonagem para evitar sorteios repetidos na base."""
+    """Filtro Anti-Clonagem para evitar sorteios repetidos na base."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -71,7 +70,7 @@ BANCAS_CONFIG = {
 # --- 2. MOTORES DE EXTRAÇÃO (WEB SCRAPING) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Etapa 3: Varredura de tabelas HTML nos sites configurados."""
+    """Varredura de tabelas HTML nos sites configurados."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -101,7 +100,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V41")
+    st.header("🎯 Pentágono V41.1")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -198,7 +197,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                     if len(dados_brutos) < 2:
                         st.error("Dados insuficientes na aba selecionada.")
                     else:
-                        # Prepara o DataFrame
                         df = pd.DataFrame(dados_brutos)
                         for i in range(len(df.columns), 7): df[i] = ""
                         df = df.iloc[:, :7]
@@ -208,7 +206,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df = df[df["P1"].astype(str).str.lower() != "p1"]
                         df = df[~df["P1"].astype(str).str.contains("---")]
                         
-                        # Documentação: Converte a coluna Data para identificar a última semana
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         def get_grupo(m):
@@ -217,10 +214,9 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
                             except: return None
                         
-                        # Dicionário principal de pontuação (A Mágica do Algoritmo)
                         scores = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
                         
-                        # --- CÁLCULO 1: RUPTURA (Atrasos) ---
+                        # CÁLCULO 1: RUPTURA (Atrasos)
                         atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
                         for i in range(len(df)):
                             g_v = get_grupo(df.iloc[i]["P1"])
@@ -229,33 +225,30 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
                                     if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
                         
-                        # Bônus de Ruptura (Se estiver a 2 jogos ou menos do limite máximo)
                         for k, v in atr_g.items():
                             if v['t'] > 0 and v['t'] >= (v['max'] - 2):
-                                scores[k]['ruptura'] += 10  # Peso altíssimo
+                                scores[k]['ruptura'] += 10  
                         
-                        # --- CÁLCULO 2: PUXADA HISTÓRICA (Gatilho) ---
+                        # CÁLCULO 2: PUXADA HISTÓRICA (Gatilho)
                         ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                         ult_nome = str(df.iloc[-1]["Sorteio"])
                         ult_g = get_grupo(ult_m)
                         
-                        duque_dz = [] # Unidades de dezena (3º dígito)
+                        duque_dz = []
                         
                         for i in range(len(df)-1):
                             if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
-                                # Grupos do 1º e 2º Prêmio
                                 g_p1 = get_grupo(df.iloc[i+1]["P1"])
                                 g_p2 = get_grupo(df.iloc[i+1]["P2"])
-                                if g_p1: scores[g_p1]['puxada'] += 3 # Peso Forte no 1º
-                                if g_p2: scores[g_p2]['puxada'] += 2 # Peso Médio no 2º
+                                if g_p1: scores[g_p1]['puxada'] += 3 
+                                if g_p2: scores[g_p2]['puxada'] += 2 
                                 
-                                # Extrai as Unidades de Dezena do 1º e 2º
                                 for p in ["P1", "P2"]:
                                     m_duq = str(df.iloc[i+1][p]).zfill(4)
                                     if len(m_duq) == 4 and m_duq != "0000":
-                                        duque_dz.append(m_duq[-2]) # Pega exatamente o 3º algarismo
+                                        duque_dz.append(m_duq[-2]) 
                         
-                        # --- CÁLCULO 3: TEMPERATURA DA SEMANA (Últimos 7 dias) ---
+                        # CÁLCULO 3: TEMPERATURA DA SEMANA
                         limite_data = df['Data'].max() - timedelta(days=7)
                         df_semana = df[df['Data'] >= limite_data]
                         
@@ -264,34 +257,32 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 g_v = get_grupo(df_semana.iloc[i][p])
                                 if g_v: scores[g_v]['semana'] += 1
                         
-                        # --- COMPILAÇÃO TOTAL DE PONTOS ---
+                        # COMPILAÇÃO TOTAL DE PONTOS
                         for k in scores:
                             scores[k]['total'] = scores[k]['puxada'] + scores[k]['ruptura'] + scores[k]['semana']
                             
-                        # Ordena os grupos pela maior pontuação
                         ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
                         top_10_grupos = [x[0] for x in ranking[:10]]
-                        
-                        # Calcula as Unidades de Dezena mais frequentes na Puxada
                         top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
 
                         # =================================================================
-                        # RENDERIZAÇÃO NATIIVA STREAMLIT (Componentes Limpos e Dark Mode)
+                        # RENDERIZAÇÃO CORRIGIDA (EVITANDO RETICÊNCIAS NO ST.METRIC)
                         # =================================================================
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
                         st.subheader("🎯 Top 10 Grupos: Duque (1º e 2º Prêmio)")
                         st.write("Os grupos com as maiores notas somando histórico, recordes de atraso e calor da semana.")
                         
-                        # Cria linhas com 5 colunas cada para exibir os 10 grupos usando st.metric
                         col1, col2, col3, col4, col5 = st.columns(5)
                         col6, col7, col8, col9, col10 = st.columns(5)
                         colunas_top10 = [col1, col2, col3, col4, col5, col6, col7, col8, col9, col10]
                         
+                        # DOCUMENTAÇÃO: O parâmetro 'value' agora contém APENAS o número. 
+                        # Isso garante que ele caiba dentro da coluna sem ser cortado pelo Streamlit.
                         for idx, grupo in enumerate(top_10_grupos):
                             pontos = scores[grupo]['total']
                             with colunas_top10[idx]:
-                                st.metric(label=f"{idx+1}º Lugar", value=f"G: {grupo}", delta=f"{pontos} pts")
+                                st.metric(label=f"{idx+1}º Lugar (Grupo)", value=grupo, delta=f"{pontos} pts")
                         
                         st.divider()
                         
@@ -301,9 +292,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         col_d1, col_d2, col_d3, col_d4, col_d5 = st.columns(5)
                         colunas_dz = [col_d1, col_d2, col_d3, col_d4, col_d5]
                         
+                        # DOCUMENTAÇÃO: O mesmo ajuste foi feito para a Unidade de Dezena.
                         for idx, digito in enumerate(top_5_udz):
                             with colunas_dz[idx]:
-                                st.metric(label=f"Posição {idx+1}", value=f"Nº {digito}")
+                                st.metric(label=f"Posição {idx+1}", value=digito)
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
