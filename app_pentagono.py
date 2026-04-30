@@ -7,12 +7,13 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import itertools # Biblioteca para gerar as combinações
+import itertools # Biblioteca especialista em combinações
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V44 - 105 Duques", page_icon="🎯", layout="wide")
+# DOCUMENTAÇÃO: Configuração inicial da página atualizada para V45.
+st.set_page_config(page_title="Pentágono V45 - 120 Duques", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Conecta com segurança à API do Google Sheets."""
@@ -26,7 +27,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Filtro para evitar que sorteios repetidos sejam salvos."""
+    """Filtro para evitar que sorteios repetidos sejam salvos na base."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -67,10 +68,10 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO ---
+# --- 2. MOTORES DE EXTRAÇÃO (WEB SCRAPING) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Rastreador web que busca os resultados do dia."""
+    """Rastreador web que busca os resultados do dia diretamente na fonte."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -100,11 +101,11 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V44")
+    st.header("🎯 Pentágono V45")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
-# --- 4. TELA 1: EXTRAÇÃO ---
+# --- 4. TELA 1: EXTRAÇÃO MULTI-MODAL ---
 # =============================================================================
 if menu == "📡 Extração & Automação":
     st.title("📡 Automação CentralBichos")
@@ -172,16 +173,16 @@ if menu == "📡 Extração & Automação":
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (FÁBRICA DE DUQUES - TOP 15) ---
+# --- 5. TELA 2: CÉREBRO IA (FÁBRICA DE DUQUES - TOP 16) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
     st.title("🧠 Algoritmo de Confluência Tática")
-    st.info("O sistema agora cruza automaticamente os **Top 15 Grupos**, forjando **105 duplas perfeitas** em ordem crescente.")
+    st.info("O sistema agora cruza automaticamente os **Top 16 Grupos**, forjando **120 duplas perfeitas** para garantir maior cobertura estatística.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Calculando pontuações e forjando combinações de Duques (105 alvos)..."):
+        with st.spinner("Calculando pontuações e forjando combinações de Duques (120 alvos)..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -251,24 +252,27 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         for k in scores:
                             scores[k]['total'] = scores[k]['puxada'] + scores[k]['ruptura'] + scores[k]['semana']
                             
-                        # DOCUMENTAÇÃO: Aqui o ranking é cortado para pegar os TOP 15 em vez de 10
                         ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
-                        top_15_grupos = [x[0] for x in ranking[:15]]
+                        
+                        # DOCUMENTAÇÃO: O fatiamento (slice) foi alterado de 15 para 16
+                        # Isso garante que a máquina capte o 16º grupo para cruzar.
+                        top_16_grupos = [x[0] for x in ranking[:16]]
                         top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
 
                         # =================================================================
-                        # RENDERIZAÇÃO E COMBINATÓRIA (FÁBRICA DE DUQUES - 105)
+                        # RENDERIZAÇÃO E COMBINATÓRIA (FÁBRICA DE DUQUES - 120)
                         # =================================================================
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
-                        st.subheader("🎯 Top 15 Grupos de Elite")
+                        st.subheader("🎯 Top 16 Grupos de Elite")
                         
-                        # DOCUMENTAÇÃO: Criação dinâmica de 3 linhas com 5 colunas para organizar os 15 grupos
-                        linhas_colunas = [st.columns(5), st.columns(5), st.columns(5)]
+                        # DOCUMENTAÇÃO: Design Simétrico. Criamos 4 linhas com 4 colunas (4x4 = 16)
+                        # Isso evita falhas de renderização e mantém o painel limpo.
+                        linhas_colunas = [st.columns(4), st.columns(4), st.columns(4), st.columns(4)]
                         
-                        for idx, grupo in enumerate(top_15_grupos):
-                            linha_atual = idx // 5  # Vai resultar em 0, 1 ou 2 (qual das 3 linhas)
-                            coluna_atual = idx % 5  # Vai resultar de 0 a 4 (qual coluna dentro da linha)
+                        for idx, grupo in enumerate(top_16_grupos):
+                            linha_atual = idx // 4  # Determina qual das 4 linhas o item pertence (0, 1, 2 ou 3)
+                            coluna_atual = idx % 4  # Determina qual coluna o item entra (0 a 3)
                             
                             pontos = scores[grupo]['total']
                             with linhas_colunas[linha_atual][coluna_atual]:
@@ -276,20 +280,20 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         
                         st.divider()
 
-                        # DOCUMENTAÇÃO: Fábrica de duques com o Top 15.
-                        # 1. Converte e organiza do menor para o maior.
-                        top_15_ints = sorted([int(g) for g in top_15_grupos])
+                        # DOCUMENTAÇÃO: A Combinatória Matemática.
+                        # 1. Organizamos os 16 grupos do menor para o maior para facilitar a cópia.
+                        top_16_ints = sorted([int(g) for g in top_16_grupos])
                         
-                        # 2. Usa itertools para gerar 105 combinações (C(15,2)).
-                        duplas = list(itertools.combinations(top_15_ints, 2))
+                        # 2. O itertools cruza os 16 grupos de 2 em 2, resultando obrigatoriamente em 120 combinações.
+                        duplas = list(itertools.combinations(top_16_ints, 2))
                         
-                        # 3. Formata para texto com zeros à esquerda.
+                        # 3. Transformamos os números novamente em texto com 2 casas decimais (ex: '05', não '5').
                         lista_formatada = [f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas]
                         
-                        st.subheader("⚔️ Arsenal de Duques Gerados (105 Combinações)")
-                        st.write("Aumento de assertividade: 105 duplas geradas pelo cruzamento do Top 15, em ordem crescente.")
+                        st.subheader("⚔️ Arsenal de Duques Gerados (120 Combinações)")
+                        st.write("Aumento massivo de assertividade: 120 duplas perfeitas geradas pela análise profunda de 16 alvos.")
                         
-                        # Exibição pronta para copiar
+                        # Renderiza as duplas prontas para cópia
                         texto_duplas = "  |  ".join(lista_formatada)
                         st.code(texto_duplas, language="text")
 
