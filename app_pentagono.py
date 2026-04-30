@@ -11,8 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-# Documentação: Configuração inicial da página.
-st.set_page_config(page_title="Pentágono V41.1 - Cérebro IA Correção", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V42 - Recalibragem de Pesos", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Autenticação segura na API do Google Sheets."""
@@ -26,7 +25,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Filtro Anti-Clonagem para evitar sorteios repetidos na base."""
+    """Filtro Anti-Clonagem."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -67,10 +66,10 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO (WEB SCRAPING) ---
+# --- 2. MOTORES DE EXTRAÇÃO ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Varredura de tabelas HTML nos sites configurados."""
+    """Varredura de tabelas HTML."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -100,11 +99,11 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V41.1")
+    st.header("🎯 Pentágono V42")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
-# --- 4. TELA 1: EXTRAÇÃO MULTI-MODAL ---
+# --- 4. TELA 1: EXTRAÇÃO ---
 # =============================================================================
 if menu == "📡 Extração & Automação":
     st.title("📡 Automação CentralBichos")
@@ -124,7 +123,7 @@ if menu == "📡 Extração & Automação":
                         if inseridos > 0:
                             st.success(f"✅ {inseridos} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
                         if repetidos > 0:
-                            st.warning(f"⚠️ {repetidos} sorteio(s) já existiam e foram ignorados para não duplicar.")
+                            st.warning(f"⚠️ {repetidos} sorteio(s) já existiam.")
                 else: st.error("Nenhum dado encontrado no site.")
                 
     with tab2:
@@ -132,7 +131,7 @@ if menu == "📡 Extração & Automação":
         with col_m1: dt_inicio = st.date_input("Data Inicial:", value=date.today() - timedelta(days=2))
         with col_m2: dt_fim = st.date_input("Data Final:", value=date.today())
         if st.button("🚀 SALVAR MASSA NA PLANILHA", use_container_width=True):
-            with st.spinner("Varrendo servidores e validando dados..."):
+            with st.spinner("Varrendo servidores..."):
                 todos = []
                 for i in range((dt_fim - dt_inicio).days + 1): 
                     todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
@@ -141,10 +140,8 @@ if menu == "📡 Extração & Automação":
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, todos)
-                        if inseridos > 0:
-                            st.success(f"✅ {inseridos} novos sorteios salvos!")
-                        if repetidos > 0:
-                            st.warning(f"⚠️ {repetidos} sorteios ignorados (já estavam na planilha).")
+                        if inseridos > 0: st.success(f"✅ {inseridos} novos sorteios salvos!")
+                        if repetidos > 0: st.warning(f"⚠️ {repetidos} sorteios ignorados.")
                 else: st.error("Nenhum dado no período.")
                 
     with tab3:
@@ -170,24 +167,22 @@ if menu == "📡 Extração & Automação":
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, limpos)
-                        if inseridos > 0:
-                            st.success(f"✅ {inseridos} resultados manuais inseridos!")
-                        if repetidos > 0:
-                            st.warning(f"⚠️ {repetidos} sorteio(s) já constavam na planilha.")
+                        if inseridos > 0: st.success(f"✅ {inseridos} resultados manuais inseridos!")
+                        if repetidos > 0: st.warning(f"⚠️ {repetidos} sorteio(s) já constavam na planilha.")
                 else:
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (ALGORITMO DE PONTUAÇÃO) ---
+# --- 5. TELA 2: CÉREBRO IA (ALGORITMO RECALIBRADO) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
     st.title("🧠 Algoritmo de Confluência Tática")
-    st.info("Análise baseada em três pilares: **Puxada Histórica**, **Pontos de Ruptura** e **Temperatura Semanal**.")
+    st.info("Pesos recalibrados: Foco máximo em **Puxada Histórica** para forjar Duques mais precisos.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Calculando sistema de pontuação e cruzando dados vitais..."):
+        with st.spinner("Recalculando sistema de pontuação avançado..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -205,7 +200,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df = df[df["P1"].astype(str).str.strip() != ""]
                         df = df[df["P1"].astype(str).str.lower() != "p1"]
                         df = df[~df["P1"].astype(str).str.contains("---")]
-                        
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         def get_grupo(m):
@@ -216,7 +210,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         
                         scores = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
                         
-                        # CÁLCULO 1: RUPTURA (Atrasos)
+                        # --- CÁLCULO 1: RUPTURA (Atrasos) ---
                         atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
                         for i in range(len(df)):
                             g_v = get_grupo(df.iloc[i]["P1"])
@@ -227,9 +221,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         
                         for k, v in atr_g.items():
                             if v['t'] > 0 and v['t'] >= (v['max'] - 2):
-                                scores[k]['ruptura'] += 10  
+                                # DOCUMENTAÇÃO: Peso da ruptura reduzido de 10 para 4.
+                                scores[k]['ruptura'] += 4  
                         
-                        # CÁLCULO 2: PUXADA HISTÓRICA (Gatilho)
+                        # --- CÁLCULO 2: PUXADA HISTÓRICA (Gatilho) ---
                         ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                         ult_nome = str(df.iloc[-1]["Sorteio"])
                         ult_g = get_grupo(ult_m)
@@ -240,24 +235,27 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                             if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
                                 g_p1 = get_grupo(df.iloc[i+1]["P1"])
                                 g_p2 = get_grupo(df.iloc[i+1]["P2"])
-                                if g_p1: scores[g_p1]['puxada'] += 3 
-                                if g_p2: scores[g_p2]['puxada'] += 2 
+                                
+                                # DOCUMENTAÇÃO: Peso da Puxada aumentado massivamente (+7 e +5) para forçar as duplas.
+                                if g_p1: scores[g_p1]['puxada'] += 7 
+                                if g_p2: scores[g_p2]['puxada'] += 5 
                                 
                                 for p in ["P1", "P2"]:
                                     m_duq = str(df.iloc[i+1][p]).zfill(4)
                                     if len(m_duq) == 4 and m_duq != "0000":
                                         duque_dz.append(m_duq[-2]) 
                         
-                        # CÁLCULO 3: TEMPERATURA DA SEMANA
+                        # --- CÁLCULO 3: TEMPERATURA DA SEMANA ---
                         limite_data = df['Data'].max() - timedelta(days=7)
                         df_semana = df[df['Data'] >= limite_data]
                         
                         for i in range(len(df_semana)):
                             for p in ["P1", "P2", "P3", "P4", "P5"]:
                                 g_v = get_grupo(df_semana.iloc[i][p])
-                                if g_v: scores[g_v]['semana'] += 1
+                                # DOCUMENTAÇÃO: Temperatura da semana aumentada de 1 para 2.
+                                if g_v: scores[g_v]['semana'] += 2
                         
-                        # COMPILAÇÃO TOTAL DE PONTOS
+                        # --- COMPILAÇÃO TOTAL DE PONTOS ---
                         for k in scores:
                             scores[k]['total'] = scores[k]['puxada'] + scores[k]['ruptura'] + scores[k]['semana']
                             
@@ -266,23 +264,21 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
 
                         # =================================================================
-                        # RENDERIZAÇÃO CORRIGIDA (EVITANDO RETICÊNCIAS NO ST.METRIC)
+                        # RENDERIZAÇÃO
                         # =================================================================
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
                         st.subheader("🎯 Top 10 Grupos: Duque (1º e 2º Prêmio)")
-                        st.write("Os grupos com as maiores notas somando histórico, recordes de atraso e calor da semana.")
+                        st.write("Ranking recalibrado focando na sinergia e histórico de duplas.")
                         
                         col1, col2, col3, col4, col5 = st.columns(5)
                         col6, col7, col8, col9, col10 = st.columns(5)
                         colunas_top10 = [col1, col2, col3, col4, col5, col6, col7, col8, col9, col10]
                         
-                        # DOCUMENTAÇÃO: O parâmetro 'value' agora contém APENAS o número. 
-                        # Isso garante que ele caiba dentro da coluna sem ser cortado pelo Streamlit.
                         for idx, grupo in enumerate(top_10_grupos):
                             pontos = scores[grupo]['total']
                             with colunas_top10[idx]:
-                                st.metric(label=f"{idx+1}º Lugar (Grupo)", value=grupo, delta=f"{pontos} pts")
+                                st.metric(label=f"{idx+1}º Lugar", value=grupo, delta=f"{pontos} pts")
                         
                         st.divider()
                         
@@ -292,7 +288,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         col_d1, col_d2, col_d3, col_d4, col_d5 = st.columns(5)
                         colunas_dz = [col_d1, col_d2, col_d3, col_d4, col_d5]
                         
-                        # DOCUMENTAÇÃO: O mesmo ajuste foi feito para a Unidade de Dezena.
                         for idx, digito in enumerate(top_5_udz):
                             with colunas_dz[idx]:
                                 st.metric(label=f"Posição {idx+1}", value=digito)
