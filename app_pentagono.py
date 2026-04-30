@@ -11,11 +11,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-# Documentação: Configuração inicial da página
-st.set_page_config(page_title="Pentágono V40 - Dígito da Dezena", page_icon="🎯", layout="wide")
+# Documentação: Utilização de componentes nativos, sem injeção de HTML/CSS pesado,
+# garantindo compatibilidade total com o Dark Mode e zero erros de renderização.
+st.set_page_config(page_title="Pentágono V41 - Algoritmo de Pontuação", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
-    """Cria a conexão autenticada com o Google Sheets."""
+    """Etapa 1: Autenticação segura na API do Google Sheets."""
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
@@ -26,7 +27,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Verifica e impede que sorteios repetidos sejam salvos na planilha."""
+    """Etapa 2: Filtro Anti-Clonagem para evitar sorteios repetidos na base."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -59,27 +60,6 @@ MAPA_ABAS = {
     "Lotep": "LOTEP_MILHAR"
 }
 
-# Estilização CSS Nativa e HTML para o modo Dark do Streamlit
-st.markdown("""
-<style>
-    .stApp { background-color: #1e1e1e; color: #f0f0f0; }
-    h1, h2, h3 { color: #4CAF50 !important; }
-    .stButton > button { background-color: #4CAF50; color: white; font-weight: bold; border-radius: 8px; }
-    hr { border-color: #4CAF50; opacity: 0.3; }
-    .card-tatico { background-color: #001a00; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50; margin-bottom: 15px; }
-    .card-alerta { background-color: #2b0000; padding: 20px; border-radius: 10px; border: 1px solid #ff4b4b; margin-bottom: 15px; }
-    .card-ouro { background-color: #1a1a00; padding: 15px; border-radius: 8px; border: 1px dashed #ffeb3b; margin-top: 15px; text-align: center; }
-    .titulo-card { color: #ffb74d; font-weight: bold; font-size: 1.25em; margin-bottom: 10px;}
-    .dado-destaque { font-size: 1.8em; font-weight: bold; color: #fff; }
-    .label-destaque { color: #4CAF50; font-weight: bold; font-size: 1.1em; }
-    .sub-dado { color: #aaa; font-size: 0.85em; margin-left: 10px; }
-    .badge-cercado { background-color: #1a3a5a; padding: 5px 10px; border-radius: 5px; color: #fff; font-weight: bold; border: 1px solid #2196F3; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
-    .badge-duque { background-color: #4b3800; padding: 5px 10px; border-radius: 5px; color: #ffb74d; font-weight: bold; border: 1px solid #ffb74d; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
-    .badge-dezena { background-color: #4a148c; padding: 5px 10px; border-radius: 5px; color: #e1bee7; font-weight: bold; border: 1px solid #9c27b0; display: inline-block; margin-right: 5px; margin-bottom: 5px; }
-    .milhar-ouro { font-size: 2.8em; font-weight: bold; color: #ffeb3b; letter-spacing: 5px; text-shadow: 0px 0px 10px rgba(255, 235, 59, 0.4); }
-</style>
-""", unsafe_allow_html=True)
-
 BANCAS_CONFIG = {
     "Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-",
     "Caminho da Sorte": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-",
@@ -88,10 +68,10 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO ---
+# --- 2. MOTORES DE EXTRAÇÃO (WEB SCRAPING) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Faz a raspagem (web scraping) dos resultados na internet."""
+    """Etapa 3: Varredura de tabelas HTML nos sites configurados."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -121,8 +101,8 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V40")
-    menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🔮 Conselheiro Tático (IA)"])
+    st.header("🎯 Pentágono V41")
+    menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
 # --- 4. TELA 1: EXTRAÇÃO MULTI-MODAL ---
@@ -143,10 +123,8 @@ if menu == "📡 Extração & Automação":
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, dados)
                         if inseridos > 0:
-                            st.toast(f"✅ {inseridos} sorteios salvos!", icon="✅")
                             st.success(f"✅ {inseridos} sorteios salvos na aba {MAPA_ABAS[banca_sel]}!")
                         if repetidos > 0:
-                            st.toast(f"⚠️ {repetidos} já existiam.", icon="⚠️")
                             st.warning(f"⚠️ {repetidos} sorteio(s) já existiam e foram ignorados para não duplicar.")
                 else: st.error("Nenhum dado encontrado no site.")
                 
@@ -165,15 +143,13 @@ if menu == "📡 Extração & Automação":
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, todos)
                         if inseridos > 0:
-                            st.toast(f"✅ Massa concluída: {inseridos} novos.", icon="✅")
                             st.success(f"✅ {inseridos} novos sorteios salvos!")
                         if repetidos > 0:
-                            st.toast(f"⚠️ {repetidos} ignorados (duplicados).", icon="⚠️")
                             st.warning(f"⚠️ {repetidos} sorteios ignorados (já estavam na planilha).")
                 else: st.error("Nenhum dado no período.")
                 
     with tab3:
-        st.info("💡 **DICA:** Após digitar o último número, clique fora da tabela ou aperte ENTER antes de clicar em Salvar.")
+        st.info("💡 Após digitar o último número, clique fora da tabela antes de clicar em Salvar.")
         df_manual = pd.DataFrame([{"Data": date.today().strftime('%Y-%m-%d'), "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""}], dtype=str)
         df_editado = st.data_editor(df_manual, num_rows="dynamic", use_container_width=True)
         
@@ -187,10 +163,7 @@ if menu == "📡 Extração & Automação":
                         linha = [data_v, sort_v]
                         for v in r[2:7]: 
                             v_str = str(v).replace(".0", "").strip()
-                            if v_str == "" or v_str.lower() == "nan" or v_str == "none":
-                                linha.append("") 
-                            else:
-                                linha.append(v_str.zfill(4))
+                            linha.append("" if v_str == "" or v_str.lower() in ["nan", "none"] else v_str.zfill(4))
                         limpos.append(linha)
                 
                 if limpos:
@@ -199,181 +172,138 @@ if menu == "📡 Extração & Automação":
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, limpos)
                         if inseridos > 0:
-                            st.toast(f"🎯 Salvo com sucesso! ({inseridos})", icon="✅")
                             st.success(f"✅ {inseridos} resultados manuais inseridos!")
                         if repetidos > 0:
-                            st.toast(f"🚫 {repetidos} duplicados bloqueados.", icon="🚫")
                             st.warning(f"⚠️ {repetidos} sorteio(s) já constavam na planilha.")
-                        if inseridos == 0 and repetidos == 0:
-                            st.toast("Erro inesperado ou tabela vazia.", icon="❌")
                 else:
-                    st.toast("Preencha ao menos o Sorteio!", icon="⚠️")
+                    st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CONSELHEIRO TÁTICO (TEMPO REAL VIA API) ---
+# --- 5. TELA 2: CÉREBRO IA (ALGORITMO DE PONTUAÇÃO) ---
 # =============================================================================
-elif menu == "🔮 Conselheiro Tático (IA)":
-    st.title("🔮 Inteligência Artificial de Combate")
-    st.info("O Pentágono puxa os seus dados **diretamente da API em tempo real**, garantindo que a análise seja feita no milissegundo seguinte à inserção!")
+elif menu == "🧠 Cérebro IA (Algoritmo)":
+    st.title("🧠 Algoritmo de Confluência Tática")
+    st.info("Análise baseada em três pilares: **Puxada Histórica**, **Pontos de Ruptura** e **Temperatura Semanal**.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
-    if st.button("Gerar Relatórios de Ataque", use_container_width=True):
-        with st.spinner("Puxando histórico em tempo real da CentralBichos..."):
+    if st.button("Processar Dados Matemáticos", use_container_width=True):
+        with st.spinner("Calculando sistema de pontuação e cruzando dados vitais..."):
             try:
                 sh = conectar_sheets()
                 if sh:
                     ws = sh.worksheet(MAPA_ABAS[banca_ia])
                     dados_brutos = ws.get_all_values()
                     
-                    if not dados_brutos:
-                        st.error("A aba selecionada está vazia.")
+                    if len(dados_brutos) < 2:
+                        st.error("Dados insuficientes na aba selecionada.")
                     else:
+                        # Prepara o DataFrame
                         df = pd.DataFrame(dados_brutos)
                         for i in range(len(df.columns), 7): df[i] = ""
                         df = df.iloc[:, :7]
                         df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
                         
                         df = df[df["P1"].astype(str).str.strip() != ""]
-                        df = df[df["P1"].astype(str).str.lower() != "nan"]
-                        df = df[df["P1"].astype(str).str.lower() != "none"]
                         df = df[df["P1"].astype(str).str.lower() != "p1"]
                         df = df[~df["P1"].astype(str).str.contains("---")]
-
-                        if df.empty:
-                            st.warning("Não há dados válidos de prêmios nesta aba para analisar.")
-                        else:
-                            def get_grupo(m):
-                                try:
-                                    d = int(str(m)[-2:])
-                                    return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
-                                except: return None
-                            
-                            atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-                            atr_um = {str(i): {'t': 0, 'max': 0} for i in range(10)} 
-                            
-                            for i in range(len(df)):
-                                m_str = str(df.iloc[i]["P1"]).zfill(4)
-                                g_v, um_v = get_grupo(m_str), m_str[0]
-                                if g_v:
-                                    for k in atr_g:
-                                        atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
-                                        if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-                                for k in atr_um:
-                                    atr_um[k]['t'] = 0 if k == um_v else atr_um[k]['t'] + 1
-                                    if atr_um[k]['t'] > atr_um[k]['max']: atr_um[k]['max'] = atr_um[k]['t']
-
-                            ult_m = str(df.iloc[-1]["P1"]).zfill(4)
-                            ult_nome = str(df.iloc[-1]["Sorteio"])
-                            ult_g = get_grupo(ult_m)
-                            
-                            seco_g, seco_um = [], []
-                            duque_g = [] 
-                            duque_dz = [] # Lista para as Unidades de Dezena (3º dígito)
-                            cercado_g, cercado_um, cercado_c, cercado_dz = [], [], [], []
-
-                            for i in range(len(df)-1):
-                                if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
-                                    p_m_seco = str(df.iloc[i+1]["P1"]).zfill(4)
-                                    seco_g.append(get_grupo(p_m_seco))
-                                    seco_um.append(p_m_seco[0])
-                                    
-                                    # Analisa o 1º e 2º Prêmio para o Duque (Grupos e Unidades de Dezena)
-                                    for p in ["P1", "P2"]:
-                                        p_m_duq = str(df.iloc[i+1][p]).zfill(4)
-                                        if p_m_duq != "nan" and "---" not in p_m_duq and p_m_duq != "":
-                                            # Extrai o Grupo
-                                            g_duq = get_grupo(p_m_duq)
-                                            if g_duq: duque_g.append(g_duq)
-                                            
-                                            # Extrai APENAS a "Unidade de Dezena" (penúltimo dígito)
-                                            # Ex: Em '8275', ele pega o '7' (índice -2 no Python)
-                                            if len(p_m_duq) >= 2:
-                                                duque_dz.append(p_m_duq[-2])
-                                            
-                                    # Analisa o Cercado (1º ao 5º)
-                                    for p in ["P1", "P2", "P3", "P4", "P5"]:
-                                        p_m_all = str(df.iloc[i+1][p]).zfill(4)
-                                        if p_m_all != "nan" and "---" not in p_m_all and len(p_m_all) == 4:
-                                            g_cerc = get_grupo(p_m_all)
-                                            if g_cerc: cercado_g.append(g_cerc)
-                                            cercado_um.append(p_m_all[0])
-                                            cercado_c.append(p_m_all[1]) 
-                                            cercado_dz.append(p_m_all[2:]) 
-                                    
-                            top_seco_g = pd.Series(seco_g).mode()[0] if seco_g else "N/A"
-                            top_seco_um = pd.Series(seco_um).mode()[0] if seco_um else "N/A"
-                            
-                            # RANKING EXPANDIDO: Top 10 Grupos e Top 5 Unidades de Dezena
-                            top_duq_g = pd.Series(duque_g).value_counts().head(10).index.tolist() if duque_g else []
-                            top_duq_dz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
-                            
-                            top_cerc_g = pd.Series(cercado_g).value_counts().head(3).index.tolist() if cercado_g else []
-                            top_cerc_um = pd.Series(cercado_um).value_counts().head(3).index.tolist() if cercado_um else []
-                            
-                            # --- A FORJA DA MILHAR DE OURO ---
+                        
+                        # Documentação: Converte a coluna Data para identificar a última semana
+                        df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
+                        
+                        def get_grupo(m):
                             try:
-                                t_um_ouro = top_cerc_um[0] if top_cerc_um else "0"
-                                t_c_ouro = pd.Series(cercado_c).mode()[0] if cercado_c else "0"
-                                t_dz_ouro = pd.Series(cercado_dz).mode()[0] if cercado_dz else "00"
-                                milhar_ouro = f"{t_um_ouro}{t_c_ouro}{t_dz_ouro}"
-                            except:
-                                milhar_ouro = "0000"
+                                d = int(str(m)[-2:])
+                                return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
+                            except: return None
+                        
+                        # Dicionário principal de pontuação (A Mágica do Algoritmo)
+                        scores = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
+                        
+                        # --- CÁLCULO 1: RUPTURA (Atrasos) ---
+                        atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
+                        for i in range(len(df)):
+                            g_v = get_grupo(df.iloc[i]["P1"])
+                            if g_v:
+                                for k in atr_g:
+                                    atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
+                                    if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
+                        
+                        # Bônus de Ruptura (Se estiver a 2 jogos ou menos do limite máximo)
+                        for k, v in atr_g.items():
+                            if v['t'] > 0 and v['t'] >= (v['max'] - 2):
+                                scores[k]['ruptura'] += 10  # Peso altíssimo
+                        
+                        # --- CÁLCULO 2: PUXADA HISTÓRICA (Gatilho) ---
+                        ult_m = str(df.iloc[-1]["P1"]).zfill(4)
+                        ult_nome = str(df.iloc[-1]["Sorteio"])
+                        ult_g = get_grupo(ult_m)
+                        
+                        duque_dz = [] # Unidades de dezena (3º dígito)
+                        
+                        for i in range(len(df)-1):
+                            if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
+                                # Grupos do 1º e 2º Prêmio
+                                g_p1 = get_grupo(df.iloc[i+1]["P1"])
+                                g_p2 = get_grupo(df.iloc[i+1]["P2"])
+                                if g_p1: scores[g_p1]['puxada'] += 3 # Peso Forte no 1º
+                                if g_p2: scores[g_p2]['puxada'] += 2 # Peso Médio no 2º
+                                
+                                # Extrai as Unidades de Dezena do 1º e 2º
+                                for p in ["P1", "P2"]:
+                                    m_duq = str(df.iloc[i+1][p]).zfill(4)
+                                    if len(m_duq) == 4 and m_duq != "0000":
+                                        duque_dz.append(m_duq[-2]) # Pega exatamente o 3º algarismo
+                        
+                        # --- CÁLCULO 3: TEMPERATURA DA SEMANA (Últimos 7 dias) ---
+                        limite_data = df['Data'].max() - timedelta(days=7)
+                        df_semana = df[df['Data'] >= limite_data]
+                        
+                        for i in range(len(df_semana)):
+                            for p in ["P1", "P2", "P3", "P4", "P5"]:
+                                g_v = get_grupo(df_semana.iloc[i][p])
+                                if g_v: scores[g_v]['semana'] += 1
+                        
+                        # --- COMPILAÇÃO TOTAL DE PONTOS ---
+                        for k in scores:
+                            scores[k]['total'] = scores[k]['puxada'] + scores[k]['ruptura'] + scores[k]['semana']
+                            
+                        # Ordena os grupos pela maior pontuação
+                        ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
+                        top_10_grupos = [x[0] for x in ranking[:10]]
+                        
+                        # Calcula as Unidades de Dezena mais frequentes na Puxada
+                        top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
 
-                            st.success(f"Base Sincronizada ao Vivo! Último Sorteio Encontrado: {ult_nome} - Milhar {ult_m} (Grupo {ult_g})")
-
-                            # Modificação do texto no HTML para refletir "UNIDADES DE DEZENA (3º Dígito)"
-                            st.markdown(f"""
-<div class="card-tatico">
-<div class="titulo-card">🔮 1. Oráculo Markov (Predição Pós-Grupo {ult_g})</div>
-
-<div style="margin-bottom: 20px;">
-<span class="label-destaque">🎯 ALVO SECO (Para o 1º Prêmio):</span><br>
-Grupo Alvo: <span class="dado-destaque">{top_seco_g}</span> | 
-Unid. Milhar: <span class="dado-destaque">{top_seco_um}</span>
-</div>
-
-<hr>
-
-<div style="margin-bottom: 20px; margin-top: 10px;">
-<span class="label-destaque" style="color:#ffb74d;">⚔️ COMBINAÇÕES PARA O 1º OU 2º PRÊMIO (Duque):</span><br>
-<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Aposte escolhendo entre as Unidades de Dezena e Grupos mais fortes cruzados na cabeça e no segundo prêmio.</p>
-<b>TOP 10 GRUPOS:</b><br> {' '.join([f'<span class="badge-duque">{x}</span>' for x in top_duq_g])}<br><br>
-<b>TOP 5 UNIDADES DE DEZENA (3º Dígito da Milhar):</b><br> {' '.join([f'<span class="badge-dezena">{x}</span>' for x in top_duq_dz])}
-</div>
-
-<hr>
-
-<div style="margin-top: 10px;">
-<span class="label-destaque">🛡️ ALVOS CERCADOS (Para sair do 1º ao 5º):</span><br>
-<p style="color:#aaa; font-size:0.9em; margin-bottom: 5px;">Estes são os números que mais aparecem em qualquer posição após o grupo gatilho.</p>
-<b>TOP GRUPOS:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_g])}<br><br>
-<b>TOP UNIDADES MILHAR:</b> {' '.join([f'<span class="badge-cercado">{x}</span>' for x in top_cerc_um])}
-</div>
-
-<div class="card-ouro">
-<span class="label-destaque" style="color:#ffeb3b; font-size: 1.2em;">💎 A MILHAR DE OURO (Cercado 1º ao 5º)</span><br>
-<p style="color:#aaa; font-size:0.85em; margin-top:5px; margin-bottom:10px;">Forjada unindo matematicamente a Unidade, Centena e Dezena mais frequentes do histórico de repetições pós-gatilho.</p>
-<div class="milhar-ouro">{milhar_ouro}</div>
-</div>
-
-</div>
-""", unsafe_allow_html=True)
-
-                            def gerar_alertas(dic, pref):
-                                alertas = []
-                                for k, v in dic.items():
-                                    if v['t'] > 0 and v['t'] >= (v['max'] - 2):
-                                        alertas.append(f"• {pref} **{k}** <span class='sub-dado'>(Atraso: {v['t']} | Recorde: {v['max']})</span>")
-                                return "<br>".join(alertas) if alertas else "Sem rupturas iminentes."
-
-                            st.markdown(f"""
-<div class="card-alerta">
-<div class="titulo-card" style="color:#ff4b4b;">⏳ 2. Alerta de Ponto Crítico (Ruptura)</div>
-<b style="color:#ffb74d;">🦁 GRUPOS (1º Prêmio):</b><br>{gerar_alertas(atr_g, "Grupo")}<br><br>
-<b style="color:#ffb74d;">🥇 UNID. MILHAR (1º Prêmio):</b><br>{gerar_alertas(atr_um, "UM")}
-</div>
-""", unsafe_allow_html=True)
+                        # =================================================================
+                        # RENDERIZAÇÃO NATIIVA STREAMLIT (Componentes Limpos e Dark Mode)
+                        # =================================================================
+                        st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
+                        
+                        st.subheader("🎯 Top 10 Grupos: Duque (1º e 2º Prêmio)")
+                        st.write("Os grupos com as maiores notas somando histórico, recordes de atraso e calor da semana.")
+                        
+                        # Cria linhas com 5 colunas cada para exibir os 10 grupos usando st.metric
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        col6, col7, col8, col9, col10 = st.columns(5)
+                        colunas_top10 = [col1, col2, col3, col4, col5, col6, col7, col8, col9, col10]
+                        
+                        for idx, grupo in enumerate(top_10_grupos):
+                            pontos = scores[grupo]['total']
+                            with colunas_top10[idx]:
+                                st.metric(label=f"{idx+1}º Lugar", value=f"G: {grupo}", delta=f"{pontos} pts")
+                        
+                        st.divider()
+                        
+                        st.subheader("🔟 Top 5 Unidades de Dezena (3º Dígito)")
+                        st.write("Os algarismos com maior probabilidade de entrarem na casa da dezena (1º ou 2º prêmio).")
+                        
+                        col_d1, col_d2, col_d3, col_d4, col_d5 = st.columns(5)
+                        colunas_dz = [col_d1, col_d2, col_d3, col_d4, col_d5]
+                        
+                        for idx, digito in enumerate(top_5_udz):
+                            with colunas_dz[idx]:
+                                st.metric(label=f"Posição {idx+1}", value=f"Nº {digito}")
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
