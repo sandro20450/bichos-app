@@ -7,13 +7,11 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import itertools # Biblioteca especialista em combinações
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-# DOCUMENTAÇÃO: Configuração inicial da página atualizada para V45.
-st.set_page_config(page_title="Pentágono V45 - 120 Duques", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V46 - Fechamento de Fixos", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Conecta com segurança à API do Google Sheets."""
@@ -101,7 +99,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V45")
+    st.header("🎯 Pentágono V46")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -173,16 +171,16 @@ if menu == "📡 Extração & Automação":
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (FÁBRICA DE DUQUES - TOP 16) ---
+# --- 5. TELA 2: CÉREBRO IA (ESTRATÉGIA: GRUPOS FIXOS) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Confluência Tática")
-    st.info("O sistema agora cruza automaticamente os **Top 16 Grupos**, forjando **120 duplas perfeitas** para garantir maior cobertura estatística.")
+    st.title("🧠 Algoritmo: Fechamento com Fixo")
+    st.info("O sistema agora isola os **5 Grupos Mais Fortes** e gera automaticamente as 24 combinações de Duque para cada um deles.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Calculando pontuações e forjando combinações de Duques (120 alvos)..."):
+        with st.spinner("Analisando base e isolando os alvos de Elite..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -254,48 +252,49 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                             
                         ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
                         
-                        # DOCUMENTAÇÃO: O fatiamento (slice) foi alterado de 15 para 16
-                        # Isso garante que a máquina capte o 16º grupo para cruzar.
-                        top_16_grupos = [x[0] for x in ranking[:16]]
+                        # DOCUMENTAÇÃO: O fatiamento foi drasticamente afunilado para os TOP 5 Grupos absolutos.
+                        top_5_grupos = [x[0] for x in ranking[:5]]
                         top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
 
                         # =================================================================
-                        # RENDERIZAÇÃO E COMBINATÓRIA (FÁBRICA DE DUQUES - 120)
+                        # RENDERIZAÇÃO: OS 5 FIXOS E SEUS FECHAMENTOS
                         # =================================================================
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
-                        st.subheader("🎯 Top 16 Grupos de Elite")
+                        st.subheader("🎯 Os 5 Grupos Fixos (Alta Probabilidade)")
+                        st.write("Estes são os 5 grupos mais fortes do cenário. Escolha um (ou mais) para usar como Fixo.")
                         
-                        # DOCUMENTAÇÃO: Design Simétrico. Criamos 4 linhas com 4 colunas (4x4 = 16)
-                        # Isso evita falhas de renderização e mantém o painel limpo.
-                        linhas_colunas = [st.columns(4), st.columns(4), st.columns(4), st.columns(4)]
-                        
-                        for idx, grupo in enumerate(top_16_grupos):
-                            linha_atual = idx // 4  # Determina qual das 4 linhas o item pertence (0, 1, 2 ou 3)
-                            coluna_atual = idx % 4  # Determina qual coluna o item entra (0 a 3)
-                            
+                        # Exibe os 5 Fixos lado a lado
+                        colunas_fixos = st.columns(5)
+                        for idx, grupo in enumerate(top_5_grupos):
                             pontos = scores[grupo]['total']
-                            with linhas_colunas[linha_atual][coluna_atual]:
-                                st.metric(label=f"{idx+1}º Lugar (Grupo)", value=grupo, delta=f"{pontos} pts")
+                            with colunas_fixos[idx]:
+                                st.metric(label=f"Fixo {idx+1}º Lugar", value=grupo, delta=f"{pontos} pts")
                         
                         st.divider()
 
-                        # DOCUMENTAÇÃO: A Combinatória Matemática.
-                        # 1. Organizamos os 16 grupos do menor para o maior para facilitar a cópia.
-                        top_16_ints = sorted([int(g) for g in top_16_grupos])
+                        st.subheader("⚔️ Arsenal de Fechamento (Fixo x 24 Grupos)")
+                        st.write("Abaixo estão as 24 combinações prontas para cada Fixo. Se o seu Fixo sair, o Duque é infalível.")
                         
-                        # 2. O itertools cruza os 16 grupos de 2 em 2, resultando obrigatoriamente em 120 combinações.
-                        duplas = list(itertools.combinations(top_16_ints, 2))
-                        
-                        # 3. Transformamos os números novamente em texto com 2 casas decimais (ex: '05', não '5').
-                        lista_formatada = [f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas]
-                        
-                        st.subheader("⚔️ Arsenal de Duques Gerados (120 Combinações)")
-                        st.write("Aumento massivo de assertividade: 120 duplas perfeitas geradas pela análise profunda de 16 alvos.")
-                        
-                        # Renderiza as duplas prontas para cópia
-                        texto_duplas = "  |  ".join(lista_formatada)
-                        st.code(texto_duplas, language="text")
+                        # DOCUMENTAÇÃO: Fábrica de Duques com Fixo.
+                        # O laço (for) percorre cada um dos 5 grupos escolhidos.
+                        for fixo in top_5_grupos:
+                            st.markdown(f"<h4 style='color:#4CAF50;'>► Fechamento usando o Grupo Fixo {fixo}</h4>", unsafe_allow_html=True)
+                            
+                            combos_fixo = []
+                            # O laço secundário cruza o Fixo com todos os números de 1 a 25.
+                            for i in range(1, 26):
+                                numero_alvo = str(i).zfill(2)
+                                # Impede que o fixo cruze com ele mesmo (ex: 09-09)
+                                if numero_alvo != fixo:
+                                    # Organiza para o menor número ficar na frente
+                                    menor = min(int(fixo), int(numero_alvo))
+                                    maior = max(int(fixo), int(numero_alvo))
+                                    combos_fixo.append(f"{str(menor).zfill(2)}-{str(maior).zfill(2)}")
+                            
+                            # Exibe o arsenal em uma caixa de código pronta para cópia
+                            texto_fechamento = "  |  ".join(combos_fixo)
+                            st.code(texto_fechamento, language="text")
 
                         st.divider()
                         
