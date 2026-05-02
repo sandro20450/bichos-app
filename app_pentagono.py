@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V46 - Fechamento de Fixos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V47 - Backtest IA", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Conecta com segurança à API do Google Sheets."""
@@ -25,7 +25,7 @@ def conectar_sheets():
         return None
 
 def salvar_sem_duplicar(ws, dados_novos):
-    """Filtro para evitar que sorteios repetidos sejam salvos na base."""
+    """Filtro para evitar que sorteios repetidos sejam salvos."""
     try:
         existentes = ws.get_all_values()
         set_existentes = set()
@@ -69,7 +69,7 @@ BANCAS_CONFIG = {
 # --- 2. MOTORES DE EXTRAÇÃO (WEB SCRAPING) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
-    """Rastreador web que busca os resultados do dia diretamente na fonte."""
+    """Busca os resultados do dia diretamente na fonte."""
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -99,7 +99,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V46")
+    st.header("🎯 Pentágono V47")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -171,16 +171,70 @@ if menu == "📡 Extração & Automação":
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (ESTRATÉGIA: GRUPOS FIXOS) ---
+# --- 5. TELA 2: CÉREBRO IA (BACKTEST E GRUPOS FIXOS) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo: Fechamento com Fixo")
-    st.info("O sistema agora isola os **5 Grupos Mais Fortes** e gera automaticamente as 24 combinações de Duque para cada um deles.")
+    st.title("🧠 Algoritmo de Grupos Fixos e Backtest")
+    st.info("Validação do passado e projeção dos **5 Grupos Mais Fortes** para uso como base nos seus jogos.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
+    def get_grupo(m):
+        """Função auxiliar para identificar o grupo (01 a 25) a partir de uma milhar."""
+        try:
+            d = int(str(m)[-2:])
+            return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
+        except: return None
+        
+    def calcular_top5(df_analise):
+        """
+        DOCUMENTAÇÃO DO MÉTODO:
+        Esta função encapsula todo o cérebro matemático.
+        Permite que o código a chame tanto para prever o FUTURO (sorteio atual)
+        quanto para prever o PASSADO (máquina do tempo do Backtest).
+        """
+        scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
+        
+        # 1. Ruptura
+        atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
+        for i in range(len(df_analise)):
+            g_v = get_grupo(df_analise.iloc[i]["P1"])
+            if g_v:
+                for k in atr_g:
+                    atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
+                    if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
+        
+        for k, v in atr_g.items():
+            if v['t'] > 0 and v['t'] >= (v['max'] - 2):
+                scores_tmp[k]['ruptura'] += 4  
+        
+        # 2. Puxada
+        if len(df_analise) > 0:
+            ult_g = get_grupo(df_analise.iloc[-1]["P1"])
+            for i in range(len(df_analise)-1):
+                if get_grupo(str(df_analise.iloc[i]["P1"]).zfill(4)) == ult_g:
+                    g_p1 = get_grupo(df_analise.iloc[i+1]["P1"])
+                    g_p2 = get_grupo(df_analise.iloc[i+1]["P2"])
+                    if g_p1: scores_tmp[g_p1]['puxada'] += 7 
+                    if g_p2: scores_tmp[g_p2]['puxada'] += 5 
+        
+        # 3. Semana
+        if len(df_analise) > 0:
+            limite_data = df_analise['Data'].max() - timedelta(days=7)
+            df_semana = df_analise[df_analise['Data'] >= limite_data]
+            for i in range(len(df_semana)):
+                for p in ["P1", "P2", "P3", "P4", "P5"]:
+                    g_v = get_grupo(df_semana.iloc[i][p])
+                    if g_v: scores_tmp[g_v]['semana'] += 2
+        
+        for k in scores_tmp:
+            scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura'] + scores_tmp[k]['semana']
+            
+        ranking_tmp = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
+        return [x[0] for x in ranking_tmp[:5]], scores_tmp
+
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Analisando base e isolando os alvos de Elite..."):
+        with st.spinner("Analisando base, executando backtests e isolando os alvos de Elite..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -200,113 +254,67 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df = df[~df["P1"].astype(str).str.contains("---")]
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
-                        def get_grupo(m):
-                            try:
-                                d = int(str(m)[-2:])
-                                return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
-                            except: return None
+                        # =================================================================
+                        # ROTINA DE BACKTEST (MÁQUINA DO TEMPO)
+                        # =================================================================
+                        resultados_bt = []
+                        qtd_testes = min(5, len(df) - 1) # Previne erro se a planilha tiver poucos dados
                         
-                        scores = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
-                        
-                        # --- CÁLCULOS DO ALGORITMO ---
-                        atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-                        for i in range(len(df)):
-                            g_v = get_grupo(df.iloc[i]["P1"])
-                            if g_v:
-                                for k in atr_g:
-                                    atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
-                                    if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-                        
-                        for k, v in atr_g.items():
-                            if v['t'] > 0 and v['t'] >= (v['max'] - 2):
-                                scores[k]['ruptura'] += 4  
-                        
+                        if qtd_testes > 0:
+                            # O Python vai olhar as últimas linhas do histórico
+                            for i in range(len(df) - qtd_testes, len(df)):
+                                # Esconde o futuro do robô: corta a planilha ANTES do sorteio acontecer
+                                df_passado = df.iloc[:i].copy() 
+                                sorteio_alvo = str(df.iloc[i]["Sorteio"]).strip()
+                                
+                                # O robô prevê os Top 5 baseado APENAS no que sabia até aquele momento
+                                top5_passado, _ = calcular_top5(df_passado)
+                                
+                                # O que REALMENTE saiu no 1º e 2º prêmio daquele momento?
+                                g1_real = get_grupo(df.iloc[i]["P1"])
+                                g2_real = get_grupo(df.iloc[i]["P2"])
+                                
+                                # Verifica a assertividade: se um dos reais estava no top 5 passado
+                                if (g1_real in top5_passado) or (g2_real in top5_passado):
+                                    resultados_bt.append(f"{sorteio_alvo} 🟢")
+                                else:
+                                    resultados_bt.append(f"{sorteio_alvo} ❌")
+
+                        # =================================================================
+                        # PREVISÃO PARA O PRESENTE (FUTURO)
+                        # =================================================================
                         ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                         ult_nome = str(df.iloc[-1]["Sorteio"])
                         ult_g = get_grupo(ult_m)
                         
-                        duque_dz = []
-                        
-                        for i in range(len(df)-1):
-                            if get_grupo(str(df.iloc[i]["P1"]).zfill(4)) == ult_g:
-                                g_p1 = get_grupo(df.iloc[i+1]["P1"])
-                                g_p2 = get_grupo(df.iloc[i+1]["P2"])
-                                if g_p1: scores[g_p1]['puxada'] += 7 
-                                if g_p2: scores[g_p2]['puxada'] += 5 
-                                
-                                for p in ["P1", "P2"]:
-                                    m_duq = str(df.iloc[i+1][p]).zfill(4)
-                                    if len(m_duq) == 4 and m_duq != "0000":
-                                        duque_dz.append(m_duq[-2]) 
-                        
-                        limite_data = df['Data'].max() - timedelta(days=7)
-                        df_semana = df[df['Data'] >= limite_data]
-                        
-                        for i in range(len(df_semana)):
-                            for p in ["P1", "P2", "P3", "P4", "P5"]:
-                                g_v = get_grupo(df_semana.iloc[i][p])
-                                if g_v: scores[g_v]['semana'] += 2
-                        
-                        for k in scores:
-                            scores[k]['total'] = scores[k]['puxada'] + scores[k]['ruptura'] + scores[k]['semana']
-                            
-                        ranking = sorted(scores.items(), key=lambda x: x[1]['total'], reverse=True)
-                        
-                        # DOCUMENTAÇÃO: O fatiamento foi drasticamente afunilado para os TOP 5 Grupos absolutos.
-                        top_5_grupos = [x[0] for x in ranking[:5]]
-                        top_5_udz = pd.Series(duque_dz).value_counts().head(5).index.tolist() if duque_dz else []
+                        top_5_grupos, scores = calcular_top5(df)
 
                         # =================================================================
-                        # RENDERIZAÇÃO: OS 5 FIXOS E SEUS FECHAMENTOS
+                        # RENDERIZAÇÃO NA TELA
                         # =================================================================
+                        
+                        # 1. Painel de Backtest
+                        st.markdown("### 🔙 Radar de Assertividade (Backtest)")
+                        st.write("Verificamos a performance das previsões nos últimos 5 sorteios históricos do 1º e 2º Prêmio.")
+                        
+                        if resultados_bt:
+                            st.info(" **-** ".join(resultados_bt))
+                        else:
+                            st.write("Sem histórico suficiente para backtest.")
+                            
+                        st.divider()
+
+                        # 2. Painel de Gatilho e Previsão
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
                         st.subheader("🎯 Os 5 Grupos Fixos (Alta Probabilidade)")
-                        st.write("Estes são os 5 grupos mais fortes do cenário. Escolha um (ou mais) para usar como Fixo.")
+                        st.write("Estes são os 5 grupos mais fortes para o **próximo sorteio**. Utilize como Fixo nas suas estratégias.")
                         
-                        # Exibe os 5 Fixos lado a lado
                         colunas_fixos = st.columns(5)
                         for idx, grupo in enumerate(top_5_grupos):
                             pontos = scores[grupo]['total']
                             with colunas_fixos[idx]:
                                 st.metric(label=f"Fixo {idx+1}º Lugar", value=grupo, delta=f"{pontos} pts")
-                        
-                        st.divider()
-
-                        st.subheader("⚔️ Arsenal de Fechamento (Fixo x 24 Grupos)")
-                        st.write("Abaixo estão as 24 combinações prontas para cada Fixo. Se o seu Fixo sair, o Duque é infalível.")
-                        
-                        # DOCUMENTAÇÃO: Fábrica de Duques com Fixo.
-                        # O laço (for) percorre cada um dos 5 grupos escolhidos.
-                        for fixo in top_5_grupos:
-                            st.markdown(f"<h4 style='color:#4CAF50;'>► Fechamento usando o Grupo Fixo {fixo}</h4>", unsafe_allow_html=True)
-                            
-                            combos_fixo = []
-                            # O laço secundário cruza o Fixo com todos os números de 1 a 25.
-                            for i in range(1, 26):
-                                numero_alvo = str(i).zfill(2)
-                                # Impede que o fixo cruze com ele mesmo (ex: 09-09)
-                                if numero_alvo != fixo:
-                                    # Organiza para o menor número ficar na frente
-                                    menor = min(int(fixo), int(numero_alvo))
-                                    maior = max(int(fixo), int(numero_alvo))
-                                    combos_fixo.append(f"{str(menor).zfill(2)}-{str(maior).zfill(2)}")
-                            
-                            # Exibe o arsenal em uma caixa de código pronta para cópia
-                            texto_fechamento = "  |  ".join(combos_fixo)
-                            st.code(texto_fechamento, language="text")
-
-                        st.divider()
-                        
-                        st.subheader("🔟 Top 5 Unidades de Dezena (3º Dígito)")
-                        st.write("Os algarismos com maior probabilidade de entrarem na casa da dezena (1º ou 2º prêmio).")
-                        
-                        col_d1, col_d2, col_d3, col_d4, col_d5 = st.columns(5)
-                        colunas_dz = [col_d1, col_d2, col_d3, col_d4, col_d5]
-                        
-                        for idx, digito in enumerate(top_5_udz):
-                            with colunas_dz[idx]:
-                                st.metric(label=f"Posição {idx+1}", value=digito)
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
