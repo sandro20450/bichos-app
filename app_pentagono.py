@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V47 - Backtest IA", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V48 - Recordes de Sequência", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Conecta com segurança à API do Google Sheets."""
@@ -99,7 +99,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V47")
+    st.header("🎯 Pentágono V48")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -171,11 +171,11 @@ if menu == "📡 Extração & Automação":
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (BACKTEST E GRUPOS FIXOS) ---
+# --- 5. TELA 2: CÉREBRO IA (BACKTEST DE SEQUÊNCIAS E FIXOS) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
     st.title("🧠 Algoritmo de Grupos Fixos e Backtest")
-    st.info("Validação do passado e projeção dos **5 Grupos Mais Fortes** para uso como base nos seus jogos.")
+    st.info("Validação de recordes históricos e projeção dos **5 Grupos Mais Fortes**.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
@@ -187,12 +187,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         except: return None
         
     def calcular_top5(df_analise):
-        """
-        DOCUMENTAÇÃO DO MÉTODO:
-        Esta função encapsula todo o cérebro matemático.
-        Permite que o código a chame tanto para prever o FUTURO (sorteio atual)
-        quanto para prever o PASSADO (máquina do tempo do Backtest).
-        """
+        """Encapsula a matemática para uso no presente e no passado (Backtest)."""
         scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
         
         # 1. Ruptura
@@ -234,7 +229,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         return [x[0] for x in ranking_tmp[:5]], scores_tmp
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Analisando base, executando backtests e isolando os alvos de Elite..."):
+        with st.spinner("Executando backtest de sequências em 25 sorteios e isolando os alvos de Elite..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -255,30 +250,54 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         # =================================================================
-                        # ROTINA DE BACKTEST (MÁQUINA DO TEMPO)
+                        # ROTINA DE BACKTEST: ANÁLISE DE 25 SORTEIOS E RECORDES
                         # =================================================================
-                        resultados_bt = []
-                        qtd_testes = min(5, len(df) - 1) # Previne erro se a planilha tiver poucos dados
+                        resultados_texto = [] # Guarda o texto visual (ex: 12:20 🟢)
+                        resultados_booleanos = [] # Guarda Verdadeiro ou Falso para contar a sequência
+                        
+                        # DOCUMENTAÇÃO: Define a janela de análise para os últimos 25 sorteios
+                        qtd_testes = min(25, len(df) - 1) 
                         
                         if qtd_testes > 0:
-                            # O Python vai olhar as últimas linhas do histórico
                             for i in range(len(df) - qtd_testes, len(df)):
-                                # Esconde o futuro do robô: corta a planilha ANTES do sorteio acontecer
                                 df_passado = df.iloc[:i].copy() 
                                 sorteio_alvo = str(df.iloc[i]["Sorteio"]).strip()
                                 
-                                # O robô prevê os Top 5 baseado APENAS no que sabia até aquele momento
                                 top5_passado, _ = calcular_top5(df_passado)
                                 
-                                # O que REALMENTE saiu no 1º e 2º prêmio daquele momento?
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
                                 
-                                # Verifica a assertividade: se um dos reais estava no top 5 passado
+                                # Condição de Acerto (Vitória)
                                 if (g1_real in top5_passado) or (g2_real in top5_passado):
-                                    resultados_bt.append(f"{sorteio_alvo} 🟢")
+                                    resultados_booleanos.append(True)
+                                    # Guarda o texto apenas para os últimos 5 para o visor não ficar gigante
+                                    if i >= len(df) - 5: 
+                                        resultados_texto.append(f"{sorteio_alvo} 🟢")
+                                # Condição de Erro (Derrota)
                                 else:
-                                    resultados_bt.append(f"{sorteio_alvo} ❌")
+                                    resultados_booleanos.append(False)
+                                    if i >= len(df) - 5:
+                                        resultados_texto.append(f"{sorteio_alvo} ❌")
+
+                        # DOCUMENTAÇÃO: Contador de Sequências (Streak Counter)
+                        max_vitorias = 0
+                        max_derrotas = 0
+                        vit_atuais = 0
+                        der_atuais = 0
+
+                        # Analisa toda a lista de 25 resultados passados
+                        for res in resultados_booleanos:
+                            if res == True:
+                                vit_atuais += 1     # Soma +1 vitória
+                                der_atuais = 0      # Zera as derrotas
+                                if vit_atuais > max_vitorias: 
+                                    max_vitorias = vit_atuais # Atualiza o recorde
+                            else:
+                                der_atuais += 1     # Soma +1 derrota
+                                vit_atuais = 0      # Zera as vitórias
+                                if der_atuais > max_derrotas: 
+                                    max_derrotas = der_atuais # Atualiza o recorde
 
                         # =================================================================
                         # PREVISÃO PARA O PRESENTE (FUTURO)
@@ -293,14 +312,21 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         # RENDERIZAÇÃO NA TELA
                         # =================================================================
                         
-                        # 1. Painel de Backtest
-                        st.markdown("### 🔙 Radar de Assertividade (Backtest)")
-                        st.write("Verificamos a performance das previsões nos últimos 5 sorteios históricos do 1º e 2º Prêmio.")
+                        # 1. Painel de Backtest e Recordes
+                        st.markdown("### 🔙 Radar de Assertividade e Sequências")
                         
-                        if resultados_bt:
-                            st.info(" **-** ".join(resultados_bt))
+                        # Mostra as sequências históricas máximas nas 25 extrações
+                        col_r1, col_r2 = st.columns(2)
+                        with col_r1:
+                            st.metric("🏆 Maior Sequência de Vitórias (Últimos 25)", f"{max_vitorias} Seguidas 🟢")
+                        with col_r2:
+                            st.metric("⚠️ Maior Sequência de Derrotas (Últimos 25)", f"{max_derrotas} Seguidas ❌")
+                        
+                        st.write("Resultado direto dos **últimos 5 sorteios**:")
+                        if resultados_texto:
+                            st.info(" **-** ".join(resultados_texto))
                         else:
-                            st.write("Sem histórico suficiente para backtest.")
+                            st.write("Sem histórico suficiente.")
                             
                         st.divider()
 
