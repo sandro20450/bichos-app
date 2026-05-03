@@ -12,14 +12,16 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V54 - Otimização 150 Jogos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V55 - Radar de Pontos Cegos", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
 .flex-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin-bottom: 20px; }
 .grupo-card { background-color: #001a00; border: 1px solid #4CAF50; border-radius: 6px; padding: 8px; text-align: center; flex: 1 1 60px; max-width: 90px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.grupo-card-zebra { background-color: #330000; border: 1px solid #ff4b4b; border-radius: 6px; padding: 8px; text-align: center; flex: 1 1 60px; max-width: 90px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .grupo-numero { font-size: 20px; font-weight: bold; color: #ffffff; margin: 3px 0; }
 .grupo-pontos { font-size: 11px; color: #4CAF50; font-weight: bold; }
+.grupo-pontos-zebra { font-size: 11px; color: #ff4b4b; font-weight: bold; }
 .grupo-posicao { font-size: 9px; color: #aaaaaa; text-transform: uppercase; }
 .backtest-box { background-color: #1a2634; padding: 10px; border-radius: 5px; border-left: 4px solid #2196F3; margin-bottom: 10px;}
 .alerta-tendencia { background-color: #331a00; border-left: 4px solid #ffb74d; padding: 8px; font-size: 13px; margin-top: 5px; border-radius: 4px;}
@@ -93,7 +95,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V54")
+    st.header("🎯 Pentágono V55")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -148,10 +150,10 @@ if menu == "📡 Extração & Automação":
                     if ins > 0: st.success(f"✅ {ins} inseridos!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (RADAR OTIMIZADO PARA 150 JOGOS) ---
+# --- 5. TELA 2: CÉREBRO IA (RADAR 150 JOGOS + PONTOS CEGOS) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Padrões (150 Jogos Otimizados)")
+    st.title("🧠 Algoritmo de Cobertura Total (V55)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -200,13 +202,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                 if der_a > max_d: max_d = der_a
         return max_v, max_d
 
-    # DOCUMENTAÇÃO: FUNÇÃO DE PREVISÃO AGORA LIMITADA A 150 JOGOS NO TEXTO
     def prever_tendencia(lista_booleanos):
         if len(lista_booleanos) < 5: return "Aguardando mais dados para traçar perfil."
-        
         padrao_atual = lista_booleanos[-4:]
-        vitorias_apos = 0
-        derrotas_apos = 0
+        vitorias_apos = 0; derrotas_apos = 0
         
         for i in range(len(lista_booleanos) - 4):
             if lista_booleanos[i:i+4] == padrao_atual:
@@ -216,28 +215,27 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         total_ocorrencias = vitorias_apos + derrotas_apos
         padrao_emoji = "".join(["🟢" if x else "❌" for x in padrao_atual])
         
-        if total_ocorrencias == 0:
-            return f"A sequência de 4 ({padrao_emoji}) é inédita nos últimos 150 jogos."
-            
+        if total_ocorrencias == 0: return f"A sequência ({padrao_emoji}) é inédita."
         prob_vitoria = (vitorias_apos / total_ocorrencias) * 100
         
-        if prob_vitoria > 50:
-            return f"Com a sequência {padrao_emoji}, o algoritmo aponta 🟢 VITÓRIA em {prob_vitoria:.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
-        elif prob_vitoria < 50:
-            return f"Com a sequência {padrao_emoji}, o algoritmo aponta ❌ DERROTA em {(100-prob_vitoria):.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
-        else:
-            return f"A sequência {padrao_emoji} está Neutra (50% Vitória / 50% Derrota). (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
+        if prob_vitoria > 50: return f"Com a sequência {padrao_emoji}, a IA aponta 🟢 VITÓRIA em {prob_vitoria:.0f}% (Ocorreu {total_ocorrencias}x)."
+        elif prob_vitoria < 50: return f"Com a sequência {padrao_emoji}, a IA aponta ❌ DERROTA em {(100-prob_vitoria):.0f}% (Ocorreu {total_ocorrencias}x)."
+        else: return f"Sequência Neutra 50/50. (Ocorreu {total_ocorrencias}x)."
 
-    def renderizar_mobile(grupos, scores, inicio_pos, titulo):
+    def renderizar_mobile(grupos, scores, inicio_pos, titulo, is_zebra=False):
         html = '<div class="flex-container">'
+        # DOCUMENTAÇÃO: Se for a área de Zebras, usa a classe CSS com cores de alerta
+        card_class = "grupo-card-zebra" if is_zebra else "grupo-card"
+        pts_class = "grupo-pontos-zebra" if is_zebra else "grupo-pontos"
+        
         for idx, grupo in enumerate(grupos):
             pts = scores[grupo]['total']
-            html += f'<div class="grupo-card"><div class="grupo-posicao">{idx + inicio_pos}º {titulo}</div><div class="grupo-numero">{grupo}</div><div class="grupo-pontos">↑ {pts} pts</div></div>'
+            html += f'<div class="{card_class}"><div class="grupo-posicao">{idx + inicio_pos}º {titulo}</div><div class="grupo-numero">{grupo}</div><div class="{pts_class}">↑ {pts} pts</div></div>'
         html += '</div>'
         st.markdown(html, unsafe_allow_html=True)
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Processamento rápido: Compilando os 150 jogos mais recentes..."):
+        with st.spinner("Compilando 150 jogos e identificando Pontos Cegos (Zebras)..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -256,12 +254,12 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         # =================================================================
-                        # ROTINA DE BACKTEST DUPLO (OTIMIZADO PARA 150 JOGOS)
+                        # ROTINA DE BACKTEST TRIPLO (Incluindo os 4 Pontos Cegos)
                         # =================================================================
                         bool_5 = []; texto_5 = []
                         bool_16 = []; texto_16 = []
+                        bool_cegos = []; texto_cegos = []
                         
-                        # DOCUMENTAÇÃO: Máquina do tempo reduzida para 150 sorteios garantindo velocidade
                         qtd_testes = min(150, len(df) - 1) 
                         
                         if qtd_testes > 0:
@@ -272,11 +270,12 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 ranking_passado, _ = calcular_ranking_completo(df_passado)
                                 top5_passado = ranking_passado[:5]
                                 top16_passado = ranking_passado[5:21]
+                                top4_cegos_passado = ranking_passado[21:25] # Pega os 4 piores
                                 
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
                                 
-                                # Análise do Top 5
+                                # Backtest Top 5
                                 if (g1_real in top5_passado) or (g2_real in top5_passado):
                                     bool_5.append(True)
                                     if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} 🟢")
@@ -284,16 +283,25 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_5.append(False)
                                     if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} ❌")
                                     
-                                # Análise dos 16 Secundários
+                                # Backtest 16 Secundários
                                 if (g1_real in top16_passado) and (g2_real in top16_passado) and (g1_real != g2_real):
                                     bool_16.append(True)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} 🟢")
                                 else:
                                     bool_16.append(False)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
+                                    
+                                # DOCUMENTAÇÃO: Backtest dos 4 Pontos Cegos (A Zebra)
+                                if (g1_real in top4_cegos_passado) and (g2_real in top4_cegos_passado) and (g1_real != g2_real):
+                                    bool_cegos.append(True)
+                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA!)")
+                                else:
+                                    bool_cegos.append(False)
+                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} ❌")
 
                         v_max_5, d_max_5 = contar_sequencias(bool_5)
                         v_max_16, d_max_16 = contar_sequencias(bool_16)
+                        v_max_c, d_max_c = contar_sequencias(bool_cegos)
                         
                         tendencia_5 = prever_tendencia(bool_5)
                         tendencia_16 = prever_tendencia(bool_16)
@@ -308,6 +316,9 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         ranking_completo, scores = calcular_ranking_completo(df)
                         top_5_grupos = ranking_completo[:5]
                         proximos_16_grupos = ranking_completo[5:21]
+                        
+                        # DOCUMENTAÇÃO: Fatiamos os 4 últimos (Pontos Cegos) do ranking
+                        pontos_cegos = ranking_completo[21:25]
 
                         # =================================================================
                         # RENDERIZAÇÃO NA TELA
@@ -323,7 +334,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_5}</div>
                         </div>
                         """, unsafe_allow_html=True)
-                        
                         renderizar_mobile(top_5_grupos, scores, inicio_pos=1, titulo="Fixo")
                         st.divider()
                         
@@ -336,15 +346,31 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_16}</div>
                         </div>
                         """, unsafe_allow_html=True)
-                        
                         renderizar_mobile(proximos_16_grupos, scores, inicio_pos=6, titulo="Lugar")
                         
-                        # --- PAINEL 3: ARSENAL 120 DUQUES ---
-                        st.write("⚔️ **Arsenal de Duques Gerados (120 Combinações):**")
+                        st.write("⚔️ **Arsenal de Duques (120 Combinações):**")
                         top_16_ints = sorted([int(g) for g in proximos_16_grupos])
                         duplas_16 = list(itertools.combinations(top_16_ints, 2))
-                        lista_formatada = [f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]
-                        st.code("  |  ".join(lista_formatada), language="text")
+                        st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]), language="text")
+                        st.divider()
+
+                        # --- PAINEL 3: PONTOS CEGOS (O SEGURO ZEBRA) ---
+                        st.subheader("🚨 Pelotão de Risco: 4 Pontos Cegos (Seguro Zebra)")
+                        st.write("Estes são os 4 grupos com o pior desempenho histórico. Cruze-os como uma aposta defensiva barata (Seguro).")
+                        st.markdown(f"""
+                        <div class="backtest-box" style="border-left-color: #ff4b4b;">
+                            <b>Rastreador de Zebras (150 Jogos):</b> Máximo de ocorrências seguidas de Zebra: <span style='color:#ff4b4b'>{v_max_c} 🟢</span><br>
+                            <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_cegos) if texto_cegos else 'Sem dados'}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Renderiza com as cores de alerta (is_zebra=True)
+                        renderizar_mobile(pontos_cegos, scores, inicio_pos=22, titulo="Cego", is_zebra=True)
+                        
+                        st.write("⚠️ **Seguro Anti-Zebra (Apenas 6 Combinações de Duque):**")
+                        cegos_ints = sorted([int(g) for g in pontos_cegos])
+                        duplas_cegas = list(itertools.combinations(cegos_ints, 2))
+                        st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_cegas]), language="text")
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
