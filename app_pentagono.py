@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V53 - Radar 250", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V54 - Otimização 150 Jogos", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -93,7 +93,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V53")
+    st.header("🎯 Pentágono V54")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -148,10 +148,10 @@ if menu == "📡 Extração & Automação":
                     if ins > 0: st.success(f"✅ {ins} inseridos!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (RADAR 250 JOGOS E DETALHAMENTO DE TENDÊNCIA) ---
+# --- 5. TELA 2: CÉREBRO IA (RADAR OTIMIZADO PARA 150 JOGOS) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Padrões Profundos (250 Jogos)")
+    st.title("🧠 Algoritmo de Padrões (150 Jogos Otimizados)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -200,7 +200,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                 if der_a > max_d: max_d = der_a
         return max_v, max_d
 
-    # DOCUMENTAÇÃO: FUNÇÃO ATUALIZADA PARA MOSTRAR A QUANTIDADE DE OCORRÊNCIAS
+    # DOCUMENTAÇÃO: FUNÇÃO DE PREVISÃO AGORA LIMITADA A 150 JOGOS NO TEXTO
     def prever_tendencia(lista_booleanos):
         if len(lista_booleanos) < 5: return "Aguardando mais dados para traçar perfil."
         
@@ -216,19 +216,17 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         total_ocorrencias = vitorias_apos + derrotas_apos
         padrao_emoji = "".join(["🟢" if x else "❌" for x in padrao_atual])
         
-        # DOCUMENTAÇÃO: Se o padrão nunca aconteceu nos últimos 250 jogos
         if total_ocorrencias == 0:
-            return f"A sequência de 4 ({padrao_emoji}) é inédita nos últimos 250 jogos."
+            return f"A sequência de 4 ({padrao_emoji}) é inédita nos últimos 150 jogos."
             
         prob_vitoria = (vitorias_apos / total_ocorrencias) * 100
         
-        # DOCUMENTAÇÃO: Retorno dinâmico informando a quantidade exata de vezes que o padrão ocorreu
         if prob_vitoria > 50:
-            return f"Com a sequência {padrao_emoji}, o algoritmo aponta 🟢 VITÓRIA em {prob_vitoria:.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 250 jogos)."
+            return f"Com a sequência {padrao_emoji}, o algoritmo aponta 🟢 VITÓRIA em {prob_vitoria:.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
         elif prob_vitoria < 50:
-            return f"Com a sequência {padrao_emoji}, o algoritmo aponta ❌ DERROTA em {(100-prob_vitoria):.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 250 jogos)."
+            return f"Com a sequência {padrao_emoji}, o algoritmo aponta ❌ DERROTA em {(100-prob_vitoria):.0f}% das vezes (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
         else:
-            return f"A sequência {padrao_emoji} está Neutra (50% Vitória / 50% Derrota). (Padrão encontrado {total_ocorrencias} vezes em 250 jogos)."
+            return f"A sequência {padrao_emoji} está Neutra (50% Vitória / 50% Derrota). (Padrão encontrado {total_ocorrencias} vezes em 150 jogos)."
 
     def renderizar_mobile(grupos, scores, inicio_pos, titulo):
         html = '<div class="flex-container">'
@@ -239,7 +237,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         st.markdown(html, unsafe_allow_html=True)
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Compilando 250 extrações históricas e escaneando padrões de repetição..."):
+        with st.spinner("Processamento rápido: Compilando os 150 jogos mais recentes..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -258,13 +256,13 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         # =================================================================
-                        # ROTINA DE BACKTEST DUPLO (AGORA COM 250 JOGOS)
+                        # ROTINA DE BACKTEST DUPLO (OTIMIZADO PARA 150 JOGOS)
                         # =================================================================
                         bool_5 = []; texto_5 = []
                         bool_16 = []; texto_16 = []
                         
-                        # DOCUMENTAÇÃO: Máquina do tempo expandida para 250 sorteios
-                        qtd_testes = min(250, len(df) - 1) 
+                        # DOCUMENTAÇÃO: Máquina do tempo reduzida para 150 sorteios garantindo velocidade
+                        qtd_testes = min(150, len(df) - 1) 
                         
                         if qtd_testes > 0:
                             for i in range(len(df) - qtd_testes, len(df)):
@@ -320,7 +318,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.subheader("🎯 Pelotão de Frente: 5 Grupos Fixos")
                         st.markdown(f"""
                         <div class="backtest-box">
-                            <b>Backtest Fixos (250 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_5} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_5} ❌</span><br>
+                            <b>Backtest Fixos (150 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_5} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_5} ❌</span><br>
                             <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_5) if texto_5 else 'Sem dados'}</span>
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_5}</div>
                         </div>
@@ -333,7 +331,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.subheader("🛡️ Pelotão de Cobertura: Próximos 16 Grupos")
                         st.markdown(f"""
                         <div class="backtest-box">
-                            <b>Backtest Duques (250 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_16} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_16} ❌</span><br>
+                            <b>Backtest Duques (150 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_16} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_16} ❌</span><br>
                             <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_16) if texto_16 else 'Sem dados'}</span>
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_16}</div>
                         </div>
