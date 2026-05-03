@@ -7,11 +7,12 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import itertools # DOCUMENTAÇÃO: Importamos novamente o motor de combinações
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CONEXÃO GOOGLE SHEETS ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V48 - Recordes de Sequência", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V49 - Esquadrão Duplo", page_icon="🎯", layout="wide")
 
 def conectar_sheets():
     """Conecta com segurança à API do Google Sheets."""
@@ -99,7 +100,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V48")
+    st.header("🎯 Pentágono V49")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -171,11 +172,11 @@ if menu == "📡 Extração & Automação":
                     st.warning("Preencha ao menos o Sorteio!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (BACKTEST DE SEQUÊNCIAS E FIXOS) ---
+# --- 5. TELA 2: CÉREBRO IA (O ESQUADRÃO DUPLO) ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Grupos Fixos e Backtest")
-    st.info("Validação de recordes históricos e projeção dos **5 Grupos Mais Fortes**.")
+    st.title("🧠 Algoritmo de Tática Combinada (Esquadrão Duplo)")
+    st.info("O sistema rastreia os **5 Fixos** de elite e, simultaneamente, forja **120 Duques** com os 16 grupos secundários.")
     
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
@@ -186,8 +187,11 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
             return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
         except: return None
         
-    def calcular_top5(df_analise):
-        """Encapsula a matemática para uso no presente e no passado (Backtest)."""
+    def calcular_ranking_completo(df_analise):
+        """
+        DOCUMENTAÇÃO: Agora a função retorna o ranking INTEIRO, 
+        do 1º ao 25º lugar, para que possamos fatiar (slice) os pedaços que queremos.
+        """
         scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'semana': 0, 'total': 0} for i in range(1, 26)}
         
         # 1. Ruptura
@@ -226,10 +230,11 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
             scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura'] + scores_tmp[k]['semana']
             
         ranking_tmp = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
-        return [x[0] for x in ranking_tmp[:5]], scores_tmp
+        # Devolve a lista completa de grupos ordenados do mais forte para o mais fraco
+        return [x[0] for x in ranking_tmp], scores_tmp
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Executando backtest de sequências em 25 sorteios e isolando os alvos de Elite..."):
+        with st.spinner("Analisando base, executando backtests e dividindo os esquadrões..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -250,12 +255,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
                         # =================================================================
-                        # ROTINA DE BACKTEST: ANÁLISE DE 25 SORTEIOS E RECORDES
+                        # ROTINA DE BACKTEST (MÁQUINA DO TEMPO)
                         # =================================================================
-                        resultados_texto = [] # Guarda o texto visual (ex: 12:20 🟢)
-                        resultados_booleanos = [] # Guarda Verdadeiro ou Falso para contar a sequência
-                        
-                        # DOCUMENTAÇÃO: Define a janela de análise para os últimos 25 sorteios
+                        resultados_texto = [] 
+                        resultados_booleanos = [] 
                         qtd_testes = min(25, len(df) - 1) 
                         
                         if qtd_testes > 0:
@@ -263,59 +266,60 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 df_passado = df.iloc[:i].copy() 
                                 sorteio_alvo = str(df.iloc[i]["Sorteio"]).strip()
                                 
-                                top5_passado, _ = calcular_top5(df_passado)
+                                # No Backtest, o robô testa se o 1º ou 2º prêmio estava no TOP 5 daquele momento
+                                ranking_passado, _ = calcular_ranking_completo(df_passado)
+                                top5_passado = ranking_passado[:5]
                                 
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
                                 
-                                # Condição de Acerto (Vitória)
                                 if (g1_real in top5_passado) or (g2_real in top5_passado):
                                     resultados_booleanos.append(True)
-                                    # Guarda o texto apenas para os últimos 5 para o visor não ficar gigante
                                     if i >= len(df) - 5: 
                                         resultados_texto.append(f"{sorteio_alvo} 🟢")
-                                # Condição de Erro (Derrota)
                                 else:
                                     resultados_booleanos.append(False)
                                     if i >= len(df) - 5:
                                         resultados_texto.append(f"{sorteio_alvo} ❌")
 
-                        # DOCUMENTAÇÃO: Contador de Sequências (Streak Counter)
                         max_vitorias = 0
                         max_derrotas = 0
                         vit_atuais = 0
                         der_atuais = 0
 
-                        # Analisa toda a lista de 25 resultados passados
                         for res in resultados_booleanos:
                             if res == True:
-                                vit_atuais += 1     # Soma +1 vitória
-                                der_atuais = 0      # Zera as derrotas
-                                if vit_atuais > max_vitorias: 
-                                    max_vitorias = vit_atuais # Atualiza o recorde
+                                vit_atuais += 1     
+                                der_atuais = 0      
+                                if vit_atuais > max_vitorias: max_vitorias = vit_atuais 
                             else:
-                                der_atuais += 1     # Soma +1 derrota
-                                vit_atuais = 0      # Zera as vitórias
-                                if der_atuais > max_derrotas: 
-                                    max_derrotas = der_atuais # Atualiza o recorde
+                                der_atuais += 1     
+                                vit_atuais = 0      
+                                if der_atuais > max_derrotas: max_derrotas = der_atuais 
 
                         # =================================================================
-                        # PREVISÃO PARA O PRESENTE (FUTURO)
+                        # O PRESENTE: SEPARAÇÃO DOS PELOTÕES
                         # =================================================================
                         ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                         ult_nome = str(df.iloc[-1]["Sorteio"])
                         ult_g = get_grupo(ult_m)
                         
-                        top_5_grupos, scores = calcular_top5(df)
+                        # Pegamos o ranking completo
+                        ranking_completo, scores = calcular_ranking_completo(df)
+                        
+                        # DOCUMENTAÇÃO DO FATIAMENTO (Slicing):
+                        # Pega do índice 0 ao 4 (Os 5 primeiros colocados)
+                        top_5_grupos = ranking_completo[:5]
+                        
+                        # Pega do índice 5 ao 20 (Que são exatamente os próximos 16 colocados: do 6º ao 21º)
+                        proximos_16_grupos = ranking_completo[5:21]
 
                         # =================================================================
                         # RENDERIZAÇÃO NA TELA
                         # =================================================================
                         
-                        # 1. Painel de Backtest e Recordes
-                        st.markdown("### 🔙 Radar de Assertividade e Sequências")
-                        
-                        # Mostra as sequências históricas máximas nas 25 extrações
+                        # 1. Painel de Backtest
+                        st.markdown("### 🔙 Radar de Assertividade (Top 5 Histórico)")
                         col_r1, col_r2 = st.columns(2)
                         with col_r1:
                             st.metric("🏆 Maior Sequência de Vitórias (Últimos 25)", f"{max_vitorias} Seguidas 🟢")
@@ -330,17 +334,49 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                             
                         st.divider()
 
-                        # 2. Painel de Gatilho e Previsão
+                        # 2. Painel: O Pelotão de Frente (Os 5 Fixos)
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
-                        st.subheader("🎯 Os 5 Grupos Fixos (Alta Probabilidade)")
-                        st.write("Estes são os 5 grupos mais fortes para o **próximo sorteio**. Utilize como Fixo nas suas estratégias.")
+                        st.subheader("🎯 O Pelotão de Frente: Os 5 Grupos Fixos (Alta Probabilidade)")
+                        st.write("Estes são os 5 grupos com as pontuações mais altas no algoritmo. Excelentes para jogo seco ou fixos.")
                         
                         colunas_fixos = st.columns(5)
                         for idx, grupo in enumerate(top_5_grupos):
                             pontos = scores[grupo]['total']
                             with colunas_fixos[idx]:
                                 st.metric(label=f"Fixo {idx+1}º Lugar", value=grupo, delta=f"{pontos} pts")
+                                
+                        st.divider()
+                        
+                        # 3. Painel: O Pelotão de Cobertura (Os 16 Secundários)
+                        st.subheader("🛡️ O Pelotão de Cobertura: Os Próximos 16 Grupos")
+                        st.write("Estes são os grupos ranqueados do **6º ao 21º lugar**. Eles formam a nossa malha de proteção tática.")
+                        
+                        # Desenhando uma grade de 4x4 para os 16 grupos
+                        linhas_16 = [st.columns(4), st.columns(4), st.columns(4), st.columns(4)]
+                        for idx, grupo in enumerate(proximos_16_grupos):
+                            linha_atual = idx // 4
+                            coluna_atual = idx % 4
+                            pontos = scores[grupo]['total']
+                            with linhas_16[linha_atual][coluna_atual]:
+                                st.metric(label=f"{idx+6}º Lugar", value=grupo, delta=f"{pontos} pts")
+                                
+                        st.divider()
+                        
+                        # 4. Painel: A Forja das 120 Combinações
+                        st.subheader("⚔️ Arsenal de Duques Gerados (120 Combinações de Cobertura)")
+                        st.write("Abaixo estão os 120 Duques matematicamente gerados **apenas entre os 16 grupos do Pelotão de Cobertura** (em ordem crescente).")
+                        
+                        # DOCUMENTAÇÃO: Transformar para inteiro, ordenar e usar itertools
+                        top_16_ints = sorted([int(g) for g in proximos_16_grupos])
+                        duplas_16 = list(itertools.combinations(top_16_ints, 2))
+                        
+                        # Formata de volta para o padrão '00-00'
+                        lista_formatada = [f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]
+                        texto_duplas = "  |  ".join(lista_formatada)
+                        
+                        # Exibe a caixa para cópia rápida
+                        st.code(texto_duplas, language="text")
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
