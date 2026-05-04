@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.1 - Leitor Inteligente", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.2 - Seguro Zebra Expandido", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -75,7 +75,7 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO (AGORA COM LEITOR INTELIGENTE DE HORÁRIOS) ---
+# --- 2. MOTORES DE EXTRAÇÃO ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -96,8 +96,6 @@ def extrair_dia(banca, data_alvo):
             
             texto_alvo = txt_prev
             
-            # DOCUMENTAÇÃO: NOVO REGEX DE BUSCA GERAL
-            # Procura por "15:40", "16:00h" ou "17h" em qualquer parte do título.
             for t in [txt_caption, txt_th, txt_prev]:
                 if re.search(r'\d{2}:\d{2}h?|\d{2}h', t, re.IGNORECASE) or "PT" in t.upper():
                     texto_alvo = t
@@ -105,20 +103,16 @@ def extrair_dia(banca, data_alvo):
 
             if "FEDERAL" in texto_alvo.upper(): continue
 
-            # DOCUMENTAÇÃO: NOVO REGEX DE HORÁRIOS E PADRONIZAÇÃO
-            # Separa os números em blocos para podermos formatar depois.
             match_hora = re.search(r'(\d{2}):(\d{2})h?|(\d{2})h', texto_alvo, re.IGNORECASE)
             
             if banca in ["Caminho da Sorte", "Monte Carlos", "Lotep"]:
                 if match_hora:
-                    # Se caiu no grupo 3 (ex: "17h"), formata para "17:00"
                     if match_hora.group(3):
                         nome = f"{match_hora.group(3)}:00"
-                    # Se caiu no formato normal (ex: "15:40" ou "16:00h"), formata para "15:40"
                     else:
                         nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
                 else:
-                    continue # Continua ignorando os clones que não têm hora nenhuma
+                    continue 
             else:
                 if match_hora:
                     if match_hora.group(3):
@@ -137,7 +131,6 @@ def extrair_dia(banca, data_alvo):
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             
             if len(milhares) >= 5:
-                # Anti-clone extra de segurança
                 eh_clone = False
                 for r in resultados:
                     if milhares[0] == r[2] and milhares[1] == r[3]: 
@@ -156,7 +149,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V56.1")
+    st.header("🎯 Pentágono V56.2")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -170,7 +163,7 @@ if menu == "📡 Extração & Automação":
     with tab1:
         dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
         if st.button("🚀 EXTRAIR E SALVAR", use_container_width=True):
-            with st.spinner("Extraindo e padronizando horários..."):
+            with st.spinner("Extraindo..."):
                 dados = extrair_dia(banca_sel, dt_alvo)
                 if dados:
                     sh = conectar_sheets()
@@ -220,7 +213,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V56.1)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56.2)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -333,7 +326,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 ranking_passado, _ = calcular_ranking_completo(df_passado)
                                 top5_passado = ranking_passado[:5]
                                 top16_passado = ranking_passado[5:21]
-                                top4_cegos_passado = ranking_passado[21:25] 
+                                
+                                # DOCUMENTAÇÃO: EXPANSÃO DO SEGURO ZEBRA (De 4 para 6 grupos no Backtest)
+                                # Fatiamento (Slicing) ajustado para capturar do índice 19 ao 25.
+                                top6_cegos_passado = ranking_passado[19:25] 
                                 
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
@@ -352,7 +348,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_16.append(False)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
                                     
-                                if (g1_real in top4_cegos_passado) and (g2_real in top4_cegos_passado) and (g1_real != g2_real):
+                                if (g1_real in top6_cegos_passado) and (g2_real in top6_cegos_passado) and (g1_real != g2_real):
                                     bool_cegos.append(True)
                                     if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA!)")
                                 else:
@@ -373,7 +369,9 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         ranking_completo, scores = calcular_ranking_completo(df)
                         top_5_grupos = ranking_completo[:5]
                         proximos_16_grupos = ranking_completo[5:21]
-                        pontos_cegos = ranking_completo[21:25]
+                        
+                        # DOCUMENTAÇÃO: EXPANSÃO DO SEGURO ZEBRA (De 4 para 6 grupos no Presente)
+                        pontos_cegos = ranking_completo[19:25]
 
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
@@ -407,8 +405,8 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.divider()
 
                         # --- PAINEL 3 ---
-                        st.subheader("🚨 Pelotão de Risco: 4 Pontos Cegos (Seguro Zebra)")
-                        st.write("Estes são os 4 grupos com o pior desempenho histórico. Cruze-os como uma aposta defensiva barata (Seguro).")
+                        st.subheader("🚨 Pelotão de Risco: 6 Pontos Cegos (Seguro Zebra)")
+                        st.write("Estes são os 6 grupos com o pior desempenho histórico. Cruze-os como uma aposta defensiva barata (Seguro).")
                         st.markdown(f"""
                         <div class="backtest-box" style="border-left-color: #ff4b4b;">
                             <b>Rastreador de Zebras (150 Jogos):</b> Máximo de ocorrências seguidas de Zebra: <span style='color:#ff4b4b'>{v_max_c} 🟢</span><br>
@@ -416,9 +414,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        renderizar_mobile(pontos_cegos, scores, inicio_pos=22, titulo="Cego", is_zebra=True)
+                        # A contagem agora inicia na 20ª posição
+                        renderizar_mobile(pontos_cegos, scores, inicio_pos=20, titulo="Cego", is_zebra=True)
                         
-                        st.write("⚠️ **Seguro Anti-Zebra (Apenas 6 Combinações de Duque):**")
+                        st.write("⚠️ **Seguro Anti-Zebra (15 Combinações de Duque):**")
                         cegos_ints = sorted([int(g) for g in pontos_cegos])
                         duplas_cegas = list(itertools.combinations(cegos_ints, 2))
                         st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_cegas]), language="text")
