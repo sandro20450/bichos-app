@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56 - Anti-Clone Definitivo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.1 - Leitor Inteligente", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -75,7 +75,7 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO ---
+# --- 2. MOTORES DE EXTRAÇÃO (AGORA COM LEITOR INTELIGENTE DE HORÁRIOS) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -95,27 +95,36 @@ def extrair_dia(banca, data_alvo):
             txt_prev = prev.get_text().upper() if prev else ""
             
             texto_alvo = txt_prev
+            
+            # DOCUMENTAÇÃO: NOVO REGEX DE BUSCA GERAL
+            # Procura por "15:40", "16:00h" ou "17h" em qualquer parte do título.
             for t in [txt_caption, txt_th, txt_prev]:
-                if re.search(r'\d{2}:\d{2}', t) or "PT" in t:
+                if re.search(r'\d{2}:\d{2}h?|\d{2}h', t, re.IGNORECASE) or "PT" in t.upper():
                     texto_alvo = t
                     break
 
-            if "FEDERAL" in texto_alvo: continue
+            if "FEDERAL" in texto_alvo.upper(): continue
 
-            match_hora = re.search(r'\d{2}:\d{2}', texto_alvo)
+            # DOCUMENTAÇÃO: NOVO REGEX DE HORÁRIOS E PADRONIZAÇÃO
+            # Separa os números em blocos para podermos formatar depois.
+            match_hora = re.search(r'(\d{2}):(\d{2})h?|(\d{2})h', texto_alvo, re.IGNORECASE)
             
-            # DOCUMENTAÇÃO: FILTRO ESTRITO DE HORÁRIO
-            # Se for Caminho da Sorte, Monte Carlos ou Lotep...
             if banca in ["Caminho da Sorte", "Monte Carlos", "Lotep"]:
                 if match_hora:
-                    nome = match_hora.group(0) # Salva apenas se tiver a hora (ex: 11:00)
+                    # Se caiu no grupo 3 (ex: "17h"), formata para "17:00"
+                    if match_hora.group(3):
+                        nome = f"{match_hora.group(3)}:00"
+                    # Se caiu no formato normal (ex: "15:40" ou "16:00h"), formata para "15:40"
+                    else:
+                        nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
                 else:
-                    continue # Se não tem hora (título genérico/fantasma), IGNORE A TABELA INTEIRA!
-            
-            # Se for Tradicional, continua exatamente como sempre foi (Puxando PTM, PT, etc)
+                    continue # Continua ignorando os clones que não têm hora nenhuma
             else:
                 if match_hora:
-                    nome = match_hora.group(0)
+                    if match_hora.group(3):
+                        nome = f"{match_hora.group(3)}:00"
+                    else:
+                        nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
                 else:
                     nome = texto_alvo.split("-")[0].replace("RESULTADO", "").replace("LOTEP", "").strip()
                     if not nome: nome = "Sorteio Extra"
@@ -125,7 +134,6 @@ def extrair_dia(banca, data_alvo):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
                 if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
-                    # Trava de Segurança dos 4 Dígitos
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             
             if len(milhares) >= 5:
@@ -148,7 +156,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V56")
+    st.header("🎯 Pentágono V56.1")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -162,7 +170,7 @@ if menu == "📡 Extração & Automação":
     with tab1:
         dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
         if st.button("🚀 EXTRAIR E SALVAR", use_container_width=True):
-            with st.spinner("Extraindo e aplicando Filtro Anti-Clone..."):
+            with st.spinner("Extraindo e padronizando horários..."):
                 dados = extrair_dia(banca_sel, dt_alvo)
                 if dados:
                     sh = conectar_sheets()
@@ -179,7 +187,7 @@ if menu == "📡 Extração & Automação":
         with col1: dt_inicio = st.date_input("Inicial:", value=date.today() - timedelta(days=2))
         with col2: dt_fim = st.date_input("Final:", value=date.today())
         if st.button("🚀 SALVAR MASSA", use_container_width=True):
-            with st.spinner("Varrendo histórico com Filtro Anti-Clone..."):
+            with st.spinner("Varrendo histórico..."):
                 todos = []
                 for i in range((dt_fim - dt_inicio).days + 1): todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
                 if todos:
@@ -212,7 +220,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V56)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56.1)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
