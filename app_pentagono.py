@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V55.1 - Correção Scraper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V55.2 - Correção Lotep", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -67,17 +67,17 @@ MAPA_ABAS = {
     "Lotep": "LOTEP_MILHAR"
 }
 
-# DOCUMENTAÇÃO: CORREÇÃO LOTEP (Passo 1)
-# O link da Lotep foi padronizado para a PlayBicho conforme a sua excelente sugestão tática.
+# DOCUMENTAÇÃO: CORREÇÃO DA ROTA LOTEP
+# Voltamos para o site Resultado Fácil porque a PlayBicho não fornece os dados da Lotep.
 BANCAS_CONFIG = {
     "Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-", 
     "Caminho da Sorte": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-", 
     "Monte Carlos": "https://playbicho.com/resultado-jogo-do-bicho/nordeste-montes-claros-do-dia-", 
-    "Lotep": "https://playbicho.com/resultado-jogo-do-bicho/lotep-paraiba-do-dia-"
+    "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO (AGORA BLINDADO) ---
+# --- 2. MOTORES DE EXTRAÇÃO (BLINDADO) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -97,9 +97,8 @@ def extrair_dia(banca, data_alvo):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
                 if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
-                    # DOCUMENTAÇÃO: CORREÇÃO LOTEP (Passo 2)
-                    # Adicionei nums[0][:4] - Isso força o Python a cortar a string e pegar só os 4 primeiros dígitos.
-                    # Se vier "547419", ele corta e salva apenas "5474".
+                    # DOCUMENTAÇÃO: A TRAVA MATEMÁTICA (MANTIDA)
+                    # Mesmo extraindo do site original, forçamos o corte nos 4 primeiros dígitos [:4]
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
                 resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
@@ -111,7 +110,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V55.1")
+    st.header("🎯 Pentágono V55.2")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -125,28 +124,34 @@ if menu == "📡 Extração & Automação":
     with tab1:
         dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
         if st.button("🚀 EXTRAIR E SALVAR", use_container_width=True):
-            dados = extrair_dia(banca_sel, dt_alvo)
-            if dados:
-                sh = conectar_sheets()
-                if sh:
-                    ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                    inseridos, repetidos = salvar_sem_duplicar(ws, dados)
-                    if inseridos > 0: st.success(f"✅ {inseridos} salvos!")
-                    if repetidos > 0: st.warning(f"⚠️ {repetidos} já existiam.")
+            with st.spinner("Extraindo e limpando dados..."):
+                dados = extrair_dia(banca_sel, dt_alvo)
+                if dados:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                        inseridos, repetidos = salvar_sem_duplicar(ws, dados)
+                        if inseridos > 0: st.success(f"✅ {inseridos} salvos com sucesso!")
+                        if repetidos > 0: st.warning(f"⚠️ {repetidos} já existiam.")
+                else:
+                    st.error("Falha ao extrair. O site não retornou resultados para esta data.")
     
     with tab2:
         col1, col2 = st.columns(2)
         with col1: dt_inicio = st.date_input("Inicial:", value=date.today() - timedelta(days=2))
         with col2: dt_fim = st.date_input("Final:", value=date.today())
         if st.button("🚀 SALVAR MASSA", use_container_width=True):
-            todos = []
-            for i in range((dt_fim - dt_inicio).days + 1): todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
-            if todos:
-                sh = conectar_sheets()
-                if sh:
-                    ws = sh.worksheet(MAPA_ABAS[banca_sel])
-                    ins, rep = salvar_sem_duplicar(ws, todos)
-                    if ins > 0: st.success(f"✅ {ins} novos salvos!")
+            with st.spinner("Extraindo histórico completo..."):
+                todos = []
+                for i in range((dt_fim - dt_inicio).days + 1): todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
+                if todos:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_sel])
+                        ins, rep = salvar_sem_duplicar(ws, todos)
+                        if ins > 0: st.success(f"✅ {ins} novos salvos!")
+                else:
+                    st.error("Falha ao extrair. Sem resultados no período.")
     
     with tab3:
         df_manual = pd.DataFrame([{"Data": date.today().strftime('%Y-%m-%d'), "Sorteio": "", "1º": "", "2º": "", "3º": "", "4º": "", "5º": ""}], dtype=str)
@@ -169,7 +174,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V55.1)")
+    st.title("🧠 Algoritmo de Cobertura Total (V55.2)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
