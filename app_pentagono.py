@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V55.3 - Anti-Clone Lotep", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56 - Anti-Clone Definitivo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -75,7 +75,7 @@ BANCAS_CONFIG = {
 }
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO (RADAR ANTI-CLONE V55.3) ---
+# --- 2. MOTORES DE EXTRAÇÃO ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -87,7 +87,6 @@ def extrair_dia(banca, data_alvo):
         resultados = []
         
         for tab in tabelas:
-            # 1. Busca Profunda pelo Título
             caption = tab.find('caption')
             txt_caption = caption.get_text().upper() if caption else ""
             th_tag = tab.find('th')
@@ -96,7 +95,6 @@ def extrair_dia(banca, data_alvo):
             txt_prev = prev.get_text().upper() if prev else ""
             
             texto_alvo = txt_prev
-            # Prioriza a fonte que contiver formato de hora (ex: 18:00) ou códigos da banca
             for t in [txt_caption, txt_th, txt_prev]:
                 if re.search(r'\d{2}:\d{2}', t) or "PT" in t:
                     texto_alvo = t
@@ -104,13 +102,23 @@ def extrair_dia(banca, data_alvo):
 
             if "FEDERAL" in texto_alvo: continue
 
-            # Extração limpa da Hora ou Nome
             match_hora = re.search(r'\d{2}:\d{2}', texto_alvo)
-            if match_hora:
-                nome = match_hora.group(0)
+            
+            # DOCUMENTAÇÃO: FILTRO ESTRITO DE HORÁRIO
+            # Se for Caminho da Sorte, Monte Carlos ou Lotep...
+            if banca in ["Caminho da Sorte", "Monte Carlos", "Lotep"]:
+                if match_hora:
+                    nome = match_hora.group(0) # Salva apenas se tiver a hora (ex: 11:00)
+                else:
+                    continue # Se não tem hora (título genérico/fantasma), IGNORE A TABELA INTEIRA!
+            
+            # Se for Tradicional, continua exatamente como sempre foi (Puxando PTM, PT, etc)
             else:
-                nome = texto_alvo.split("-")[0].replace("RESULTADO", "").replace("LOTEP", "").strip()
-                if not nome: nome = "Sorteio Extra"
+                if match_hora:
+                    nome = match_hora.group(0)
+                else:
+                    nome = texto_alvo.split("-")[0].replace("RESULTADO", "").replace("LOTEP", "").strip()
+                    if not nome: nome = "Sorteio Extra"
 
             milhares = []
             for row in tab.find_all('tr'):
@@ -121,17 +129,14 @@ def extrair_dia(banca, data_alvo):
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             
             if len(milhares) >= 5:
-                # DOCUMENTAÇÃO: RADAR ANTI-CLONE
-                # Se a lista de resultados já tem algo salvo, ele compara o 1º prêmio da tabela atual
-                # com o 1º prêmio da última tabela salva. Se for igualzinho, é tabela repetida/fantasma!
+                # Anti-clone extra de segurança
                 eh_clone = False
                 for r in resultados:
                     if milhares[0] == r[2] and milhares[1] == r[3]: 
                         eh_clone = True
                         break
                 
-                if eh_clone:
-                    continue # Aborta esta tabela e vai para a próxima (evita salvar a zebra duplicada)
+                if eh_clone: continue
 
                 resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
                 
@@ -143,7 +148,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V55.3")
+    st.header("🎯 Pentágono V56")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -157,14 +162,14 @@ if menu == "📡 Extração & Automação":
     with tab1:
         dt_alvo = st.date_input("Data do Sorteio:", value=date.today(), key="data_unica")
         if st.button("🚀 EXTRAIR E SALVAR", use_container_width=True):
-            with st.spinner("Acionando Radar Anti-Clone e extraindo dados..."):
+            with st.spinner("Extraindo e aplicando Filtro Anti-Clone..."):
                 dados = extrair_dia(banca_sel, dt_alvo)
                 if dados:
                     sh = conectar_sheets()
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         inseridos, repetidos = salvar_sem_duplicar(ws, dados)
-                        if inseridos > 0: st.success(f"✅ {inseridos} salvos limpos!")
+                        if inseridos > 0: st.success(f"✅ {inseridos} sorteios salvos com sucesso!")
                         if repetidos > 0: st.warning(f"⚠️ {repetidos} já existiam na base.")
                 else:
                     st.error("Nenhum dado válido retornado do site.")
@@ -174,7 +179,7 @@ if menu == "📡 Extração & Automação":
         with col1: dt_inicio = st.date_input("Inicial:", value=date.today() - timedelta(days=2))
         with col2: dt_fim = st.date_input("Final:", value=date.today())
         if st.button("🚀 SALVAR MASSA", use_container_width=True):
-            with st.spinner("Varrendo histórico com filtro de Clones..."):
+            with st.spinner("Varrendo histórico com Filtro Anti-Clone..."):
                 todos = []
                 for i in range((dt_fim - dt_inicio).days + 1): todos.extend(extrair_dia(banca_sel, dt_inicio + timedelta(days=i)))
                 if todos:
@@ -182,7 +187,7 @@ if menu == "📡 Extração & Automação":
                     if sh:
                         ws = sh.worksheet(MAPA_ABAS[banca_sel])
                         ins, rep = salvar_sem_duplicar(ws, todos)
-                        if ins > 0: st.success(f"✅ {ins} novos salvos perfeitamente!")
+                        if ins > 0: st.success(f"✅ {ins} novos salvos!")
                 else:
                     st.error("Nenhum resultado no período.")
     
@@ -207,7 +212,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V55.3)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -288,7 +293,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         st.markdown(html, unsafe_allow_html=True)
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Compilando dados históricos..."):
+        with st.spinner("Processando Inteligência de Dados (150 Jogos)..."):
             try:
                 sh = conectar_sheets()
                 if sh:
