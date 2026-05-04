@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V55 - Radar de Pontos Cegos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V55.1 - Correção Scraper", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -60,11 +60,24 @@ def salvar_sem_duplicar(ws, dados_novos):
     except Exception as e:
         return 0, 0
 
-MAPA_ABAS = {"Tradicional": "TRADICIONAL_MILHAR", "Caminho da Sorte": "CAMINHO_MILHAR", "Monte Carlos": "MONTE_MILHAR", "Lotep": "LOTEP_MILHAR"}
-BANCAS_CONFIG = {"Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-", "Caminho da Sorte": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-", "Monte Carlos": "https://playbicho.com/resultado-jogo-do-bicho/nordeste-montes-claros-do-dia-", "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"}
+MAPA_ABAS = {
+    "Tradicional": "TRADICIONAL_MILHAR", 
+    "Caminho da Sorte": "CAMINHO_MILHAR", 
+    "Monte Carlos": "MONTE_MILHAR", 
+    "Lotep": "LOTEP_MILHAR"
+}
+
+# DOCUMENTAÇÃO: CORREÇÃO LOTEP (Passo 1)
+# O link da Lotep foi padronizado para a PlayBicho conforme a sua excelente sugestão tática.
+BANCAS_CONFIG = {
+    "Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-", 
+    "Caminho da Sorte": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-", 
+    "Monte Carlos": "https://playbicho.com/resultado-jogo-do-bicho/nordeste-montes-claros-do-dia-", 
+    "Lotep": "https://playbicho.com/resultado-jogo-do-bicho/lotep-paraiba-do-dia-"
+}
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO ---
+# --- 2. MOTORES DE EXTRAÇÃO (AGORA BLINDADO) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -84,7 +97,10 @@ def extrair_dia(banca, data_alvo):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
                 if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
-                    milhares.append(nums[0].zfill(4) if nums and len(nums[0]) >= 3 else "----")
+                    # DOCUMENTAÇÃO: CORREÇÃO LOTEP (Passo 2)
+                    # Adicionei nums[0][:4] - Isso força o Python a cortar a string e pegar só os 4 primeiros dígitos.
+                    # Se vier "547419", ele corta e salva apenas "5474".
+                    milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
                 resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
         return resultados
@@ -95,7 +111,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V55")
+    st.header("🎯 Pentágono V55.1")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -150,10 +166,10 @@ if menu == "📡 Extração & Automação":
                     if ins > 0: st.success(f"✅ {ins} inseridos!")
 
 # =============================================================================
-# --- 5. TELA 2: CÉREBRO IA (RADAR 150 JOGOS + PONTOS CEGOS) ---
+# --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V55)")
+    st.title("🧠 Algoritmo de Cobertura Total (V55.1)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -224,7 +240,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
 
     def renderizar_mobile(grupos, scores, inicio_pos, titulo, is_zebra=False):
         html = '<div class="flex-container">'
-        # DOCUMENTAÇÃO: Se for a área de Zebras, usa a classe CSS com cores de alerta
         card_class = "grupo-card-zebra" if is_zebra else "grupo-card"
         pts_class = "grupo-pontos-zebra" if is_zebra else "grupo-pontos"
         
@@ -235,7 +250,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         st.markdown(html, unsafe_allow_html=True)
 
     if st.button("Processar Dados Matemáticos", use_container_width=True):
-        with st.spinner("Compilando 150 jogos e identificando Pontos Cegos (Zebras)..."):
+        with st.spinner("Compilando dados históricos..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -253,9 +268,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         df = df[df["P1"].astype(str).str.lower() != "p1"]
                         df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
                         
-                        # =================================================================
-                        # ROTINA DE BACKTEST TRIPLO (Incluindo os 4 Pontos Cegos)
-                        # =================================================================
                         bool_5 = []; texto_5 = []
                         bool_16 = []; texto_16 = []
                         bool_cegos = []; texto_cegos = []
@@ -270,12 +282,11 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 ranking_passado, _ = calcular_ranking_completo(df_passado)
                                 top5_passado = ranking_passado[:5]
                                 top16_passado = ranking_passado[5:21]
-                                top4_cegos_passado = ranking_passado[21:25] # Pega os 4 piores
+                                top4_cegos_passado = ranking_passado[21:25] 
                                 
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
                                 
-                                # Backtest Top 5
                                 if (g1_real in top5_passado) or (g2_real in top5_passado):
                                     bool_5.append(True)
                                     if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} 🟢")
@@ -283,7 +294,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_5.append(False)
                                     if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} ❌")
                                     
-                                # Backtest 16 Secundários
                                 if (g1_real in top16_passado) and (g2_real in top16_passado) and (g1_real != g2_real):
                                     bool_16.append(True)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} 🟢")
@@ -291,7 +301,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_16.append(False)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
                                     
-                                # DOCUMENTAÇÃO: Backtest dos 4 Pontos Cegos (A Zebra)
                                 if (g1_real in top4_cegos_passado) and (g2_real in top4_cegos_passado) and (g1_real != g2_real):
                                     bool_cegos.append(True)
                                     if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA!)")
@@ -306,9 +315,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         tendencia_5 = prever_tendencia(bool_5)
                         tendencia_16 = prever_tendencia(bool_16)
 
-                        # =================================================================
-                        # CÁLCULO DO PRESENTE
-                        # =================================================================
                         ult_m = str(df.iloc[-1]["P1"]).zfill(4)
                         ult_nome = str(df.iloc[-1]["Sorteio"])
                         ult_g = get_grupo(ult_m)
@@ -316,16 +322,11 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         ranking_completo, scores = calcular_ranking_completo(df)
                         top_5_grupos = ranking_completo[:5]
                         proximos_16_grupos = ranking_completo[5:21]
-                        
-                        # DOCUMENTAÇÃO: Fatiamos os 4 últimos (Pontos Cegos) do ranking
                         pontos_cegos = ranking_completo[21:25]
 
-                        # =================================================================
-                        # RENDERIZAÇÃO NA TELA
-                        # =================================================================
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
                         
-                        # --- PAINEL 1: PELOTÃO DE FRENTE (TOP 5) ---
+                        # --- PAINEL 1 ---
                         st.subheader("🎯 Pelotão de Frente: 5 Grupos Fixos")
                         st.markdown(f"""
                         <div class="backtest-box">
@@ -337,7 +338,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         renderizar_mobile(top_5_grupos, scores, inicio_pos=1, titulo="Fixo")
                         st.divider()
                         
-                        # --- PAINEL 2: PELOTÃO DE COBERTURA (16 GRUPOS) ---
+                        # --- PAINEL 2 ---
                         st.subheader("🛡️ Pelotão de Cobertura: Próximos 16 Grupos")
                         st.markdown(f"""
                         <div class="backtest-box">
@@ -354,7 +355,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]), language="text")
                         st.divider()
 
-                        # --- PAINEL 3: PONTOS CEGOS (O SEGURO ZEBRA) ---
+                        # --- PAINEL 3 ---
                         st.subheader("🚨 Pelotão de Risco: 4 Pontos Cegos (Seguro Zebra)")
                         st.write("Estes são os 4 grupos com o pior desempenho histórico. Cruze-os como uma aposta defensiva barata (Seguro).")
                         st.markdown(f"""
@@ -364,7 +365,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Renderiza com as cores de alerta (is_zebra=True)
                         renderizar_mobile(pontos_cegos, scores, inicio_pos=22, titulo="Cego", is_zebra=True)
                         
                         st.write("⚠️ **Seguro Anti-Zebra (Apenas 6 Combinações de Duque):**")
