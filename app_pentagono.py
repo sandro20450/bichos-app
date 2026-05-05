@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.3 - Radar de Exclusão", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.4 - Gatilho de Exaustão", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -25,6 +25,8 @@ st.markdown("""
 .grupo-posicao { font-size: 9px; color: #aaaaaa; text-transform: uppercase; }
 .backtest-box { background-color: #1a2634; padding: 10px; border-radius: 5px; border-left: 4px solid #2196F3; margin-bottom: 10px;}
 .alerta-tendencia { background-color: #331a00; border-left: 4px solid #ffb74d; padding: 8px; font-size: 13px; margin-top: 5px; border-radius: 4px;}
+.gatilho-ativo { background-color: #003300; border-left: 4px solid #00ff00; padding: 10px; margin-top: 10px; border-radius: 5px; color: #00ff00; font-weight: bold;}
+.gatilho-espera { background-color: #1a1a1a; border-left: 4px solid #555555; padding: 10px; margin-top: 10px; border-radius: 5px; color: #aaaaaa; font-size: 13px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -149,7 +151,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V56.3")
+    st.header("🎯 Pentágono V56.4")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -213,7 +215,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V56.3)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56.4)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -251,6 +253,8 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         ranking_tmp = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
         return [x[0] for x in ranking_tmp], scores_tmp
 
+    # DOCUMENTAÇÃO: EXTRAÇÃO DA SEQUÊNCIA ATUAL
+    # Agora a função devolve 4 valores: Max Vitórias, Max Derrotas, Atual Vitórias e Atual Derrotas
     def contar_sequencias(lista_booleanos):
         max_v = 0; max_d = 0; vit_a = 0; der_a = 0
         for res in lista_booleanos:
@@ -260,7 +264,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
             else:
                 der_a += 1; vit_a = 0
                 if der_a > max_d: max_d = der_a
-        return max_v, max_d
+        return max_v, max_d, vit_a, der_a
 
     def prever_tendencia(lista_booleanos):
         if len(lista_booleanos) < 5: return "Aguardando mais dados para traçar perfil."
@@ -345,7 +349,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_16.append(False)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
                                     
-                                # DOCUMENTAÇÃO: NOVO BACKTEST DE EXCLUSÃO (Analisa apenas se a Zebra saiu no P1)
                                 if g1_real in top6_cegos_passado:
                                     bool_cegos.append(True)
                                     if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA NO 1º!)")
@@ -353,9 +356,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_cegos.append(False)
                                     if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} ❌")
 
-                        v_max_5, d_max_5 = contar_sequencias(bool_5)
-                        v_max_16, d_max_16 = contar_sequencias(bool_16)
-                        v_max_c, d_max_c = contar_sequencias(bool_cegos)
+                        # Agora desempacotamos as 4 variáveis da função
+                        v_max_5, d_max_5, v_atual_5, d_atual_5 = contar_sequencias(bool_5)
+                        v_max_16, d_max_16, v_atual_16, d_atual_16 = contar_sequencias(bool_16)
+                        v_max_c, d_max_c, v_atual_c, d_atual_c = contar_sequencias(bool_cegos)
                         
                         tendencia_5 = prever_tendencia(bool_5)
                         tendencia_16 = prever_tendencia(bool_16)
@@ -400,17 +404,33 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]), language="text")
                         st.divider()
 
-                        # --- PAINEL 3 (AGORA FOCADO EM ALERTA DE EXCLUSÃO DO 1º PRÊMIO) ---
-                        st.subheader("🚨 Pelotão de Risco: 6 Grupos Zebra (Baixa Probabilidade no 1º Prêmio)")
-                        st.write("Estes são os 6 grupos com o pior desempenho histórico. O algoritmo indica que eles provavelmente **NÃO** aparecerão no 1º Prêmio.")
+                        # --- PAINEL 3 (GATILHO DE EXAUSTÃO ESTRATÉGICA) ---
+                        st.subheader("🚨 Radar de Exclusão: 6 Grupos Zebra (Baixa Probabilidade)")
+                        st.write("O algoritmo monitora quando a Zebra (um desses 6 grupos caindo no 1º prêmio) atinge a exaustão estatística. Use esta quebra de recorde como sinal verde para atacar com os pelotões principais.")
+                        
                         st.markdown(f"""
                         <div class="backtest-box" style="border-left-color: #ff4b4b;">
-                            <b>Rastreador de Zebras (150 Jogos):</b> Máximo de ocorrências seguidas de Zebra no 1º Prêmio: <span style='color:#ff4b4b'>{v_max_c} 🟢</span><br>
+                            <b>Histórico da Zebra (150 Jogos):</b> Recorde Máximo da Zebra no 1º Prêmio: <span style='color:#ff4b4b'>{v_max_c} vezes seguidas 🟢</span><br>
                             <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_cegos) if texto_cegos else 'Sem dados'}</span>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        renderizar_mobile(pontos_cegos, scores, inicio_pos=20, titulo="Cego", is_zebra=True)
+                        # DOCUMENTAÇÃO: GATILHO ESTRATÉGICO
+                        # Compara a sequência do presente (v_atual_c) com o recorde do passado (v_max_c)
+                        if v_max_c > 0 and v_atual_c >= (v_max_c - 1) and v_atual_c > 0:
+                            st.markdown(f"""
+                            <div class="gatilho-ativo">
+                                🚀 GATILHO TÁTICO ATIVADO! A Zebra saiu {v_atual_c}x seguidas e encostou no limite histórico de {v_max_c}x! A probabilidade de reversão à média é extrema. OPORTUNIDADE DE ENTRADA NOS GRUPOS PRINCIPAIS!
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div class="gatilho-espera">
+                                ⏳ Status: Aguardando exaustão da Zebra. (A Zebra saiu {v_atual_c}x seguidas atualmente. O limite histórico é {v_max_c}x).
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        renderizar_mobile(pontos_cegos, scores, inicio_pos=20, titulo="Zebra", is_zebra=True)
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
