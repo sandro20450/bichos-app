@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.4 - Gatilho de Exaustão", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.5 - Visor Expandido", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -151,7 +151,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V56.4")
+    st.header("🎯 Pentágono V56.5")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -215,7 +215,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V56.4)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56.5)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -253,8 +253,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
         ranking_tmp = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
         return [x[0] for x in ranking_tmp], scores_tmp
 
-    # DOCUMENTAÇÃO: EXTRAÇÃO DA SEQUÊNCIA ATUAL
-    # Agora a função devolve 4 valores: Max Vitórias, Max Derrotas, Atual Vitórias e Atual Derrotas
     def contar_sequencias(lista_booleanos):
         max_v = 0; max_d = 0; vit_a = 0; der_a = 0
         for res in lista_booleanos:
@@ -335,28 +333,29 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 g1_real = get_grupo(df.iloc[i]["P1"])
                                 g2_real = get_grupo(df.iloc[i]["P2"])
                                 
+                                # DOCUMENTAÇÃO: VISOR EXPANDIDO PARA 10 JOGOS
+                                # Em vez de (len(df) - 5), agora usamos (len(df) - 10)
                                 if (g1_real in top5_passado) or (g2_real in top5_passado):
                                     bool_5.append(True)
-                                    if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} 🟢")
+                                    if i >= len(df) - 10: texto_5.append(f"{sorteio_alvo} 🟢")
                                 else:
                                     bool_5.append(False)
-                                    if i >= len(df) - 5: texto_5.append(f"{sorteio_alvo} ❌")
+                                    if i >= len(df) - 10: texto_5.append(f"{sorteio_alvo} ❌")
                                     
                                 if (g1_real in top16_passado) and (g2_real in top16_passado) and (g1_real != g2_real):
                                     bool_16.append(True)
-                                    if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} 🟢")
+                                    if i >= len(df) - 10: texto_16.append(f"{sorteio_alvo} 🟢")
                                 else:
                                     bool_16.append(False)
-                                    if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
+                                    if i >= len(df) - 10: texto_16.append(f"{sorteio_alvo} ❌")
                                     
                                 if g1_real in top6_cegos_passado:
                                     bool_cegos.append(True)
-                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA NO 1º!)")
+                                    if i >= len(df) - 10: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA NO 1º!)")
                                 else:
                                     bool_cegos.append(False)
-                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} ❌")
+                                    if i >= len(df) - 10: texto_cegos.append(f"{sorteio_alvo} ❌")
 
-                        # Agora desempacotamos as 4 variáveis da função
                         v_max_5, d_max_5, v_atual_5, d_atual_5 = contar_sequencias(bool_5)
                         v_max_16, d_max_16, v_atual_16, d_atual_16 = contar_sequencias(bool_16)
                         v_max_c, d_max_c, v_atual_c, d_atual_c = contar_sequencias(bool_cegos)
@@ -380,7 +379,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.markdown(f"""
                         <div class="backtest-box">
                             <b>Backtest Fixos (150 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_5} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_5} ❌</span><br>
-                            <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_5) if texto_5 else 'Sem dados'}</span>
+                            <span style='font-size:0.9em;'>Últimos 10: {' - '.join(texto_5) if texto_5 else 'Sem dados'}</span>
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_5}</div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -392,7 +391,7 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.markdown(f"""
                         <div class="backtest-box">
                             <b>Backtest Duques (150 Jogos):</b> Recorde Vitórias: <span style='color:#4CAF50'>{v_max_16} 🟢</span> | Recorde Derrotas: <span style='color:#ff4b4b'>{d_max_16} ❌</span><br>
-                            <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_16) if texto_16 else 'Sem dados'}</span>
+                            <span style='font-size:0.9em;'>Últimos 10: {' - '.join(texto_16) if texto_16 else 'Sem dados'}</span>
                             <div class="alerta-tendencia">🔮 <b>Alerta Tático:</b> {tendencia_16}</div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -404,19 +403,17 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]), language="text")
                         st.divider()
 
-                        # --- PAINEL 3 (GATILHO DE EXAUSTÃO ESTRATÉGICA) ---
+                        # --- PAINEL 3 ---
                         st.subheader("🚨 Radar de Exclusão: 6 Grupos Zebra (Baixa Probabilidade)")
                         st.write("O algoritmo monitora quando a Zebra (um desses 6 grupos caindo no 1º prêmio) atinge a exaustão estatística. Use esta quebra de recorde como sinal verde para atacar com os pelotões principais.")
                         
                         st.markdown(f"""
                         <div class="backtest-box" style="border-left-color: #ff4b4b;">
                             <b>Histórico da Zebra (150 Jogos):</b> Recorde Máximo da Zebra no 1º Prêmio: <span style='color:#ff4b4b'>{v_max_c} vezes seguidas 🟢</span><br>
-                            <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_cegos) if texto_cegos else 'Sem dados'}</span>
+                            <span style='font-size:0.9em;'>Últimos 10: {' - '.join(texto_cegos) if texto_cegos else 'Sem dados'}</span>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # DOCUMENTAÇÃO: GATILHO ESTRATÉGICO
-                        # Compara a sequência do presente (v_atual_c) com o recorde do passado (v_max_c)
                         if v_max_c > 0 and v_atual_c >= (v_max_c - 1) and v_atual_c > 0:
                             st.markdown(f"""
                             <div class="gatilho-ativo">
