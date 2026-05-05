@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS MOBILE E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.2 - Seguro Zebra Expandido", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.3 - Radar de Exclusão", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -149,7 +149,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=80)
-    st.header("🎯 Pentágono V56.2")
+    st.header("🎯 Pentágono V56.3")
     menu = st.radio("Selecione a Base:", ["📡 Extração & Automação", "🧠 Cérebro IA (Algoritmo)"])
 
 # =============================================================================
@@ -213,7 +213,7 @@ if menu == "📡 Extração & Automação":
 # --- 5. TELA 2: CÉREBRO IA ---
 # =============================================================================
 elif menu == "🧠 Cérebro IA (Algoritmo)":
-    st.title("🧠 Algoritmo de Cobertura Total (V56.2)")
+    st.title("🧠 Algoritmo de Cobertura Total (V56.3)")
     banca_ia = st.selectbox("Selecione a Banca Alvo para Análise:", list(BANCAS_CONFIG.keys()), key="sel_banca_ia")
     
     def get_grupo(m):
@@ -326,9 +326,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                 ranking_passado, _ = calcular_ranking_completo(df_passado)
                                 top5_passado = ranking_passado[:5]
                                 top16_passado = ranking_passado[5:21]
-                                
-                                # DOCUMENTAÇÃO: EXPANSÃO DO SEGURO ZEBRA (De 4 para 6 grupos no Backtest)
-                                # Fatiamento (Slicing) ajustado para capturar do índice 19 ao 25.
                                 top6_cegos_passado = ranking_passado[19:25] 
                                 
                                 g1_real = get_grupo(df.iloc[i]["P1"])
@@ -348,9 +345,10 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                                     bool_16.append(False)
                                     if i >= len(df) - 5: texto_16.append(f"{sorteio_alvo} ❌")
                                     
-                                if (g1_real in top6_cegos_passado) and (g2_real in top6_cegos_passado) and (g1_real != g2_real):
+                                # DOCUMENTAÇÃO: NOVO BACKTEST DE EXCLUSÃO (Analisa apenas se a Zebra saiu no P1)
+                                if g1_real in top6_cegos_passado:
                                     bool_cegos.append(True)
-                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA!)")
+                                    if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} 🟢 (ZEBRA NO 1º!)")
                                 else:
                                     bool_cegos.append(False)
                                     if i >= len(df) - 5: texto_cegos.append(f"{sorteio_alvo} ❌")
@@ -369,8 +367,6 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         ranking_completo, scores = calcular_ranking_completo(df)
                         top_5_grupos = ranking_completo[:5]
                         proximos_16_grupos = ranking_completo[5:21]
-                        
-                        # DOCUMENTAÇÃO: EXPANSÃO DO SEGURO ZEBRA (De 4 para 6 grupos no Presente)
                         pontos_cegos = ranking_completo[19:25]
 
                         st.success(f"**Gatilho Identificado:** Sorteio {ult_nome} | Milhar {ult_m} | Grupo {ult_g}")
@@ -404,23 +400,17 @@ elif menu == "🧠 Cérebro IA (Algoritmo)":
                         st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_16]), language="text")
                         st.divider()
 
-                        # --- PAINEL 3 ---
-                        st.subheader("🚨 Pelotão de Risco: 6 Pontos Cegos (Seguro Zebra)")
-                        st.write("Estes são os 6 grupos com o pior desempenho histórico. Cruze-os como uma aposta defensiva barata (Seguro).")
+                        # --- PAINEL 3 (AGORA FOCADO EM ALERTA DE EXCLUSÃO DO 1º PRÊMIO) ---
+                        st.subheader("🚨 Pelotão de Risco: 6 Grupos Zebra (Baixa Probabilidade no 1º Prêmio)")
+                        st.write("Estes são os 6 grupos com o pior desempenho histórico. O algoritmo indica que eles provavelmente **NÃO** aparecerão no 1º Prêmio.")
                         st.markdown(f"""
                         <div class="backtest-box" style="border-left-color: #ff4b4b;">
-                            <b>Rastreador de Zebras (150 Jogos):</b> Máximo de ocorrências seguidas de Zebra: <span style='color:#ff4b4b'>{v_max_c} 🟢</span><br>
+                            <b>Rastreador de Zebras (150 Jogos):</b> Máximo de ocorrências seguidas de Zebra no 1º Prêmio: <span style='color:#ff4b4b'>{v_max_c} 🟢</span><br>
                             <span style='font-size:0.9em;'>Últimos 5: {' - '.join(texto_cegos) if texto_cegos else 'Sem dados'}</span>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # A contagem agora inicia na 20ª posição
                         renderizar_mobile(pontos_cegos, scores, inicio_pos=20, titulo="Cego", is_zebra=True)
-                        
-                        st.write("⚠️ **Seguro Anti-Zebra (15 Combinações de Duque):**")
-                        cegos_ints = sorted([int(g) for g in pontos_cegos])
-                        duplas_cegas = list(itertools.combinations(cegos_ints, 2))
-                        st.code("  |  ".join([f"{str(d[0]).zfill(2)}-{str(d[1]).zfill(2)}" for d in duplas_cegas]), language="text")
 
             except Exception as e:
                 st.error(f"Erro na conexão em tempo real: {e}")
