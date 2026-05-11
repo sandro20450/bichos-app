@@ -7,17 +7,14 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import itertools
 import numpy as np
 import xgboost as xgb
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.7 - Comando Central", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V56.8 - Turbo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -29,13 +26,9 @@ st.markdown("""
 .backtest-box { background-color: #1a2634; padding: 12px; border-radius: 5px; border-left: 4px solid #ff4b4b; margin-bottom: 15px;}
 .gatilho-ativo { background-color: #003300; border-left: 4px solid #00ff00; padding: 10px; margin-top: 10px; border-radius: 5px; color: #00ff00; font-weight: bold;}
 .gatilho-espera { background-color: #1a1a1a; border-left: 4px solid #555555; padding: 10px; margin-top: 10px; border-radius: 5px; color: #aaaaaa; font-size: 13px;}
-
-/* Estilo IA 12 Alvos */
 .previsao-card { background-color: #001a00; border: 1px solid #4CAF50; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 10px; min-height: 110px; }
 .previsao-num { font-size: 26px; font-weight: bold; color: #4CAF50; line-height: 1.1; }
 .bicho-nome { font-size: 13px; color: #fff; font-weight: bold; }
-
-/* Banner de Último Sorteio */
 .banner-info { background-color: #121212; border: 1px solid #4CAF50; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,255,0,0.1); }
 </style>
 """, unsafe_allow_html=True)
@@ -47,13 +40,11 @@ def conectar_sheets():
         return gspread.authorize(creds).open("CentralBichos")
     except: return None
 
-# Função para evitar o erro de colunas duplicadas
 def carregar_e_limpar_df(ws):
     dados = ws.get_all_values()
     if len(dados) < 2: return pd.DataFrame()
-    # Força a criação do DataFrame ignorando os nomes das colunas originais para evitar duplicatas
     df = pd.DataFrame(dados[1:])
-    df = df.iloc[:, :7] # Garante apenas as 7 colunas essenciais
+    df = df.iloc[:, :7]
     df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
     df = df[df["P1"].astype(str).str.strip() != ""]
     df = df[~df["P1"].astype(str).str.contains("---")]
@@ -96,29 +87,57 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# --- 2. LOGICA ESTATÍSTICA (REDUZIDA PARA MÁXIMA VELOCIDADE) ---
+# --- A FUNÇÃO DE EXTRAÇÃO QUE FALTAVA (DEVOLVIDA) ---
+# =============================================================================
+def extrair_dia(banca, data_alvo):
+    url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        tabelas = soup.find_all('table')
+        resultados = []
+        for tab in tabelas:
+            th_tag = tab.find('th')
+            txt_th = th_tag.get_text().upper() if th_tag else ""
+            prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
+            txt_prev = prev.get_text().upper() if prev else ""
+            texto_alvo = txt_th if re.search(r'\d{2}:\d{2}h?|\d{2}h', txt_th) else txt_prev
+            if "FEDERAL" in texto_alvo.upper(): continue
+            match_hora = re.search(r'(\d{2}):(\d{2})h?|(\d{2})h', texto_alvo, re.IGNORECASE)
+            nome = f"{match_hora.group(3)}:00" if match_hora and match_hora.group(3) else (f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora else "Extra")
+            milhares = []
+            for row in tab.find_all('tr'):
+                cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                    nums = re.findall(r'\d+', "".join(cols[1:]))
+                    milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
+            if len(milhares) >= 5:
+                resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
+        return resultados
+    except: return []
+
+# =============================================================================
+# --- 2. LOGICA ESTATÍSTICA ---
 # =============================================================================
 def calcular_ranking_cegos(df_analise):
     scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-    
     for i in range(len(df_analise)):
         g_v = get_grupo_str(df_analise.iloc[i]["P1"])
         if g_v:
+            atr_g[g_v]['t'] += 1
             for k in atr_g:
-                atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
+                if k != g_v: atr_g[k]['t'] = 0
                 if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-    
     for k, v in atr_g.items():
         if v['t'] >= (v['max'] - 2) and v['t'] > 0: scores_tmp[k]['ruptura'] += 4  
-        
     if len(df_analise) > 1:
         ult_g = get_grupo_str(df_analise.iloc[-1]["P1"])
         for i in range(len(df_analise)-1):
             if get_grupo_str(df_analise.iloc[i]["P1"]) == ult_g:
                 g_prox = get_grupo_str(df_analise.iloc[i+1]["P1"])
                 if g_prox: scores_tmp[g_prox]['puxada'] += 7 
-                
     for k in scores_tmp: scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
     ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
     return [x[0] for x in ranking], scores_tmp
@@ -128,10 +147,10 @@ def calcular_ranking_cegos(df_analise):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("🎯 Pentágono V56.7")
+    st.header("🎯 Pentágono V56.8")
     menu = st.radio("Selecione:", ["📊 Radar Zebra", "🤖 IA XGBoost (12 Alvos)", "📡 Extração"])
 
-# --- RADAR ZEBRA (Otimizado) ---
+# --- RADAR ZEBRA ---
 if menu == "📊 Radar Zebra":
     st.title("🚨 Radar de Exclusão: 6 Grupos Zebra")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
@@ -143,23 +162,24 @@ if menu == "📊 Radar Zebra":
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 
-                # Backtest rápido (últimos 50)
-                ranking_final, scores = calcular_ranking_cegos(df)
+                # Otimização extrema: Pega só os últimos 200 jogos para não travar o app
+                df_radar = df.tail(200).reset_index(drop=True)
+                ranking_final, scores = calcular_ranking_cegos(df_radar)
                 cegos_atuais = ranking_final[19:25]
                 
+                # Backtest muito mais rápido e leve
                 bool_cegos = []
-                for i in range(len(df)-50, len(df)):
-                    df_p = df.iloc[:i]
+                for i in range(len(df_radar)-30, len(df_radar)):
+                    df_p = df_radar.iloc[:i]
                     rank_p, _ = calcular_ranking_cegos(df_p)
-                    bool_cegos.append(True if get_grupo_str(df.iloc[i]["P1"]) in rank_p[19:25] else False)
+                    bool_cegos.append(True if get_grupo_str(df_radar.iloc[i]["P1"]) in rank_p[19:25] else False)
                 
-                # Conta sequências
                 mv=0; ca=0
                 for r in bool_cegos:
                     if r: ca+=1; mv=max(mv, ca)
                     else: ca=0
                 
-                st.markdown(f'<div class="backtest-box"><b>Histórico da Zebra:</b> Recorde: {mv}x seguidas | Atual: {ca}x seguidas</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="backtest-box"><b>Histórico da Zebra (Recent.):</b> Recorde: {mv}x seguidas | Atual: {ca}x seguidas</div>', unsafe_allow_html=True)
                 
                 if ca >= (mv - 1) and ca > 0:
                     st.markdown(f'<div class="gatilho-ativo">🚀 GATILHO TÁTICO ATIVADO! Zebra no limite histórico.</div>', unsafe_allow_html=True)
@@ -177,14 +197,14 @@ elif menu == "🤖 IA XGBoost (12 Alvos)":
     st.title("🤖 IA Pentágono: Previsão 1º Prêmio")
     banca_xgb = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("Ativar IA (XGBoost Otimizado)", type="primary", use_container_width=True):
+    if st.button("Ativar IA (Turbo)", type="primary", use_container_width=True):
         sh = conectar_sheets()
         if sh:
             df = carregar_e_limpar_df(sh.worksheet(MAPA_ABAS[banca_xgb]))
             if not df.empty:
                 exibir_banner_sorteio(df, banca_xgb)
                 
-                with st.spinner("Treinando IA..."):
+                with st.spinner("Treinando IA em Modo Rápido..."):
                     df_ia = df.tail(500).copy()
                     df_ia['g'] = df_ia['P1'].apply(get_grupo_int)
                     df_ia = df_ia.dropna(subset=['g'])
@@ -194,10 +214,11 @@ elif menu == "🤖 IA XGBoost (12 Alvos)":
                     X = df_treino[['a1', 'a2', 'a3']]
                     le = LabelEncoder(); y = le.fit_transform(df_treino['g'])
                     
-                    grid = GridSearchCV(xgb.XGBClassifier(eval_metric='mlogloss'), {'max_depth':[3,4], 'n_estimators':[50,100]}, cv=2)
-                    grid.fit(X, y)
+                    # Motor Turbo: Sem GridSearch demorado. Já calibrado e pronto para fogo rápido.
+                    modelo_final = xgb.XGBClassifier(max_depth=3, n_estimators=80, learning_rate=0.1, eval_metric='mlogloss', n_jobs=-1)
+                    modelo_final.fit(X, y)
                     
-                    prob = grid.best_estimator_.predict_proba(df_ia[['a1','a2','a3']].tail(1))[0]
+                    prob = modelo_final.predict_proba(df_ia[['a1','a2','a3']].tail(1))[0]
                     top_12 = np.argsort(prob)[::-1][:12]
                     
                     st.markdown("### 🔮 Projeção dos 12 Alvos IA:")
@@ -210,23 +231,21 @@ elif menu == "🤖 IA XGBoost (12 Alvos)":
                                 with cols[col]:
                                     st.markdown(f"""<div class="previsao-card"><div style="color:#4CAF50; font-size:10px; font-weight:bold;">{i+1}º ALVO</div><div class="previsao-num">{str(g_real).zfill(2)}</div><div class="bicho-nome">{BICHOS_DICT[g_real]}</div><div style="color:#aaa; font-size:11px;">{prob[top_12[i]]*100:.1f}%</div></div>""", unsafe_allow_html=True)
 
-# --- EXTRAÇÃO (Mantida igual) ---
+# --- EXTRAÇÃO ---
 elif menu == "📡 Extração":
     st.title("📡 Extração de Resultados")
     banca_ex = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
     dt = st.date_input("Data:", value=date.today())
     if st.button("🚀 Extrair Agora"):
-        # (Lógica de extração do seu código anterior foi mantida aqui para salvar no Sheets)
         with st.spinner("Conectando..."):
             res = extrair_dia(banca_ex, dt)
             if res:
                 sh = conectar_sheets()
                 if sh:
                     ws = sh.worksheet(MAPA_ABAS[banca_ex])
-                    # Função interna para salvar sem duplicar
                     existentes = ws.get_all_values()
                     set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
                     p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
                     if p_ins: ws.append_rows(p_ins, value_input_option="RAW")
                     st.success(f"✅ {len(p_ins)} novos sorteios guardados.")
-            else: st.error("Nenhum resultado disponível.")
+            else: st.error("Nenhum resultado disponível ou já extraído.")
