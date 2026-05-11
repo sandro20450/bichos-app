@@ -1,9 +1,9 @@
 streamlit
 pandas
+numpy
 requests
 beautifulsoup4
 gspread
 oauth2client
 xgboost
 scikit-learn
-numpy
