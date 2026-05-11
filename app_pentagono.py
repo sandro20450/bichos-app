@@ -10,7 +10,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import itertools
 import numpy as np
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
@@ -108,7 +108,7 @@ def get_grupo_str(m):
     except: return None
 
 # =============================================================================
-# --- 2. MOTORES DE EXTRAÇÃO ---
+# --- 2. MOTORES DE EXTRAÇÃO E ESTATÍSTICA TRADICIONAL ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -206,18 +206,14 @@ def prever_tendencia(lista_booleanos):
     if len(lista_booleanos) < 5: return "Aguardando mais dados para traçar perfil."
     padrao_atual = lista_booleanos[-4:]
     vitorias_apos = 0; derrotas_apos = 0
-    
     for i in range(len(lista_booleanos) - 4):
         if lista_booleanos[i:i+4] == padrao_atual:
             if lista_booleanos[i+4] == True: vitorias_apos += 1
             else: derrotas_apos += 1
-            
     total_ocorrencias = vitorias_apos + derrotas_apos
     padrao_emoji = "".join(["🟢" if x else "❌" for x in padrao_atual])
-    
     if total_ocorrencias == 0: return f"A sequência ({padrao_emoji}) é inédita."
     prob_vitoria = (vitorias_apos / total_ocorrencias) * 100
-    
     if prob_vitoria > 50: return f"Com a sequência {padrao_emoji}, a IA aponta 🟢 VITÓRIA em {prob_vitoria:.0f}% (Ocorreu {total_ocorrencias}x)."
     elif prob_vitoria < 50: return f"Com a sequência {padrao_emoji}, a IA aponta ❌ DERROTA em {(100-prob_vitoria):.0f}% (Ocorreu {total_ocorrencias}x)."
     else: return f"Sequência Neutra 50/50. (Ocorreu {total_ocorrencias}x)."
@@ -226,7 +222,6 @@ def renderizar_mobile(grupos, scores, inicio_pos, titulo, is_zebra=False):
     html = '<div class="flex-container">'
     card_class = "grupo-card-zebra" if is_zebra else "grupo-card"
     pts_class = "grupo-pontos-zebra" if is_zebra else "grupo-pontos"
-    
     for idx, grupo in enumerate(grupos):
         pts = scores[grupo]['total']
         html += f'<div class="{card_class}"><div class="grupo-posicao">{idx + inicio_pos}º {titulo}</div><div class="grupo-numero">{grupo}</div><div class="{pts_class}">↑ {pts} pts</div></div>'
@@ -301,7 +296,7 @@ if menu == "📡 Extração & Automação":
                     if ins > 0: st.success(f"✅ {ins} inseridos!")
 
 # =============================================================================
-# --- 5. TELA 2: ESTATÍSTICA TRADICIONAL (ALGORITMO ORIGINAL) ---
+# --- 5. TELA 2: ESTATÍSTICA TRADICIONAL ---
 # =============================================================================
 elif menu == "📊 Estatística Tradicional":
     st.title("📊 Algoritmo de Cobertura Total (V56.5)")
@@ -429,16 +424,16 @@ elif menu == "📊 Estatística Tradicional":
                 st.error(f"Erro na conexão em tempo real: {e}")
 
 # =============================================================================
-# --- 6. TELA 3: CÉREBRO IA PENTÁGONO (XGBOOST - 12 ALVOS) ---
+# --- 6. TELA 3: CÉREBRO IA PENTÁGONO (XGBOOST - 12 ALVOS) OTIMIZADO ---
 # =============================================================================
 elif menu == "🤖 Radar IA Pentágono (XGBoost)":
     st.title("🤖 Radar Preditivo Pentágono (12 Alvos IA)")
     banca_xgb = st.selectbox("Selecione a Banca Alvo para Previsão IA:", list(BANCAS_CONFIG.keys()), key="sel_banca_xgb")
     
-    st.info("💡 Radar apontado exclusivamente para o 1º prêmio. O sistema agora exibe os 12 grupos com maior força estatística baseada em Gradiente Boosting.")
+    st.info("💡 A IA (Gradiente Boosting) utiliza Validação Cruzada (Cross-Validation) e GridSearchCV para auto-ajustar seus hiperparâmetros antes de prever o próximo resultado.")
     
-    if st.button("🚀 Ativar Cérebro Pentágono (Treinar IA)", use_container_width=True, type="primary"):
-        with st.spinner("Calibrando IA para busca de 12 padrões..."):
+    if st.button("🚀 Ativar Cérebro Pentágono (Treinar e Otimizar IA)", use_container_width=True, type="primary"):
+        with st.spinner("Lendo base de dados e preparando treinamento pesado..."):
             try:
                 sh = conectar_sheets()
                 if sh:
@@ -460,23 +455,69 @@ elif menu == "🤖 Radar IA Pentágono (XGBoost)":
                         df['ant_3'] = df['grupo_alvo'].shift(3)
                         df_treino = df.dropna().tail(500)
                         
+                        # --- NOVA ARTILHARIA: GridSearchCV, CV e Early Stopping ---
                         X = df_treino[['ant_1', 'ant_2', 'ant_3']]
                         y = df_treino['grupo_alvo']
                         
                         le = LabelEncoder()
                         y_encoded = le.fit_transform(y)
+                        num_classes_reais = len(le.classes_)
                         
-                        modelo = xgb.XGBClassifier(objective='multi:softprob', n_estimators=100, max_depth=4, learning_rate=0.1)
-                        modelo.fit(X, y_encoded)
+                        X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
                         
+                        st.warning("⚙️ Otimizando motor com GridSearchCV e Validação Cruzada... Aguarde.")
+                        
+                        # 1. GridSearchCV: A IA testa as configurações para não sofrer overfitting
+                        param_grid = {
+                            'max_depth': [3, 4, 5],
+                            'learning_rate': [0.05, 0.1, 0.2],
+                            'n_estimators': [50, 100]
+                        }
+                        
+                        modelo_base = xgb.XGBClassifier(
+                            objective='multi:softprob', 
+                            num_class=num_classes_reais, 
+                            eval_metric='mlogloss'
+                        )
+                        
+                        grid_search = GridSearchCV(
+                            estimator=modelo_base,
+                            param_grid=param_grid,
+                            cv=3, # Cross-Validation 3 folds
+                            scoring='accuracy',
+                            n_jobs=-1
+                        )
+                        
+                        grid_search.fit(X_train, y_train)
+                        melhores_parametros = grid_search.best_params_
+                        st.info(f"🔧 **Auto-ajuste concluído! Parâmetros adotados:** {melhores_parametros}")
+                        
+                        # 2. Treinamento Final com Early Stopping
+                        modelo_final = xgb.XGBClassifier(
+                            **melhores_parametros,
+                            objective='multi:softprob',
+                            num_class=num_classes_reais,
+                            eval_metric='mlogloss',
+                            early_stopping_rounds=10 # Trava se não evoluir
+                        )
+                        
+                        modelo_final.fit(
+                            X_train, y_train,
+                            eval_set=[(X_test, y_test)],
+                            verbose=False
+                        )
+                        
+                        precisao = accuracy_score(y_test, modelo_final.predict(X_test))
+                        st.success(f"✅ Inteligência Calibrada com Sucesso! Precisão Validada (OOS): {precisao*100:.2f}%")
+                        
+                        # 3. Previsão para os 12 próximos alvos
                         ultimos_3 = df['grupo_alvo'].tail(3).values
                         if len(ultimos_3) == 3:
                             entrada = pd.DataFrame({'ant_1':[ultimos_3[2]], 'ant_2':[ultimos_3[1]], 'ant_3':[ultimos_3[0]]})
-                            probabilidades = modelo.predict_proba(entrada)[0]
+                            probabilidades = modelo_final.predict_proba(entrada)[0]
                             
                             top_12_idx = np.argsort(probabilidades)[::-1][:12]
                             
-                            st.success(f"✅ Inteligência Calibrada! Alvos Localizados.")
                             st.markdown("### 🔮 Projeção dos 12 Grupos Mais Quentes (1º Prêmio):")
                             
                             for row in range(4):
@@ -499,6 +540,6 @@ elif menu == "🤖 Radar IA Pentágono (XGBoost)":
                                             </div>
                                             """, unsafe_allow_html=True)
                         else:
-                            st.warning("Histórico insuficiente na planilha.")
+                            st.warning("Histórico recente insuficiente para formar a base de previsão (precisa de pelo menos 3 sorteios).")
             except Exception as e:
-                st.error(f"Erro Crítico: {e}")
+                st.error(f"Erro Crítico no Motor de IA: {e}")
