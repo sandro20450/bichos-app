@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V58.3 - AWACS Aprimorado", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V58.4 - Frota Completa", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -39,13 +39,18 @@ st.markdown("""
 .alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
 .alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 15px; }
 
-/* Cabeçalhos dos 5 Esquadrões */
+/* Cabeçalhos dos 10 Esquadrões */
 .titulo-esquadrao { text-align: center; font-weight: bold; padding: 10px; border-radius: 5px; margin-top: 20px; margin-bottom: 15px; text-transform: uppercase; font-size: 14px;}
 .bg-alpha { background-color: #001f3f; border: 1px solid #0074D9; color: #7FDBFF; }
 .bg-bravo { background-color: #3e1f00; border: 1px solid #FF851B; color: #FFDC00; }
 .bg-charlie { background-color: #2e003e; border: 1px solid #B10DC9; color: #F012BE; }
 .bg-delta { background-color: #003333; border: 1px solid #39CCCC; color: #7FDBFF; }
 .bg-echo { background-color: #330000; border: 1px solid #FF4136; color: #FF851B; }
+.bg-foxtrot { background-color: #1a1a1a; border: 1px solid #aaaaaa; color: #ffffff; }
+.bg-golf { background-color: #002200; border: 1px solid #01FF70; color: #01FF70; }
+.bg-hotel { background-color: #2b1d00; border: 1px solid #FFD700; color: #FFD700; }
+.bg-india { background-color: #330000; border: 1px solid #ffffff; color: #ffffff; }
+.bg-juliet { background-color: #191970; border: 1px solid #E6E6FA; color: #E6E6FA; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,13 +62,18 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-# Configurações Globais dos Esquadrões
+# Configurações Globais dos 10 Esquadrões
 ESQUADROES_CFG = [
-    (1, 15, 600, 999, 6000, 9999, "bg-alpha", "⚔️ ESQUADRÃO ALPHA"),
-    (7, 21, 100, 499, 1000, 4999, "bg-bravo", "⚔️ ESQUADRÃO BRAVO"),
-    (11, 25, 0, 399, 0, 3999, "bg-charlie", "⚔️ ESQUADRÃO CHARLIE"),
-    (6, 20, 300, 699, 3000, 6999, "bg-delta", "⚔️ ESQUADRÃO DELTA"),
-    (4, 18, 500, 899, 5000, 8999, "bg-echo", "⚔️ ESQUADRÃO ECHO")
+    (1, 15, 600, 999, 6000, 9999, "bg-alpha", "⚔️ ESQ. ALPHA (G:01-15 | C:600-999)"),
+    (7, 21, 100, 499, 1000, 4999, "bg-bravo", "⚔️ ESQ. BRAVO (G:07-21 | C:100-499)"),
+    (11, 25, 0, 399, 0, 3999, "bg-charlie", "⚔️ ESQ. CHARLIE (G:11-25 | C:000-399)"),
+    (6, 20, 300, 699, 3000, 6999, "bg-delta", "⚔️ ESQ. DELTA (G:06-20 | C:300-699)"),
+    (4, 18, 500, 899, 5000, 8999, "bg-echo", "⚔️ ESQ. ECHO (G:04-18 | C:500-899)"),
+    (1, 15, 0, 399, 0, 3999, "bg-foxtrot", "⚔️ ESQ. FOXTROT (G:01-15 | C:000-399)"),
+    (11, 25, 600, 999, 6000, 9999, "bg-golf", "⚔️ ESQ. GOLF (G:11-25 | C:600-999)"),
+    (2, 16, 200, 599, 2000, 5999, "bg-hotel", "⚔️ ESQ. HOTEL (G:02-16 | C:200-599)"),
+    (9, 23, 400, 799, 4000, 7999, "bg-india", "⚔️ ESQ. INDIA (G:09-23 | C:400-799)"),
+    (5, 19, 100, 499, 1000, 4999, "bg-juliet", "⚔️ ESQ. JULIET (G:05-19 | C:100-499)")
 ]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
@@ -207,15 +217,15 @@ def calcular_metricas_sniper(df_analise, coluna, g_min, g_max, c_min, c_max, m_m
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V58.3")
+    st.header("Pentágono V58.4")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Sniper (Banca Específica)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central de Alerta AWACS (Melhores Oportunidades)")
-    st.info("Varredura em tempo real. Exibe Alertas Críticos ou Recordes de Atrasos alcançados nas últimas 50 extrações.")
+    st.title("🚨 Central de Alerta AWACS (10 Esquadrões)")
+    st.info("Varredura simultânea usando 10 matrizes matemáticas. Exibindo os 15 melhores alvos confirmados no momento.")
     
     if st.button("🔄 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando Bancas, Prêmios e Esquadrões... Aguarde."):
+        with st.spinner("Analisando Bancas, Prêmios e 10 Esquadrões... Aguarde."):
             oportunidades = []
             recordes = []
             
@@ -229,7 +239,7 @@ if menu == "🏠 Visão Geral (Home)":
                     for i, col in enumerate(COLUNAS_DF):
                         atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, col, g_min, g_max, c_min, c_max, m_min, m_max)
                         
-                        # 1. Verifica Alertas Críticos (Gatilho Principal)
+                        # 1. Verifica Alertas Críticos
                         if atr_g >= LIMITE_GRUPO:
                             prioridade = 4
                             html_alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS Grupos</span></div>"
@@ -251,7 +261,7 @@ if menu == "🏠 Visão Geral (Home)":
                                 "c_info": f"{str(c_min).zfill(3)}-{str(c_max).zfill(3)}", "m_info": f"{str(m_min).zfill(4)}-{str(m_max).zfill(4)}"
                             })
                         
-                        # 2. Se NÃO houver alerta crítico, verifica se há Recordes Quebrados
+                        # 2. Se NÃO houver alerta crítico, verifica Recordes Quebrados
                         else:
                             rec_g = (atr_g == max_g and max_g >= 3)
                             rec_c = (atr_c == max_c and max_c >= 4)
@@ -275,11 +285,11 @@ if menu == "🏠 Visão Geral (Home)":
             
             # --- RENDERIZAÇÃO DA TELA HOME ---
             if oportunidades:
-                st.success(f"🎯 Foram encontrados {len(oportunidades)} ALERTAS CRÍTICOS para ataque imediato!")
+                st.success(f"🎯 Foram encontrados {len(oportunidades)} ALERTAS CRÍTICOS. Exibindo o Top 15:")
                 oportunidades.sort(key=lambda x: (x['prioridade'], -x['atr_g']))
                 
                 cols_ui = st.columns(3)
-                for idx, op in enumerate(oportunidades[:12]):
+                for idx, op in enumerate(oportunidades[:15]): # Exibe até 15 cards
                     with cols_ui[idx % 3]:
                         st.markdown(f"""
                         <div class="home-box">
@@ -300,7 +310,7 @@ if menu == "🏠 Visão Geral (Home)":
                 recordes.sort(key=lambda x: (-x['atr_c'], -x['atr_m'], -x['atr_g']))
                 
                 cols_ui = st.columns(3)
-                for idx, op in enumerate(recordes[:12]):
+                for idx, op in enumerate(recordes[:15]):
                     with cols_ui[idx % 3]:
                         st.markdown(f"""
                         <div class="home-box">
@@ -323,13 +333,13 @@ elif menu == "🎯 Radar Sniper (Banca Específica)":
     banca_ia = st.selectbox("Selecione a Banca para Mapeamento:", list(BANCAS_CONFIG.keys()))
     
     if st.button("INICIAR VARREDURA GERAL", use_container_width=True, type="primary"):
-        with st.spinner("Varrendo os 5 Esquadrões na banca selecionada..."):
+        with st.spinner("Varrendo os 10 Esquadrões na banca selecionada..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 for cfg in ESQUADROES_CFG:
                     g_min, g_max, c_min, c_max, m_min, m_max, css_class, titulo_esq = cfg
-                    st.markdown(f"<div class='titulo-esquadrao {css_class}'>{titulo_esq} (G: {str(g_min).zfill(2)}-{str(g_max).zfill(2)} | C: {str(c_min).zfill(3)}-{str(c_max).zfill(3)} | M: {str(m_min).zfill(4)}-{str(m_max).zfill(4)})</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='titulo-esquadrao {css_class}'>{titulo_esq}</div>", unsafe_allow_html=True)
                     cols = st.columns(5)
                     for i in range(5):
                         atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, COLUNAS_DF[i], g_min, g_max, c_min, c_max, m_min, m_max)
