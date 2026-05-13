@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.3 - Zebra Corrigida", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.4 - Radar Sniper", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -21,6 +21,15 @@ st.markdown("""
 .td-cabecalho { color: #888 !important; font-size: 10px !important; background-color: #000 !important; }
 .grupo-destaque { font-weight: bold; color: #4CAF50 !important; font-size: 16px; }
 .banner-info { background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
+
+/* Estilos do Sniper */
+.sniper-box { background-color: #1a1a2e; border: 1px solid #16213e; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+.sniper-titulo { font-size: 16px; font-weight: bold; color: #e94560; margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
+.sniper-dado { font-size: 13px; color: #aaa; margin: 5px 0; }
+.sniper-valor { font-weight: bold; font-size: 16px; color: #fff; }
+.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+.alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 10px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,6 +73,12 @@ def exibir_banner_sorteio(df, banca):
         </div>
         """, unsafe_allow_html=True)
 
+def get_grupo_int(m):
+    try:
+        d = int(str(m)[-2:])
+        return 25 if d == 0 else math.ceil(d/4)
+    except: return None
+
 def get_grupo_str(m):
     try:
         d = int(str(m)[-2:])
@@ -99,7 +114,39 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- LÓGICA CLÁSSICA CORRIGIDA: FREQUÊNCIA + PUXADA + RUPTURA ---
+# --- LÓGICA DO RADAR SNIPER (BLOCOS) ---
+# =============================================================================
+def calcular_atrasos_sniper(df_analise, coluna):
+    atraso_grupo = 0
+    atraso_centena = 0
+    achou_g = False
+    achou_c = False
+    
+    # Lê de trás pra frente (do mais recente pro mais antigo)
+    for i in range(len(df_analise)-1, -1, -1):
+        milhar = str(df_analise.iloc[i][coluna]).zfill(4)
+        if milhar == "----" or milhar == "0000" or milhar == "nan": continue
+        
+        g = get_grupo_int(milhar)
+        try:
+            c = int(milhar[-3:])
+        except:
+            c = -1
+            
+        if not achou_g:
+            if g is not None and 1 <= g <= 15: achou_g = True
+            else: atraso_grupo += 1
+            
+        if not achou_c:
+            if c >= 600: achou_c = True
+            else: atraso_centena += 1
+            
+        if achou_g and achou_c: break
+            
+    return atraso_grupo, atraso_centena
+
+# =============================================================================
+# --- LÓGICA CLÁSSICA (ZEBRA) ---
 # =============================================================================
 def calcular_ranking_por_coluna(df_analise, coluna):
     scores_tmp = {str(i).zfill(2): {'frequencia': 0, 'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
@@ -108,17 +155,13 @@ def calcular_ranking_por_coluna(df_analise, coluna):
     for i in range(len(df_analise)):
         g_v = get_grupo_str(df_analise.iloc[i][coluna])
         if g_v:
-            # 1. Dá 1 ponto de frequência toda vez que o bicho aparece
             scores_tmp[g_v]['frequencia'] += 1
-            
-            # 2. Calcula os Atrasos para a Ruptura
             for k in atr_g:
                 atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
                 if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
                 
     for k, v in atr_g.items():
-        if v['t'] >= (v['max'] - 2) and v['t'] > 0: 
-            scores_tmp[k]['ruptura'] += 4  
+        if v['t'] >= (v['max'] - 2) and v['t'] > 0: scores_tmp[k]['ruptura'] += 4  
             
     if len(df_analise) > 1:
         ult_g = get_grupo_str(df_analise.iloc[-1][coluna])
@@ -131,58 +174,91 @@ def calcular_ranking_por_coluna(df_analise, coluna):
         scores_tmp[k]['total'] = scores_tmp[k]['frequencia'] + scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
         
     ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
-    ranking_grupos = [x[0] for x in ranking]
-    
-    zebras = ranking_grupos[19:25]
-    return zebras, scores_tmp
+    return [x[0] for x in ranking][19:25], scores_tmp
 
 # =============================================================================
 # --- INTERFACE DE COMANDO ---
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.3")
-    menu = st.radio("Selecione:", ["📊 Radar Zebra Clássico", "📡 Extração Central"])
+    st.header("Pentágono V57.4")
+    menu = st.radio("Selecione:", ["🎯 Radar Sniper (Blocos)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
 
-if menu == "📊 Radar Zebra Clássico":
-    st.title("🚨 Radar de Zebras (Sistema Clássico)")
-    st.info("Mostra as verdadeiras ZEBRAS: Bichos com pior Frequência + Sem Puxadas + Sem Rupturas.")
-    banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
+if menu == "🎯 Radar Sniper (Blocos)":
+    st.title("🎯 Operação Interseção (Sniper)")
+    st.info("Monitora o atraso do **Bloco de Grupos (01 ao 15)** e o atraso do **Bloco de Centenas (600 a 999)** para encontrar o ponto exato de Ataque Total (Hedge).")
     
-    if st.button("VARREDURA DE ZEBRAS (COMPACTA)", use_container_width=True, type="primary"):
-        with st.spinner("Calculando pontuações reais..."):
+    banca_ia = st.selectbox("Selecione a Banca para Mapeamento:", list(BANCAS_CONFIG.keys()))
+    
+    if st.button("INICIAR VARREDURA SNIPER", use_container_width=True, type="primary"):
+        with st.spinner("Procurando Interseções..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 
-                df_radar = df.tail(500).reset_index(drop=True)
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
+                
+                # Limites Táticos de Atraso
+                LIMITE_GRUPO = 4
+                LIMITE_CENTENA = 5
                 
                 cols_ui = st.columns(5)
                 
                 for i in range(5):
-                    zebras_coluna, pontuacoes = calcular_ranking_por_coluna(df_radar, colunas_df[i])
+                    atr_g, atr_c = calcular_atrasos_sniper(df, colunas_df[i])
                     
+                    # Logica do Veredito
+                    if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
+                        veredito = "<div class='alerta-verde'>🟢 ATAQUE TOTAL (R$ 190)<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Centenas</span></div>"
+                    elif atr_g >= LIMITE_GRUPO:
+                        veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos 1-15</span></div>"
+                    else:
+                        veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal</span></div>"
+                        
+                    with cols_ui[i]:
+                        st.markdown(f"""
+                        <div class="sniper-box">
+                            <div class="sniper-titulo">{titulos[i]}</div>
+                            <div class="sniper-dado">Grupos (01 ao 15): <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x s/ sair</span></div>
+                            <div class="sniper-dado">Centenas (600 a 999): <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x s/ sair</span></div>
+                            {veredito}
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.error("Erro ao carregar base. Execute uma extração primeiro.")
+
+elif menu == "📊 Radar Zebra Clássico":
+    st.title("🚨 Radar de Zebras (Sistema Clássico)")
+    banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
+    
+    if st.button("VARREDURA DE ZEBRAS", use_container_width=True):
+        with st.spinner("Calculando pontuações reais..."):
+            df = carregar_dados_em_memoria(banca_ia)
+            if not df.empty:
+                exibir_banner_sorteio(df, banca_ia)
+                df_radar = df.tail(500).reset_index(drop=True)
+                colunas_df = ["P1", "P2", "P3", "P4", "P5"]
+                titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
+                cols_ui = st.columns(5)
+                for i in range(5):
+                    zebras_coluna, pontuacoes = calcular_ranking_por_coluna(df_radar, colunas_df[i])
                     with cols_ui[i]:
                         html = f"<table class='tabela-compacta'>"
                         html += f"<tr><th colspan='2'>🏆 {titulos[i]}</th></tr>"
                         html += f"<tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>PONTOS</td></tr>"
-                        
                         for grupo in zebras_coluna:
                             pts = pontuacoes[grupo]['total']
                             html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{pts} pts</td></tr>"
-                            
                         html += "</table>"
                         st.markdown(html, unsafe_allow_html=True)
             else:
-                st.error("Erro ao carregar base. Execute uma extração primeiro.")
+                st.error("Erro ao carregar base. Execute uma extração.")
 
 elif menu == "📡 Extração Central":
     st.title("📡 Extração e Automação")
     banca_ex = st.selectbox("Banca para Extração:", list(BANCAS_CONFIG.keys()))
     dt = st.date_input("Data do Sorteio:", value=date.today())
-    
     if st.button("🚀 INICIAR COLETA", use_container_width=True):
         with st.spinner("Acessando servidores externos..."):
             res = extrair_dia(banca_ex, dt)
