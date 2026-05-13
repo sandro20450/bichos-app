@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.7 - Duplo Esquadrão", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V58.1 - Força-Tarefa", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -36,10 +36,13 @@ st.markdown("""
 .alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
 .alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 15px; }
 
-/* Cabeçalhos dos Esquadrões */
+/* Cabeçalhos dos 5 Esquadrões */
 .titulo-esquadrao { text-align: center; font-weight: bold; padding: 10px; border-radius: 5px; margin-top: 20px; margin-bottom: 15px; text-transform: uppercase; }
 .bg-alpha { background-color: #001f3f; border: 1px solid #0074D9; color: #7FDBFF; }
 .bg-bravo { background-color: #3e1f00; border: 1px solid #FF851B; color: #FFDC00; }
+.bg-charlie { background-color: #2e003e; border: 1px solid #B10DC9; color: #F012BE; }
+.bg-delta { background-color: #003333; border: 1px solid #39CCCC; color: #7FDBFF; }
+.bg-echo { background-color: #330000; border: 1px solid #FF4136; color: #FF851B; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,7 +127,7 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- MOTOR DO SNIPER (AGORA ACEITA MÉTRICAS PERSONALIZADAS) ---
+# --- MOTOR DO SNIPER (MÉTRICAS DINÂMICAS) ---
 # =============================================================================
 def calcular_metricas_sniper(df_analise, coluna, g_min, g_max, c_min, c_max, m_min, m_max, janela=50):
     atraso_grupo, atraso_centena, atraso_milhar = 0, 0, 0
@@ -132,7 +135,7 @@ def calcular_metricas_sniper(df_analise, coluna, g_min, g_max, c_min, c_max, m_m
     
     for i in range(len(df_analise)-1, -1, -1):
         milhar = str(df_analise.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "0000" or milhar == "nan": continue
+        if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
         
         g = get_grupo_int(milhar)
         try: c = int(milhar[-3:])
@@ -158,7 +161,7 @@ def calcular_metricas_sniper(df_analise, coluna, g_min, g_max, c_min, c_max, m_m
     
     for i in range(len(df_janela)):
         milhar = str(df_janela.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "0000" or milhar == "nan": continue
+        if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
         
         g = get_grupo_int(milhar)
         try: c = int(milhar[-3:])
@@ -215,17 +218,17 @@ def calcular_ranking_por_coluna(df_analise, coluna):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.7")
-    menu = st.radio("Selecione:", ["🎯 Radar Sniper (Duplo)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
+    st.header("Pentágono V58.1")
+    menu = st.radio("Selecione:", ["🎯 Radar Sniper (5 Esquadrões)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
 
-if menu == "🎯 Radar Sniper (Duplo)":
-    st.title("🎯 Operação Duplo Esquadrão (Alpha & Bravo)")
-    st.info("Monitora simultaneamente duas frentes estratégicas diferentes para garantir que nenhuma anomalia passe despercebida.")
+if menu == "🎯 Radar Sniper (5 Esquadrões)":
+    st.title("🎯 Centro de Comando de Operações (5 Esquadrões)")
+    st.info("Monitoramento tático de 5 zonas matemáticas diferentes de probabilidade. (Todos ajustados para 60% Grupos / 40% Centenas e Milhares).")
     
     banca_ia = st.selectbox("Selecione a Banca para Mapeamento:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("INICIAR VARREDURA SNIPER", use_container_width=True, type="primary"):
-        with st.spinner("Mapeando histórico nos dois esquadrões..."):
+    if st.button("INICIAR VARREDURA GERAL", use_container_width=True, type="primary"):
+        with st.spinner("Varrendo os 5 Esquadrões em todos os prêmios..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
@@ -233,74 +236,51 @@ if menu == "🎯 Radar Sniper (Duplo)":
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Limites base para os Alertas
+                # Limites base para os Alertas (Mantendo o rigor matemático)
                 LIMITE_GRUPO = 4
                 LIMITE_CENTENA = 5
                 LIMITE_MILHAR = 5
                 
-                # ==========================================
-                # ESQUADRÃO ALPHA
-                # ==========================================
-                st.markdown("<div class='titulo-esquadrao bg-alpha'>⚔️ ESQUADRÃO ALPHA (Grupos: 01-15 | C: 600-999 | M: 6000-9999)</div>", unsafe_allow_html=True)
-                cols_alpha = st.columns(5)
+                # Configurações dos Esquadrões
+                # Todos agora usam exatos 15 Grupos, 400 Centenas e 4000 Milhares
+                esquadroes = [
+                    (1, 15, 600, 999, 6000, 9999, "bg-alpha", "⚔️ ESQUADRÃO ALPHA (G: 01-15 | C: 600-999 | M: 6000-9999)"),
+                    (7, 21, 100, 499, 1000, 4999, "bg-bravo", "⚔️ ESQUADRÃO BRAVO (G: 07-21 | C: 100-499 | M: 1000-4999)"),
+                    (11, 25, 0, 399, 0, 3999, "bg-charlie", "⚔️ ESQUADRÃO CHARLIE (G: 11-25 | C: 000-399 | M: 0000-3999)"),
+                    (6, 20, 300, 699, 3000, 6999, "bg-delta", "⚔️ ESQUADRÃO DELTA (G: 06-20 | C: 300-699 | M: 3000-6999)"),
+                    (4, 18, 500, 899, 5000, 8999, "bg-echo", "⚔️ ESQUADRÃO ECHO (G: 04-18 | C: 500-899 | M: 5000-8999)")
+                ]
                 
-                for i in range(5):
-                    atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, colunas_df[i], 1, 15, 600, 999, 6000, 9999)
+                for cfg in esquadroes:
+                    g_min, g_max, c_min, c_max, m_min, m_max, css_class, titulo_esq = cfg
                     
-                    if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA and atr_m >= LIMITE_MILHAR:
-                        veredito = "<div class='alerta-supremo'>🔥 ALERTA MÁXIMO<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas + Milhares</span></div>"
-                    elif atr_g >= LIMITE_GRUPO and atr_m >= LIMITE_MILHAR:
-                        veredito = "<div class='alerta-azul'>🔵 ATAQUE MILHAR<br><span style='font-size:10px;font-weight:normal;'>Grupos (01-15) + Milhar (6000-9999)</span></div>"
-                    elif atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
-                        veredito = "<div class='alerta-verde'>🟢 ATAQUE CENTENA<br><span style='font-size:10px;font-weight:normal;'>Grupos (01-15) + Centena (600-999)</span></div>"
-                    elif atr_g >= LIMITE_GRUPO:
-                        veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos (01-15)</span></div>"
-                    else:
-                        veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal</span></div>"
-                        
-                    with cols_alpha[i]:
-                        st.markdown(f"""
-                        <div class="sniper-box">
-                            <div class="sniper-titulo">{titulos[i]}</div>
-                            <div class="sniper-dado">Grupos 01-15: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x</span><span class="sniper-recorde">Rec: {max_g}x</span></div>
-                            <div class="sniper-dado">C: 600-999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x</span><span class="sniper-recorde">Rec: {max_c}x</span></div>
-                            <div class="sniper-dado">M: 6000-9999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x</span><span class="sniper-recorde">Rec: {max_m}x</span></div>
-                            {veredito}
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                st.divider()
-                
-                # ==========================================
-                # ESQUADRÃO BRAVO
-                # ==========================================
-                st.markdown("<div class='titulo-esquadrao bg-bravo'>⚔️ ESQUADRÃO BRAVO (Grupos: 05-25 | C: 100-599 | M: 1000-5999)</div>", unsafe_allow_html=True)
-                cols_bravo = st.columns(5)
-                
-                for i in range(5):
-                    atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, colunas_df[i], 5, 25, 100, 599, 1000, 5999)
+                    st.markdown(f"<div class='titulo-esquadrao {css_class}'>{titulo_esq}</div>", unsafe_allow_html=True)
+                    cols = st.columns(5)
                     
-                    if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA and atr_m >= LIMITE_MILHAR:
-                        veredito = "<div class='alerta-supremo'>🔥 ALERTA MÁXIMO<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas + Milhares</span></div>"
-                    elif atr_g >= LIMITE_GRUPO and atr_m >= LIMITE_MILHAR:
-                        veredito = "<div class='alerta-azul'>🔵 ATAQUE MILHAR<br><span style='font-size:10px;font-weight:normal;'>Grupos (05-25) + Milhar (1000-5999)</span></div>"
-                    elif atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
-                        veredito = "<div class='alerta-verde'>🟢 ATAQUE CENTENA<br><span style='font-size:10px;font-weight:normal;'>Grupos (05-25) + Centena (100-599)</span></div>"
-                    elif atr_g >= LIMITE_GRUPO:
-                        veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos (05-25)</span></div>"
-                    else:
-                        veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal</span></div>"
+                    for i in range(5):
+                        atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, colunas_df[i], g_min, g_max, c_min, c_max, m_min, m_max)
                         
-                    with cols_bravo[i]:
-                        st.markdown(f"""
-                        <div class="sniper-box" style="border-color: #593100;">
-                            <div class="sniper-titulo" style="color: #FF851B;">{titulos[i]}</div>
-                            <div class="sniper-dado">Grupos 05-25: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x</span><span class="sniper-recorde">Rec: {max_g}x</span></div>
-                            <div class="sniper-dado">C: 100-599: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x</span><span class="sniper-recorde">Rec: {max_c}x</span></div>
-                            <div class="sniper-dado">M: 1000-5999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x</span><span class="sniper-recorde">Rec: {max_m}x</span></div>
-                            {veredito}
-                        </div>
-                        """, unsafe_allow_html=True)
+                        if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA and atr_m >= LIMITE_MILHAR:
+                            veredito = "<div class='alerta-supremo'>🔥 ALERTA MÁXIMO<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas + Milhares</span></div>"
+                        elif atr_g >= LIMITE_GRUPO and atr_m >= LIMITE_MILHAR:
+                            veredito = "<div class='alerta-azul'>🔵 ATAQUE MILHAR<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Milhares</span></div>"
+                        elif atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
+                            veredito = "<div class='alerta-verde'>🟢 ATAQUE CENTENA<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Centenas</span></div>"
+                        elif atr_g >= LIMITE_GRUPO:
+                            veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos</span></div>"
+                        else:
+                            veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal</span></div>"
+                            
+                        with cols[i]:
+                            st.markdown(f"""
+                            <div class="sniper-box">
+                                <div class="sniper-titulo">{titulos[i]}</div>
+                                <div class="sniper-dado">Grupos {str(g_min).zfill(2)}-{str(g_max).zfill(2)}: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x</span><span class="sniper-recorde">Rec: {max_g}x</span></div>
+                                <div class="sniper-dado">C: {str(c_min).zfill(3)}-{str(c_max).zfill(3)}: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x</span><span class="sniper-recorde">Rec: {max_c}x</span></div>
+                                <div class="sniper-dado">M: {str(m_min).zfill(4)}-{str(m_max).zfill(4)}: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x</span><span class="sniper-recorde">Rec: {max_m}x</span></div>
+                                {veredito}
+                            </div>
+                            """, unsafe_allow_html=True)
 
             else:
                 st.error("Erro ao carregar base. Execute uma extração primeiro.")
