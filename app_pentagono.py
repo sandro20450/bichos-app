@@ -11,17 +11,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.2 - Zebra Clássica", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.3 - Zebra Corrigida", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
-/* Tabelas Compactas para as Zebras Individuais */
 .tabela-compacta { width: 100%; border-collapse: collapse; text-align: center; font-size: 14px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
 .tabela-compacta th { background-color: #330000; color: #ff4b4b; padding: 8px; border: 1px solid #444; font-size: 13px; }
 .tabela-compacta td { padding: 6px; border: 1px solid #333; color: #fff; background-color: #121212; }
 .td-cabecalho { color: #888 !important; font-size: 10px !important; background-color: #000 !important; }
 .grupo-destaque { font-weight: bold; color: #4CAF50 !important; font-size: 16px; }
-
 .banner-info { background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
@@ -41,9 +39,6 @@ def conectar_sheets():
         return gspread.authorize(creds).open("CentralBichos")
     except: return None
 
-# =============================================================================
-# 🚀 SISTEMA DE CACHE: Mantém a velocidade ultra rápida
-# =============================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def carregar_dados_em_memoria(banca_nome):
     sh = conectar_sheets()
@@ -75,9 +70,6 @@ def get_grupo_str(m):
         return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
     except: return None
 
-# =============================================================================
-# --- MOTOR DE EXTRAÇÃO (PRESERVADO) ---
-# =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -107,19 +99,21 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- LÓGICA CLÁSSICA: RANKING ESTRATÉGICO POR COLUNA ---
+# --- LÓGICA CLÁSSICA CORRIGIDA: FREQUÊNCIA + PUXADA + RUPTURA ---
 # =============================================================================
 def calcular_ranking_por_coluna(df_analise, coluna):
-    """Aplica a matemática de Puxadas e Rupturas para uma coluna específica e retorna os 6 piores."""
-    scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
+    scores_tmp = {str(i).zfill(2): {'frequencia': 0, 'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
     
     for i in range(len(df_analise)):
         g_v = get_grupo_str(df_analise.iloc[i][coluna])
         if g_v:
-            atr_g[g_v]['t'] += 1
+            # 1. Dá 1 ponto de frequência toda vez que o bicho aparece
+            scores_tmp[g_v]['frequencia'] += 1
+            
+            # 2. Calcula os Atrasos para a Ruptura
             for k in atr_g:
-                if k != g_v: atr_g[k]['t'] = 0
+                atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
                 if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
                 
     for k, v in atr_g.items():
@@ -134,13 +128,11 @@ def calcular_ranking_por_coluna(df_analise, coluna):
                 if g_prox: scores_tmp[g_prox]['puxada'] += 7 
                 
     for k in scores_tmp: 
-        scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
+        scores_tmp[k]['total'] = scores_tmp[k]['frequencia'] + scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
         
-    # Ordena do grupo com MAIS pontos (1º lugar) para o de MENOS pontos (25º lugar)
     ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
     ranking_grupos = [x[0] for x in ranking]
     
-    # Isola os 6 últimos colocados desse ranking (do 20º ao 25º lugar) -> As verdadeiras Zebras
     zebras = ranking_grupos[19:25]
     return zebras, scores_tmp
 
@@ -149,31 +141,27 @@ def calcular_ranking_por_coluna(df_analise, coluna):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.2")
-    menu = st.radio("Selecione:", ["📊 Radar Zebra (1º ao 5º)", "📡 Extração Central"])
+    st.header("Pentágono V57.3")
+    menu = st.radio("Selecione:", ["📊 Radar Zebra Clássico", "📡 Extração Central"])
 
-if menu == "📊 Radar Zebra (1º ao 5º)":
+if menu == "📊 Radar Zebra Clássico":
     st.title("🚨 Radar de Zebras (Sistema Clássico)")
-    st.info("As tabelas mostram os 6 grupos com as PIORES pontuações (do 20º ao 25º no Ranking) em cada prêmio, baseadas na matemática de Rupturas e Puxadas.")
+    st.info("Mostra as verdadeiras ZEBRAS: Bichos com pior Frequência + Sem Puxadas + Sem Rupturas.")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
     if st.button("VARREDURA DE ZEBRAS (COMPACTA)", use_container_width=True, type="primary"):
-        with st.spinner("Calculando pontuações nos 5 prêmios..."):
+        with st.spinner("Calculando pontuações reais..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 
-                # Foco matemático nos últimos 500 sorteios (ótimo balanço para Puxadas/Rupturas)
                 df_radar = df.tail(500).reset_index(drop=True)
-                
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Cria 5 colunas no Streamlit para as tabelas
                 cols_ui = st.columns(5)
                 
                 for i in range(5):
-                    # Aciona o motor clássico para aquela coluna
                     zebras_coluna, pontuacoes = calcular_ranking_por_coluna(df_radar, colunas_df[i])
                     
                     with cols_ui[i]:
@@ -181,7 +169,6 @@ if menu == "📊 Radar Zebra (1º ao 5º)":
                         html += f"<tr><th colspan='2'>🏆 {titulos[i]}</th></tr>"
                         html += f"<tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>PONTOS</td></tr>"
                         
-                        # Lista os 6 piores grupos (Zebras)
                         for grupo in zebras_coluna:
                             pts = pontuacoes[grupo]['total']
                             html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{pts} pts</td></tr>"
