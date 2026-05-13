@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.5 - Sniper Triplo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.6 - Sniper com Recordes", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -25,15 +25,16 @@ st.markdown("""
 /* Estilos do Sniper Triplo */
 .sniper-box { background-color: #1a1a2e; border: 1px solid #16213e; border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
 .sniper-titulo { font-size: 16px; font-weight: bold; color: #e94560; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
-.sniper-dado { font-size: 12px; color: #aaa; margin: 4px 0; }
+.sniper-dado { font-size: 13px; color: #aaa; margin: 8px 0; line-height: 1.1; }
 .sniper-valor { font-weight: bold; font-size: 15px; color: #fff; }
+.sniper-recorde { font-size: 10px; color: #666; display: block; margin-top: 2px; }
 
 /* Cores de Alerta */
-.alerta-supremo { background-color: #330033; border: 1px solid #ff00ff; color: #ff00ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
-.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
-.alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
-.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
-.alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
+.alerta-supremo { background-color: #330033; border: 1px solid #ff00ff; color: #ff00ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
+.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
+.alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
+.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 15px; font-size: 13px; }
+.alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,18 +119,15 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- LÓGICA DO RADAR SNIPER (TRIPLO) ---
+# --- LÓGICA DO RADAR SNIPER: ATRASOS + RECORDES (ÚLTIMOS 50) ---
 # =============================================================================
-def calcular_atrasos_sniper_triplo(df_analise, coluna):
+def calcular_atrasos_e_recordes(df_analise, coluna, janela=50):
+    # 1. Calcula o Atraso Atual
     atraso_grupo = 0
     atraso_centena = 0
     atraso_milhar = 0
+    achou_g, achou_c, achou_m = False, False, False
     
-    achou_g = False
-    achou_c = False
-    achou_m = False
-    
-    # Lê do mais recente pro mais antigo
     for i in range(len(df_analise)-1, -1, -1):
         milhar = str(df_analise.iloc[i][coluna]).zfill(4)
         if milhar == "----" or milhar == "0000" or milhar == "nan": continue
@@ -143,19 +141,48 @@ def calcular_atrasos_sniper_triplo(df_analise, coluna):
         if not achou_g:
             if g is not None and 1 <= g <= 15: achou_g = True
             else: atraso_grupo += 1
-            
         if not achou_c:
             if c >= 600: achou_c = True
             else: atraso_centena += 1
-
         if not achou_m:
             if m >= 6000: achou_m = True
             else: atraso_milhar += 1
             
-        # Se achou os 3, não precisa mais olhar o passado
         if achou_g and achou_c and achou_m: break
+
+    # 2. Calcula o Recorde de Atraso nas últimas 50 extrações
+    df_janela = df_analise.tail(janela)
+    curr_g, curr_c, curr_m = 0, 0, 0
+    max_g, max_c, max_m = 0, 0, 0
+    
+    for i in range(len(df_janela)):
+        milhar = str(df_janela.iloc[i][coluna]).zfill(4)
+        if milhar == "----" or milhar == "0000" or milhar == "nan": continue
+        
+        g = get_grupo_int(milhar)
+        try: c = int(milhar[-3:])
+        except: c = -1
+        try: m = int(milhar)
+        except: m = -1
             
-    return atraso_grupo, atraso_centena, atraso_milhar
+        if g is not None and 1 <= g <= 15: curr_g = 0
+        else: curr_g += 1
+        if curr_g > max_g: max_g = curr_g
+            
+        if c >= 600: curr_c = 0
+        else: curr_c += 1
+        if curr_c > max_c: max_c = curr_c
+            
+        if m >= 6000: curr_m = 0
+        else: curr_m += 1
+        if curr_m > max_m: max_m = curr_m
+
+    # Blindagem: o recorde nunca pode ser menor que o atraso atual
+    max_g = max(max_g, atraso_grupo)
+    max_c = max(max_c, atraso_centena)
+    max_m = max(max_m, atraso_milhar)
+
+    return atraso_grupo, atraso_centena, atraso_milhar, max_g, max_c, max_m
 
 # =============================================================================
 # --- LÓGICA CLÁSSICA (ZEBRA) ---
@@ -188,17 +215,17 @@ def calcular_ranking_por_coluna(df_analise, coluna):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.5")
+    st.header("Pentágono V57.6")
     menu = st.radio("Selecione:", ["🎯 Radar Sniper (Triplo)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
 
 if menu == "🎯 Radar Sniper (Triplo)":
     st.title("🎯 Operação Interseção de Múltiplos Filtros")
-    st.info("Monitora **Grupos (01-15)**, **Centenas (600-999)** e **Milhares (6000-9999)** simultaneamente.")
+    st.info("Monitora **Grupos (01-15)**, **Centenas (600-999)** e **Milhares (6000-9999)**. As letras miúdas mostram o recorde de atraso das últimas 50 extrações.")
     
     banca_ia = st.selectbox("Selecione a Banca para Mapeamento:", list(BANCAS_CONFIG.keys()))
     
     if st.button("INICIAR VARREDURA SNIPER", use_container_width=True, type="primary"):
-        with st.spinner("Analisando os 3 filtros nos 5 prêmios..."):
+        with st.spinner("Mapeando histórico e atrasos nos 5 prêmios..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
@@ -206,7 +233,6 @@ if menu == "🎯 Radar Sniper (Triplo)":
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Limites Matemáticos
                 LIMITE_GRUPO = 4
                 LIMITE_CENTENA = 5
                 LIMITE_MILHAR = 5
@@ -214,9 +240,8 @@ if menu == "🎯 Radar Sniper (Triplo)":
                 cols_ui = st.columns(5)
                 
                 for i in range(5):
-                    atr_g, atr_c, atr_m = calcular_atrasos_sniper_triplo(df, colunas_df[i])
+                    atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_atrasos_e_recordes(df, colunas_df[i], janela=50)
                     
-                    # Logica de Veredito Triplo
                     if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA and atr_m >= LIMITE_MILHAR:
                         veredito = "<div class='alerta-supremo'>🔥 ALERTA MÁXIMO<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas + Milhares</span></div>"
                     elif atr_g >= LIMITE_GRUPO and atr_m >= LIMITE_MILHAR:
@@ -232,9 +257,18 @@ if menu == "🎯 Radar Sniper (Triplo)":
                         st.markdown(f"""
                         <div class="sniper-box">
                             <div class="sniper-titulo">{titulos[i]}</div>
-                            <div class="sniper-dado">Grupos 01-15: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x s/ sair</span></div>
-                            <div class="sniper-dado">C: 600-999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x s/ sair</span></div>
-                            <div class="sniper-dado">M: 6000-9999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x s/ sair</span></div>
+                            <div class="sniper-dado">
+                                Grupos 01-15: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x s/ sair</span>
+                                <span class="sniper-recorde">Recorde (50j): {max_g}x</span>
+                            </div>
+                            <div class="sniper-dado">
+                                C: 600-999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x s/ sair</span>
+                                <span class="sniper-recorde">Recorde (50j): {max_c}x</span>
+                            </div>
+                            <div class="sniper-dado">
+                                M: 6000-9999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x s/ sair</span>
+                                <span class="sniper-recorde">Recorde (50j): {max_m}x</span>
+                            </div>
                             {veredito}
                         </div>
                         """, unsafe_allow_html=True)
