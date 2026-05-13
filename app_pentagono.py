@@ -7,29 +7,23 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import numpy as np
-import xgboost as xgb
-from sklearn.preprocessing import LabelEncoder
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V56.9 - Hyper Turbo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.0 - Radar Total", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
 .flex-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin-bottom: 20px; }
-.grupo-card-zebra { background-color: #330000; border: 1px solid #ff4b4b; border-radius: 6px; padding: 8px; text-align: center; flex: 1 1 60px; max-width: 90px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-.grupo-numero { font-size: 20px; font-weight: bold; color: #ffffff; margin: 3px 0; }
-.grupo-pontos-zebra { font-size: 11px; color: #ff4b4b; font-weight: bold; }
-.grupo-posicao { font-size: 9px; color: #aaaaaa; text-transform: uppercase; }
-.backtest-box { background-color: #1a2634; padding: 12px; border-radius: 5px; border-left: 4px solid #ff4b4b; margin-bottom: 15px;}
-.gatilho-ativo { background-color: #003300; border-left: 4px solid #00ff00; padding: 10px; margin-top: 10px; border-radius: 5px; color: #00ff00; font-weight: bold;}
-.gatilho-espera { background-color: #1a1a1a; border-left: 4px solid #555555; padding: 10px; margin-top: 10px; border-radius: 5px; color: #aaaaaa; font-size: 13px;}
-.previsao-card { background-color: #001a00; border: 1px solid #4CAF50; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 10px; min-height: 110px; }
-.previsao-num { font-size: 26px; font-weight: bold; color: #4CAF50; line-height: 1.1; }
-.bicho-nome { font-size: 13px; color: #fff; font-weight: bold; }
-.banner-info { background-color: #121212; border: 1px solid #4CAF50; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,255,0,0.1); }
+.grupo-card-zebra { background-color: #1a0000; border: 1px solid #ff4b4b; border-radius: 6px; padding: 10px; text-align: center; flex: 1 1 80px; max-width: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+.grupo-numero { font-size: 24px; font-weight: bold; color: #ffffff; margin: 2px 0; }
+.grupo-pontos-zebra { font-size: 12px; color: #ff4b4b; font-weight: bold; }
+.grupo-posicao { font-size: 10px; color: #aaaaaa; text-transform: uppercase; }
+.backtest-box { background-color: #0e1117; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; border-right: 1px solid #333; border-top: 1px solid #333; border-bottom: 1px solid #333;}
+.gatilho-ativo { background-color: #001a00; border: 1px solid #00ff00; padding: 12px; margin-top: 10px; border-radius: 5px; color: #00ff00; font-weight: bold; text-align: center;}
+.gatilho-espera { background-color: #1a1a1a; border: 1px solid #555555; padding: 12px; margin-top: 10px; border-radius: 5px; color: #aaaaaa; font-size: 13px; text-align: center;}
+.banner-info { background-color: #000; border: 1px solid #4CAF50; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,12 +35,6 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-BICHOS_DICT = {
-    1:"Avestruz", 2:"Águia", 3:"Burro", 4:"Borboleta", 5:"Cachorro", 6:"Cabra", 7:"Carneiro", 8:"Camelo", 9:"Cobra", 10:"Coelho",
-    11:"Cavalo", 12:"Elefante", 13:"Galo", 14:"Gato", 15:"Jacaré", 16:"Leão", 17:"Macaco", 18:"Porco", 19:"Pavão", 20:"Peru",
-    21:"Touro", 22:"Tigre", 23:"Urso", 24:"Veado", 25:"Vaca"
-}
-
 def conectar_sheets():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -55,9 +43,9 @@ def conectar_sheets():
     except: return None
 
 # =============================================================================
-# 🚀 SISTEMA DE CACHE: Guarda a planilha na RAM por 30 minutos!
+# 🚀 SISTEMA DE CACHE: Mantém a velocidade ultra rápida
 # =============================================================================
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def carregar_dados_em_memoria(banca_nome):
     sh = conectar_sheets()
     if not sh: return pd.DataFrame()
@@ -69,18 +57,16 @@ def carregar_dados_em_memoria(banca_nome):
         df = df.iloc[:, :7]
         df.columns = ["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"]
         df = df[df["P1"].astype(str).str.strip() != ""]
-        df = df[~df["P1"].astype(str).str.contains("---")]
         return df
-    except:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def exibir_banner_sorteio(df, banca):
     if not df.empty:
         ult_nome = str(df.iloc[-1]["Sorteio"])
         st.markdown(f"""
         <div class="banner-info">
-            <span style='color: #4CAF50; font-size: 12px; font-weight: bold;'>📡 ÚLTIMO RESULTADO EXTRAÍDO (CACHE):</span><br>
-            <span style='color: white; font-size: 18px; font-weight: bold;'>{banca} das {ult_nome}</span>
+            <span style='color: #4CAF50; font-size: 11px; font-weight: bold;'>📡 ÚLTIMA ATUALIZAÇÃO MONITORADA:</span><br>
+            <span style='color: white; font-size: 18px; font-weight: bold;'>{banca} - {ult_nome}</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -90,14 +76,8 @@ def get_grupo_str(m):
         return "25" if d == 0 else str(math.ceil(d/4)).zfill(2)
     except: return None
 
-def get_grupo_int(m):
-    try:
-        d = int(str(m)[-2:])
-        return 25 if d == 0 else math.ceil(d/4)
-    except: return None
-
 # =============================================================================
-# --- MOTOR DE EXTRAÇÃO ---
+# --- MOTOR DE EXTRAÇÃO (PRESERVADO) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -128,120 +108,101 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- LOGICA ESTATÍSTICA ---
+# --- NOVA LÓGICA: RADAR ZEBRA 1º AO 5º ---
 # =============================================================================
-def calcular_ranking_cegos(df_analise):
-    scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
-    atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
+def calcular_ranking_cegos_1_ao_5(df_analise):
+    # Dicionário para rastrear atraso atual e atraso máximo
+    scores_tmp = {str(i).zfill(2): {'atraso_atual': 0, 'atraso_max': 0, 'total': 0} for i in range(1, 26)}
+    
     for i in range(len(df_analise)):
-        g_v = get_grupo_str(df_analise.iloc[i]["P1"])
-        if g_v:
-            atr_g[g_v]['t'] += 1
-            for k in atr_g:
-                if k != g_v: atr_g[k]['t'] = 0
-                if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-    for k, v in atr_g.items():
-        if v['t'] >= (v['max'] - 2) and v['t'] > 0: scores_tmp[k]['ruptura'] += 4  
-    if len(df_analise) > 1:
-        ult_g = get_grupo_str(df_analise.iloc[-1]["P1"])
-        for i in range(len(df_analise)-1):
-            if get_grupo_str(df_analise.iloc[i]["P1"]) == ult_g:
-                g_prox = get_grupo_str(df_analise.iloc[i+1]["P1"])
-                if g_prox: scores_tmp[g_prox]['puxada'] += 7 
-    for k in scores_tmp: scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
+        # Captura os 5 grupos que saíram neste sorteio
+        sorteio_atual = [
+            get_grupo_str(df_analise.iloc[i]["P1"]),
+            get_grupo_str(df_analise.iloc[i]["P2"]),
+            get_grupo_str(df_analise.iloc[i]["P3"]),
+            get_grupo_str(df_analise.iloc[i]["P4"]),
+            get_grupo_str(df_analise.iloc[i]["P5"])
+        ]
+        
+        for g in scores_tmp:
+            if g in sorteio_atual:
+                # Se o grupo saiu em QUALQUER uma das 5 posições, zera o atraso
+                scores_tmp[g]['atraso_atual'] = 0
+            else:
+                # Se não saiu, incrementa o atraso
+                scores_tmp[g]['atraso_atual'] += 1
+                
+            # Atualiza o recorde de atraso histórico
+            if scores_tmp[g]['atraso_atual'] > scores_tmp[g]['atraso_max']:
+                scores_tmp[g]['atraso_max'] = scores_tmp[g]['atraso_atual']
+                
+    # O "Total" para o ranking é o atraso atual (Zebra)
+    for g in scores_tmp:
+        scores_tmp[g]['total'] = scores_tmp[g]['atraso_atual']
+        
     ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
     return [x[0] for x in ranking], scores_tmp
 
 # =============================================================================
-# --- 3. MENU E TELAS ---
+# --- INTERFACE DE COMANDO ---
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("🎯 Pentágono V56.9")
-    menu = st.radio("Selecione:", ["🤖 IA XGBoost (12 Alvos)", "📊 Radar Zebra", "📡 Extração"])
+    st.header("Pentágono V57.0")
+    menu = st.radio("Selecione:", ["📊 Radar Zebra (1º ao 5º)", "📡 Extração Central"])
 
-# --- IA XGBOOST ---
-if menu == "🤖 IA XGBoost (12 Alvos)":
-    st.title("🤖 IA Pentágono: Previsão 1º Prêmio")
-    banca_xgb = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    
-    if st.button("Ativar IA (Hyper Turbo)", type="primary", use_container_width=True):
-        with st.spinner("Lendo Memória Cache e Treinando Motor..."):
-            df = carregar_dados_em_memoria(banca_xgb)
-            if not df.empty:
-                exibir_banner_sorteio(df, banca_xgb)
-                
-                df_ia = df.tail(500).copy()
-                df_ia['g'] = df_ia['P1'].apply(get_grupo_int)
-                df_ia = df_ia.dropna(subset=['g'])
-                df_ia['a1'] = df_ia['g'].shift(1); df_ia['a2'] = df_ia['g'].shift(2); df_ia['a3'] = df_ia['g'].shift(3)
-                df_treino = df_ia.dropna()
-                
-                X = df_treino[['a1', 'a2', 'a3']]
-                le = LabelEncoder(); y = le.fit_transform(df_treino['g'])
-                
-                modelo_final = xgb.XGBClassifier(max_depth=3, n_estimators=80, learning_rate=0.1, eval_metric='mlogloss', n_jobs=-1)
-                modelo_final.fit(X, y)
-                
-                prob = modelo_final.predict_proba(df_ia[['a1','a2','a3']].tail(1))[0]
-                top_12 = np.argsort(prob)[::-1][:12]
-                
-                st.markdown("### 🔮 Projeção dos 12 Alvos IA:")
-                for row in range(4):
-                    cols = st.columns(3)
-                    for col in range(3):
-                        i = row*3+col
-                        if i < 12:
-                            g_real = int(le.inverse_transform([top_12[i]])[0])
-                            with cols[col]:
-                                st.markdown(f"""<div class="previsao-card"><div style="color:#4CAF50; font-size:10px; font-weight:bold;">{i+1}º ALVO</div><div class="previsao-num">{str(g_real).zfill(2)}</div><div class="bicho-nome">{BICHOS_DICT[g_real]}</div><div style="color:#aaa; font-size:11px;">{prob[top_12[i]]*100:.1f}%</div></div>""", unsafe_allow_html=True)
-            else:
-                st.error("Erro ao carregar base de dados. Tente extrair resultados novamente.")
-
-# --- RADAR ZEBRA ---
-elif menu == "📊 Radar Zebra":
-    st.title("🚨 Radar de Exclusão: 6 Grupos Zebra")
+if menu == "📊 Radar Zebra (1º ao 5º)":
+    st.title("🚨 Radar de Exclusão (1º ao 5º Prêmio)")
+    st.info("Monitorando grupos que não aparecem em nenhuma das 5 primeiras posições.")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("Processar Radar Zebra", use_container_width=True):
-        with st.spinner("Puxando do Cache..."):
+    if st.button("VARREDURA TOTAL DE ATRASOS", use_container_width=True, type="primary"):
+        with st.spinner("Analisando 1º ao 5º prêmio..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
-                df_radar = df.tail(200).reset_index(drop=True)
-                ranking_final, scores = calcular_ranking_cegos(df_radar)
-                cegos_atuais = ranking_final[19:25]
                 
-                bool_cegos = []
-                for i in range(len(df_radar)-30, len(df_radar)):
-                    df_p = df_radar.iloc[:i]
-                    rank_p, _ = calcular_ranking_cegos(df_p)
-                    bool_cegos.append(True if get_grupo_str(df_radar.iloc[i]["P1"]) in rank_p[19:25] else False)
+                # Análise Zebra focada nos últimos 400 sorteios para precisão
+                df_radar = df.tail(400).reset_index(drop=True)
+                ranking_final, scores = calcular_ranking_cegos_1_ao_5(df_radar)
                 
-                mv=0; ca=0
-                for r in bool_cegos:
-                    if r: ca+=1; mv=max(mv, ca)
-                    else: ca=0
+                # Os 6 grupos mais atrasados (Zebra)
+                cegos_atuais = ranking_final[:6]
                 
-                st.markdown(f'<div class="backtest-box"><b>Histórico da Zebra (Recent.):</b> Recorde: {mv}x seguidas | Atual: {ca}x seguidas</div>', unsafe_allow_html=True)
-                if ca >= (mv - 1) and ca > 0:
-                    st.markdown(f'<div class="gatilho-ativo">🚀 GATILHO TÁTICO ATIVADO! Zebra no limite histórico.</div>', unsafe_allow_html=True)
+                # Pega o bicho mais atrasado de todos para o destaque
+                topo_zebra = cegos_atuais[0]
+                atraso_topo = scores[topo_zebra]['atraso_atual']
+                recorde_topo = scores[topo_zebra]['atraso_max']
+                
+                st.markdown(f"""
+                <div class="backtest-box">
+                    <b>Bicho em Alerta Máximo:</b> Grupo {topo_zebra}<br>
+                    <b>Atraso Atual (1º-5º):</b> {atraso_topo} sorteios sem aparecer.<br>
+                    <b>Recorde de Atraso nesta banca:</b> {recorde_topo} sorteios.
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if atraso_topo >= (recorde_topo - 1) and atraso_topo > 0:
+                    st.markdown(f'<div class="gatilho-ativo">🚀 GATILHO TÁTICO ATIVADO! Grupo {topo_zebra} atingiu o limite de exaustão!</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="gatilho-espera">⏳ Status: Zebra em fluxo normal.</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="gatilho-espera">⏳ Monitorando exaustão... (Próximo alvo provável: {topo_zebra})</div>', unsafe_allow_html=True)
                 
+                st.subheader("🏁 Os 6 Grupos Mais Atrasados (Zebra 1º-5º):")
                 html = '<div class="flex-container">'
                 for idx, g in enumerate(cegos_atuais):
                     pts = scores[g]['total']
-                    html += f'<div class="grupo-card-zebra"><div class="grupo-posicao">{idx+20}º Zebra</div><div class="grupo-numero">{g}</div><div class="grupo-pontos-zebra">↑ {pts} pts</div></div>'
+                    html += f'<div class="grupo-card-zebra"><div class="grupo-posicao">{idx+1}º ZEBRA</div><div class="grupo-numero">{g}</div><div class="grupo-pontos-zebra">{pts} ATRASOS</div></div>'
                 st.markdown(html + '</div>', unsafe_allow_html=True)
+            else:
+                st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
-# --- EXTRAÇÃO ---
-elif menu == "📡 Extração":
-    st.title("📡 Extração de Resultados")
-    banca_ex = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
-    dt = st.date_input("Data:", value=date.today())
-    if st.button("🚀 Extrair Agora"):
-        with st.spinner("Conectando com o site..."):
+elif menu == "📡 Extração Central":
+    st.title("📡 Extração e Automação")
+    banca_ex = st.selectbox("Banca para Extração:", list(BANCAS_CONFIG.keys()))
+    dt = st.date_input("Data do Sorteio:", value=date.today())
+    
+    if st.button("🚀 INICIAR COLETA", use_container_width=True):
+        with st.spinner("Acessando servidores externos..."):
             res = extrair_dia(banca_ex, dt)
             if res:
                 sh = conectar_sheets()
@@ -252,9 +213,8 @@ elif menu == "📡 Extração":
                     p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
                     if p_ins: 
                         ws.append_rows(p_ins, value_input_option="RAW")
-                        st.success(f"✅ {len(p_ins)} novos sorteios guardados.")
-                        # Limpa o Cache para o app pegar a atualização no próximo clique
-                        carregar_dados_em_memoria.clear()
+                        st.success(f"✅ Missão Cumprida: {len(p_ins)} novos registros salvos.")
+                        carregar_dados_em_memoria.clear() # Limpa o cache para atualizar o radar
                     else:
-                        st.info("Todos os resultados de hoje já estavam na base de dados.")
-            else: st.error("Nenhum resultado disponível ou já extraído.")
+                        st.info("Todos os dados já estão no banco de dados.")
+            else: st.error("Nenhum resultado disponível para esta data.")
