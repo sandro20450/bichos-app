@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.4 - Radar Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.5 - Sniper Triplo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,14 +22,18 @@ st.markdown("""
 .grupo-destaque { font-weight: bold; color: #4CAF50 !important; font-size: 16px; }
 .banner-info { background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
 
-/* Estilos do Sniper */
-.sniper-box { background-color: #1a1a2e; border: 1px solid #16213e; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-.sniper-titulo { font-size: 16px; font-weight: bold; color: #e94560; margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
-.sniper-dado { font-size: 13px; color: #aaa; margin: 5px 0; }
-.sniper-valor { font-weight: bold; font-size: 16px; color: #fff; }
-.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 10px; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-.alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 10px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
+/* Estilos do Sniper Triplo */
+.sniper-box { background-color: #1a1a2e; border: 1px solid #16213e; border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+.sniper-titulo { font-size: 16px; font-weight: bold; color: #e94560; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
+.sniper-dado { font-size: 12px; color: #aaa; margin: 4px 0; }
+.sniper-valor { font-weight: bold; font-size: 15px; color: #fff; }
+
+/* Cores de Alerta */
+.alerta-supremo { background-color: #330033; border: 1px solid #ff00ff; color: #ff00ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
+.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
+.alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
+.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 13px; }
+.alerta-cinza { background-color: #222; border: 1px solid #555; color: #888; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,24 +118,27 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- LÓGICA DO RADAR SNIPER (BLOCOS) ---
+# --- LÓGICA DO RADAR SNIPER (TRIPLO) ---
 # =============================================================================
-def calcular_atrasos_sniper(df_analise, coluna):
+def calcular_atrasos_sniper_triplo(df_analise, coluna):
     atraso_grupo = 0
     atraso_centena = 0
+    atraso_milhar = 0
+    
     achou_g = False
     achou_c = False
+    achou_m = False
     
-    # Lê de trás pra frente (do mais recente pro mais antigo)
+    # Lê do mais recente pro mais antigo
     for i in range(len(df_analise)-1, -1, -1):
         milhar = str(df_analise.iloc[i][coluna]).zfill(4)
         if milhar == "----" or milhar == "0000" or milhar == "nan": continue
         
         g = get_grupo_int(milhar)
-        try:
-            c = int(milhar[-3:])
-        except:
-            c = -1
+        try: c = int(milhar[-3:])
+        except: c = -1
+        try: m = int(milhar)
+        except: m = -1
             
         if not achou_g:
             if g is not None and 1 <= g <= 15: achou_g = True
@@ -140,10 +147,15 @@ def calcular_atrasos_sniper(df_analise, coluna):
         if not achou_c:
             if c >= 600: achou_c = True
             else: atraso_centena += 1
+
+        if not achou_m:
+            if m >= 6000: achou_m = True
+            else: atraso_milhar += 1
             
-        if achou_g and achou_c: break
+        # Se achou os 3, não precisa mais olhar o passado
+        if achou_g and achou_c and achou_m: break
             
-    return atraso_grupo, atraso_centena
+    return atraso_grupo, atraso_centena, atraso_milhar
 
 # =============================================================================
 # --- LÓGICA CLÁSSICA (ZEBRA) ---
@@ -151,7 +163,6 @@ def calcular_atrasos_sniper(df_analise, coluna):
 def calcular_ranking_por_coluna(df_analise, coluna):
     scores_tmp = {str(i).zfill(2): {'frequencia': 0, 'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
     atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-    
     for i in range(len(df_analise)):
         g_v = get_grupo_str(df_analise.iloc[i][coluna])
         if g_v:
@@ -159,20 +170,16 @@ def calcular_ranking_por_coluna(df_analise, coluna):
             for k in atr_g:
                 atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
                 if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-                
     for k, v in atr_g.items():
         if v['t'] >= (v['max'] - 2) and v['t'] > 0: scores_tmp[k]['ruptura'] += 4  
-            
     if len(df_analise) > 1:
         ult_g = get_grupo_str(df_analise.iloc[-1][coluna])
         for i in range(len(df_analise)-1):
             if get_grupo_str(df_analise.iloc[i][coluna]) == ult_g:
                 g_prox = get_grupo_str(df_analise.iloc[i+1][coluna])
                 if g_prox: scores_tmp[g_prox]['puxada'] += 7 
-                
     for k in scores_tmp: 
         scores_tmp[k]['total'] = scores_tmp[k]['frequencia'] + scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
-        
     ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
     return [x[0] for x in ranking][19:25], scores_tmp
 
@@ -181,17 +188,17 @@ def calcular_ranking_por_coluna(df_analise, coluna):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.4")
-    menu = st.radio("Selecione:", ["🎯 Radar Sniper (Blocos)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
+    st.header("Pentágono V57.5")
+    menu = st.radio("Selecione:", ["🎯 Radar Sniper (Triplo)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
 
-if menu == "🎯 Radar Sniper (Blocos)":
-    st.title("🎯 Operação Interseção (Sniper)")
-    st.info("Monitora o atraso do **Bloco de Grupos (01 ao 15)** e o atraso do **Bloco de Centenas (600 a 999)** para encontrar o ponto exato de Ataque Total (Hedge).")
+if menu == "🎯 Radar Sniper (Triplo)":
+    st.title("🎯 Operação Interseção de Múltiplos Filtros")
+    st.info("Monitora **Grupos (01-15)**, **Centenas (600-999)** e **Milhares (6000-9999)** simultaneamente.")
     
     banca_ia = st.selectbox("Selecione a Banca para Mapeamento:", list(BANCAS_CONFIG.keys()))
     
     if st.button("INICIAR VARREDURA SNIPER", use_container_width=True, type="primary"):
-        with st.spinner("Procurando Interseções..."):
+        with st.spinner("Analisando os 3 filtros nos 5 prêmios..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
@@ -199,29 +206,35 @@ if menu == "🎯 Radar Sniper (Blocos)":
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Limites Táticos de Atraso
+                # Limites Matemáticos
                 LIMITE_GRUPO = 4
                 LIMITE_CENTENA = 5
+                LIMITE_MILHAR = 5
                 
                 cols_ui = st.columns(5)
                 
                 for i in range(5):
-                    atr_g, atr_c = calcular_atrasos_sniper(df, colunas_df[i])
+                    atr_g, atr_c, atr_m = calcular_atrasos_sniper_triplo(df, colunas_df[i])
                     
-                    # Logica do Veredito
-                    if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
-                        veredito = "<div class='alerta-verde'>🟢 ATAQUE TOTAL (R$ 190)<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Centenas</span></div>"
+                    # Logica de Veredito Triplo
+                    if atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA and atr_m >= LIMITE_MILHAR:
+                        veredito = "<div class='alerta-supremo'>🔥 ALERTA MÁXIMO<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas + Milhares</span></div>"
+                    elif atr_g >= LIMITE_GRUPO and atr_m >= LIMITE_MILHAR:
+                        veredito = "<div class='alerta-azul'>🔵 ATAQUE MILHAR<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Milhares(6000-9999)</span></div>"
+                    elif atr_g >= LIMITE_GRUPO and atr_c >= LIMITE_CENTENA:
+                        veredito = "<div class='alerta-verde'>🟢 ATAQUE CENTENA<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos e Centenas(600-999)</span></div>"
                     elif atr_g >= LIMITE_GRUPO:
-                        veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos 1-15</span></div>"
+                        veredito = "<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS os Grupos 01-15</span></div>"
                     else:
-                        veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal</span></div>"
+                        veredito = "<div class='alerta-cinza'>⚪ AGUARDAR<br><span style='font-size:10px;'>Padrão Normal / Grupos Fortes</span></div>"
                         
                     with cols_ui[i]:
                         st.markdown(f"""
                         <div class="sniper-box">
                             <div class="sniper-titulo">{titulos[i]}</div>
-                            <div class="sniper-dado">Grupos (01 ao 15): <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x s/ sair</span></div>
-                            <div class="sniper-dado">Centenas (600 a 999): <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x s/ sair</span></div>
+                            <div class="sniper-dado">Grupos 01-15: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_g >= LIMITE_GRUPO else '#4CAF50'};">{atr_g}x s/ sair</span></div>
+                            <div class="sniper-dado">C: 600-999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_c >= LIMITE_CENTENA else '#4CAF50'};">{atr_c}x s/ sair</span></div>
+                            <div class="sniper-dado">M: 6000-9999: <span class="sniper-valor" style="color:{'#ff4b4b' if atr_m >= LIMITE_MILHAR else '#4CAF50'};">{atr_m}x s/ sair</span></div>
                             {veredito}
                         </div>
                         """, unsafe_allow_html=True)
@@ -231,7 +244,6 @@ if menu == "🎯 Radar Sniper (Blocos)":
 elif menu == "📊 Radar Zebra Clássico":
     st.title("🚨 Radar de Zebras (Sistema Clássico)")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    
     if st.button("VARREDURA DE ZEBRAS", use_container_width=True):
         with st.spinner("Calculando pontuações reais..."):
             df = carregar_dados_em_memoria(banca_ia)
