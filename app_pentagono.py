@@ -2,28 +2,28 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from datetime import date, timedelta
+from datetime import date
 import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import numpy as np
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.0 - Radar Total", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.1 - Radar Compacto", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
-.flex-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin-bottom: 20px; }
-.grupo-card-zebra { background-color: #1a0000; border: 1px solid #ff4b4b; border-radius: 6px; padding: 10px; text-align: center; flex: 1 1 80px; max-width: 100px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
-.grupo-numero { font-size: 24px; font-weight: bold; color: #ffffff; margin: 2px 0; }
-.grupo-pontos-zebra { font-size: 12px; color: #ff4b4b; font-weight: bold; }
-.grupo-posicao { font-size: 10px; color: #aaaaaa; text-transform: uppercase; }
-.backtest-box { background-color: #0e1117; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; border-right: 1px solid #333; border-top: 1px solid #333; border-bottom: 1px solid #333;}
-.gatilho-ativo { background-color: #001a00; border: 1px solid #00ff00; padding: 12px; margin-top: 10px; border-radius: 5px; color: #00ff00; font-weight: bold; text-align: center;}
-.gatilho-espera { background-color: #1a1a1a; border: 1px solid #555555; padding: 12px; margin-top: 10px; border-radius: 5px; color: #aaaaaa; font-size: 13px; text-align: center;}
-.banner-info { background-color: #000; border: 1px solid #4CAF50; padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
+/* Tabelas Compactas para as Zebras Individuais */
+.tabela-compacta { width: 100%; border-collapse: collapse; text-align: center; font-size: 14px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+.tabela-compacta th { background-color: #330000; color: #ff4b4b; padding: 8px; border: 1px solid #444; font-size: 13px; }
+.tabela-compacta td { padding: 6px; border: 1px solid #333; color: #fff; background-color: #121212; }
+.td-cabecalho { color: #888 !important; font-size: 10px !important; background-color: #000 !important; }
+.grupo-destaque { font-weight: bold; color: #4CAF50 !important; font-size: 16px; }
+
+.banner-info { background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,91 +108,74 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- NOVA LÓGICA: RADAR ZEBRA 1º AO 5º ---
+# --- NOVA LÓGICA ULTRA RÁPIDA: ZEBRA INDIVIDUAL POR POSIÇÃO ---
 # =============================================================================
-def calcular_ranking_cegos_1_ao_5(df_analise):
-    # Dicionário para rastrear atraso atual e atraso máximo
-    scores_tmp = {str(i).zfill(2): {'atraso_atual': 0, 'atraso_max': 0, 'total': 0} for i in range(1, 26)}
+def calcular_zebras_por_premio(df, coluna_premio):
+    """Calcula matematicamente o atraso de cada grupo em uma coluna específica."""
+    grupos_coluna = df[coluna_premio].astype(str).apply(get_grupo_str)
+    atrasos = {}
+    total_sorteios = len(grupos_coluna)
     
-    for i in range(len(df_analise)):
-        # Captura os 5 grupos que saíram neste sorteio
-        sorteio_atual = [
-            get_grupo_str(df_analise.iloc[i]["P1"]),
-            get_grupo_str(df_analise.iloc[i]["P2"]),
-            get_grupo_str(df_analise.iloc[i]["P3"]),
-            get_grupo_str(df_analise.iloc[i]["P4"]),
-            get_grupo_str(df_analise.iloc[i]["P5"])
-        ]
+    for g in range(1, 26):
+        g_str = str(g).zfill(2)
+        # Encontra todos os índices onde este grupo saiu nesta coluna
+        ocorrencias = np.where(grupos_coluna == g_str)[0]
         
-        for g in scores_tmp:
-            if g in sorteio_atual:
-                # Se o grupo saiu em QUALQUER uma das 5 posições, zera o atraso
-                scores_tmp[g]['atraso_atual'] = 0
-            else:
-                # Se não saiu, incrementa o atraso
-                scores_tmp[g]['atraso_atual'] += 1
-                
-            # Atualiza o recorde de atraso histórico
-            if scores_tmp[g]['atraso_atual'] > scores_tmp[g]['atraso_max']:
-                scores_tmp[g]['atraso_max'] = scores_tmp[g]['atraso_atual']
-                
-    # O "Total" para o ranking é o atraso atual (Zebra)
-    for g in scores_tmp:
-        scores_tmp[g]['total'] = scores_tmp[g]['atraso_atual']
-        
-    ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
-    return [x[0] for x in ranking], scores_tmp
+        if len(ocorrencias) > 0:
+            # O último índice é a vez mais recente que ele saiu
+            ultimo_idx = ocorrencias[-1]
+            atrasos[g_str] = total_sorteios - 1 - ultimo_idx
+        else:
+            # Se não saiu na janela de análise, o atraso é o total de sorteios
+            atrasos[g_str] = total_sorteios
+            
+    # Ordena do grupo mais atrasado para o menos atrasado
+    ranking = sorted(atrasos.items(), key=lambda x: x[1], reverse=True)
+    return ranking[:6] # Retorna os 6 mais atrasados (Zebras)
 
 # =============================================================================
 # --- INTERFACE DE COMANDO ---
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.0")
-    menu = st.radio("Selecione:", ["📊 Radar Zebra (1º ao 5º)", "📡 Extração Central"])
+    st.header("Pentágono V57.1")
+    menu = st.radio("Selecione:", ["📊 Zebras por Prêmio (1º ao 5º)", "📡 Extração Central"])
 
-if menu == "📊 Radar Zebra (1º ao 5º)":
-    st.title("🚨 Radar de Exclusão (1º ao 5º Prêmio)")
-    st.info("Monitorando grupos que não aparecem em nenhuma das 5 primeiras posições.")
+if menu == "📊 Zebras por Prêmio (1º ao 5º)":
+    st.title("🚨 Radar de Zebras Independentes")
+    st.info("As tabelas abaixo mostram os 6 grupos mais atrasados em CADA UMA das 5 posições separadamente.")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("VARREDURA TOTAL DE ATRASOS", use_container_width=True, type="primary"):
-        with st.spinner("Analisando 1º ao 5º prêmio..."):
+    if st.button("VARREDURA DE ATRASOS (COMPACTA)", use_container_width=True, type="primary"):
+        with st.spinner("Mapeando os 5 prêmios..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 
-                # Análise Zebra focada nos últimos 400 sorteios para precisão
-                df_radar = df.tail(400).reset_index(drop=True)
-                ranking_final, scores = calcular_ranking_cegos_1_ao_5(df_radar)
+                # Vamos focar a matemática nos últimos 800 sorteios (muita precisão)
+                df_radar = df.tail(800).reset_index(drop=True)
                 
-                # Os 6 grupos mais atrasados (Zebra)
-                cegos_atuais = ranking_final[:6]
+                colunas_df = ["P1", "P2", "P3", "P4", "P5"]
+                titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Pega o bicho mais atrasado de todos para o destaque
-                topo_zebra = cegos_atuais[0]
-                atraso_topo = scores[topo_zebra]['atraso_atual']
-                recorde_topo = scores[topo_zebra]['atraso_max']
+                # Cria 5 colunas no Streamlit para colocar as tabelas lado a lado
+                cols_ui = st.columns(5)
                 
-                st.markdown(f"""
-                <div class="backtest-box">
-                    <b>Bicho em Alerta Máximo:</b> Grupo {topo_zebra}<br>
-                    <b>Atraso Atual (1º-5º):</b> {atraso_topo} sorteios sem aparecer.<br>
-                    <b>Recorde de Atraso nesta banca:</b> {recorde_topo} sorteios.
-                </div>
-                """, unsafe_allow_html=True)
-                
-                if atraso_topo >= (recorde_topo - 1) and atraso_topo > 0:
-                    st.markdown(f'<div class="gatilho-ativo">🚀 GATILHO TÁTICO ATIVADO! Grupo {topo_zebra} atingiu o limite de exaustão!</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="gatilho-espera">⏳ Monitorando exaustão... (Próximo alvo provável: {topo_zebra})</div>', unsafe_allow_html=True)
-                
-                st.subheader("🏁 Os 6 Grupos Mais Atrasados (Zebra 1º-5º):")
-                html = '<div class="flex-container">'
-                for idx, g in enumerate(cegos_atuais):
-                    pts = scores[g]['total']
-                    html += f'<div class="grupo-card-zebra"><div class="grupo-posicao">{idx+1}º ZEBRA</div><div class="grupo-numero">{g}</div><div class="grupo-pontos-zebra">{pts} ATRASOS</div></div>'
-                st.markdown(html + '</div>', unsafe_allow_html=True)
+                for i in range(5):
+                    # Puxa a matemática para aquela coluna específica (P1, P2...)
+                    zebras_do_premio = calcular_zebras_por_premio(df_radar, colunas_df[i])
+                    
+                    with cols_ui[i]:
+                        # Constrói a tabela HTML compacta para o prêmio
+                        html = f"<table class='tabela-compacta'>"
+                        html += f"<tr><th colspan='2'>🏆 {titulos[i]}</th></tr>"
+                        html += f"<tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>ATRASO</td></tr>"
+                        
+                        for grupo, atraso in zebras_do_premio:
+                            html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{atraso}x</td></tr>"
+                            
+                        html += "</table>"
+                        st.markdown(html, unsafe_allow_html=True)
             else:
                 st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
@@ -214,7 +197,7 @@ elif menu == "📡 Extração Central":
                     if p_ins: 
                         ws.append_rows(p_ins, value_input_option="RAW")
                         st.success(f"✅ Missão Cumprida: {len(p_ins)} novos registros salvos.")
-                        carregar_dados_em_memoria.clear() # Limpa o cache para atualizar o radar
+                        carregar_dados_em_memoria.clear() 
                     else:
                         st.info("Todos os dados já estão no banco de dados.")
             else: st.error("Nenhum resultado disponível para esta data.")
