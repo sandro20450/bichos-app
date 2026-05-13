@@ -7,12 +7,11 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import numpy as np
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V57.1 - Radar Compacto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V57.2 - Zebra Clássica", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -108,71 +107,84 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- NOVA LÓGICA ULTRA RÁPIDA: ZEBRA INDIVIDUAL POR POSIÇÃO ---
+# --- LÓGICA CLÁSSICA: RANKING ESTRATÉGICO POR COLUNA ---
 # =============================================================================
-def calcular_zebras_por_premio(df, coluna_premio):
-    """Calcula matematicamente o atraso de cada grupo em uma coluna específica."""
-    grupos_coluna = df[coluna_premio].astype(str).apply(get_grupo_str)
-    atrasos = {}
-    total_sorteios = len(grupos_coluna)
+def calcular_ranking_por_coluna(df_analise, coluna):
+    """Aplica a matemática de Puxadas e Rupturas para uma coluna específica e retorna os 6 piores."""
+    scores_tmp = {str(i).zfill(2): {'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
+    atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
     
-    for g in range(1, 26):
-        g_str = str(g).zfill(2)
-        # Encontra todos os índices onde este grupo saiu nesta coluna
-        ocorrencias = np.where(grupos_coluna == g_str)[0]
-        
-        if len(ocorrencias) > 0:
-            # O último índice é a vez mais recente que ele saiu
-            ultimo_idx = ocorrencias[-1]
-            atrasos[g_str] = total_sorteios - 1 - ultimo_idx
-        else:
-            # Se não saiu na janela de análise, o atraso é o total de sorteios
-            atrasos[g_str] = total_sorteios
+    for i in range(len(df_analise)):
+        g_v = get_grupo_str(df_analise.iloc[i][coluna])
+        if g_v:
+            atr_g[g_v]['t'] += 1
+            for k in atr_g:
+                if k != g_v: atr_g[k]['t'] = 0
+                if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
+                
+    for k, v in atr_g.items():
+        if v['t'] >= (v['max'] - 2) and v['t'] > 0: 
+            scores_tmp[k]['ruptura'] += 4  
             
-    # Ordena do grupo mais atrasado para o menos atrasado
-    ranking = sorted(atrasos.items(), key=lambda x: x[1], reverse=True)
-    return ranking[:6] # Retorna os 6 mais atrasados (Zebras)
+    if len(df_analise) > 1:
+        ult_g = get_grupo_str(df_analise.iloc[-1][coluna])
+        for i in range(len(df_analise)-1):
+            if get_grupo_str(df_analise.iloc[i][coluna]) == ult_g:
+                g_prox = get_grupo_str(df_analise.iloc[i+1][coluna])
+                if g_prox: scores_tmp[g_prox]['puxada'] += 7 
+                
+    for k in scores_tmp: 
+        scores_tmp[k]['total'] = scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
+        
+    # Ordena do grupo com MAIS pontos (1º lugar) para o de MENOS pontos (25º lugar)
+    ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
+    ranking_grupos = [x[0] for x in ranking]
+    
+    # Isola os 6 últimos colocados desse ranking (do 20º ao 25º lugar) -> As verdadeiras Zebras
+    zebras = ranking_grupos[19:25]
+    return zebras, scores_tmp
 
 # =============================================================================
 # --- INTERFACE DE COMANDO ---
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V57.1")
-    menu = st.radio("Selecione:", ["📊 Zebras por Prêmio (1º ao 5º)", "📡 Extração Central"])
+    st.header("Pentágono V57.2")
+    menu = st.radio("Selecione:", ["📊 Radar Zebra (1º ao 5º)", "📡 Extração Central"])
 
-if menu == "📊 Zebras por Prêmio (1º ao 5º)":
-    st.title("🚨 Radar de Zebras Independentes")
-    st.info("As tabelas abaixo mostram os 6 grupos mais atrasados em CADA UMA das 5 posições separadamente.")
+if menu == "📊 Radar Zebra (1º ao 5º)":
+    st.title("🚨 Radar de Zebras (Sistema Clássico)")
+    st.info("As tabelas mostram os 6 grupos com as PIORES pontuações (do 20º ao 25º no Ranking) em cada prêmio, baseadas na matemática de Rupturas e Puxadas.")
     banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("VARREDURA DE ATRASOS (COMPACTA)", use_container_width=True, type="primary"):
-        with st.spinner("Mapeando os 5 prêmios..."):
+    if st.button("VARREDURA DE ZEBRAS (COMPACTA)", use_container_width=True, type="primary"):
+        with st.spinner("Calculando pontuações nos 5 prêmios..."):
             df = carregar_dados_em_memoria(banca_ia)
             if not df.empty:
                 exibir_banner_sorteio(df, banca_ia)
                 
-                # Vamos focar a matemática nos últimos 800 sorteios (muita precisão)
-                df_radar = df.tail(800).reset_index(drop=True)
+                # Foco matemático nos últimos 500 sorteios (ótimo balanço para Puxadas/Rupturas)
+                df_radar = df.tail(500).reset_index(drop=True)
                 
                 colunas_df = ["P1", "P2", "P3", "P4", "P5"]
                 titulos = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
                 
-                # Cria 5 colunas no Streamlit para colocar as tabelas lado a lado
+                # Cria 5 colunas no Streamlit para as tabelas
                 cols_ui = st.columns(5)
                 
                 for i in range(5):
-                    # Puxa a matemática para aquela coluna específica (P1, P2...)
-                    zebras_do_premio = calcular_zebras_por_premio(df_radar, colunas_df[i])
+                    # Aciona o motor clássico para aquela coluna
+                    zebras_coluna, pontuacoes = calcular_ranking_por_coluna(df_radar, colunas_df[i])
                     
                     with cols_ui[i]:
-                        # Constrói a tabela HTML compacta para o prêmio
                         html = f"<table class='tabela-compacta'>"
                         html += f"<tr><th colspan='2'>🏆 {titulos[i]}</th></tr>"
-                        html += f"<tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>ATRASO</td></tr>"
+                        html += f"<tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>PONTOS</td></tr>"
                         
-                        for grupo, atraso in zebras_do_premio:
-                            html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{atraso}x</td></tr>"
+                        # Lista os 6 piores grupos (Zebras)
+                        for grupo in zebras_coluna:
+                            pts = pontuacoes[grupo]['total']
+                            html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{pts} pts</td></tr>"
                             
                         html += "</table>"
                         st.markdown(html, unsafe_allow_html=True)
