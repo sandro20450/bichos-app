@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V58.2 - Comando AWACS", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V58.3 - AWACS Aprimorado", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -203,46 +203,21 @@ def calcular_metricas_sniper(df_analise, coluna, g_min, g_max, c_min, c_max, m_m
     return atraso_grupo, atraso_centena, atraso_milhar, max_g, max_c, max_m
 
 # =============================================================================
-# --- LÓGICA CLÁSSICA (ZEBRA) ---
-# =============================================================================
-def calcular_ranking_por_coluna(df_analise, coluna):
-    scores_tmp = {str(i).zfill(2): {'frequencia': 0, 'puxada': 0, 'ruptura': 0, 'total': 0} for i in range(1, 26)}
-    atr_g = {str(i).zfill(2): {'t': 0, 'max': 0} for i in range(1, 26)}
-    for i in range(len(df_analise)):
-        g_v = get_grupo_str(df_analise.iloc[i][coluna])
-        if g_v:
-            scores_tmp[g_v]['frequencia'] += 1
-            for k in atr_g:
-                atr_g[k]['t'] = 0 if k == g_v else atr_g[k]['t'] + 1
-                if atr_g[k]['t'] > atr_g[k]['max']: atr_g[k]['max'] = atr_g[k]['t']
-    for k, v in atr_g.items():
-        if v['t'] >= (v['max'] - 2) and v['t'] > 0: scores_tmp[k]['ruptura'] += 4  
-    if len(df_analise) > 1:
-        ult_g = get_grupo_str(df_analise.iloc[-1][coluna])
-        for i in range(len(df_analise)-1):
-            if get_grupo_str(df_analise.iloc[i][coluna]) == ult_g:
-                g_prox = get_grupo_str(df_analise.iloc[i+1][coluna])
-                if g_prox: scores_tmp[g_prox]['puxada'] += 7 
-    for k in scores_tmp: 
-        scores_tmp[k]['total'] = scores_tmp[k]['frequencia'] + scores_tmp[k]['puxada'] + scores_tmp[k]['ruptura']
-    ranking = sorted(scores_tmp.items(), key=lambda x: x[1]['total'], reverse=True)
-    return [x[0] for x in ranking][19:25], scores_tmp
-
-# =============================================================================
 # --- INTERFACE DE COMANDO ---
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V58.2")
-    menu = st.radio("Selecione:", ["🏠 Visão Geral (Home)", "🎯 Radar Sniper (Banca Específica)", "📊 Radar Zebra Clássico", "📡 Extração Central"])
+    st.header("Pentágono V58.3")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Sniper (Banca Específica)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central de Alerta AWACS (Melhores Oportunidades)")
-    st.info("Varredura em tempo real em todas as bancas. Exibindo apenas alvos confirmados (Atrasos Críticos).")
+    st.info("Varredura em tempo real. Exibe Alertas Críticos ou Recordes de Atrasos alcançados nas últimas 50 extrações.")
     
     if st.button("🔄 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("Analisando Bancas, Prêmios e Esquadrões... Aguarde."):
             oportunidades = []
+            recordes = []
             
             for banca_nome in BANCAS_CONFIG.keys():
                 df = carregar_dados_em_memoria(banca_nome)
@@ -254,7 +229,7 @@ if menu == "🏠 Visão Geral (Home)":
                     for i, col in enumerate(COLUNAS_DF):
                         atr_g, atr_c, atr_m, max_g, max_c, max_m = calcular_metricas_sniper(df, col, g_min, g_max, c_min, c_max, m_min, m_max)
                         
-                        # Apenas filtra quem tem PELO MENOS o grupo atrasado
+                        # 1. Verifica Alertas Críticos (Gatilho Principal)
                         if atr_g >= LIMITE_GRUPO:
                             prioridade = 4
                             html_alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL<br><span style='font-size:10px;font-weight:normal;'>Jogue APENAS Grupos</span></div>"
@@ -270,28 +245,42 @@ if menu == "🏠 Visão Geral (Home)":
                                 html_alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA<br><span style='font-size:10px;font-weight:normal;'>Jogue Grupos + Centenas</span></div>"
                             
                             oportunidades.append({
-                                "prioridade": prioridade,
-                                "banca": banca_nome,
-                                "premio": TITULOS_PREMIOS[i],
-                                "esquadrao": titulo_esq,
-                                "css": css_class,
-                                "atr_g": atr_g, "atr_c": atr_c, "atr_m": atr_m,
-                                "max_g": max_g, "max_c": max_c, "max_m": max_m,
-                                "html_alerta": html_alerta,
-                                "g_info": f"{str(g_min).zfill(2)}-{str(g_max).zfill(2)}",
-                                "c_info": f"{str(c_min).zfill(3)}-{str(c_max).zfill(3)}",
-                                "m_info": f"{str(m_min).zfill(4)}-{str(m_max).zfill(4)}"
+                                "prioridade": prioridade, "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "esquadrao": titulo_esq,
+                                "css": css_class, "atr_g": atr_g, "atr_c": atr_c, "atr_m": atr_m, "max_g": max_g, "max_c": max_c, "max_m": max_m,
+                                "html_alerta": html_alerta, "g_info": f"{str(g_min).zfill(2)}-{str(g_max).zfill(2)}",
+                                "c_info": f"{str(c_min).zfill(3)}-{str(c_max).zfill(3)}", "m_info": f"{str(m_min).zfill(4)}-{str(m_max).zfill(4)}"
                             })
+                        
+                        # 2. Se NÃO houver alerta crítico, verifica se há Recordes Quebrados
+                        else:
+                            rec_g = (atr_g == max_g and max_g >= 3)
+                            rec_c = (atr_c == max_c and max_c >= 4)
+                            rec_m = (atr_m == max_m and max_m >= 4)
+                            
+                            if rec_g or rec_c or rec_m:
+                                alertas_rec = []
+                                if rec_g: alertas_rec.append("Grupo")
+                                if rec_c: alertas_rec.append("Centena")
+                                if rec_m: alertas_rec.append("Milhar")
+                                
+                                motivo = " + ".join(alertas_rec)
+                                html_recorde = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO<br><span style='font-size:10px;font-weight:normal;'>{motivo} no limite histórico</span></div>"
+                                
+                                recordes.append({
+                                    "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "esquadrao": titulo_esq, "css": css_class,
+                                    "atr_g": atr_g, "atr_c": atr_c, "atr_m": atr_m, "max_g": max_g, "max_c": max_c, "max_m": max_m,
+                                    "html_alerta": html_recorde, "g_info": f"{str(g_min).zfill(2)}-{str(g_max).zfill(2)}",
+                                    "c_info": f"{str(c_min).zfill(3)}-{str(c_max).zfill(3)}", "m_info": f"{str(m_min).zfill(4)}-{str(m_max).zfill(4)}"
+                                })
             
+            # --- RENDERIZAÇÃO DA TELA HOME ---
             if oportunidades:
-                # Ordena primeiro pela prioridade (1 é melhor) e depois pelo atraso do grupo
+                st.success(f"🎯 Foram encontrados {len(oportunidades)} ALERTAS CRÍTICOS para ataque imediato!")
                 oportunidades.sort(key=lambda x: (x['prioridade'], -x['atr_g']))
                 
-                # Renderiza em Grid (3 colunas por linha)
                 cols_ui = st.columns(3)
-                for idx, op in enumerate(oportunidades[:12]): # Mostra os 12 melhores
-                    col_idx = idx % 3
-                    with cols_ui[col_idx]:
+                for idx, op in enumerate(oportunidades[:12]):
+                    with cols_ui[idx % 3]:
                         st.markdown(f"""
                         <div class="home-box">
                             <div class="titulo-esquadrao {op['css']}" style="margin-top:0px;">{op['esquadrao']}</div>
@@ -305,8 +294,29 @@ if menu == "🏠 Visão Geral (Home)":
                             {op['html_alerta']}
                         </div>
                         """, unsafe_allow_html=True)
+                        
+            elif recordes:
+                st.warning("⚠️ Nenhum Alerta Crítico (Gatilho Principal) no momento, mas os seguintes **RECORDES DE ATRASO** foram alcançados nas últimas 50 extrações:")
+                recordes.sort(key=lambda x: (-x['atr_c'], -x['atr_m'], -x['atr_g']))
+                
+                cols_ui = st.columns(3)
+                for idx, op in enumerate(recordes[:12]):
+                    with cols_ui[idx % 3]:
+                        st.markdown(f"""
+                        <div class="home-box">
+                            <div class="titulo-esquadrao {op['css']}" style="margin-top:0px;">{op['esquadrao']}</div>
+                            <div class="home-banca">🏦 {op['banca']}</div>
+                            <div class="home-premio">🏆 {op['premio']}</div>
+                            <div class="sniper-dado" style="text-align:left;">
+                                G ({op['g_info']}): <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['atr_g']==op['max_g'] else '#4CAF50'};">{op['atr_g']}x</span> (Rec: {op['max_g']})</span><br>
+                                C ({op['c_info']}): <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['atr_c']==op['max_c'] else '#4CAF50'};">{op['atr_c']}x</span> (Rec: {op['max_c']})</span><br>
+                                M ({op['m_info']}): <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['atr_m']==op['max_m'] else '#4CAF50'};">{op['atr_m']}x</span> (Rec: {op['max_m']})</span>
+                            </div>
+                            {op['html_alerta']}
+                        </div>
+                        """, unsafe_allow_html=True)
             else:
-                st.success("🟢 Campo Limpo! Não há anomalias ou atrasos críticos no momento. Todos os parâmetros em fluxo normal.")
+                st.success("🟢 Campo Limpo! Não há anomalias críticas nem recordes sendo quebrados no momento.")
 
 elif menu == "🎯 Radar Sniper (Banca Específica)":
     st.title("🎯 Centro de Comando de Operações (Detalhado)")
@@ -346,28 +356,6 @@ elif menu == "🎯 Radar Sniper (Banca Específica)":
                             """, unsafe_allow_html=True)
             else:
                 st.error("Erro ao carregar base. Execute uma extração primeiro.")
-
-elif menu == "📊 Radar Zebra Clássico":
-    st.title("🚨 Radar de Zebras (Sistema Clássico)")
-    banca_ia = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("VARREDURA DE ZEBRAS", use_container_width=True):
-        with st.spinner("Calculando pontuações reais..."):
-            df = carregar_dados_em_memoria(banca_ia)
-            if not df.empty:
-                exibir_banner_sorteio(df, banca_ia)
-                df_radar = df.tail(500).reset_index(drop=True)
-                cols_ui = st.columns(5)
-                for i in range(5):
-                    zebras_coluna, pontuacoes = calcular_ranking_por_coluna(df_radar, COLUNAS_DF[i])
-                    with cols_ui[i]:
-                        html = f"<table class='tabela-compacta'><tr><th colspan='2'>🏆 {TITULOS_PREMIOS[i]}</th></tr><tr><td class='td-cabecalho'>GRUPO</td><td class='td-cabecalho'>PONTOS</td></tr>"
-                        for grupo in zebras_coluna:
-                            pts = pontuacoes[grupo]['total']
-                            html += f"<tr><td class='grupo-destaque'>{grupo}</td><td>{pts} pts</td></tr>"
-                        html += "</table>"
-                        st.markdown(html, unsafe_allow_html=True)
-            else:
-                st.error("Erro ao carregar base. Execute uma extração.")
 
 elif menu == "📡 Extração Central":
     st.title("📡 Extração e Automação")
