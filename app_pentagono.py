@@ -11,24 +11,23 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V59.0 - Esquadrão Fantasma", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V59.1 - Fantasma Corrigido", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
-.home-box { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
-.home-banca { font-size: 18px; font-weight: bold; color: #fff; margin-bottom: 5px; text-transform: uppercase; }
-.home-premio { font-size: 14px; color: #4CAF50; margin-bottom: 10px; font-weight: bold; }
-.sniper-titulo { font-size: 14px; font-weight: bold; color: #e94560; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
-.sniper-dado { font-size: 12px; color: #aaa; margin: 6px 0; line-height: 1.1; }
+.home-box { background-color: #111; border: 1px solid #333; border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
+.home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
+.home-premio { font-size: 13px; color: #4CAF50; margin-bottom: 10px; font-weight: bold; }
+.sniper-titulo { font-size: 12px; font-weight: bold; color: #e94560; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; background-color: #1a0000; border-radius: 4px; padding: 5px;}
+.sniper-dado { font-size: 12px; color: #aaa; margin: 6px 0; line-height: 1.2; }
 .sniper-valor { font-weight: bold; font-size: 14px; color: #fff; }
-.sniper-recorde { font-size: 10px; color: #666; display: block; margin-top: 2px; }
 .banner-info { background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
 
 /* Cores de Alerta */
-.alerta-supremo { background-color: #330033; border: 1px solid #ff00ff; color: #ff00ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-.alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 8px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 12px; }
+.alerta-supremo { background-color: #330033; border: 1px solid #ff00ff; color: #ff00ff; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
+.alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
+.alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
+.alerta-amarelo { background-color: #332b00; border: 1px solid #ffcc00; color: #ffcc00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,14 +73,12 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 O MOTOR DO ESQUADRÃO FANTASMA (77 COMBINAÇÕES)
+# 👻 O MOTOR DO ESQUADRÃO FANTASMA
 # =============================================================================
 def gerar_77_esquadroes():
     esquadroes = []
-    # 11 Blocos de Grupos (1-15, 2-16... 11-25)
     for g in range(1, 12):
         g_min, g_max = g, g + 14
-        # 7 Blocos de Centenas/Milhares (000-399, 100-499... 600-999)
         for c in range(7):
             c_min, c_max = c * 100, (c * 100) + 399
             m_min, m_max = c * 1000, (c * 1000) + 3999
@@ -93,13 +90,13 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
     atr_g, atr_c, atr_m = 0, 0, 0
     achou_g, achou_c, achou_m = False, False, False
     
-    # Atraso Atual
     for i in range(len(df_analise)-1, -1, -1):
         milhar = str(df_analise.iloc[i][coluna]).zfill(4)
         if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
         g = get_grupo_int(milhar)
         try: c = int(milhar[-3:]); m = int(milhar)
         except: c, m = -1, -1
+        
         if not achou_g:
             if g is not None and g_min <= g <= g_max: achou_g = True
             else: atr_g += 1
@@ -111,7 +108,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
             else: atr_m += 1
         if achou_g and achou_c and achou_m: break
 
-    # Recordes (últimos 50)
     df_janela = df_analise.tail(janela)
     cur_g, cur_c, cur_m, max_g, max_c, max_m = 0, 0, 0, 0, 0, 0
     for i in range(len(df_janela)):
@@ -120,13 +116,27 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
         g = get_grupo_int(milhar)
         try: c = int(milhar[-3:]); m = int(milhar)
         except: c, m = -1, -1
+        
         cur_g = 0 if (g is not None and g_min <= g <= g_max) else cur_g + 1
         max_g = max(max_g, cur_g)
         cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
         max_c = max(max_c, cur_c)
         cur_m = 0 if (m_min <= m <= m_max) else cur_m + 1
         max_m = max(max_m, cur_m)
+        
     return atr_g, atr_c, atr_m, max(max_g, atr_g), max(max_c, atr_c), max(max_m, atr_m)
+
+def deduplicar_alvos(lista):
+    """Filtro Anti-Flood: Remove alertas idênticos (mesma banca, premio e perfil de atraso)"""
+    vistos = set()
+    resultado = []
+    for item in lista:
+        # A assinatura foca no atraso da centena e milhar para evitar repetição de grupos com atraso 0
+        assinatura = f"{item['banca']}_{item['premio']}_{item['ac']}_{item['am']}"
+        if assinatura not in vistos:
+            vistos.add(assinatura)
+            resultado.append(item)
+    return resultado
 
 # =============================================================================
 # --- MOTOR DE EXTRAÇÃO (INTACTO) ---
@@ -164,15 +174,15 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V59.0")
+    st.header("Pentágono V59.1")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Esquadrão Fantasma")
-    st.info("Varredura dinâmica de 77 esquadrões em todas as bancas. Exibindo Alertas Críticos ou Recordes Alcançados.")
+    st.title("🚨 Central AWACS - Rastreio Anti-Flood")
+    st.info("O algoritmo avalia 77 combinações de hedge. Filtros deduplicados para mostrar apenas os alvos mais limpos e precisos.")
     
     if st.button("🚀 INICIAR VARREDURA FANTASMA", use_container_width=True, type="primary"):
-        with st.spinner("IA Analisando 1.540 combinações..."):
+        with st.spinner("Decodificando 1.540 assinaturas matemáticas..."):
             oportunidades, recordes = [], []
             todos_esq = gerar_77_esquadroes()
             
@@ -198,90 +208,123 @@ if menu == "🏠 Visão Geral (Home)":
                                 "mg": mg, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
                         # LOGICA DE RECORDE
-                        elif ag == mg and mg >= 3 or ac == mc and mc >= 4 or am == mm and mm >= 4:
+                        elif (ag == mg and mg >= 3) or (ac == mc and mc >= 4) or (am == mm and mm >= 4):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
-                                "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "ag": ag, "ac": ac, "am": am, 
+                                "prio": 5, "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "ag": ag, "ac": ac, "am": am, 
                                 "mg": mg, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
             
+            # Aplica o Filtro Anti-Flood e Ordena priorizando Atraso de Grupo
+            oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -x['ag'], -x['ac'], -x['am'])))
+            recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-x['ag'], -x['ac'], -x['am'])))
+            
             if oportunidades:
-                st.success(f"🎯 ENCONTRADOS {len(oportunidades)} ALERTAS CRÍTICOS!")
-                oportunidades.sort(key=lambda x: (x['prio'], -x['ag']))
+                st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades Críticas Encontradas!")
                 cols = st.columns(3)
                 for idx, op in enumerate(oportunidades[:12]):
                     g_min, g_max, c_min, c_max, m_min, m_max = op['cfg']
                     with cols[idx % 3]:
                         st.markdown(f"""
                         <div class="home-box">
-                            <div class="sniper-titulo">G:{str(g_min).zfill(2)}-{str(g_max).zfill(2)} | C:{str(c_min).zfill(3)}</div>
                             <div class="home-banca">🏦 {op['banca']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
+                            <div class="sniper-titulo">
+                                G: {str(g_min).zfill(2)} ao {str(g_max).zfill(2)}<br>
+                                C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>
+                                M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}
+                            </div>
                             <div class="sniper-dado" style="text-align:left;">
-                                G: <span class="sniper-valor" style="color:#ff4b4b;">{op['ag']}x</span> (Rec: {op['mg']})<br>
-                                C: <span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})<br>
-                                M: <span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})
+                                Grupo: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ag']}x</span> (Rec: {op['mg']})</span><br>
+                                Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
+                                Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>
                             </div>
                             {op['alerta']}
                         </div>
                         """, unsafe_allow_html=True)
             elif recordes:
-                st.warning("⚠️ RECORDES DE ATRASO ALCANÇADOS:")
-                recordes.sort(key=lambda x: (-x['ac'], -x['am']))
+                st.warning("⚠️ SEM ALERTAS CRÍTICOS. Exibindo RECORDES DE ATRASO alcançados nas últimas 50 extrações:")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes[:12]):
                     g_min, g_max, c_min, c_max, m_min, m_max = op['cfg']
                     with cols[idx % 3]:
                         st.markdown(f"""
                         <div class="home-box">
-                            <div class="sniper-titulo">G:{str(g_min).zfill(2)}-{str(g_max).zfill(2)}</div>
                             <div class="home-banca">🏦 {op['banca']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
+                            <div class="sniper-titulo">
+                                G: {str(g_min).zfill(2)} ao {str(g_max).zfill(2)}<br>
+                                C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>
+                                M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}
+                            </div>
                             <div class="sniper-dado" style="text-align:left;">
-                                G: <span class="sniper-valor">{op['ag']}x</span> (Rec: {op['mg']})<br>
-                                C: <span class="sniper-valor">{op['ac']}x</span> (Rec: {op['mc']})<br>
-                                M: <span class="sniper-valor">{op['am']}x</span> (Rec: {op['mm']})
+                                Grupo: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ag']==op['mg'] else '#aaa'};">{op['ag']}x</span> (Rec: {op['mg']})</span><br>
+                                Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
+                                Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>
                             </div>
                             {op['alerta']}
                         </div>
                         """, unsafe_allow_html=True)
+            else:
+                st.success("🟢 Campo 100% Limpo! O fluxo de sorteios está completamente normal em todas as bancas.")
 
 elif menu == "🎯 Radar Detalhado":
     st.title("🎯 Varredura de Precisão por Banca")
     banca = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("INICIAR BUSCA DETALHADA"):
-        df = carregar_dados_em_memoria(banca)
-        if not df.empty:
-            oportunidades = []
-            for cfg in gerar_77_esquadroes():
-                for i, col in enumerate(COLUNAS_DF):
-                    ag, ac, am, mg, mc, mm = calcular_metricas_fantasma(df, col, cfg)
-                    if ag >= LIMITE_GRUPO:
-                        oportunidades.append({"banca": banca, "premio": TITULOS_PREMIOS[i], "ag": ag, "ac": ac, "am": am, "mg": mg, "mc": mc, "mm": mm, "cfg": cfg})
-            
-            if oportunidades:
-                oportunidades.sort(key=lambda x: -x['ag'])
-                st.write(f"Resultados encontrados para {banca}:")
-                st.table(pd.DataFrame([{
-                    "Prêmio": o['premio'], "Bloco Grupos": f"{o['cfg'][0]}-{o['cfg'][1]}", "Atraso G": o['ag'], "Atraso C": o['ac'], "Atraso M": o['am']
-                } for o in oportunidades[:15]]))
+    if st.button("INICIAR BUSCA DETALHADA", type="primary"):
+        with st.spinner("Analisando todas as combinações..."):
+            df = carregar_dados_em_memoria(banca)
+            if not df.empty:
+                oportunidades = []
+                for cfg in gerar_77_esquadroes():
+                    for i, col in enumerate(COLUNAS_DF):
+                        ag, ac, am, mg, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        if ag >= LIMITE_GRUPO:
+                            oportunidades.append({"premio": TITULOS_PREMIOS[i], "ag": ag, "ac": ac, "am": am, "cfg": cfg})
+                
+                if oportunidades:
+                    # Ordena e remove duplicatas no detalhado
+                    oportunidades.sort(key=lambda x: (-x['ag'], -x['ac']))
+                    vistos = set()
+                    op_limpas = []
+                    for o in oportunidades:
+                        sig = f"{o['premio']}_{o['ac']}_{o['am']}"
+                        if sig not in vistos:
+                            vistos.add(sig)
+                            op_limpas.append(o)
+                            
+                    st.write(f"### 📊 Alvos Críticos encontrados para {banca}:")
+                    st.table(pd.DataFrame([{
+                        "Prêmio": o['premio'], 
+                        "Grupos": f"{str(o['cfg'][0]).zfill(2)} a {str(o['cfg'][1]).zfill(2)}", 
+                        "Centenas": f"{str(o['cfg'][2]).zfill(3)} a {str(o['cfg'][3]).zfill(3)}",
+                        "Milhares": f"{str(o['cfg'][4]).zfill(4)} a {str(o['cfg'][5]).zfill(4)}",
+                        "Atraso Grupo": f"{o['ag']}x", 
+                        "Atraso Centena": f"{o['ac']}x", 
+                        "Atraso Milhar": f"{o['am']}x"
+                    } for o in op_limpas[:15]]))
+                else:
+                    st.info(f"✅ Nenhuma anomalia crítica (Atraso de Grupo >= {LIMITE_GRUPO}) encontrada na banca {banca} neste momento.")
+            else:
+                st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
 elif menu == "📡 Extração Central":
-    st.title("📡 Extração de Resultados (Módulo Blindado)")
+    st.title("📡 Extração de Resultados")
     banca_ex = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
     dt = st.date_input("Data:", value=date.today())
-    if st.button("🚀 INICIAR COLETA"):
-        res = extrair_dia(banca_ex, dt)
-        if res:
-            sh = conectar_sheets()
-            if sh:
-                ws = sh.worksheet(MAPA_ABAS[banca_ex])
-                existentes = ws.get_all_values()
-                set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
-                p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
-                if p_ins: 
-                    ws.append_rows(p_ins, value_input_option="RAW")
-                    st.success(f"✅ {len(p_ins)} novos registros salvos.")
-                    carregar_dados_em_memoria.clear() 
-                else: st.info("Base de dados já atualizada.")
-        else: st.error("Nenhum dado encontrado para esta data.")
+    if st.button("🚀 INICIAR COLETA", type="primary"):
+        with st.spinner("Conectando aos servidores..."):
+            res = extrair_dia(banca_ex, dt)
+            if res:
+                sh = conectar_sheets()
+                if sh:
+                    ws = sh.worksheet(MAPA_ABAS[banca_ex])
+                    existentes = ws.get_all_values()
+                    set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
+                    p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
+                    if p_ins: 
+                        ws.append_rows(p_ins, value_input_option="RAW")
+                        st.success(f"✅ {len(p_ins)} novos registros salvos.")
+                        carregar_dados_em_memoria.clear() 
+                    else: st.info("Base de dados já atualizada para hoje.")
+            else: st.error("Nenhum dado encontrado para esta data.")
