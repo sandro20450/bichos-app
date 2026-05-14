@@ -427,6 +427,6 @@ elif menu == "📡 Extração Central":
 # =============================================================================
 st.markdown("""
 <div class="rodape-tatico">
-    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x
+    🎯 DIRETRIZ DE ENGAJAMENTO: M;C;D e PAR/IMPAR saiu 9x (ENTRAR) | GRUPOS saiu 6x (MELHOR CHANCE) |
 </div>
 """, unsafe_allow_html=True)
