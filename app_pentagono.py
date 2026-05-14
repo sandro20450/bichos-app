@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.0 - Matriz 133", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.1 - Matriz 133", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -25,6 +25,7 @@ st.markdown("""
 .home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } /* Dezenas Gerais: Oliva/Dourado */
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
+.home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
 .home-premio { font-size: 13px; color: #4CAF50; margin-bottom: 10px; font-weight: bold; }
 .sniper-titulo { font-size: 12px; font-weight: bold; color: #fff; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; background-color: rgba(0,0,0,0.5); border-radius: 4px; padding: 5px;}
 .sniper-dado { font-size: 12px; color: #ccc; margin: 6px 0; line-height: 1.2; }
@@ -47,7 +48,7 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-# Constantes de Anomalia Globais (Centena e Milhar sempre 5)
+# Constantes de Anomalia Globais
 LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
@@ -73,6 +74,16 @@ def carregar_dados_em_memoria(banca_nome):
         df = df[df["P1"].astype(str).str.strip() != ""]
         return df
     except: return pd.DataFrame()
+
+def exibir_banner_sorteio(df, banca):
+    if not df.empty:
+        ult_nome = str(df.iloc[-1]["Sorteio"])
+        st.markdown(f"""
+        <div class="banner-info">
+            <span style='color: #4CAF50; font-size: 11px; font-weight: bold;'>📡 ÚLTIMA ATUALIZAÇÃO LIDA DA PLANILHA:</span><br>
+            <span style='color: white; font-size: 18px; font-weight: bold;'>{banca} - {ult_nome}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 def get_grupo_int(m):
     try:
@@ -185,7 +196,7 @@ def deduplicar_alvos(lista):
     return resultado
 
 # =============================================================================
-# --- MOTOR DE EXTRAÇÃO (INTACTO) ---
+# --- MOTOR DE EXTRAÇÃO BLINDADO (CORREÇÃO DA NOMECLATURA 21h) ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -200,10 +211,22 @@ def extrair_dia(banca, data_alvo):
             txt_th = th_tag.get_text().upper() if th_tag else ""
             prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
             txt_prev = prev.get_text().upper() if prev else ""
-            texto_alvo = txt_th if re.search(r'\d{2}:\d{2}h?|\d{2}h', txt_th) else txt_prev
+            
+            # Combina os textos para não perder nenhuma informação
+            texto_alvo = txt_th + " " + txt_prev
+            
             if "FEDERAL" in texto_alvo.upper(): continue
-            match_hora = re.search(r'(\d{2}):(\d{2})h?|(\d{2})h', texto_alvo, re.IGNORECASE)
-            nome = f"{match_hora.group(3)}:00" if match_hora and match_hora.group(3) else (f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora else "Extra")
+            
+            # 🛡️ Nova Regex Blindada: Pega "18:30", "18h30", "21h", "21H", "21 h"
+            match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
+            if match_hora:
+                if match_hora.group(1): # Achou formato com dois pontos ou minutos
+                    nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
+                else: # Achou formato solto, ex: 21h
+                    nome = f"{match_hora.group(3)}:00"
+            else:
+                nome = "Extra"
+                
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
@@ -220,12 +243,12 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.0")
+    st.header("Pentágono V60.1")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - 133 Matrizes (Com HUD Dinâmico)")
-    st.info("Algoritmo interceptando Grupos, Dezenas, Pares, Ímpares e Extremos. O fundo do alerta indica visualmente a tática!")
+    st.title("🚨 Central AWACS - 133 Matrizes")
+    st.info("Algoritmo interceptando Grupos, Dezenas, Pares, Ímpares e Extremos. Horário de último sinal integrado nos cards.")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("O Computador está analisando 2.660 assinaturas de combate..."):
@@ -235,9 +258,13 @@ if menu == "🏠 Visão Geral (Home)":
             for banca_nome in BANCAS_CONFIG.keys():
                 df = carregar_dados_em_memoria(banca_nome)
                 if df.empty: continue
+                
+                # Extrai o último horário do sorteio dessa banca específica
+                ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
+                
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
-                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg) # ap = Atraso Principal (G ou D)
+                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
                         
                         # LOGICA DE ALERTA
@@ -251,15 +278,15 @@ if menu == "🏠 Visão Geral (Home)":
                                 prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
                             
                             oportunidades.append({
-                                "prio": prio, "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, 
-                                "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
+                                "prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
+                                "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
                         # LOGICA DE RECORDE
                         elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 4) or (am == mm and mm >= 4):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
-                                "prio": 5, "banca": banca_nome, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, 
-                                "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
+                                "prio": 5, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
+                                "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
             
             # Filtro Anti-Flood
@@ -278,6 +305,7 @@ if menu == "🏠 Visão Geral (Home)":
                         st.markdown(f"""
                         <div class="home-box {css_class}">
                             <div class="home-banca">🏦 {op['banca']}</div>
+                            <div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
                             <div class="sniper-titulo">
                                 {op['cfg']['nome']}<br>
@@ -304,6 +332,7 @@ if menu == "🏠 Visão Geral (Home)":
                         st.markdown(f"""
                         <div class="home-box {css_class}">
                             <div class="home-banca">🏦 {op['banca']}</div>
+                            <div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
                             <div class="sniper-titulo">
                                 {op['cfg']['nome']}<br>
@@ -328,6 +357,9 @@ elif menu == "🎯 Radar Detalhado":
         with st.spinner("Analisando as 133 matrizes táticas..."):
             df = carregar_dados_em_memoria(banca)
             if not df.empty:
+                # Retorna o Banner de Atualização que havia sumido!
+                exibir_banner_sorteio(df, banca)
+                
                 oportunidades = []
                 for cfg in gerar_133_esquadroes():
                     for i, col in enumerate(COLUNAS_DF):
@@ -379,4 +411,4 @@ elif menu == "📡 Extração Central":
                         st.success(f"✅ {len(p_ins)} novos registros salvos.")
                         carregar_dados_em_memoria.clear() 
                     else: st.info("Base de dados já atualizada para hoje.")
-            else: st.error("Nenhum dado encontrado para esta data.")
+            else: st.error("Nenhum dado encontrado para esta data ou a banca ainda não atualizou o site.")
