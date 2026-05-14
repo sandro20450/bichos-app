@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.1 - Matriz 133", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.2 - Filtro Extremo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -48,7 +48,7 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-# Constantes de Anomalia Globais
+# Constantes de Anomalia Globais (Centena e Milhar sempre 5)
 LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
@@ -92,7 +92,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 O MOTOR DO ESQUADRÃO FANTASMA (133 COMBINAÇÕES)
+# 👻 O MOTOR DO ESQUADRÃO FANTASMA (LIMITES EXTREMOS: 6x e 8x)
 # =============================================================================
 def gerar_133_esquadroes():
     esquadroes = []
@@ -102,22 +102,22 @@ def gerar_133_esquadroes():
         cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
         
     for cm in cms:
-        # 1. ESQUADRÕES DE GRUPOS SEQUENCIAIS (11)
+        # 1. ESQUADRÕES DE GRUPOS SEQUENCIAIS (60% -> Limite 6)
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 4, **cm})
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
             
-        # 2. ESQUADRÕES DE GRUPOS PARES E ÍMPARES (2)
-        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 5, **cm})
-        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 5, **cm})
+        # 2. ESQUADRÕES DE GRUPOS PARES E ÍMPARES (50% -> Limite 8)
+        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 8, **cm})
+        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 8, **cm})
         
-        # 3. ESQUADRÕES DE DEZENAS (6 variações de 50%)
-        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 5, **cm})
-        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 5, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 5, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 5, **cm})
-        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 5, **cm})
-        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 5, **cm})
+        # 3. ESQUADRÕES DE DEZENAS (50% -> Limite 8)
+        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 8, **cm})
+        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 8, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 8, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 8, **cm})
+        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 8, **cm})
+        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 8, **cm})
 
     return esquadroes
 
@@ -126,7 +126,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
     
-    atr_p, atr_c, atr_m = 0, 0, 0 # atr_p = Atraso Principal (Grupo ou Dezena)
+    atr_p, atr_c, atr_m = 0, 0, 0 
     achou_p, achou_c, achou_m = False, False, False
     
     for i in range(len(df_analise)-1, -1, -1):
@@ -140,7 +140,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
             d = int(milhar[-2:])
         except: c, m, d = -1, -1, -1
         
-        # Verifica Alvo Principal (Grupo ou Dezena)
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
@@ -196,7 +195,7 @@ def deduplicar_alvos(lista):
     return resultado
 
 # =============================================================================
-# --- MOTOR DE EXTRAÇÃO BLINDADO (CORREÇÃO DA NOMECLATURA 21h) ---
+# --- MOTOR DE EXTRAÇÃO BLINDADO ---
 # =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -211,19 +210,14 @@ def extrair_dia(banca, data_alvo):
             txt_th = th_tag.get_text().upper() if th_tag else ""
             prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
             txt_prev = prev.get_text().upper() if prev else ""
-            
-            # Combina os textos para não perder nenhuma informação
             texto_alvo = txt_th + " " + txt_prev
             
             if "FEDERAL" in texto_alvo.upper(): continue
             
-            # 🛡️ Nova Regex Blindada: Pega "18:30", "18h30", "21h", "21H", "21 h"
             match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
             if match_hora:
-                if match_hora.group(1): # Achou formato com dois pontos ou minutos
-                    nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
-                else: # Achou formato solto, ex: 21h
-                    nome = f"{match_hora.group(3)}:00"
+                if match_hora.group(1): nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
+                else: nome = f"{match_hora.group(3)}:00"
             else:
                 nome = "Extra"
                 
@@ -243,15 +237,15 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.1")
+    st.header("Pentágono V60.2")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - 133 Matrizes")
-    st.info("Algoritmo interceptando Grupos, Dezenas, Pares, Ímpares e Extremos. Horário de último sinal integrado nos cards.")
+    st.title("🚨 Central AWACS - Stealth Mode (Ataque Máximo)")
+    st.info("Filtros operando em limite extremo: Grupos(60%) disparam em 6x. Pares/Ímpares/Dezenas(50%) disparam apenas em 8x.")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("O Computador está analisando 2.660 assinaturas de combate..."):
+        with st.spinner("Analisando 2.660 assinaturas para alvos de ruptura..."):
             oportunidades, recordes = [], []
             todos_esq = gerar_133_esquadroes()
             
@@ -259,7 +253,6 @@ if menu == "🏠 Visão Geral (Home)":
                 df = carregar_dados_em_memoria(banca_nome)
                 if df.empty: continue
                 
-                # Extrai o último horário do sorteio dessa banca específica
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
                 
                 for cfg in todos_esq:
@@ -267,11 +260,12 @@ if menu == "🏠 Visão Geral (Home)":
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
                         
-                        # LOGICA DE ALERTA
+                        # LOGICA DE ALERTA EXTREMO (SÓ MÁXIMA TENSÃO)
                         if ap >= LIM_P_ATUAL:
-                            prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE PARCIAL</div>"
+                            # Qualquer alvo que chega aqui já é uma operação crítica por causa dos limites altos (6 ou 8).
+                            prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
                             if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
-                                prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ALERTA MÁXIMO</div>"
+                                prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
                             elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR:
                                 prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
                             elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA:
@@ -281,20 +275,19 @@ if menu == "🏠 Visão Geral (Home)":
                                 "prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
                                 "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
-                        # LOGICA DE RECORDE
-                        elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 4) or (am == mm and mm >= 4):
+                        # LOGICA DE RECORDE (Ocultada se não houver alerta crítico para manter o painel limpo, apenas recordes raros)
+                        elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 5) or (am == mm and mm >= 5):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
                                 "prio": 5, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
                                 "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
             
-            # Filtro Anti-Flood
             oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -x['ap'], -x['ac'], -x['am'])))
             recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-x['ap'], -x['ac'], -x['am'])))
             
             if oportunidades:
-                st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades Críticas Encontradas!")
+                st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades de Ruptura Encontradas!")
                 cols = st.columns(3)
                 for idx, op in enumerate(oportunidades[:18]):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
@@ -321,7 +314,7 @@ if menu == "🏠 Visão Geral (Home)":
                         </div>
                         """, unsafe_allow_html=True)
             elif recordes:
-                st.warning("⚠️ SEM ALERTAS CRÍTICOS. Exibindo RECORDES DE ATRASO alcançados nas últimas 50 extrações:")
+                st.warning("⚠️ O elástico ainda não estourou os limites extremos (6x/8x). Exibindo apenas RECORDES HISTÓRICOS batidos agora:")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes[:18]):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
@@ -348,16 +341,15 @@ if menu == "🏠 Visão Geral (Home)":
                         </div>
                         """, unsafe_allow_html=True)
             else:
-                st.success("🟢 Campo 100% Limpo! Nenhuma anomalia no momento.")
+                st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda. Aguardando a movimentação da banca.")
 
 elif menu == "🎯 Radar Detalhado":
     st.title("🎯 Varredura de Precisão por Banca")
     banca = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
     if st.button("INICIAR BUSCA DETALHADA", type="primary"):
-        with st.spinner("Analisando as 133 matrizes táticas..."):
+        with st.spinner("Buscando por alvos em ruptura máxima..."):
             df = carregar_dados_em_memoria(banca)
             if not df.empty:
-                # Retorna o Banner de Atualização que havia sumido!
                 exibir_banner_sorteio(df, banca)
                 
                 oportunidades = []
@@ -377,7 +369,7 @@ elif menu == "🎯 Radar Detalhado":
                             vistos.add(sig)
                             op_limpas.append(o)
                             
-                    st.write(f"### 📊 Alvos Críticos encontrados para {banca}:")
+                    st.write(f"### 📊 Alvos Críticos (Extremos) encontrados para {banca}:")
                     st.table(pd.DataFrame([{
                         "Prêmio": o['premio'], 
                         "Alvo Principal": o['cfg']['nome'], 
@@ -388,7 +380,7 @@ elif menu == "🎯 Radar Detalhado":
                         "Atraso Milhar": f"{o['am']}x"
                     } for o in op_limpas[:20]]))
                 else:
-                    st.info(f"✅ Nenhuma anomalia crítica encontrada na banca {banca} neste momento.")
+                    st.info(f"✅ Nenhuma ruptura extrema detectada na banca {banca} neste momento. (Gatilhos em 6x e 8x)")
             else:
                 st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
