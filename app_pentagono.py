@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.2 - Filtro Extremo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.3 - Filtro Extremo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -37,6 +37,24 @@ st.markdown("""
 .alerta-verde { background-color: #003300; border: 1px solid #00ff00; color: #00ff00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 .alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 .alerta-amarelo { background-color: rgba(0,0,0,0.5); border: 1px solid #ffcc00; color: #ffcc00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
+
+/* Rodapé Fixo de Engajamento */
+.rodape-tatico {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(17, 17, 17, 0.95);
+    color: #ffcc00;
+    text-align: center;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    border-top: 2px solid #ff4b4b;
+    z-index: 9999;
+}
+/* Espaçamento extra no fundo para o rodapé não cobrir conteúdo */
+.block-container { padding-bottom: 80px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,7 +255,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.2")
+    st.header("Pentágono V60.3")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -262,7 +280,6 @@ if menu == "🏠 Visão Geral (Home)":
                         
                         # LOGICA DE ALERTA EXTREMO (SÓ MÁXIMA TENSÃO)
                         if ap >= LIM_P_ATUAL:
-                            # Qualquer alvo que chega aqui já é uma operação crítica por causa dos limites altos (6 ou 8).
                             prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
                             if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
                                 prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
@@ -275,7 +292,7 @@ if menu == "🏠 Visão Geral (Home)":
                                 "prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
                                 "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
-                        # LOGICA DE RECORDE (Ocultada se não houver alerta crítico para manter o painel limpo, apenas recordes raros)
+                        # LOGICA DE RECORDE
                         elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 5) or (am == mm and mm >= 5):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
@@ -404,3 +421,12 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear() 
                     else: st.info("Base de dados já atualizada para hoje.")
             else: st.error("Nenhum dado encontrado para esta data ou a banca ainda não atualizou o site.")
+
+# =============================================================================
+# --- RODAPÉ FIXO DE ENGAJAMENTO ---
+# =============================================================================
+st.markdown("""
+<div class="rodape-tatico">
+    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE)
+</div>
+""", unsafe_allow_html=True)
