@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.3 - Filtro Extremo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.4 - Filtro Extremo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -255,7 +255,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.3")
+    st.header("Pentágono V60.4")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -427,6 +427,6 @@ elif menu == "📡 Extração Central":
 # =============================================================================
 st.markdown("""
 <div class="rodape-tatico">
-    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE)
+    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x
 </div>
 """, unsafe_allow_html=True)
