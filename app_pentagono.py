@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V63.0 - Armadilha do Pêndulo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V63.1 - Pêndulo 5T", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -23,7 +23,7 @@ st.markdown("""
 .home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } 
 .home-box-uni { background-color: #2d001d; border-color: #ff00aa; } 
 .home-box-lab { background-color: #001f3f; border-color: #00ffff; } 
-.home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } /* Novo: Pêndulo */
+.home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } 
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
 .home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
@@ -109,7 +109,6 @@ def get_grupo_int(m):
 # =============================================================================
 # 👻 MOTORES DE ANÁLISE (AWACS, LAB E PÊNDULO)
 # =============================================================================
-# ... (Funções gerar_matrizes_taticas, calcular_metricas_fantasma, deduplicar_alvos) ...
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
@@ -126,11 +125,13 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 8, **cm})
+    
+    # AJUSTE FINO: LIMITE DE UNIDADE REDUZIDO PARA 6
     esquadroes_unidade = [
-        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
     esquadroes.extend(esquadroes_unidade)
     return esquadroes
@@ -240,47 +241,52 @@ def processar_laboratorio_ternos(df):
             if len(top5_dezenas) == 5: break
     return top5_grupos, top5_dezenas
 
-# 🧲 NOVO: MOTOR DO PÊNDULO (DISTÂNCIA CIRCULAR)
+# 🧲 MOTOR DO PÊNDULO AMPLIADO (5 SORTEIOS -> 4 SETAS)
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
     diff = curr - prev
-    if diff > 0:
-        return "C" if diff <= 12 else "D" # Crescent se for o caminho mais curto
-    else:
-        return "D" if abs(diff) <= 12 else "C"
+    if diff > 0: return "C" if diff <= 12 else "D"
+    else: return "D" if abs(diff) <= 12 else "C"
 
 def processar_pendulo(df, coluna):
-    # Pega os últimos 4 resultados válidos do prêmio
     draws = []
     for i in range(len(df)-1, -1, -1):
         m = str(df.iloc[i][coluna]).zfill(4)
         if m != "----" and m != "nan" and m.strip():
             g = get_grupo_int(m)
             if g is not None:
-                draws.insert(0, g) # Fica na ordem cronológica (antigo -> novo)
-                if len(draws) == 4: break
-    if len(draws) < 4: return None
+                draws.insert(0, g) 
+                if len(draws) == 5: break # Analisa os 5 últimos
+    if len(draws) < 5: return None
     
+    # 4 Movimentos
     t1 = direcao_pendulo(draws[0], draws[1])
     t2 = direcao_pendulo(draws[1], draws[2])
     t3 = direcao_pendulo(draws[2], draws[3])
-    dirs = [t1, t2, t3]
-    last_g = draws[3]
+    t4 = direcao_pendulo(draws[3], draws[4])
+    dirs = [t1, t2, t3, t4]
+    last_g = draws[4]
     
-    if dirs == ["C", "C", "C"]:
+    # Gatilho de Saturação (se as últimas 3 setas ou todas as 4 forem iguais)
+    if dirs[-3:] == ["C", "C", "C"]:
         jogos = []; curr = last_g
         for _ in range(15):
             jogos.append(str(curr).zfill(2))
             curr -= 1
             if curr < 1: curr = 25
-        return "Saturação CRESCENTE", jogos, draws, dirs
-    elif dirs == ["D", "D", "D"]:
+        # Verifica se são 4 seguidas para intensificar o alerta
+        intensidade = "🔥 SATURAÇÃO EXTREMA (4 SETAS)" if dirs == ["C", "C", "C", "C"] else "🚨 SATURAÇÃO ALTA (3 SETAS)"
+        return intensidade, jogos, draws, dirs
+        
+    elif dirs[-3:] == ["D", "D", "D"]:
         jogos = []; curr = last_g
         for _ in range(15):
             jogos.append(str(curr).zfill(2))
             curr += 1
             if curr > 25: curr = 1
-        return "Saturação DECRESCENTE", jogos, draws, dirs
+        intensidade = "🔥 SATURAÇÃO EXTREMA (4 SETAS)" if dirs == ["D", "D", "D", "D"] else "🚨 SATURAÇÃO ALTA (3 SETAS)"
+        return intensidade, jogos, draws, dirs
+        
     return "Estável", [], draws, dirs
 
 # =============================================================================
@@ -322,7 +328,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V63.0")
+    st.header("Pentágono V63.1")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -415,11 +421,9 @@ elif menu == "🎯 Radar Detalhado":
                 else: st.info(f"✅ Nenhuma ruptura detectada.")
             else: st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
-# 🧲 NOVA ABA: ARMADILHA DO PÊNDULO
 elif menu == "🧲 Armadilha do Pêndulo":
     st.title("🧲 Armadilha de Saturação (Pêndulo)")
-    st.info("Analisa a física circular dos últimos 4 sorteios. Se houver 3 movimentos contínuos na mesma direção, dispara o alvo de reversão.")
-    
+    st.info("Analisa a física circular dos últimos 5 sorteios. Se houver 3 ou 4 movimentos contínuos na mesma direção, dispara o alvo de reversão.")
     banca_pendulo = st.selectbox("Selecione o Alvo de Rastreador Circular:", list(BANCAS_CONFIG.keys()))
     
     if st.button("🧲 ANALISAR MOMENTUM CIRCULAR", type="primary", use_container_width=True):
@@ -430,31 +434,28 @@ elif menu == "🧲 Armadilha do Pêndulo":
             else:
                 exibir_banner_sorteio(df, banca_pendulo)
                 st.markdown("### 📊 Resultado do Rastreador")
-                
                 cols = st.columns(5)
                 for i, col in enumerate(COLUNAS_DF):
                     resultado = processar_pendulo(df, col)
                     with cols[i]:
                         if resultado:
                             status, jogos, draws, dirs = resultado
-                            
-                            # Formatação Visual da Sequência (Ex: 23 ➡️ 24 ➡️ 07 ➡️ 14)
                             setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" for d in dirs]
                             seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
-                                         f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[3]).zfill(2)}</span>"
+                                         f"<span style='font-size:16px; font-weight:bold;'>{str(draws[3]).zfill(2)}</span> {setas[3]} " \
+                                         f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[4]).zfill(2)}</span>"
                             
                             if status != "Estável":
                                 cor_box = "border-color: #ff00aa;" if "CRESCENTE" in status else "border-color: #00ffff;"
-                                titulo_alerta = "🚨 SATURAÇÃO MÁXIMA"
                                 lista_jogos = ", ".join(jogos)
                                 
                                 st.markdown(f"""
                                 <div class="home-box home-box-pendulo" style="{cor_box}">
                                     <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
                                     <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
-                                    <div class="alerta-supremo" style="{cor_box}">{titulo_alerta}<br>{status}</div>
+                                    <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if 'CRESCENTE' in status else 'Direção: Decrescente'}</div>
                                     <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if 'CRESCENTE' in status else 'Seguintes'}:</div>
                                     <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
                                 </div>
@@ -547,4 +548,4 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena/Unidade: acima de 9x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x | Unidade: acima de 6x</div>""", unsafe_allow_html=True)
