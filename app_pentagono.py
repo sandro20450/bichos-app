@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.6 - Ajuste Fino", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V61.0 - Franco-Atirador", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,7 +22,8 @@ st.markdown("""
 .home-box-seq { background-color: #111111; border-color: #444444; } /* Sequencial: Cinza/Preto */
 .home-box-impar { background-color: #2a0a18; border-color: #ff0055; } /* Ímpar: Púrpura/Vermelho */
 .home-box-par { background-color: #0a1b2a; border-color: #00aaff; } /* Par: Azul/Ciano */
-.home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } /* Dezenas Gerais: Oliva/Dourado */
+.home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } /* Dezenas: Oliva/Dourado */
+.home-box-uni { background-color: #2d001d; border-color: #ff00aa; } /* Unidades: Magenta Escuro */
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
 .home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
@@ -110,10 +111,12 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 O MOTOR DO ESQUADRÃO FANTASMA
+# 👻 O MOTOR DO ESQUADRÃO FANTASMA (MATRIZES COMPLETAS)
 # =============================================================================
-def gerar_133_esquadroes():
+def gerar_matrizes_taticas():
     esquadroes = []
+    
+    # --- MATRIZES NORMAIS (GRUPOS E DEZENAS) CROSS-CM ---
     cms = []
     for c in range(7):
         cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
@@ -132,6 +135,15 @@ def gerar_133_esquadroes():
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 8, **cm})
+
+    # --- ESQUADRÕES EXCLUSIVOS DE UNIDADE (APENAS TRADICIONAL P1) ---
+    esquadroes_unidade = [
+        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+    ]
+    esquadroes.extend(esquadroes_unidade)
 
     return esquadroes
 
@@ -152,11 +164,13 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
             c = int(milhar[-3:])
             m = int(milhar)
             d = int(milhar[-2:])
-        except: c, m, d = -1, -1, -1
+            u = int(milhar[-1:]) # Unidade
+        except: c, m, d, u = -1, -1, -1, -1
         
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
+        elif modo == 'unidade' and u in alvos: hit_p = True
         
         if not achou_p:
             if hit_p: achou_p = True
@@ -183,11 +197,13 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
             c = int(milhar[-3:])
             m = int(milhar)
             d = int(milhar[-2:])
-        except: c, m, d = -1, -1, -1
+            u = int(milhar[-1:])
+        except: c, m, d, u = -1, -1, -1, -1
         
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
+        elif modo == 'unidade' and u in alvos: hit_p = True
         
         cur_p = 0 if hit_p else cur_p + 1
         max_p = max(max_p, cur_p)
@@ -251,7 +267,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.6")
+    st.header("Pentágono V61.0")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -259,9 +275,9 @@ if menu == "🏠 Visão Geral (Home)":
     st.info("Filtros operando em limite extremo. (Banca Tradicional exibe exclusivamente o 1º Prêmio nesta tela).")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas para alvos de ruptura..."):
+        with st.spinner("Analisando assinaturas de combate (Incluindo Alvos de Unidade)..."):
             oportunidades, recordes = [], []
-            todos_esq = gerar_133_esquadroes()
+            todos_esq = gerar_matrizes_taticas()
             
             for banca_nome in BANCAS_CONFIG.keys():
                 df = carregar_dados_em_memoria(banca_nome)
@@ -275,24 +291,31 @@ if menu == "🏠 Visão Geral (Home)":
                         # 🛡️ FILTRO CIRÚRGICO DA BANCA TRADICIONAL NA HOME
                         if banca_nome == "Tradicional" and col != "P1":
                             continue # Ignora do 2º ao 5º prêmio na Tradicional
+                            
+                        # 🎯 FILTRO EXCLUSIVO DE UNIDADES (APENAS TRADICIONAL P1)
+                        if cfg['modo'] == 'unidade' and (banca_nome != "Tradicional" or col != "P1"):
+                            continue
                         
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
                         
                         if ap >= LIM_P_ATUAL:
-                            prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
-                            if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
-                                prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
-                            elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR:
-                                prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
-                            elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA:
-                                prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
+                            if cfg['modo'] == 'unidade':
+                                prio = 1; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE (1x 8,50)</div>"
+                            else:
+                                prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
+                                if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
+                                    prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
+                                elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR:
+                                    prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
+                                elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA:
+                                    prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
                             
                             oportunidades.append({
                                 "prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
                                 "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
-                        elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 5) or (am == mm and mm >= 5):
+                        elif (ap == mp and mp >= LIM_P_ATUAL-1) or (cfg['modo'] != 'unidade' and ((ac == mc and mc >= 5) or (am == mm and mm >= 5))):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
                                 "prio": 5, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
@@ -307,8 +330,17 @@ if menu == "🏠 Visão Geral (Home)":
                 cols = st.columns(3)
                 for idx, op in enumerate(oportunidades[:18]):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
-                    lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                     css_class = f"home-box-{op['cfg']['tipo']}"
+                    
+                    if op['cfg']['modo'] == 'unidade':
+                        lbl_alvo = "Unidade"
+                        sub_titulo = "ALVO EXCLUSIVO: UNIDADE"
+                        cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
+                    else:
+                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
+                        sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
+                        Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     
                     with cols[idx % 3]:
                         st.markdown(f"""
@@ -316,26 +348,30 @@ if menu == "🏠 Visão Geral (Home)":
                             <div class="home-banca">🏦 {op['banca']}</div>
                             <div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
-                            <div class="sniper-titulo">
-                                {op['cfg']['nome']}<br>
-                                C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>
-                                M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}
-                            </div>
+                            <div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div>
                             <div class="sniper-dado" style="text-align:left;">
                                 {lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ap']}x</span> (Rec: {op['mp']})</span><br>
-                                Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
-                                Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>
+                                {cm_html}
                             </div>
                             {op['alerta']}
                         </div>
                         """, unsafe_allow_html=True)
             elif recordes:
-                st.warning("⚠️ O elástico ainda não estourou os limites extremos (6x/8x). Exibindo apenas RECORDES HISTÓRICOS batidos agora:")
+                st.warning("⚠️ Exibindo apenas RECORDES HISTÓRICOS batidos agora:")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes[:18]):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
-                    lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                     css_class = f"home-box-{op['cfg']['tipo']}"
+                    
+                    if op['cfg']['modo'] == 'unidade':
+                        lbl_alvo = "Unidade"
+                        sub_titulo = "ALVO EXCLUSIVO: UNIDADE"
+                        cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
+                    else:
+                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
+                        sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
+                        Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     
                     with cols[idx % 3]:
                         st.markdown(f"""
@@ -343,15 +379,10 @@ if menu == "🏠 Visão Geral (Home)":
                             <div class="home-banca">🏦 {op['banca']}</div>
                             <div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div>
                             <div class="home-premio">🏆 {op['premio']}</div>
-                            <div class="sniper-titulo">
-                                {op['cfg']['nome']}<br>
-                                C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>
-                                M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}
-                            </div>
+                            <div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div>
                             <div class="sniper-dado" style="text-align:left;">
                                 {lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>
-                                Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>
-                                Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>
+                                {cm_html}
                             </div>
                             {op['alerta']}
                         </div>
@@ -369,8 +400,13 @@ elif menu == "🎯 Radar Detalhado":
                 exibir_banner_sorteio(df, banca)
                 
                 oportunidades = []
-                for cfg in gerar_133_esquadroes():
+                for cfg in gerar_matrizes_taticas():
                     for i, col in enumerate(COLUNAS_DF):
+                        
+                        # FILTRO EXCLUSIVO DE UNIDADES (APENAS TRADICIONAL P1)
+                        if cfg['modo'] == 'unidade' and (banca != "Tradicional" or col != "P1"):
+                            continue
+                            
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         if ap >= cfg['lim']:
                             oportunidades.append({"premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "cfg": cfg})
@@ -389,11 +425,11 @@ elif menu == "🎯 Radar Detalhado":
                     st.table(pd.DataFrame([{
                         "Prêmio": o['premio'], 
                         "Alvo Principal": o['cfg']['nome'], 
-                        "Centenas": f"{str(o['cfg']['c_min']).zfill(3)} a {str(o['cfg']['c_max']).zfill(3)}",
-                        "Milhares": f"{str(o['cfg']['m_min']).zfill(4)} a {str(o['cfg']['m_max']).zfill(4)}",
+                        "Centenas": "---" if o['cfg']['modo'] == 'unidade' else f"{str(o['cfg']['c_min']).zfill(3)} a {str(o['cfg']['c_max']).zfill(3)}",
+                        "Milhares": "---" if o['cfg']['modo'] == 'unidade' else f"{str(o['cfg']['m_min']).zfill(4)} a {str(o['cfg']['m_max']).zfill(4)}",
                         "Atraso (Alvo)": f"{o['ap']}x", 
-                        "Atraso Centena": f"{o['ac']}x", 
-                        "Atraso Milhar": f"{o['am']}x"
+                        "Atraso Centena": "---" if o['cfg']['modo'] == 'unidade' else f"{o['ac']}x", 
+                        "Atraso Milhar": "---" if o['cfg']['modo'] == 'unidade' else f"{o['am']}x"
                     } for o in op_limpas[:20]]))
                 else:
                     st.info(f"✅ Nenhuma ruptura extrema detectada na banca {banca} neste momento. (Gatilhos em 6x e 8x)")
@@ -462,6 +498,6 @@ elif menu == "📡 Extração Central":
 # =============================================================================
 st.markdown("""
 <div class="rodape-tatico">
-    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x
+    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena/Unidade: acima de 9x
 </div>
 """, unsafe_allow_html=True)
