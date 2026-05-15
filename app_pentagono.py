@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V63.1 - Pêndulo 5T", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V64.0 - Central Unificada", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -126,7 +126,6 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 8, **cm})
     
-    # AJUSTE FINO: LIMITE DE UNIDADE REDUZIDO PARA 6
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -241,7 +240,7 @@ def processar_laboratorio_ternos(df):
             if len(top5_dezenas) == 5: break
     return top5_grupos, top5_dezenas
 
-# 🧲 MOTOR DO PÊNDULO AMPLIADO (5 SORTEIOS -> 4 SETAS)
+# 🧲 MOTOR DO PÊNDULO
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
     diff = curr - prev
@@ -256,10 +255,9 @@ def processar_pendulo(df, coluna):
             g = get_grupo_int(m)
             if g is not None:
                 draws.insert(0, g) 
-                if len(draws) == 5: break # Analisa os 5 últimos
+                if len(draws) == 5: break 
     if len(draws) < 5: return None
     
-    # 4 Movimentos
     t1 = direcao_pendulo(draws[0], draws[1])
     t2 = direcao_pendulo(draws[1], draws[2])
     t3 = direcao_pendulo(draws[2], draws[3])
@@ -267,14 +265,12 @@ def processar_pendulo(df, coluna):
     dirs = [t1, t2, t3, t4]
     last_g = draws[4]
     
-    # Gatilho de Saturação (se as últimas 3 setas ou todas as 4 forem iguais)
     if dirs[-3:] == ["C", "C", "C"]:
         jogos = []; curr = last_g
         for _ in range(15):
             jogos.append(str(curr).zfill(2))
             curr -= 1
             if curr < 1: curr = 25
-        # Verifica se são 4 seguidas para intensificar o alerta
         intensidade = "🔥 SATURAÇÃO EXTREMA (4 SETAS)" if dirs == ["C", "C", "C", "C"] else "🚨 SATURAÇÃO ALTA (3 SETAS)"
         return intensidade, jogos, draws, dirs
         
@@ -328,20 +324,32 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V63.1")
+    st.header("Pentágono V64.0")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Stealth Mode")
     st.info("Filtros operando em limite extremo. (Banca Tradicional exibe exclusivamente o 1º Prêmio).")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas de combate (Incluindo Alvos de Unidade)..."):
-            oportunidades, recordes = [], []
+        with st.spinner("Analisando assinaturas de combate (Incluindo Pêndulo Circular)..."):
+            oportunidades, recordes, alertas_pendulo = [], [], []
             todos_esq = gerar_matrizes_taticas()
+            
             for banca_nome in BANCAS_CONFIG.keys():
                 df = carregar_dados_em_memoria(banca_nome)
                 if df.empty: continue
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
+                
+                # 1. Varredura do Pêndulo na Home
+                for i, col in enumerate(COLUNAS_DF):
+                    if banca_nome == "Tradicional" and col != "P1": continue
+                    resultado_pend = processar_pendulo(df, col)
+                    if resultado_pend:
+                        status, jogos, draws, dirs = resultado_pend
+                        if status != "Estável":
+                            alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs})
+                
+                # 2. Varredura AWACS Normal
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
@@ -364,6 +372,36 @@ if menu == "🏠 Visão Geral (Home)":
             oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -x['ap'], -x['ac'], -x['am'])))
             recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-x['ap'], -x['ac'], -x['am'])))
             
+            # EXIBIÇÃO: PENDULO PRIMEIRO
+            if alertas_pendulo:
+                st.success(f"🧲 ALERTA GRAVITACIONAL: {len(alertas_pendulo)} Pêndulos Saturados Detectados!")
+                cols_pend = st.columns(3)
+                for idx, pend in enumerate(alertas_pendulo):
+                    with cols_pend[idx % 3]:
+                        status, jogos, draws, dirs = pend['status'], pend['jogos'], pend['draws'], pend['dirs']
+                        setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" for d in dirs]
+                        seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
+                                     f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
+                                     f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
+                                     f"<span style='font-size:16px; font-weight:bold;'>{str(draws[3]).zfill(2)}</span> {setas[3]} " \
+                                     f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[4]).zfill(2)}</span>"
+                        cor_box = "border-color: #ff00aa;" if "CRESCENTE" in status else "border-color: #00ffff;"
+                        lista_jogos = ", ".join(jogos)
+                        
+                        st.markdown(f"""
+                        <div class="home-box home-box-pendulo" style="{cor_box}">
+                            <div class="home-banca">🏦 {pend['banca']}</div>
+                            <div class="home-horario">🕒 ÚLTIMO: {pend['ultimo_sorteio']}</div>
+                            <div class="home-premio">🏆 {pend['premio']}</div>
+                            <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
+                            <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if 'CRESCENTE' in status else 'Direção: Decrescente'}</div>
+                            <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if 'CRESCENTE' in status else 'Seguintes'}:</div>
+                            <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                st.markdown("---") # Divisor
+            
+            # EXIBIÇÃO: OPORTUNIDADES AWACS
             if oportunidades:
                 st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades de Ruptura Encontradas!")
                 cols = st.columns(3)
@@ -379,7 +417,7 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
-            elif recordes:
+            elif recordes and not alertas_pendulo:
                 st.warning("⚠️ Exibindo apenas RECORDES HISTÓRICOS batidos agora:")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes[:18]):
@@ -394,7 +432,7 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
-            else: st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
+            elif not oportunidades and not alertas_pendulo: st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
 elif menu == "🎯 Radar Detalhado":
     st.title("🎯 Varredura de Precisão por Banca")
