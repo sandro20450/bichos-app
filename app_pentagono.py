@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.5 - Extração Global", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.6 - Ajuste Fino", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -66,7 +66,7 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-# Constantes de Anomalia Globais
+# Constantes de Anomalia Globais (Centena e Milhar sempre 5)
 LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
@@ -251,15 +251,15 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.5")
+    st.header("Pentágono V60.6")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Stealth Mode (Ataque Máximo)")
-    st.info("Filtros operando em limite extremo: Grupos(60%) disparam em 6x. Pares/Ímpares/Dezenas(50%) disparam apenas em 8x.")
+    st.info("Filtros operando em limite extremo. (Banca Tradicional exibe exclusivamente o 1º Prêmio nesta tela).")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando 2.660 assinaturas para alvos de ruptura..."):
+        with st.spinner("Analisando assinaturas para alvos de ruptura..."):
             oportunidades, recordes = [], []
             todos_esq = gerar_133_esquadroes()
             
@@ -271,6 +271,11 @@ if menu == "🏠 Visão Geral (Home)":
                 
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
+                        
+                        # 🛡️ FILTRO CIRÚRGICO DA BANCA TRADICIONAL NA HOME
+                        if banca_nome == "Tradicional" and col != "P1":
+                            continue # Ignora do 2º ao 5º prêmio na Tradicional
+                        
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
                         
