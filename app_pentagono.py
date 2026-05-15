@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V60.4 - Filtro Extremo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V60.5 - Extração Global", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -66,7 +66,7 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-# Constantes de Anomalia Globais (Centena e Milhar sempre 5)
+# Constantes de Anomalia Globais
 LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
@@ -110,26 +110,22 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 O MOTOR DO ESQUADRÃO FANTASMA (LIMITES EXTREMOS: 6x e 8x)
+# 👻 O MOTOR DO ESQUADRÃO FANTASMA
 # =============================================================================
 def gerar_133_esquadroes():
     esquadroes = []
-    
     cms = []
     for c in range(7):
         cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
         
     for cm in cms:
-        # 1. ESQUADRÕES DE GRUPOS SEQUENCIAIS (60% -> Limite 6)
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
             
-        # 2. ESQUADRÕES DE GRUPOS PARES E ÍMPARES (50% -> Limite 8)
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 8, **cm})
         
-        # 3. ESQUADRÕES DE DEZENAS (50% -> Limite 8)
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 8, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 8, **cm})
@@ -255,7 +251,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V60.4")
+    st.header("Pentágono V60.5")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -278,7 +274,6 @@ if menu == "🏠 Visão Geral (Home)":
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
                         
-                        # LOGICA DE ALERTA EXTREMO (SÓ MÁXIMA TENSÃO)
                         if ap >= LIM_P_ATUAL:
                             prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
                             if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
@@ -292,7 +287,6 @@ if menu == "🏠 Visão Geral (Home)":
                                 "prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], 
                                 "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg
                             })
-                        # LOGICA DE RECORDE
                         elif (ap == mp and mp >= LIM_P_ATUAL-1) or (ac == mc and mc >= 5) or (am == mm and mm >= 5):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({
@@ -403,30 +397,66 @@ elif menu == "🎯 Radar Detalhado":
 
 elif menu == "📡 Extração Central":
     st.title("📡 Extração de Resultados")
-    banca_ex = st.selectbox("Banca:", list(BANCAS_CONFIG.keys()))
-    dt = st.date_input("Data:", value=date.today())
-    if st.button("🚀 INICIAR COLETA", type="primary"):
-        with st.spinner("Conectando aos servidores..."):
-            res = extrair_dia(banca_ex, dt)
-            if res:
+    dt = st.date_input("Data do Sorteio:", value=date.today())
+    
+    st.markdown("### 🎯 Coleta Tática")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        banca_ex = st.selectbox("Selecione o Alvo Individual:", list(BANCAS_CONFIG.keys()))
+        if st.button("🚀 COLETA INDIVIDUAL", type="primary", use_container_width=True):
+            with st.spinner(f"Conectando aos servidores da {banca_ex}..."):
+                res = extrair_dia(banca_ex, dt)
+                if res:
+                    sh = conectar_sheets()
+                    if sh:
+                        ws = sh.worksheet(MAPA_ABAS[banca_ex])
+                        existentes = ws.get_all_values()
+                        set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
+                        p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
+                        if p_ins: 
+                            ws.append_rows(p_ins, value_input_option="RAW")
+                            st.success(f"✅ {len(p_ins)} novos registros salvos na banca {banca_ex}.")
+                            carregar_dados_em_memoria.clear() 
+                        else: st.info(f"Base de dados já atualizada para hoje ({banca_ex}).")
+                else: st.error(f"Nenhum dado encontrado para esta data ou a {banca_ex} ainda não atualizou o site.")
+
+    with col2:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("🌍 EXTRAÇÃO GLOBAL (TODAS AS BANCAS)", type="primary", use_container_width=True):
+            with st.spinner("Iniciando varredura global em todos os servidores..."):
                 sh = conectar_sheets()
-                if sh:
-                    ws = sh.worksheet(MAPA_ABAS[banca_ex])
-                    existentes = ws.get_all_values()
-                    set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
-                    p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
-                    if p_ins: 
-                        ws.append_rows(p_ins, value_input_option="RAW")
-                        st.success(f"✅ {len(p_ins)} novos registros salvos.")
-                        carregar_dados_em_memoria.clear() 
-                    else: st.info("Base de dados já atualizada para hoje.")
-            else: st.error("Nenhum dado encontrado para esta data ou a banca ainda não atualizou o site.")
+                if not sh:
+                    st.error("Erro Crítico: Não foi possível conectar ao banco de dados.")
+                else:
+                    total_salvos = 0
+                    for banca_alvo in BANCAS_CONFIG.keys():
+                        res = extrair_dia(banca_alvo, dt)
+                        if res:
+                            ws = sh.worksheet(MAPA_ABAS[banca_alvo])
+                            existentes = ws.get_all_values()
+                            set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
+                            p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
+                            if p_ins:
+                                ws.append_rows(p_ins, value_input_option="RAW")
+                                total_salvos += len(p_ins)
+                                st.success(f"✅ {banca_alvo}: {len(p_ins)} novos registros salvos.")
+                            else:
+                                st.info(f"ℹ️ {banca_alvo}: Base já estava atualizada.")
+                        else:
+                            st.warning(f"⚠️ {banca_alvo}: Nenhum dado extraído (site não atualizou ou sem sorteios).")
+                    
+                    if total_salvos > 0:
+                        carregar_dados_em_memoria.clear()
+                        st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros salvos no total.")
+                    else:
+                        st.warning("Nenhum dado novo foi salvo nesta operação global.")
 
 # =============================================================================
 # --- RODAPÉ FIXO DE ENGAJAMENTO ---
 # =============================================================================
 st.markdown("""
 <div class="rodape-tatico">
-    🎯 DIRETRIZ DE ENGAJAMENTO: M;C;D e PAR/IMPAR saiu 9x (ENTRAR) | GRUPOS saiu 6x (MELHOR CHANCE) |
+    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x
 </div>
 """, unsafe_allow_html=True)
