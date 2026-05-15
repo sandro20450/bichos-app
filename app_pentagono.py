@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V62.0 - Laboratório de Ternos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V63.0 - Armadilha do Pêndulo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,7 +22,8 @@ st.markdown("""
 .home-box-par { background-color: #0a1b2a; border-color: #00aaff; } 
 .home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } 
 .home-box-uni { background-color: #2d001d; border-color: #ff00aa; } 
-.home-box-lab { background-color: #001f3f; border-color: #00ffff; } /* Novo: Laboratório */
+.home-box-lab { background-color: #001f3f; border-color: #00ffff; } 
+.home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } /* Novo: Pêndulo */
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
 .home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
@@ -106,29 +107,25 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTOR DO ESQUADRÃO FANTASMA E LAB DE TERNOS
+# 👻 MOTORES DE ANÁLISE (AWACS, LAB E PÊNDULO)
 # =============================================================================
+# ... (Funções gerar_matrizes_taticas, calcular_metricas_fantasma, deduplicar_alvos) ...
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
-    for c in range(7):
-        cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
-        
+    for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
     for cm in cms:
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
-            
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 8, **cm})
-        
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 8, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 8, **cm})
-
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 8, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -142,88 +139,59 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
     alvos, modo = cfg['alvos'], cfg['modo']
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
-    
     atr_p, atr_c, atr_m = 0, 0, 0 
     achou_p, achou_c, achou_m = False, False, False
-    
     for i in range(len(df_analise)-1, -1, -1):
         milhar = str(df_analise.iloc[i][coluna]).zfill(4)
         if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
-        
         g = get_grupo_int(milhar)
-        try: 
-            c = int(milhar[-3:])
-            m = int(milhar)
-            d = int(milhar[-2:])
-            u = int(milhar[-1:]) 
+        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:]) 
         except: c, m, d, u = -1, -1, -1, -1
-        
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
-        
         if not achou_p:
             if hit_p: achou_p = True
             else: atr_p += 1
-            
         if not achou_c:
             if c_min <= c <= c_max: achou_c = True
             else: atr_c += 1
-            
         if not achou_m:
             if m_min <= m <= m_max: achou_m = True
             else: atr_m += 1
-            
         if achou_p and achou_c and achou_m: break
-
     df_janela = df_analise.tail(janela)
     cur_p, cur_c, cur_m, max_p, max_c, max_m = 0, 0, 0, 0, 0, 0
     for i in range(len(df_janela)):
         milhar = str(df_janela.iloc[i][coluna]).zfill(4)
         if milhar == "----" or milhar == "nan": continue
-        
         g = get_grupo_int(milhar)
-        try: 
-            c = int(milhar[-3:])
-            m = int(milhar)
-            d = int(milhar[-2:])
-            u = int(milhar[-1:])
+        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:])
         except: c, m, d, u = -1, -1, -1, -1
-        
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
-        
         cur_p = 0 if hit_p else cur_p + 1
         max_p = max(max_p, cur_p)
         cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
         max_c = max(max_c, cur_c)
         cur_m = 0 if (m_min <= m <= m_max) else cur_m + 1
         max_m = max(max_m, cur_m)
-        
     return atr_p, atr_c, atr_m, max(max_p, atr_p), max(max_c, atr_c), max(max_m, atr_m)
 
 def deduplicar_alvos(lista):
-    vistos = set()
-    resultado = []
+    vistos = set(); resultado = []
     for item in lista:
         assinatura = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}_{item['ac']}_{item['am']}"
-        if assinatura not in vistos:
-            vistos.add(assinatura)
-            resultado.append(item)
+        if assinatura not in vistos: vistos.add(assinatura); resultado.append(item)
     return resultado
 
-# NOVO: MOTOR DO LABORATÓRIO DE TERNOS (VÁCUO ESTATÍSTICO)
 def processar_laboratorio_ternos(df):
-    ternos_grupo_vistos = set()
-    ternos_dezena_vistos = set()
-    
-    # 1. Varre todo o histórico para encontrar os ternos que já saíram
+    ternos_grupo_vistos = set(); ternos_dezena_vistos = set()
     for i in range(len(df)):
-        grupos_sorteio = set()
-        dezenas_sorteio = set()
+        grupos_sorteio = set(); dezenas_sorteio = set()
         for col in COLUNAS_DF:
             milhar = str(df.iloc[i][col]).zfill(4)
             if milhar != "----" and milhar != "nan" and milhar.strip():
@@ -232,46 +200,30 @@ def processar_laboratorio_ternos(df):
                 except: d = -1
                 if g is not None: grupos_sorteio.add(g)
                 if d != -1: dezenas_sorteio.add(d)
-        
-        # Registra os ternos (combinações de 3) deste sorteio
-        for tg in itertools.combinations(sorted(list(grupos_sorteio)), 3):
-            ternos_grupo_vistos.add(tg)
-        for td in itertools.combinations(sorted(list(dezenas_sorteio)), 3):
-            ternos_dezena_vistos.add(td)
-            
-    # 2. Calcula o atraso individual atual de todos os Grupos (1-25) e Dezenas (0-99)
-    atrasos_g = {g: 0 for g in range(1, 26)}
-    atrasos_d = {d: 0 for d in range(100)}
-    
-    # Grupos
+        for tg in itertools.combinations(sorted(list(grupos_sorteio)), 3): ternos_grupo_vistos.add(tg)
+        for td in itertools.combinations(sorted(list(dezenas_sorteio)), 3): ternos_dezena_vistos.add(td)
+    atrasos_g = {g: 0 for g in range(1, 26)}; atrasos_d = {d: 0 for d in range(100)}
     for g in range(1, 26):
         for i in range(len(df)-1, -1, -1):
             achou = False
             for col in COLUNAS_DF:
                 m = str(df.iloc[i][col]).zfill(4)
-                if m != "----" and m != "nan" and get_grupo_int(m) == g:
-                    achou = True; break
+                if m != "----" and m != "nan" and get_grupo_int(m) == g: achou = True; break
             if achou: break
             atrasos_g[g] += 1
-            
-    # Dezenas
     for d in range(100):
         for i in range(len(df)-1, -1, -1):
             achou = False
             for col in COLUNAS_DF:
                 m = str(df.iloc[i][col]).zfill(4)
                 if m != "----" and m != "nan":
-                    try:
+                    try: 
                         if int(m[-2:]) == d: achou = True; break
                     except: pass
             if achou: break
             atrasos_d[d] += 1
-
-    # Ordena pelos mais atrasados
     g_ordenados = sorted(atrasos_g.keys(), key=lambda x: atrasos_g[x], reverse=True)
     d_ordenadas = sorted(atrasos_d.keys(), key=lambda x: atrasos_d[x], reverse=True)
-    
-    # 3. Encontra os Top 5 Inéditos de Grupos (Filtro Sniper)
     top5_grupos = []
     for tg in itertools.combinations(g_ordenados, 3):
         tg_sorted = tuple(sorted(list(tg)))
@@ -279,8 +231,6 @@ def processar_laboratorio_ternos(df):
             soma_atraso = sum([atrasos_g[x] for x in tg_sorted])
             top5_grupos.append({'terno': tg_sorted, 'score': soma_atraso, 'atrasos': [atrasos_g[x] for x in tg_sorted]})
             if len(top5_grupos) == 5: break
-            
-    # 4. Encontra os Top 5 Inéditos de Dezenas (Filtro Sniper)
     top5_dezenas = []
     for td in itertools.combinations(d_ordenadas, 3):
         td_sorted = tuple(sorted(list(td)))
@@ -288,8 +238,50 @@ def processar_laboratorio_ternos(df):
             soma_atraso = sum([atrasos_d[x] for x in td_sorted])
             top5_dezenas.append({'terno': td_sorted, 'score': soma_atraso, 'atrasos': [atrasos_d[x] for x in td_sorted]})
             if len(top5_dezenas) == 5: break
-            
     return top5_grupos, top5_dezenas
+
+# 🧲 NOVO: MOTOR DO PÊNDULO (DISTÂNCIA CIRCULAR)
+def direcao_pendulo(prev, curr):
+    if prev == curr: return "="
+    diff = curr - prev
+    if diff > 0:
+        return "C" if diff <= 12 else "D" # Crescent se for o caminho mais curto
+    else:
+        return "D" if abs(diff) <= 12 else "C"
+
+def processar_pendulo(df, coluna):
+    # Pega os últimos 4 resultados válidos do prêmio
+    draws = []
+    for i in range(len(df)-1, -1, -1):
+        m = str(df.iloc[i][coluna]).zfill(4)
+        if m != "----" and m != "nan" and m.strip():
+            g = get_grupo_int(m)
+            if g is not None:
+                draws.insert(0, g) # Fica na ordem cronológica (antigo -> novo)
+                if len(draws) == 4: break
+    if len(draws) < 4: return None
+    
+    t1 = direcao_pendulo(draws[0], draws[1])
+    t2 = direcao_pendulo(draws[1], draws[2])
+    t3 = direcao_pendulo(draws[2], draws[3])
+    dirs = [t1, t2, t3]
+    last_g = draws[3]
+    
+    if dirs == ["C", "C", "C"]:
+        jogos = []; curr = last_g
+        for _ in range(15):
+            jogos.append(str(curr).zfill(2))
+            curr -= 1
+            if curr < 1: curr = 25
+        return "Saturação CRESCENTE", jogos, draws, dirs
+    elif dirs == ["D", "D", "D"]:
+        jogos = []; curr = last_g
+        for _ in range(15):
+            jogos.append(str(curr).zfill(2))
+            curr += 1
+            if curr > 25: curr = 1
+        return "Saturação DECRESCENTE", jogos, draws, dirs
+    return "Estável", [], draws, dirs
 
 # =============================================================================
 # --- MOTOR DE EXTRAÇÃO BLINDADO ---
@@ -330,15 +322,14 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V62.0")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
+    st.header("Pentágono V63.0")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Stealth Mode")
     st.info("Filtros operando em limite extremo. (Banca Tradicional exibe exclusivamente o 1º Prêmio).")
-    
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas de combate..."):
+        with st.spinner("Analisando assinaturas de combate (Incluindo Alvos de Unidade)..."):
             oportunidades, recordes = [], []
             todos_esq = gerar_matrizes_taticas()
             for banca_nome in BANCAS_CONFIG.keys():
@@ -349,21 +340,16 @@ if menu == "🏠 Visão Geral (Home)":
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
                         if cfg['modo'] == 'unidade' and (banca_nome != "Tradicional" or col != "P1"): continue
-                        
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
-                        
                         if ap >= LIM_P_ATUAL:
                             if cfg['modo'] == 'unidade':
                                 prio = 1; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
                             else:
                                 prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
-                                if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR:
-                                    prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
-                                elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR:
-                                    prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
-                                elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA:
-                                    prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
+                                if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR: prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
+                                elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR: prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
+                                elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA: prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
                             oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg})
                         elif (ap == mp and mp >= LIM_P_ATUAL-1) or (cfg['modo'] != 'unidade' and ((ac == mc and mc >= 5) or (am == mm and mm >= 5))):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
@@ -385,7 +371,6 @@ if menu == "🏠 Visão Geral (Home)":
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
-                    
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             elif recordes:
@@ -401,7 +386,6 @@ if menu == "🏠 Visão Geral (Home)":
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
-                    
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             else: st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
@@ -428,59 +412,92 @@ elif menu == "🎯 Radar Detalhado":
                         if sig not in vistos: vistos.add(sig); op_limpas.append(o)
                     st.write(f"### 📊 Alvos Críticos (Extremos) encontrados para {banca}:")
                     st.table(pd.DataFrame([{"Prêmio": o['premio'], "Alvo Principal": o['cfg']['nome'], "Centenas": "---" if o['cfg']['modo'] == 'unidade' else f"{str(o['cfg']['c_min']).zfill(3)} a {str(o['cfg']['c_max']).zfill(3)}", "Milhares": "---" if o['cfg']['modo'] == 'unidade' else f"{str(o['cfg']['m_min']).zfill(4)} a {str(o['cfg']['m_max']).zfill(4)}", "Atraso (Alvo)": f"{o['ap']}x", "Atraso Centena": "---" if o['cfg']['modo'] == 'unidade' else f"{o['ac']}x", "Atraso Milhar": "---" if o['cfg']['modo'] == 'unidade' else f"{o['am']}x"} for o in op_limpas[:20]]))
-                else: st.info(f"✅ Nenhuma ruptura extrema detectada na banca {banca}.")
+                else: st.info(f"✅ Nenhuma ruptura detectada.")
             else: st.error("Erro ao carregar base. Execute uma extração primeiro.")
 
-# 🧪 NOVA ABA: LABORATÓRIO DE TERNOS (VÁCUO ESTATÍSTICO)
+# 🧲 NOVA ABA: ARMADILHA DO PÊNDULO
+elif menu == "🧲 Armadilha do Pêndulo":
+    st.title("🧲 Armadilha de Saturação (Pêndulo)")
+    st.info("Analisa a física circular dos últimos 4 sorteios. Se houver 3 movimentos contínuos na mesma direção, dispara o alvo de reversão.")
+    
+    banca_pendulo = st.selectbox("Selecione o Alvo de Rastreador Circular:", list(BANCAS_CONFIG.keys()))
+    
+    if st.button("🧲 ANALISAR MOMENTUM CIRCULAR", type="primary", use_container_width=True):
+        with st.spinner(f"Calculando a distância circular na {banca_pendulo}..."):
+            df = carregar_dados_em_memoria(banca_pendulo)
+            if df.empty:
+                st.error("Base de dados vazia. Faça uma extração primeiro.")
+            else:
+                exibir_banner_sorteio(df, banca_pendulo)
+                st.markdown("### 📊 Resultado do Rastreador")
+                
+                cols = st.columns(5)
+                for i, col in enumerate(COLUNAS_DF):
+                    resultado = processar_pendulo(df, col)
+                    with cols[i]:
+                        if resultado:
+                            status, jogos, draws, dirs = resultado
+                            
+                            # Formatação Visual da Sequência (Ex: 23 ➡️ 24 ➡️ 07 ➡️ 14)
+                            setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" for d in dirs]
+                            seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
+                                         f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
+                                         f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
+                                         f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[3]).zfill(2)}</span>"
+                            
+                            if status != "Estável":
+                                cor_box = "border-color: #ff00aa;" if "CRESCENTE" in status else "border-color: #00ffff;"
+                                titulo_alerta = "🚨 SATURAÇÃO MÁXIMA"
+                                lista_jogos = ", ".join(jogos)
+                                
+                                st.markdown(f"""
+                                <div class="home-box home-box-pendulo" style="{cor_box}">
+                                    <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
+                                    <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
+                                    <div class="alerta-supremo" style="{cor_box}">{titulo_alerta}<br>{status}</div>
+                                    <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if 'CRESCENTE' in status else 'Seguintes'}:</div>
+                                    <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"""
+                                <div class="home-box" style="background-color:#111; border-color:#333;">
+                                    <div class="home-premio" style="color:#aaa;">🏆 {TITULOS_PREMIOS[i]}</div>
+                                    <div class="sniper-dado" style="margin-bottom:10px; color:#666;">{seq_visual}</div>
+                                    <div class="sniper-dado">Movimento Estável.<br>Sem saturação detectada.</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
+
 elif menu == "🧪 Lab de Ternos (Vácuo)":
     st.title("🧪 Laboratório de Vácuo Estatístico")
-    st.info("Analisa **todo o histórico da planilha** para encontrar Ternos que NUNCA saíram juntos, combinados com as Dezenas/Grupos mais atrasados isoladamente no momento.")
-    
+    st.info("Analisa **todo o histórico da planilha** para encontrar Ternos que NUNCA saíram juntos.")
     banca_lab = st.selectbox("Selecione o Alvo para Pesquisa Profunda:", list(BANCAS_CONFIG.keys()))
-    
     if st.button("🔬 PROCESSAR VÁCUO ESTATÍSTICO", type="primary", use_container_width=True):
-        with st.spinner(f"Lendo todo o histórico da {banca_lab} e cruzando milhares de combinações... (Isso pode levar alguns segundos)"):
+        with st.spinner(f"Lendo histórico da {banca_lab} e cruzando milhares de combinações..."):
             df_lab = carregar_dados_em_memoria(banca_lab)
-            if df_lab.empty:
-                st.error("Base de dados vazia. Faça uma extração primeiro.")
+            if df_lab.empty: st.error("Base de dados vazia. Faça uma extração primeiro.")
             else:
                 total_sorteios = len(df_lab)
                 top5_g, top5_d = processar_laboratorio_ternos(df_lab)
-                
                 st.success(f"✅ Histórico completo analisado: **{total_sorteios} sorteios processados.**")
-                
                 col1, col2 = st.columns(2)
-                
                 with col1:
                     st.markdown("### 🐯 Terno de Grupo (Inéditos Top 5)")
                     if top5_g:
                         for i, t in enumerate(top5_g):
                             t_format = " - ".join([str(x).zfill(2) for x in t['terno']])
                             atr_format = " | ".join([f"G:{str(g).zfill(2)}({a}x)" for g, a in zip(t['terno'], t['atrasos'])])
-                            st.markdown(f"""
-                            <div class="home-box home-box-lab">
-                                <div class="sniper-titulo" style="color:#00ffff;">Terno #{i+1}: {t_format}</div>
-                                <div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div>
-                                <div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div>
-                                <div class="alerta-azul" style="border-color:#00ffff; color:#00ffff;">NUNCA SAIU JUNTO</div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(f"""<div class="home-box home-box-lab"><div class="sniper-titulo" style="color:#00ffff;">Terno #{i+1}: {t_format}</div><div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div><div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div><div class="alerta-azul" style="border-color:#00ffff; color:#00ffff;">NUNCA SAIU JUNTO</div></div>""", unsafe_allow_html=True)
                     else: st.info("Todos os ternos de grupo já saíram pelo menos uma vez.")
-                            
                 with col2:
                     st.markdown("### 💣 Terno de Dezena (Inéditos Top 5)")
                     if top5_d:
                         for i, t in enumerate(top5_d):
                             t_format = " - ".join([str(x).zfill(2) for x in t['terno']])
                             atr_format = " | ".join([f"D:{str(d).zfill(2)}({a}x)" for d, a in zip(t['terno'], t['atrasos'])])
-                            st.markdown(f"""
-                            <div class="home-box home-box-lab">
-                                <div class="sniper-titulo" style="color:#ffcc00;">Terno #{i+1}: {t_format}</div>
-                                <div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div>
-                                <div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div>
-                                <div class="alerta-amarelo" style="border-color:#ffcc00; color:#ffcc00;">NUNCA SAIU JUNTO</div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(f"""<div class="home-box home-box-lab"><div class="sniper-titulo" style="color:#ffcc00;">Terno #{i+1}: {t_format}</div><div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div><div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div><div class="alerta-amarelo" style="border-color:#ffcc00; color:#ffcc00;">NUNCA SAIU JUNTO</div></div>""", unsafe_allow_html=True)
                     else: st.info("Todos os ternos de dezena já saíram pelo menos uma vez.")
 
 elif menu == "📡 Extração Central":
@@ -501,16 +518,16 @@ elif menu == "📡 Extração Central":
                         p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
                         if p_ins: 
                             ws.append_rows(p_ins, value_input_option="RAW")
-                            st.success(f"✅ {len(p_ins)} novos registros salvos na banca {banca_ex}.")
+                            st.success(f"✅ {len(p_ins)} novos registros salvos.")
                             carregar_dados_em_memoria.clear() 
-                        else: st.info(f"Base de dados já atualizada para hoje ({banca_ex}).")
-                else: st.error(f"Nenhum dado encontrado para esta data ou a {banca_ex} ainda não atualizou o site.")
+                        else: st.info("Base de dados já atualizada.")
+                else: st.error("Sem dados para extrair.")
     with col2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        if st.button("🌍 EXTRAÇÃO GLOBAL (TODAS AS BANCAS)", type="primary", use_container_width=True):
+        if st.button("🌍 EXTRAÇÃO GLOBAL", type="primary", use_container_width=True):
             with st.spinner("Iniciando varredura global em todos os servidores..."):
                 sh = conectar_sheets()
-                if not sh: st.error("Erro Crítico: Não foi possível conectar ao banco de dados.")
+                if not sh: st.error("Erro Crítico de Conexão.")
                 else:
                     total_salvos = 0
                     for banca_alvo in BANCAS_CONFIG.keys():
@@ -523,19 +540,11 @@ elif menu == "📡 Extração Central":
                             if p_ins:
                                 ws.append_rows(p_ins, value_input_option="RAW")
                                 total_salvos += len(p_ins)
-                                st.success(f"✅ {banca_alvo}: {len(p_ins)} novos registros salvos.")
-                            else: st.info(f"ℹ️ {banca_alvo}: Base já estava atualizada.")
-                        else: st.warning(f"⚠️ {banca_alvo}: Nenhum dado extraído (site não atualizou ou sem sorteios).")
+                                st.success(f"✅ {banca_alvo}: {len(p_ins)} salvos.")
+                            else: st.info(f"ℹ️ {banca_alvo}: Atualizada.")
+                        else: st.warning(f"⚠️ {banca_alvo}: Sem dados.")
                     if total_salvos > 0:
                         carregar_dados_em_memoria.clear()
-                        st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros salvos no total.")
-                    else: st.warning("Nenhum dado novo foi salvo nesta operação global.")
+                        st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-# =============================================================================
-# --- RODAPÉ FIXO DE ENGAJAMENTO ---
-# =============================================================================
-st.markdown("""
-<div class="rodape-tatico">
-    🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena/Unidade: acima de 9x
-</div>
-""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena/Unidade: acima de 9x</div>""", unsafe_allow_html=True)
