@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V67.0 - Esquadrão Gêmeas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V67.1 - Motor Turbo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,7 +22,7 @@ st.markdown("""
 .home-box-par { background-color: #0a1b2a; border-color: #00aaff; } 
 .home-box-dez { background-color: #1a1f00; border-color: #ffcc00; } 
 .home-box-uni { background-color: #2d001d; border-color: #ff00aa; } 
-.home-box-gemeas { background-color: #1a0033; border-color: #9933ff; } /* Novo: Gêmeas */
+.home-box-gemeas { background-color: #1a0033; border-color: #9933ff; } 
 .home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } 
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
@@ -94,7 +94,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE ANÁLISE (AWACS, PÊNDULO E GÊMEAS)
+# 👻 MOTORES DE ANÁLISE OTIMIZADOS (AWACS, PÊNDULO E GÊMEAS)
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -111,15 +111,12 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 8, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 8, **cm})
     
-    # UNIDADES (Gatilho 6x)
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
-    
-    # 👯 NOVO: ESQUADRÃO DAS GÊMEAS (Gatilho 50x)
     esquadroes_gemeas = [
         {'alvos': {0, 11, 22, 33, 44, 55, 66, 77, 88, 99}, 'modo': 'dezena', 'tipo': 'gemeas', 'nome': "👯 DEZENAS GÊMEAS", 'lim': 50, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
@@ -128,22 +125,31 @@ def gerar_matrizes_taticas():
     esquadroes.extend(esquadroes_gemeas)
     return esquadroes
 
-def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=100):
+def calcular_metricas_fantasma(df_analise, coluna, cfg):
     alvos, modo = cfg['alvos'], cfg['modo']
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
+    
+    # OTIMIZAÇÃO V67.1: Carregando tudo pra memória (lista) de uma vez só!
+    valores = df_analise[coluna].astype(str).tolist()
+    
     atr_p, atr_c, atr_m = 0, 0, 0 
     achou_p, achou_c, achou_m = False, False, False
-    for i in range(len(df_analise)-1, -1, -1):
-        milhar = str(df_analise.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
+    
+    # 1. Calculando Atraso Atual (Lendo de trás pra frente)
+    for m in reversed(valores):
+        milhar = m.zfill(4)
+        if milhar == "----" or milhar == "0nan" or not milhar.strip(): continue
+        
         g = get_grupo_int(milhar)
-        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:]) 
-        except: c, m, d, u = -1, -1, -1, -1
+        try: c = int(milhar[-3:]); m_val = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:]) 
+        except: c, m_val, d, u = -1, -1, -1, -1
+        
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
+        
         if not achou_p:
             if hit_p: achou_p = True
             else: atr_p += 1
@@ -151,30 +157,36 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=100):
             if c_min <= c <= c_max: achou_c = True
             else: atr_c += 1
         if not achou_m:
-            if m_min <= m <= m_max: achou_m = True
+            if m_min <= m_val <= m_max: achou_m = True
             else: atr_m += 1
+            
         if achou_p and achou_c and achou_m: break
     
-    # Cálculo do Recorde Histórico de Atraso
+    # 2. Calculando Recorde Histórico Máximo (Lendo de frente pra trás)
     cur_p, max_p, cur_c, max_c, cur_m, max_m = 0, 0, 0, 0, 0, 0
-    for i in range(len(df_analise)):
-        milhar = str(df_analise.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "nan": continue
+    for m in valores:
+        milhar = m.zfill(4)
+        if milhar == "----" or milhar == "0nan" or not milhar.strip(): continue
+        
         g = get_grupo_int(milhar)
-        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:])
-        except: c, m, d, u = -1, -1, -1, -1
+        try: c = int(milhar[-3:]); m_val = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:])
+        except: c, m_val, d, u = -1, -1, -1, -1
+        
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
-        cur_p = 0 if hit_p else cur_p + 1
-        max_p = max(max_p, cur_p)
-        cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
-        max_c = max(max_c, cur_c)
-        cur_m = 0 if (m_min <= m <= m_max) else cur_m + 1
-        max_m = max(max_m, cur_m)
         
-    return atr_p, atr_c, atr_m, max(max_p, atr_p), max(max_c, atr_c), max(max_m, atr_m)
+        cur_p = 0 if hit_p else cur_p + 1
+        if cur_p > max_p: max_p = cur_p
+        
+        cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
+        if cur_c > max_c: max_c = cur_c
+        
+        cur_m = 0 if (m_min <= m_val <= m_max) else cur_m + 1
+        if cur_m > max_m: max_m = cur_m
+        
+    return atr_p, atr_c, atr_m, max_p, max_c, max_m
 
 def deduplicar_alvos(lista):
     vistos = set(); resultado = []
@@ -183,7 +195,7 @@ def deduplicar_alvos(lista):
         if assinatura not in vistos: vistos.add(assinatura); resultado.append(item)
     return resultado
 
-# 🧲 MOTOR DO PÊNDULO
+# 🧲 MOTOR DO PÊNDULO OTIMIZADO
 def direcao_pendulo_generico(prev, curr, mod, max_step):
     if prev == curr: return "✖️"
     dist_c = (curr - prev) % mod
@@ -196,22 +208,30 @@ def processar_pendulo_generico(df, coluna, modo):
     if modo == 'grupo': mod, max_step, reb_size, zlen = 25, 6, 15, 2
     elif modo == 'dezena': mod, max_step, reb_size, zlen = 100, 25, 50, 2
     elif modo == 'centena': mod, max_step, reb_size, zlen = 1000, 250, 500, 3
+    
+    valores = df[coluna].astype(str).tolist()
     all_nums = []
-    for i in range(len(df)):
-        m = str(df.iloc[i][coluna]).zfill(4)
-        if m != "----" and m != "nan" and m.strip():
-            if modo == 'grupo': n = get_grupo_int(m)
-            elif modo == 'dezena': n = int(m[-2:]) if m[-2:].isdigit() else None
-            elif modo == 'centena': n = int(m[-3:]) if m[-3:].isdigit() else None
+    
+    for m in valores:
+        milhar = m.zfill(4)
+        if milhar != "----" and milhar != "0nan" and milhar.strip():
+            if modo == 'grupo': n = get_grupo_int(milhar)
+            elif modo == 'dezena': n = int(milhar[-2:]) if milhar[-2:].isdigit() else None
+            elif modo == 'centena': n = int(milhar[-3:]) if milhar[-3:].isdigit() else None
             if n is not None: all_nums.append(n)
+            
     if len(all_nums) < 6: return None
+    
     draws = all_nums[-6:]; dirs_history = []
-    for i in range(1, len(all_nums)): dirs_history.append(direcao_pendulo_generico(all_nums[i-1], all_nums[i], mod, max_step))
+    for i in range(1, len(all_nums)): 
+        dirs_history.append(direcao_pendulo_generico(all_nums[i-1], all_nums[i], mod, max_step))
+        
     curr_streak = 0; curr_dir = dirs_history[-1]
     if curr_dir in ["C", "D"]:
         for d in reversed(dirs_history):
             if d == curr_dir: curr_streak += 1
             else: break
+            
     max_streak = 0; temp_streak = 0; temp_dir = None
     for d in dirs_history:
         if d in ["C", "D"]:
@@ -219,7 +239,9 @@ def processar_pendulo_generico(df, coluna, modo):
             else: temp_dir = d; temp_streak = 1
             if temp_streak > max_streak: max_streak = temp_streak
         else: temp_dir = None; temp_streak = 0
+        
     dirs = dirs_history[-5:]; last_num = draws[-1]
+    
     if curr_streak >= 3:
         status = "🚨 SATURAÇÃO ALTA" if curr_streak == 3 else "🔥 SATURAÇÃO EXTREMA" if curr_streak == 4 else "☢️ SATURAÇÃO CRÍTICA"
         if curr_dir == "C":
@@ -248,7 +270,6 @@ def processar_pendulo_generico(df, coluna, modo):
 # =============================================================================
 # --- MOTOR DE EXTRAÇÃO E INTERFACE ---
 # =============================================================================
-# ... (Função extrair_dia permanece igual) ...
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -276,31 +297,30 @@ def extrair_dia(banca, data_alvo):
 
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V67.0")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
+    st.header("Pentágono V67.1")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Visão Geral")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas (Incluindo Esquadrão das Gêmeas)..."):
-            oportunidades, recordes, alertas_pendulo = [], [], []
+        with st.spinner("Motor Turbo V67.1 Ativado... Calculando recordes em milissegundos..."):
+            oportunidades, alertas_pendulo = [], []
             todos_esq = gerar_matrizes_taticas()
             for banca_nome in BANCAS_CONFIG.keys():
                 df = carregar_dados_em_memoria(banca_nome)
                 if df.empty: continue
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
                 
-                # 1. Varredura Pêndulo
+                # Varredura Pêndulo
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     res_p = processar_pendulo_generico(df, col, 'grupo')
                     if res_p: alertas_pendulo.append({"banca": banca_nome, "sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "data": res_p})
 
-                # 2. Varredura AWACS + GÊMEAS
+                # Varredura AWACS + GÊMEAS
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
-                        # Filtro Unidade/Gêmeas apenas P1 na Tradicional já garantido acima
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         if ap >= cfg['lim']:
                             if cfg['tipo'] == 'gemeas': prio = 1; alerta = f"<div class='alerta-supremo' style='border-color:#9933ff; color:#9933ff;'>🔥 ATAQUE GÊMEAS (1x{92 if banca_nome!='Tradicional' else 85})</div>"
@@ -317,9 +337,9 @@ if menu == "🏠 Visão Geral (Home)":
                 st.success(f"🧲 PÊNDULOS SATURADOS: {len(alertas_pendulo)}")
                 cols = st.columns(3)
                 for idx, p in enumerate(alertas_pendulo):
-                    st, j, dr, di, cs, ms, cd, mo = p['data']
+                    st_txt, j, dr, di, cs, ms, cd, mo = p['data']
                     with cols[idx % 3]:
-                        st.markdown(f"""<div class="home-box home-box-pendulo" style="border-color:{'#ff00aa' if cd=='C' else '#00ffff'};"><div class="home-banca">🏦 {p['banca']}</div><div class="home-premio">🏆 {p['premio']}</div><div class="sniper-dado">Saturação: <span class="sniper-valor" style="color:#ff4b4b;">{cs}x</span> (Rec: {ms})</div><div class="alerta-supremo" style="border-color:#fff;">{st}</div><div class="sniper-valor" style="color:#ffcc00; font-size:11px;">{j}</div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box home-box-pendulo" style="border-color:{'#ff00aa' if cd=='C' else '#00ffff'};"><div class="home-banca">🏦 {p['banca']}</div><div class="home-premio">🏆 {p['premio']}</div><div class="sniper-dado">Saturação: <span class="sniper-valor" style="color:#ff4b4b;">{cs}x</span> (Rec: {ms})</div><div class="alerta-supremo" style="border-color:#fff;">{st_txt}</div><div class="sniper-valor" style="color:#ffcc00; font-size:11px;">{j}</div></div>""", unsafe_allow_html=True)
             
             # EXIBIÇÃO AWACS + GÊMEAS
             if oportunidades:
@@ -329,8 +349,9 @@ if menu == "🏠 Visão Geral (Home)":
                     css = f"home-box-{op['cfg']['tipo']}"
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}</div><div class="sniper-dado">Atraso: <span class="sniper-valor" style="color:#ff4b4b;">{op['ap']}x</span> (Rec: {op['mp']})</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+            if not alertas_pendulo and not oportunidades:
+                st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
-# Outros Menus (Radar, Extração, Lab) permanecem funcionais conforme v66.0
 elif menu == "📡 Extração Central":
     st.title("📡 Extração de Resultados")
     dt = st.date_input("Data do Sorteio:", value=date.today())
