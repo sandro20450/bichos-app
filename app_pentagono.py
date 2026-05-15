@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V64.0 - Central Unificada", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V64.1 - Pêndulo Max", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -188,6 +188,78 @@ def deduplicar_alvos(lista):
         if assinatura not in vistos: vistos.add(assinatura); resultado.append(item)
     return resultado
 
+# 🧲 NOVO MOTOR DO PÊNDULO AMPLIADO (6 Sorteios -> 5 Setas + RECORDE)
+def direcao_pendulo(prev, curr):
+    if prev == curr: return "="
+    diff = curr - prev
+    if diff > 0: return "C" if diff <= 12 else "D"
+    else: return "D" if abs(diff) <= 12 else "C"
+
+def processar_pendulo(df, coluna):
+    all_groups = []
+    # Lê todo o histórico cronologicamente para achar o Recorde
+    for i in range(len(df)):
+        m = str(df.iloc[i][coluna]).zfill(4)
+        if m != "----" and m != "nan" and m.strip():
+            g = get_grupo_int(m)
+            if g is not None:
+                all_groups.append(g) 
+                
+    if len(all_groups) < 6: return None
+    
+    draws = all_groups[-6:] # Pega as 6 últimas bolinhas para exibir 5 setas
+    
+    # Calcula todo o histórico de direções
+    dirs_history = []
+    for i in range(1, len(all_groups)):
+        dirs_history.append(direcao_pendulo(all_groups[i-1], all_groups[i]))
+        
+    # Calcula o Streak (saturação) ATUAL
+    curr_streak = 0
+    curr_dir = dirs_history[-1]
+    if curr_dir in ["C", "D"]:
+        for d in reversed(dirs_history):
+            if d == curr_dir: curr_streak += 1
+            else: break
+            
+    # Calcula o RECORDE histórico de saturação para esse prêmio
+    max_streak = 0
+    temp_streak = 0
+    temp_dir = None
+    for d in dirs_history:
+        if d in ["C", "D"]:
+            if d == temp_dir: temp_streak += 1
+            else:
+                temp_dir = d
+                temp_streak = 1
+            if temp_streak > max_streak: max_streak = temp_streak
+        else:
+            temp_dir = None
+            temp_streak = 0
+            
+    dirs = dirs_history[-5:] # As 5 últimas setas
+    last_g = draws[-1]
+    
+    if curr_streak >= 3:
+        if curr_streak == 3: status = "🚨 SATURAÇÃO ALTA"
+        elif curr_streak == 4: status = "🔥 SATURAÇÃO EXTREMA"
+        else: status = f"☢️ SATURAÇÃO CRÍTICA"
+        
+        jogos = []; curr = last_g
+        if curr_dir == "C":
+            for _ in range(15):
+                jogos.append(str(curr).zfill(2))
+                curr -= 1
+                if curr < 1: curr = 25
+        else:
+            for _ in range(15):
+                jogos.append(str(curr).zfill(2))
+                curr += 1
+                if curr > 25: curr = 1
+        return status, jogos, draws, dirs, curr_streak, max_streak, curr_dir
+        
+    return "Estável", [], draws, dirs, curr_streak, max_streak, curr_dir
+
 def processar_laboratorio_ternos(df):
     ternos_grupo_vistos = set(); ternos_dezena_vistos = set()
     for i in range(len(df)):
@@ -240,51 +312,6 @@ def processar_laboratorio_ternos(df):
             if len(top5_dezenas) == 5: break
     return top5_grupos, top5_dezenas
 
-# 🧲 MOTOR DO PÊNDULO
-def direcao_pendulo(prev, curr):
-    if prev == curr: return "="
-    diff = curr - prev
-    if diff > 0: return "C" if diff <= 12 else "D"
-    else: return "D" if abs(diff) <= 12 else "C"
-
-def processar_pendulo(df, coluna):
-    draws = []
-    for i in range(len(df)-1, -1, -1):
-        m = str(df.iloc[i][coluna]).zfill(4)
-        if m != "----" and m != "nan" and m.strip():
-            g = get_grupo_int(m)
-            if g is not None:
-                draws.insert(0, g) 
-                if len(draws) == 5: break 
-    if len(draws) < 5: return None
-    
-    t1 = direcao_pendulo(draws[0], draws[1])
-    t2 = direcao_pendulo(draws[1], draws[2])
-    t3 = direcao_pendulo(draws[2], draws[3])
-    t4 = direcao_pendulo(draws[3], draws[4])
-    dirs = [t1, t2, t3, t4]
-    last_g = draws[4]
-    
-    if dirs[-3:] == ["C", "C", "C"]:
-        jogos = []; curr = last_g
-        for _ in range(15):
-            jogos.append(str(curr).zfill(2))
-            curr -= 1
-            if curr < 1: curr = 25
-        intensidade = "🔥 SATURAÇÃO EXTREMA (4 SETAS)" if dirs == ["C", "C", "C", "C"] else "🚨 SATURAÇÃO ALTA (3 SETAS)"
-        return intensidade, jogos, draws, dirs
-        
-    elif dirs[-3:] == ["D", "D", "D"]:
-        jogos = []; curr = last_g
-        for _ in range(15):
-            jogos.append(str(curr).zfill(2))
-            curr += 1
-            if curr > 25: curr = 1
-        intensidade = "🔥 SATURAÇÃO EXTREMA (4 SETAS)" if dirs == ["D", "D", "D", "D"] else "🚨 SATURAÇÃO ALTA (3 SETAS)"
-        return intensidade, jogos, draws, dirs
-        
-    return "Estável", [], draws, dirs
-
 # =============================================================================
 # --- MOTOR DE EXTRAÇÃO BLINDADO ---
 # =============================================================================
@@ -324,14 +351,14 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V64.0")
+    st.header("Pentágono V64.1")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Stealth Mode")
     st.info("Filtros operando em limite extremo. (Banca Tradicional exibe exclusivamente o 1º Prêmio).")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas de combate (Incluindo Pêndulo Circular)..."):
+        with st.spinner("Analisando assinaturas de combate (Incluindo Pêndulo de 6 Tempos)..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
             todos_esq = gerar_matrizes_taticas()
             
@@ -345,9 +372,9 @@ if menu == "🏠 Visão Geral (Home)":
                     if banca_nome == "Tradicional" and col != "P1": continue
                     resultado_pend = processar_pendulo(df, col)
                     if resultado_pend:
-                        status, jogos, draws, dirs = resultado_pend
+                        status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado_pend
                         if status != "Estável":
-                            alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs})
+                            alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
                 
                 # 2. Varredura AWACS Normal
                 for cfg in todos_esq:
@@ -379,13 +406,17 @@ if menu == "🏠 Visão Geral (Home)":
                 for idx, pend in enumerate(alertas_pendulo):
                     with cols_pend[idx % 3]:
                         status, jogos, draws, dirs = pend['status'], pend['jogos'], pend['draws'], pend['dirs']
+                        curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], pend['curr_dir']
+                        
                         setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" for d in dirs]
                         seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                      f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
                                      f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
                                      f"<span style='font-size:16px; font-weight:bold;'>{str(draws[3]).zfill(2)}</span> {setas[3]} " \
-                                     f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[4]).zfill(2)}</span>"
-                        cor_box = "border-color: #ff00aa;" if "CRESCENTE" in status else "border-color: #00ffff;"
+                                     f"<span style='font-size:16px; font-weight:bold;'>{str(draws[4]).zfill(2)}</span> {setas[4]} " \
+                                     f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[5]).zfill(2)}</span>"
+                                     
+                        cor_box = "border-color: #ff00aa;" if curr_dir == "C" else "border-color: #00ffff;"
                         lista_jogos = ", ".join(jogos)
                         
                         st.markdown(f"""
@@ -394,8 +425,11 @@ if menu == "🏠 Visão Geral (Home)":
                             <div class="home-horario">🕒 ÚLTIMO: {pend['ultimo_sorteio']}</div>
                             <div class="home-premio">🏆 {pend['premio']}</div>
                             <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
-                            <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if 'CRESCENTE' in status else 'Direção: Decrescente'}</div>
-                            <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if 'CRESCENTE' in status else 'Seguintes'}:</div>
+                            <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
+                                Saturação: <span class="sniper-valor" style="color:#ff4b4b;">{curr_streak}x</span> (Rec: {max_streak})
+                            </div>
+                            <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if curr_dir == 'C' else 'Direção: Decrescente'}</div>
+                            <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if curr_dir == 'C' else 'Seguintes'}:</div>
                             <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -461,7 +495,7 @@ elif menu == "🎯 Radar Detalhado":
 
 elif menu == "🧲 Armadilha do Pêndulo":
     st.title("🧲 Armadilha de Saturação (Pêndulo)")
-    st.info("Analisa a física circular dos últimos 5 sorteios. Se houver 3 ou 4 movimentos contínuos na mesma direção, dispara o alvo de reversão.")
+    st.info("Analisa a física circular dos últimos 6 sorteios. Se houver 3 ou mais movimentos contínuos na mesma direção, dispara o alvo.")
     banca_pendulo = st.selectbox("Selecione o Alvo de Rastreador Circular:", list(BANCAS_CONFIG.keys()))
     
     if st.button("🧲 ANALISAR MOMENTUM CIRCULAR", type="primary", use_container_width=True):
@@ -477,24 +511,28 @@ elif menu == "🧲 Armadilha do Pêndulo":
                     resultado = processar_pendulo(df, col)
                     with cols[i]:
                         if resultado:
-                            status, jogos, draws, dirs = resultado
+                            status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
                             setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" for d in dirs]
                             seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[3]).zfill(2)}</span> {setas[3]} " \
-                                         f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[4]).zfill(2)}</span>"
+                                         f"<span style='font-size:16px; font-weight:bold;'>{str(draws[4]).zfill(2)}</span> {setas[4]} " \
+                                         f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[5]).zfill(2)}</span>"
                             
                             if status != "Estável":
-                                cor_box = "border-color: #ff00aa;" if "CRESCENTE" in status else "border-color: #00ffff;"
+                                cor_box = "border-color: #ff00aa;" if curr_dir == "C" else "border-color: #00ffff;"
                                 lista_jogos = ", ".join(jogos)
                                 
                                 st.markdown(f"""
                                 <div class="home-box home-box-pendulo" style="{cor_box}">
                                     <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
                                     <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
-                                    <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if 'CRESCENTE' in status else 'Direção: Decrescente'}</div>
-                                    <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if 'CRESCENTE' in status else 'Seguintes'}:</div>
+                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
+                                        Saturação: <span class="sniper-valor" style="color:#ff4b4b;">{curr_streak}x</span> (Rec: {max_streak})
+                                    </div>
+                                    <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Direção: Crescente' if curr_dir == 'C' else 'Direção: Decrescente'}</div>
+                                    <div class="sniper-dado" style="margin-top:10px; color:#fff;">Atirar em 15 Grupos {'Anteriores' if curr_dir == 'C' else 'Seguintes'}:</div>
                                     <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -503,6 +541,9 @@ elif menu == "🧲 Armadilha do Pêndulo":
                                 <div class="home-box" style="background-color:#111; border-color:#333;">
                                     <div class="home-premio" style="color:#aaa;">🏆 {TITULOS_PREMIOS[i]}</div>
                                     <div class="sniper-dado" style="margin-bottom:10px; color:#666;">{seq_visual}</div>
+                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
+                                        Saturação: <span class="sniper-valor" style="color:#4CAF50;">{curr_streak}x</span> (Rec: {max_streak})
+                                    </div>
                                     <div class="sniper-dado">Movimento Estável.<br>Sem saturação detectada.</div>
                                 </div>
                                 """, unsafe_allow_html=True)
