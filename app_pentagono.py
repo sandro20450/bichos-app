@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.0 - Pêndulo Curto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.1 - Radar Visão Total", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -299,7 +299,6 @@ def processar_pendulo(df, coluna):
         else: status = f"☢️ SATURAÇÃO CRÍTICA"
         
         jogos = []; curr = last_g
-        # A física da reversão: Saturação pra Direita (C), o rebote é pra Esquerda (Decrescente)
         if curr_dir == "C":
             for _ in range(15):
                 jogos.append(str(curr).zfill(2))
@@ -353,7 +352,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.0")
+    st.header("Pentágono V65.1")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -385,15 +384,23 @@ if menu == "🏠 Visão Geral (Home)":
                         if cfg['modo'] == 'unidade' and (banca_nome != "Tradicional" or col != "P1"): continue
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         LIM_P_ATUAL = cfg['lim'] 
-                        if ap >= LIM_P_ATUAL:
+                        
+                        # MUDANÇA DA V65.1: Se a Centena ou Milhar bater 9x ou mais, é promovido a Alvo Travado!
+                        if ap >= LIM_P_ATUAL or ac >= 9 or am >= 9:
                             if cfg['modo'] == 'unidade':
                                 prio = 1; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
                             else:
-                                prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
-                                if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR: prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
-                                elif ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR: prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
-                                elif ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA: prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
+                                if ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA and am >= LIMITE_MILHAR: 
+                                    prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
+                                elif am >= 9 or (ap >= LIM_P_ATUAL and am >= LIMITE_MILHAR): 
+                                    prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR</div>"
+                                elif ac >= 9 or (ap >= LIM_P_ATUAL and ac >= LIMITE_CENTENA): 
+                                    prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA</div>"
+                                else:
+                                    prio = 4; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE (GRUPO)</div>"
                             oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg})
+                        
+                        # Alvos secundários (Recordes), se não foi promovido
                         elif (ap == mp and mp >= LIM_P_ATUAL-1) or (cfg['modo'] != 'unidade' and ((ac == mc and mc >= 5) or (am == mm and mm >= 5))):
                             alerta = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({"prio": 5, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg})
@@ -453,8 +460,11 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=LIMITE_CENTENA else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=LIMITE_MILHAR else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
-            elif recordes and not alertas_pendulo:
-                st.warning("⚠️ Exibindo apenas RECORDES HISTÓRICOS batidos agora:")
+                st.markdown("---") # Divisor
+
+            # EXIBIÇÃO: RECORDES (SEMPRE VISÍVEL AGORA)
+            if recordes:
+                st.warning("⚠️ RECORDES HISTÓRICOS ALCANÇADOS (Radar Secundário):")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes[:18]):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
@@ -468,7 +478,10 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
-            elif not oportunidades and not alertas_pendulo: st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
+            
+            # SE NÃO TIVER NADA DE NADA
+            if not oportunidades and not alertas_pendulo and not recordes: 
+                st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
 elif menu == "🎯 Radar Detalhado":
     st.title("🎯 Varredura de Precisão por Banca")
@@ -630,4 +643,5 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x | Unidade: acima de 6x</div>""", unsafe_allow_html=True)
+# MUDANÇA DA V65.1: RODAPÉ COM A INSTRUÇÃO DA SATURAÇÃO DAS SETAS ACIMA DE 4X
+st.markdown("""<div class="rodape-tatico">🎯 AWACS: M/C > 9x | G > 6x | Filtros > 9x | U > 6x &nbsp;&nbsp; || &nbsp;&nbsp; 🧲 PÊNDULO: Saturação de Setas Acima de 4x</div>""", unsafe_allow_html=True)
