@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.3 - Ataque Dinâmico", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.4 - Radar Enxuto", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -107,7 +107,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE ANÁLISE (AWACS, LAB E PÊNDULO)
+# 👻 MOTORES DE ANÁLISE
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -117,8 +117,6 @@ def gerar_matrizes_taticas():
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
-        
-        # MUDANÇA DA V65.3: FILTROS REBAIXADOS PARA 7X DE LIMITE
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 7, **cm})
@@ -183,11 +181,21 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
         max_m = max(max_m, cur_m)
     return atr_p, atr_c, atr_m, max(max_p, atr_p), max(max_c, atr_c), max(max_m, atr_m)
 
+# CONSOLIDADOR DE ALVOS MUDOU: Agora ele limpa os repetidos focando na raiz do problema!
 def deduplicar_alvos(lista):
     vistos = set(); resultado = []
     for item in lista:
-        assinatura = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}_{item['ac']}_{item['am']}"
-        if assinatura not in vistos: vistos.add(assinatura); resultado.append(item)
+        ta = item.get('tipo_ataque', '')
+        # Se for SÓ milhar ou SÓ centena, ele não usa o nome do grupo como assinatura, usa só a faixa (Range)
+        if ta == "MILHAR":
+            sig = f"{item['banca']}_{item['premio']}_M_{item['cfg']['m_min']}"
+        elif ta == "CENTENA":
+            sig = f"{item['banca']}_{item['premio']}_C_{item['cfg']['c_min']}"
+        else:
+            sig = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}"
+        
+        if sig not in vistos:
+            vistos.add(sig); resultado.append(item)
     return resultado
 
 def processar_laboratorio_ternos(df):
@@ -245,14 +253,11 @@ def processar_laboratorio_ternos(df):
 # 🧲 MOTOR DO PÊNDULO: MODO "PASSOS CURTOS" (MÁX. 6 CASAS)
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
-    
     dist_c = (curr - prev) % 25
     dist_d = (prev - curr) % 25
-    
-    if 1 <= dist_c <= 6: return "C"  # Passo curto pra Direita
-    if 1 <= dist_d <= 6: return "D"  # Passo curto pra Esquerda
-    
-    return "-" # Pulo longo (Quebra a saturação)
+    if 1 <= dist_c <= 6: return "C"
+    if 1 <= dist_d <= 6: return "D"
+    return "-" 
 
 def processar_pendulo(df, coluna):
     all_groups = []
@@ -354,14 +359,14 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.3")
+    st.header("Pentágono V65.4")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Visão Absoluta")
-    st.info("Nenhuma anomalia será ocultada. Limites recalibrados para Ataque Dinâmico.")
+    st.title("🚨 Central AWACS - Visão Absoluta (Enxuta)")
+    st.info("Nenhuma anomalia será ocultada. Limites recalibrados e loops redundantes removidos.")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas de combate..."):
+        with st.spinner("Analisando assinaturas de combate (Limpando Redundâncias)..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
             todos_esq = gerar_matrizes_taticas()
             
@@ -370,7 +375,7 @@ if menu == "🏠 Visão Geral (Home)":
                 if df.empty: continue
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
                 
-                # 1. Varredura do Pêndulo na Home
+                # 1. Varredura do Pêndulo
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     resultado_pend = processar_pendulo(df, col)
@@ -391,24 +396,38 @@ if menu == "🏠 Visão Geral (Home)":
                         is_anomaly = False
                         prio = 99
                         alerta = ""
+                        tipo_ataque = ""
                         
+                        # CLASSIFICADOR INTELIGENTE (Fim do Loop de Redundância)
                         if am >= 9 and ac >= 9 and ap >= ap_lim:
-                            is_anomaly = True; prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
+                            is_anomaly = True; prio = 1; tipo_ataque = "TOTAL"; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
                         elif am >= 9:
-                            is_anomaly = True; prio = 2; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x)</div>"
+                            is_anomaly = True; prio = 2; tipo_ataque = "MILHAR"; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x)</div>"
                         elif ac >= 9:
-                            is_anomaly = True; prio = 3; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x)</div>"
+                            is_anomaly = True; prio = 3; tipo_ataque = "CENTENA"; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x)</div>"
                         elif cfg['modo'] == 'unidade' and ap >= 6:
-                            is_anomaly = True; prio = 4; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
+                            is_anomaly = True; prio = 4; tipo_ataque = "UNIDADE"; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
                         elif ap >= ap_lim:
-                            is_anomaly = True; prio = 5; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
+                            is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
 
                         if is_anomaly:
-                            oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg})
-                        elif (ap == mp and mp >= ap_lim-1) or (cfg['modo'] != 'unidade' and ((ac == mc and mc >= 5) or (am == mm and mm >= 5))):
+                            oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg, "tipo_ataque": tipo_ataque})
+                        
+                        # VERIFICAÇÃO DE RECORDES (Também classificada para não inundar a tela)
+                        elif ap == mp and mp >= ap_lim - 1:
+                            tipo_rec = "ALVO_PRINCIPAL"
                             alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
-                            recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg})
+                            recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
+                        elif am == mm and mm >= 5:
+                            tipo_rec = "MILHAR"
+                            alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE MILHAR</div>"
+                            recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
+                        elif ac == mc and mc >= 5:
+                            tipo_rec = "CENTENA"
+                            alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE CENTENA</div>"
+                            recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
             
+            # ORDENAÇÃO FOCADA NO MÁXIMO DE ATRASO
             oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
             recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-max(x['ap'], x['ac'], x['am']))))
             
@@ -419,7 +438,7 @@ if menu == "🏠 Visão Geral (Home)":
                 for idx, pend in enumerate(alertas_pendulo):
                     with cols_pend[idx % 3]:
                         status, jogos, draws, dirs = pend['status'], pend['jogos'], pend['draws'], pend['dirs']
-                        curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], pend['curr_dir']
+                        curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], curr_dir
                         
                         setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
                         seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
@@ -448,40 +467,81 @@ if menu == "🏠 Visão Geral (Home)":
                         """, unsafe_allow_html=True)
                 st.markdown("---") # Divisor
             
-            # EXIBIÇÃO: OPORTUNIDADES AWACS (SEM LIMITE DE CORTES)
+            # EXIBIÇÃO: OPORTUNIDADES AWACS
             if oportunidades:
                 st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades de Ruptura Encontradas!")
                 cols = st.columns(3)
                 for idx, op in enumerate(oportunidades):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
+                    ta = op.get('tipo_ataque', '')
                     css_class = f"home-box-{op['cfg']['tipo']}"
-                    if op['cfg']['modo'] == 'unidade':
-                        lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"
+                    
+                    # RENDERIZAÇÃO INTELIGENTE (Oculta o lixo se for ataque puro M/C)
+                    if ta == 'UNIDADE':
+                        lbl_alvo = "Unidade"
+                        sub_titulo = "ALVO EXCLUSIVO: UNIDADE"
+                        titulo = op['cfg']['nome']
+                        dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff4b4b;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
                         cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
+                    elif ta == 'MILHAR':
+                        lbl_alvo = "Filtro Base"
+                        sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"
+                        titulo = f"🎯 FOCO: MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
+                        dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=9 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        css_class = "home-box-seq" # Caixa neutra
+                    elif ta == 'CENTENA':
+                        lbl_alvo = "Filtro Base"
+                        sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        titulo = f"🎯 FOCO: CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
+                        dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=9 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        css_class = "home-box-seq"
                     else:
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        titulo = op['cfg']['nome']
+                        dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=9 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=9 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        
                     with cols[idx % 3]:
-                        st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
                 st.markdown("---") # Divisor
             
-            # EXIBIÇÃO: RECORDES HISTÓRICOS (SEMPRE VISÍVEIS)
+            # EXIBIÇÃO: RECORDES HISTÓRICOS 
             if recordes:
                 st.warning("⚠️ RECORDES HISTÓRICOS ALCANÇADOS (Radar Secundário):")
                 cols = st.columns(3)
                 for idx, op in enumerate(recordes):
                     c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
+                    ta = op.get('tipo_ataque', '')
                     css_class = f"home-box-{op['cfg']['tipo']}"
-                    if op['cfg']['modo'] == 'unidade':
-                        lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"
+                    
+                    if ta == 'UNIDADE':
+                        lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"; titulo = op['cfg']['nome']
+                        dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff4b4b;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
                         cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
+                    elif ta == 'MILHAR':
+                        lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"
+                        titulo = f"🏆 RECORDE MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
+                        dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        css_class = "home-box-seq"
+                    elif ta == 'CENTENA':
+                        lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        titulo = f"🏆 RECORDE CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
+                        dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        css_class = "home-box-seq"
                     else:
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                        titulo = op['cfg']['nome']
+                        dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        
                     with cols[idx % 3]:
-                        st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{op['cfg']['nome']}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};">{op['ap']}x</span> (Rec: {op['mp']})</span><br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             
             # SE NÃO TIVER NADA DE NADA
             if not oportunidades and not alertas_pendulo and not recordes: 
