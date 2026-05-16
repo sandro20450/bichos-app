@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.2 - Visão Absoluta", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.3 - Ataque Dinâmico", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -64,6 +64,7 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
+LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
 
@@ -117,15 +118,15 @@ def gerar_matrizes_taticas():
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
         
-        # MUDANÇA: FILTROS AGORA SÃO CONFIGURADOS PARA 9X DE LIMITE
-        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 9, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 9, **cm})
+        # MUDANÇA DA V65.3: FILTROS REBAIXADOS PARA 7X DE LIMITE
+        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 7, **cm})
+        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 7, **cm})
+        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 7, **cm})
+        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 7, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 7, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 7, **cm})
+        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 7, **cm})
+        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 7, **cm})
     
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -244,11 +245,14 @@ def processar_laboratorio_ternos(df):
 # 🧲 MOTOR DO PÊNDULO: MODO "PASSOS CURTOS" (MÁX. 6 CASAS)
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
+    
     dist_c = (curr - prev) % 25
     dist_d = (prev - curr) % 25
-    if 1 <= dist_c <= 6: return "C"  
-    if 1 <= dist_d <= 6: return "D"  
-    return "-" 
+    
+    if 1 <= dist_c <= 6: return "C"  # Passo curto pra Direita
+    if 1 <= dist_d <= 6: return "D"  # Passo curto pra Esquerda
+    
+    return "-" # Pulo longo (Quebra a saturação)
 
 def processar_pendulo(df, coluna):
     all_groups = []
@@ -291,7 +295,6 @@ def processar_pendulo(df, coluna):
     dirs = dirs_history[-5:] 
     last_g = draws[-1]
     
-    # MUDANÇA: O DISPARO AGORA SÓ OCORRE ACIMA DE 4X COMO SOLICITADO
     if curr_streak >= 4:
         if curr_streak == 4: status = "🚨 SATURAÇÃO ALTA"
         elif curr_streak == 5: status = "🔥 SATURAÇÃO EXTREMA"
@@ -351,12 +354,12 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.2")
+    st.header("Pentágono V65.3")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Radar Detalhado", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Visão Absoluta")
-    st.info("Nenhuma anomalia será ocultada. Limite de tela desativado.")
+    st.info("Nenhuma anomalia será ocultada. Limites recalibrados para Ataque Dinâmico.")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("Analisando assinaturas de combate..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
@@ -389,7 +392,6 @@ if menu == "🏠 Visão Geral (Home)":
                         prio = 99
                         alerta = ""
                         
-                        # MUDANÇA ABSOLUTA DA V65.2: Centena e Milhar assumem prioridade se estourarem o limite de 9x
                         if am >= 9 and ac >= 9 and ap >= ap_lim:
                             is_anomaly = True; prio = 1; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
                         elif am >= 9:
@@ -407,7 +409,6 @@ if menu == "🏠 Visão Geral (Home)":
                             alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg})
             
-            # ORDENAÇÃO FOCADA NO MÁXIMO DE ATRASO
             oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
             recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-max(x['ap'], x['ac'], x['am']))))
             
@@ -645,5 +646,4 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-# MUDANÇA ABSOLUTA DA V65.2: O RODAPÉ FOI ATUALIZADO EXATAMENTE COMO ORDENADO.
-st.markdown("""<div class="rodape-tatico">🎯 AWACS: M/C > 9x | D/G/Filtros > 9x | U > 6x &nbsp;&nbsp; || &nbsp;&nbsp; 🧲 PÊNDULO: Saturação de Setas Acima de 4x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 AWACS: M e C > 9x; G e U > 6x; Pendulo > 4x; D, Im/par e extremos > 7x</div>""", unsafe_allow_html=True)
