@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.5 - Scanner de Raio-X", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.6 - Raio-X Tático", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -194,58 +194,6 @@ def deduplicar_alvos(lista):
             vistos.add(sig); resultado.append(item)
     return resultado
 
-def processar_laboratorio_ternos(df):
-    ternos_grupo_vistos = set(); ternos_dezena_vistos = set()
-    for i in range(len(df)):
-        grupos_sorteio = set(); dezenas_sorteio = set()
-        for col in COLUNAS_DF:
-            milhar = str(df.iloc[i][col]).zfill(4)
-            if milhar != "----" and milhar != "nan" and milhar.strip():
-                g = get_grupo_int(milhar)
-                try: d = int(milhar[-2:])
-                except: d = -1
-                if g is not None: grupos_sorteio.add(g)
-                if d != -1: dezenas_sorteio.add(d)
-        for tg in itertools.combinations(sorted(list(grupos_sorteio)), 3): ternos_grupo_vistos.add(tg)
-        for td in itertools.combinations(sorted(list(dezenas_sorteio)), 3): ternos_dezena_vistos.add(td)
-    atrasos_g = {g: 0 for g in range(1, 26)}; atrasos_d = {d: 0 for d in range(100)}
-    for g in range(1, 26):
-        for i in range(len(df)-1, -1, -1):
-            achou = False
-            for col in COLUNAS_DF:
-                m = str(df.iloc[i][col]).zfill(4)
-                if m != "----" and m != "nan" and get_grupo_int(m) == g: achou = True; break
-            if achou: break
-            atrasos_g[g] += 1
-    for d in range(100):
-        for i in range(len(df)-1, -1, -1):
-            achou = False
-            for col in COLUNAS_DF:
-                m = str(df.iloc[i][col]).zfill(4)
-                if m != "----" and m != "nan":
-                    try: 
-                        if int(m[-2:]) == d: achou = True; break
-                    except: pass
-            if achou: break
-            atrasos_d[d] += 1
-    g_ordenados = sorted(atrasos_g.keys(), key=lambda x: atrasos_g[x], reverse=True)
-    d_ordenadas = sorted(atrasos_d.keys(), key=lambda x: atrasos_d[x], reverse=True)
-    top5_grupos = []
-    for tg in itertools.combinations(g_ordenados, 3):
-        tg_sorted = tuple(sorted(list(tg)))
-        if tg_sorted not in ternos_grupo_vistos:
-            soma_atraso = sum([atrasos_g[x] for x in tg_sorted])
-            top5_grupos.append({'terno': tg_sorted, 'score': soma_atraso, 'atrasos': [atrasos_g[x] for x in tg_sorted]})
-            if len(top5_grupos) == 5: break
-    top5_dezenas = []
-    for td in itertools.combinations(d_ordenadas, 3):
-        td_sorted = tuple(sorted(list(td)))
-        if td_sorted not in ternos_dezena_vistos:
-            soma_atraso = sum([atrasos_d[x] for x in td_sorted])
-            top5_dezenas.append({'terno': td_sorted, 'score': soma_atraso, 'atrasos': [atrasos_d[x] for x in td_sorted]})
-            if len(top5_dezenas) == 5: break
-    return top5_grupos, top5_dezenas
-
 # 🧲 MOTOR DO PÊNDULO: MODO "PASSOS CURTOS" (MÁX. 6 CASAS)
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
@@ -355,8 +303,8 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.5")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🧪 Lab de Ternos (Vácuo)", "📡 Extração Central"])
+    st.header("Pentágono V65.6")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Visão Absoluta (Enxuta)")
@@ -519,7 +467,7 @@ if menu == "🏠 Visão Geral (Home)":
             if not oportunidades and not alertas_pendulo and not recordes: 
                 st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
-# 🎯 AQUI ESTÁ A MUDANÇA: O NOVO SCANNER DE RAIO-X
+# 🎯 AQUI ESTÁ A MUDANÇA: SCANNER DE RAIO-X COM INTELIGÊNCIA TÁTICA
 elif menu == "🎯 Scanner de Raio-X":
     st.title("🎯 Scanner de Raio-X (Consulta Manual)")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
@@ -567,6 +515,16 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
 
                 st.markdown(f"### 📡 Relatório de Escaneamento: <span style='color:#00ffff;'>{cfg_rx['nome']}</span>", unsafe_allow_html=True)
+                
+                # AVISOS DOURADOS DA INTELIGÊNCIA TÁTICA
+                if categoria_rx == "Grupo (1 a 25)":
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** Um Grupo seco tem **4% de chance** de acerto. A banca tem 96% de chance de fugir dele no sorteio. A zona de ruptura crítica do elástico (quando a chance da banca continuar fugindo cai para menos de 1%) ocorre lá pela casa dos **115x a 120x** de atraso.")
+                elif categoria_rx == "Dezena (00 a 99)":
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** Uma Dezena seca tem apenas **1% de chance** de acerto. A banca tem 99% de chance de fugir. A zona de ruptura matemática crítica ocorre muito longe, lá pela casa dos **450x a 460x** de atraso.")
+                elif categoria_rx == "Unidade (0 a 9)":
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** Uma Unidade seca tem **10% de chance** de acerto. A banca tem 90% de chance de fugir. O elástico atinge sua tensão máxima de ruptura lá pela casa dos **45x a 50x** de atraso.")
+                else:
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** Filtros de Massa cobrem **50% da roleta** (Chance igual a jogar Cara ou Coroa). A banca tem pouco espaço de fuga. A zona de ruptura matemática absoluta para essa modalidade ocorre entre **7x e 9x**.")
                 
                 cols_rx = st.columns(5)
                 for i, col in enumerate(COLUNAS_DF):
@@ -640,36 +598,6 @@ elif menu == "🧲 Armadilha do Pêndulo":
                                 """, unsafe_allow_html=True)
                         else:
                             st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
-
-elif menu == "🧪 Lab de Ternos (Vácuo)":
-    st.title("🧪 Laboratório de Vácuo Estatístico")
-    st.info("Analisa **todo o histórico da planilha** para encontrar Ternos que NUNCA saíram juntos.")
-    banca_lab = st.selectbox("Selecione o Alvo para Pesquisa Profunda:", list(BANCAS_CONFIG.keys()))
-    if st.button("🔬 PROCESSAR VÁCUO ESTATÍSTICO", type="primary", use_container_width=True):
-        with st.spinner(f"Lendo histórico da {banca_lab} e cruzando milhares de combinações..."):
-            df_lab = carregar_dados_em_memoria(banca_lab)
-            if df_lab.empty: st.error("Base de dados vazia. Faça uma extração primeiro.")
-            else:
-                total_sorteios = len(df_lab)
-                top5_g, top5_d = processar_laboratorio_ternos(df_lab)
-                st.success(f"✅ Histórico completo analisado: **{total_sorteios} sorteios processados.**")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("### 🐯 Terno de Grupo (Inéditos Top 5)")
-                    if top5_g:
-                        for i, t in enumerate(top5_g):
-                            t_format = " - ".join([str(x).zfill(2) for x in t['terno']])
-                            atr_format = " | ".join([f"G:{str(g).zfill(2)}({a}x)" for g, a in zip(t['terno'], t['atrasos'])])
-                            st.markdown(f"""<div class="home-box home-box-lab"><div class="sniper-titulo" style="color:#00ffff;">Terno #{i+1}: {t_format}</div><div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div><div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div><div class="alerta-azul" style="border-color:#00ffff; color:#00ffff;">NUNCA SAIU JUNTO</div></div>""", unsafe_allow_html=True)
-                    else: st.info("Todos os ternos de grupo já saíram pelo menos uma vez.")
-                with col2:
-                    st.markdown("### 💣 Terno de Dezena (Inéditos Top 5)")
-                    if top5_d:
-                        for i, t in enumerate(top5_d):
-                            t_format = " - ".join([str(x).zfill(2) for x in t['terno']])
-                            atr_format = " | ".join([f"D:{str(d).zfill(2)}({a}x)" for d, a in zip(t['terno'], t['atrasos'])])
-                            st.markdown(f"""<div class="home-box home-box-lab"><div class="sniper-titulo" style="color:#ffcc00;">Terno #{i+1}: {t_format}</div><div class="sniper-dado" style="color:#fff;">Atrasos Individuais Atuais:</div><div class="sniper-dado" style="color:#FF851B; font-weight:bold;">{atr_format}</div><div class="alerta-amarelo" style="border-color:#ffcc00; color:#ffcc00;">NUNCA SAIU JUNTO</div></div>""", unsafe_allow_html=True)
-                    else: st.info("Todos os ternos de dezena já saíram pelo menos uma vez.")
 
 elif menu == "📡 Extração Central":
     st.title("📡 Extração de Resultados")
