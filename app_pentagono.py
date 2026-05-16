@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.6 - Raio-X Tático", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.7 - Raio-X Completo", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -303,7 +303,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.6")
+    st.header("Pentágono V65.7")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -467,7 +467,6 @@ if menu == "🏠 Visão Geral (Home)":
             if not oportunidades and not alertas_pendulo and not recordes: 
                 st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
-# 🎯 AQUI ESTÁ A MUDANÇA: SCANNER DE RAIO-X COM INTELIGÊNCIA TÁTICA
 elif menu == "🎯 Scanner de Raio-X":
     st.title("🎯 Scanner de Raio-X (Consulta Manual)")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
@@ -485,7 +484,15 @@ elif menu == "🎯 Scanner de Raio-X":
         elif categoria_rx == "Unidade (0 a 9)":
             alvo_rx = st.number_input("Qual Unidade?", min_value=0, max_value=9, value=0)
         else:
-            alvo_rx = st.selectbox("Qual Filtro?", ["Grupos Pares", "Grupos Ímpares", "Dezenas Pares", "Dezenas Ímpares", "Dezenas Baixas (01-50)", "Dezenas Altas (51-00)", "Dezenas Miolo (26-75)", "Dezenas Bordas"])
+            # MUDANÇA DA V65.7: ADICIONADOS OS FILTROS DE UNIDADE (50%)
+            alvo_rx = st.selectbox("Qual Filtro?", [
+                "Grupos Pares", "Grupos Ímpares", 
+                "Dezenas Pares", "Dezenas Ímpares", 
+                "Dezenas Baixas (01-50)", "Dezenas Altas (51-00)", 
+                "Dezenas Miolo (26-75)", "Dezenas Bordas",
+                "Unidades Baixas (1-5)", "Unidades Altas (6-0)",
+                "Unidades Ímpares", "Unidades Pares"
+            ])
             
     if st.button("🔎 EXECUTAR RAIO-X", type="primary", use_container_width=True):
         with st.spinner(f"Escaneando todo o histórico da {banca_rx}..."):
@@ -495,7 +502,6 @@ elif menu == "🎯 Scanner de Raio-X":
             else:
                 exibir_banner_sorteio(df, banca_rx)
                 
-                # Montar a matriz matemática do alvo
                 cfg_rx = {'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999, 'lim': 0}
                 if categoria_rx == "Grupo (1 a 25)":
                     cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'grupo'; cfg_rx['nome'] = f"GRUPO {str(alvo_rx).zfill(2)}"
@@ -513,10 +519,14 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Dezenas Altas (51-00)": cfg_rx['alvos'] = set(range(51, 100)) | {0}; cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Miolo (26-75)": cfg_rx['alvos'] = set(range(26, 76)); cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
+                    # MUDANÇA DA V65.7: LÓGICA DOS FILTROS DE UNIDADE
+                    elif alvo_rx == "Unidades Baixas (1-5)": cfg_rx['alvos'] = {1, 2, 3, 4, 5}; cfg_rx['modo'] = 'unidade'
+                    elif alvo_rx == "Unidades Altas (6-0)": cfg_rx['alvos'] = {6, 7, 8, 9, 0}; cfg_rx['modo'] = 'unidade'
+                    elif alvo_rx == "Unidades Ímpares": cfg_rx['alvos'] = {1, 3, 5, 7, 9}; cfg_rx['modo'] = 'unidade'
+                    elif alvo_rx == "Unidades Pares": cfg_rx['alvos'] = {0, 2, 4, 6, 8}; cfg_rx['modo'] = 'unidade'
 
                 st.markdown(f"### 📡 Relatório de Escaneamento: <span style='color:#00ffff;'>{cfg_rx['nome']}</span>", unsafe_allow_html=True)
                 
-                # AVISOS DOURADOS DA INTELIGÊNCIA TÁTICA
                 if categoria_rx == "Grupo (1 a 25)":
                     st.info("🧠 **INTELIGÊNCIA TÁTICA:** Um Grupo seco tem **4% de chance** de acerto. A banca tem 96% de chance de fugir dele no sorteio. A zona de ruptura crítica do elástico (quando a chance da banca continuar fugindo cai para menos de 1%) ocorre lá pela casa dos **115x a 120x** de atraso.")
                 elif categoria_rx == "Dezena (00 a 99)":
