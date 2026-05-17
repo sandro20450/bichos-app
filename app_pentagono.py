@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.8 - Rodapé Blindado", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.9 - Destravamento", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -114,9 +114,10 @@ def gerar_matrizes_taticas():
     cms = []
     for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
     for cm in cms:
+        # MUDANÇA DA V65.9: O Limite dos 15 Grupos caiu de 6x para 5x (Aumentando as chances de aparecer no Radar)
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 6, **cm})
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 5, **cm})
         
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 7, **cm})
@@ -303,7 +304,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.8")
+    st.header("Pentágono V65.9")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -572,7 +573,7 @@ elif menu == "🧲 Armadilha do Pêndulo":
                             setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
                             seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
-                                         f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
+                                         fspan style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[3]).zfill(2)}</span> {setas[3]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[4]).zfill(2)}</span> {setas[4]} " \
                                          f"<span style='font-size:16px; font-weight:bold; color:#ff4b4b;'>{str(draws[5]).zfill(2)}</span>"
@@ -654,4 +655,5 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 TETOS DO ELÁSTICO: Milhar/Centena = 13x | Dezena, Unidade, Ímpar/Par e Extremos = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+# ATUALIZAÇÃO DO RODAPÉ INCLUINDO OS 15 GRUPOS
+st.markdown("""<div class="rodape-tatico">🎯 AWACS: M e C > 9x; D, Im/par e extremos > 7x; U > 6x; 15 Grupos > 5x &nbsp;&nbsp; || &nbsp;&nbsp; 🧲 PÊNDULO: Saturação > 4x</div>""", unsafe_allow_html=True)
