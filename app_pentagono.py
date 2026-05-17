@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.10 - Rastreador de Blocos", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.11 - Radar Sniper", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -65,7 +65,6 @@ BANCAS_CONFIG = {
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
-LIMITE_CENTENA, LIMITE_MILHAR = 5, 5
 COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
 
@@ -133,11 +132,12 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 7, **cm})
     
+    # MUDANÇA DA V65.11: Unidades agora também disparam no 7x (2 pontos do teto de 9x)
     esquadroes_unidade = [
-        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 6, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
     esquadroes.extend(esquadroes_unidade)
     return esquadroes
@@ -248,9 +248,10 @@ def processar_pendulo(df, coluna):
     dirs = dirs_history[-5:] 
     last_g = draws[-1]
     
-    if curr_streak >= 4:
-        if curr_streak == 4: status = "🚨 SATURAÇÃO ALTA"
-        elif curr_streak == 5: status = "🔥 SATURAÇÃO EXTREMA"
+    # MUDANÇA DA V65.11: Pêndulo agora desperta no 3x (Teto é 5x)
+    if curr_streak >= 3:
+        if curr_streak == 3: status = "🚨 SATURAÇÃO ALTA"
+        elif curr_streak == 4: status = "🔥 SATURAÇÃO EXTREMA"
         else: status = f"☢️ SATURAÇÃO CRÍTICA"
         
         jogos = []; curr = last_g
@@ -307,12 +308,12 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.10")
+    st.header("Pentágono V65.11")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🧩 Rastreador de Blocos (15G)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Visão Absoluta (Enxuta)")
-    st.info("Nenhuma anomalia será ocultada. Limites recalibrados e loops redundantes removidos.")
+    st.title("🚨 Central AWACS - Radar Sniper")
+    st.info("Visão Enxuta Ativada. Exibindo apenas alvos a exatos 2 pontos da Ruptura Crítica (Teto).")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("Analisando assinaturas de combate (Limpando Redundâncias)..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
@@ -341,13 +342,14 @@ if menu == "🏠 Visão Geral (Home)":
                         
                         is_anomaly = False; prio = 99; alerta = ""; tipo_ataque = ""
                         
-                        if am >= 9 and ac >= 9 and ap >= ap_lim:
+                        # MUDANÇA DA V65.11: Milhar e Centena disparam apenas no 11x
+                        if am >= 11 and ac >= 11 and ap >= ap_lim:
                             is_anomaly = True; prio = 1; tipo_ataque = "TOTAL"; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
-                        elif am >= 9:
+                        elif am >= 11:
                             is_anomaly = True; prio = 2; tipo_ataque = "MILHAR"; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x)</div>"
-                        elif ac >= 9:
+                        elif ac >= 11:
                             is_anomaly = True; prio = 3; tipo_ataque = "CENTENA"; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x)</div>"
-                        elif cfg['modo'] == 'unidade' and ap >= 6:
+                        elif cfg['modo'] == 'unidade' and ap >= 7:
                             is_anomaly = True; prio = 4; tipo_ataque = "UNIDADE"; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
                         elif ap >= ap_lim:
                             is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
@@ -358,10 +360,10 @@ if menu == "🏠 Visão Geral (Home)":
                         elif ap == mp and mp >= ap_lim - 1:
                             tipo_rec = "ALVO_PRINCIPAL"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
                             recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
-                        elif am == mm and mm >= 5:
+                        elif am == mm and mm >= 9:
                             tipo_rec = "MILHAR"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE MILHAR</div>"
                             recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
-                        elif ac == mc and mc >= 5:
+                        elif ac == mc and mc >= 9:
                             tipo_rec = "CENTENA"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE CENTENA</div>"
                             recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
             
@@ -418,19 +420,19 @@ if menu == "🏠 Visão Geral (Home)":
                     elif ta == 'MILHAR':
                         lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"; titulo = f"🎯 FOCO: MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
                         dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=9 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq" 
                     elif ta == 'CENTENA':
                         lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"; titulo = f"🎯 FOCO: CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
                         dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=9 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq"
                     else:
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         titulo = op['cfg']['nome']
                         dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=9 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=9 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
@@ -611,7 +613,6 @@ elif menu == "🧲 Armadilha do Pêndulo":
                         else:
                             st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
 
-# 🎯 AQUI ESTÁ A "OPÇÃO A": RASTREADOR DE BLOCOS DE 15 GRUPOS
 elif menu == "🧩 Rastreador de Blocos (15G)":
     st.title("🧩 Rastreador de Blocos em Movimento (Escadinha)")
     st.info("Analisa a banca empurrando o BLOCO INTEIRO de 15 grupos (Opção A). O número indica o início do Bloco.")
@@ -627,12 +628,10 @@ elif menu == "🧩 Rastreador de Blocos (15G)":
                 st.markdown("### 📊 Resultado da Escadinha de Blocos")
                 cols = st.columns(5)
                 for i, col in enumerate(COLUNAS_DF):
-                    resultado = processar_pendulo(df, col) # A matemática direcional é exatamente a mesma
+                    resultado = processar_pendulo(df, col) 
                     with cols[i]:
                         if resultado:
                             status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
-                            
-                            # Formatação visual para "Blocos" ao invés de Dezenas
                             setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
                             
                             seq_visual = f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[0])}</span> {setas[0]}<br>" \
@@ -643,7 +642,7 @@ elif menu == "🧩 Rastreador de Blocos (15G)":
                                          f"<span style='font-size:15px; font-weight:bold; color:#ff8c00;'>{formatar_bloco_15g(draws[5])}</span>"
                             
                             if status != "Estável":
-                                cor_box = "border-color: #ff8c00;" # Laranja pra Blocos
+                                cor_box = "border-color: #ff8c00;" 
                                 lista_jogos = ", ".join(jogos)
                                 
                                 st.markdown(f"""
@@ -719,5 +718,5 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-# CORRIGIDO: O RODAPÉ FOI BLINDADO EXATAMENTE COMO ORDENADO.
-st.markdown("""<div class="rodape-tatico">🎯 TETOS DO ELÁSTICO: Milhar/Centena = 13x | Dezena, Unidade, Ímpar/Par e Extremos = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+# MUDANÇA DA V65.11: Rodapé com as novas margens ("Teto - 2")
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo e Blocos = 3x</div>""", unsafe_allow_html=True)
