@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.7 - Raio-X Completo", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.8 - Rodapé Blindado", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -303,7 +303,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.7")
+    st.header("Pentágono V65.8")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -484,7 +484,6 @@ elif menu == "🎯 Scanner de Raio-X":
         elif categoria_rx == "Unidade (0 a 9)":
             alvo_rx = st.number_input("Qual Unidade?", min_value=0, max_value=9, value=0)
         else:
-            # MUDANÇA DA V65.7: ADICIONADOS OS FILTROS DE UNIDADE (50%)
             alvo_rx = st.selectbox("Qual Filtro?", [
                 "Grupos Pares", "Grupos Ímpares", 
                 "Dezenas Pares", "Dezenas Ímpares", 
@@ -519,7 +518,6 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Dezenas Altas (51-00)": cfg_rx['alvos'] = set(range(51, 100)) | {0}; cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Miolo (26-75)": cfg_rx['alvos'] = set(range(26, 76)); cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
-                    # MUDANÇA DA V65.7: LÓGICA DOS FILTROS DE UNIDADE
                     elif alvo_rx == "Unidades Baixas (1-5)": cfg_rx['alvos'] = {1, 2, 3, 4, 5}; cfg_rx['modo'] = 'unidade'
                     elif alvo_rx == "Unidades Altas (6-0)": cfg_rx['alvos'] = {6, 7, 8, 9, 0}; cfg_rx['modo'] = 'unidade'
                     elif alvo_rx == "Unidades Ímpares": cfg_rx['alvos'] = {1, 3, 5, 7, 9}; cfg_rx['modo'] = 'unidade'
@@ -656,4 +654,4 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 AWACS: M e C > 9x; G e U > 6x; Pendulo > 4x; D, Im/par e extremos > 7x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 TETOS DO ELÁSTICO: Milhar/Centena = 13x | Dezena, Unidade, Ímpar/Par e Extremos = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
