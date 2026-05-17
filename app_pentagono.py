@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.9.1 - Correção", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.10 - Rastreador de Blocos", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -24,6 +24,7 @@ st.markdown("""
 .home-box-uni { background-color: #2d001d; border-color: #ff00aa; } 
 .home-box-lab { background-color: #001f3f; border-color: #00ffff; } 
 .home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } 
+.home-box-bloco { background-color: #2b1a00; border-color: #ff8c00; } 
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
 .home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
@@ -105,6 +106,11 @@ def get_grupo_int(m):
         d = int(str(m)[-2:])
         return 25 if d == 0 else math.ceil(d/4)
     except: return None
+
+def formatar_bloco_15g(g):
+    fim = g + 14
+    if fim > 25: fim -= 25
+    return f"[{str(g).zfill(2)}-{str(fim).zfill(2)}]"
 
 # =============================================================================
 # 👻 MOTORES DE ANÁLISE
@@ -194,7 +200,7 @@ def deduplicar_alvos(lista):
             vistos.add(sig); resultado.append(item)
     return resultado
 
-# 🧲 MOTOR DO PÊNDULO: MODO "PASSOS CURTOS" (MÁX. 6 CASAS)
+# 🧲 MOTOR DO PÊNDULO E BLOCOS
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
     dist_c = (curr - prev) % 25
@@ -213,9 +219,7 @@ def processar_pendulo(df, coluna):
                 all_groups.append(g) 
                 
     if len(all_groups) < 6: return None
-    
     draws = all_groups[-6:] 
-    
     dirs_history = []
     for i in range(1, len(all_groups)):
         dirs_history.append(direcao_pendulo(all_groups[i-1], all_groups[i]))
@@ -303,8 +307,8 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.9.1")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
+    st.header("Pentágono V65.10")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🧩 Rastreador de Blocos (15G)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Visão Absoluta (Enxuta)")
@@ -373,8 +377,6 @@ if menu == "🏠 Visão Geral (Home)":
                         curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], pend['curr_dir']
                         
                         setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
-                        
-                        # CORRIGIDO NA V65.9.1
                         seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                      f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
                                      f"<span style='font-size:16px; font-weight:bold;'>{str(draws[2]).zfill(2)}</span> {setas[2]} " \
@@ -571,8 +573,6 @@ elif menu == "🧲 Armadilha do Pêndulo":
                     with cols[i]:
                         if resultado:
                             status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
-                            
-                            # AQUI ESTÁ A CORREÇÃO NA ABA DO PÊNDULO TAMBÉM
                             setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
                             seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
                                          f"<span style='font-size:16px; font-weight:bold;'>{str(draws[1]).zfill(2)}</span> {setas[1]} " \
@@ -606,6 +606,67 @@ elif menu == "🧲 Armadilha do Pêndulo":
                                         Saturação: <span class="sniper-valor" style="color:#4CAF50;">{curr_streak}x</span> (Rec: {max_streak})
                                     </div>
                                     <div class="sniper-dado">Movimento Estável.<br>Sem saturação detectada.</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
+
+# 🎯 AQUI ESTÁ A "OPÇÃO A": RASTREADOR DE BLOCOS DE 15 GRUPOS
+elif menu == "🧩 Rastreador de Blocos (15G)":
+    st.title("🧩 Rastreador de Blocos em Movimento (Escadinha)")
+    st.info("Analisa a banca empurrando o BLOCO INTEIRO de 15 grupos (Opção A). O número indica o início do Bloco.")
+    banca_bloco = st.selectbox("Selecione o Alvo de Blocos:", list(BANCAS_CONFIG.keys()))
+    
+    if st.button("🧩 RASTREAR ESCADINHA DE BLOCOS", type="primary", use_container_width=True):
+        with st.spinner(f"Mapeando o deslocamento dos blocos de 15G na {banca_bloco}..."):
+            df = carregar_dados_em_memoria(banca_bloco)
+            if df.empty:
+                st.error("Base de dados vazia. Faça uma extração primeiro.")
+            else:
+                exibir_banner_sorteio(df, banca_bloco)
+                st.markdown("### 📊 Resultado da Escadinha de Blocos")
+                cols = st.columns(5)
+                for i, col in enumerate(COLUNAS_DF):
+                    resultado = processar_pendulo(df, col) # A matemática direcional é exatamente a mesma
+                    with cols[i]:
+                        if resultado:
+                            status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
+                            
+                            # Formatação visual para "Blocos" ao invés de Dezenas
+                            setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
+                            
+                            seq_visual = f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[0])}</span> {setas[0]}<br>" \
+                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[1])}</span> {setas[1]}<br>" \
+                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[2])}</span> {setas[2]}<br>" \
+                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[3])}</span> {setas[3]}<br>" \
+                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[4])}</span> {setas[4]}<br>" \
+                                         f"<span style='font-size:15px; font-weight:bold; color:#ff8c00;'>{formatar_bloco_15g(draws[5])}</span>"
+                            
+                            if status != "Estável":
+                                cor_box = "border-color: #ff8c00;" # Laranja pra Blocos
+                                lista_jogos = ", ".join(jogos)
+                                
+                                st.markdown(f"""
+                                <div class="home-box home-box-bloco" style="{cor_box}">
+                                    <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
+                                    <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
+                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
+                                        Saturação do Bloco: <span class="sniper-valor" style="color:#ff8c00;">{curr_streak}x</span>
+                                    </div>
+                                    <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Bloco subindo' if curr_dir == 'C' else 'Bloco descendo'}</div>
+                                    <div class="sniper-dado" style="margin-top:10px; color:#fff;">O Próximo Bloco tende a começar em:</div>
+                                    <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"""
+                                <div class="home-box" style="background-color:#111; border-color:#333;">
+                                    <div class="home-premio" style="color:#aaa;">🏆 {TITULOS_PREMIOS[i]}</div>
+                                    <div class="sniper-dado" style="margin-bottom:10px; color:#666;">{seq_visual}</div>
+                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
+                                        Saturação do Bloco: <span class="sniper-valor" style="color:#4CAF50;">{curr_streak}x</span>
+                                    </div>
+                                    <div class="sniper-dado">Blocos estáveis.<br>Sem escadinha detectada.</div>
                                 </div>
                                 """, unsafe_allow_html=True)
                         else:
@@ -658,4 +719,5 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 DIRETRIZ DE ENGAJAMENTO: Milhar e Centena acima de 9x (ENTRAR) | Grupo acima de 6x (MELHOR CHANCE) | Filtros Par/Ímpar/Dezena: acima de 9x | Unidade: acima de 6x</div>""", unsafe_allow_html=True)
+# CORRIGIDO: O RODAPÉ FOI BLINDADO EXATAMENTE COMO ORDENADO.
+st.markdown("""<div class="rodape-tatico">🎯 TETOS DO ELÁSTICO: Milhar/Centena = 13x | Dezena, Unidade, Ímpar/Par e Extremos = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
