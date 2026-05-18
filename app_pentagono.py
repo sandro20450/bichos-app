@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.11 - Radar Sniper", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.12 - Hedge & Desdobramento", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -24,7 +24,6 @@ st.markdown("""
 .home-box-uni { background-color: #2d001d; border-color: #ff00aa; } 
 .home-box-lab { background-color: #001f3f; border-color: #00ffff; } 
 .home-box-pendulo { background-color: #1a1a2e; border-color: #e94560; } 
-.home-box-bloco { background-color: #2b1a00; border-color: #ff8c00; } 
 
 .home-banca { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 2px; text-transform: uppercase; }
 .home-horario { font-size: 11px; color: #aaa; margin-top: -2px; margin-bottom: 8px; font-weight: normal; }
@@ -106,13 +105,8 @@ def get_grupo_int(m):
         return 25 if d == 0 else math.ceil(d/4)
     except: return None
 
-def formatar_bloco_15g(g):
-    fim = g + 14
-    if fim > 25: fim -= 25
-    return f"[{str(g).zfill(2)}-{str(fim).zfill(2)}]"
-
 # =============================================================================
-# 👻 MOTORES DE ANÁLISE
+# 👻 MOTORES DE ANÁLISE E DESDOBRAMENTO (HEDGE)
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -132,7 +126,6 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 7, **cm})
     
-    # MUDANÇA DA V65.11: Unidades agora também disparam no 7x (2 pontos do teto de 9x)
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -200,7 +193,75 @@ def deduplicar_alvos(lista):
             vistos.add(sig); resultado.append(item)
     return resultado
 
-# 🧲 MOTOR DO PÊNDULO E BLOCOS
+def get_hedge_15g(df, col, cfg_15g, col_delays):
+    grupos = list(cfg_15g['alvos'])
+    scores = {g: 0 for g in grupos}
+
+    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0),
+                    col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
+
+    if mass_max >= 3:
+        if col_delays.get('G: ÍMPARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 == 0: scores[g] += 1
+        if col_delays.get('G: PARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 != 0: scores[g] += 1
+        if col_delays.get('D: ALTAS (51-00)', 0) >= 3:
+            for g in grupos:
+                if g <= 12: scores[g] += 1
+        if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
+            for g in grupos:
+                if g >= 14: scores[g] += 1
+    else:
+        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0),
+                       col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
+        if uni_max >= 3:
+            if col_delays.get('U: ÍMPARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 == 0: scores[g] += 1
+            if col_delays.get('U: PARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 != 0: scores[g] += 1
+            if col_delays.get('U: ALTAS (6-0)', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) in [1,2,3,4,5]: scores[g] += 1
+            if col_delays.get('U: BAIXAS (1-5)', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) in [6,7,8,9,0]: scores[g] += 1
+
+    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
+    eliminar = [g for g in sorted_g[:2] if scores[g] > 0]
+
+    if not eliminar:
+        return None 
+
+    seguro = {}
+    for g in eliminar:
+        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4]
+        if g == 25: dezenas = [97, 98, 99, 0]
+        max_d_delay = -1
+        best_d = -1
+        for d in dezenas:
+            delay_d = 0
+            for i in range(len(df)-1, -1, -1):
+                m = str(df.iloc[i][col]).zfill(4)
+                if m == "----" or m == "nan": continue
+                try:
+                    dez_val = int(m[-2:])
+                except:
+                    dez_val = -1
+                if dez_val == d:
+                    break
+                delay_d += 1
+            if delay_d > max_d_delay:
+                max_d_delay = delay_d
+                best_d = d
+        seguro[g] = (best_d, max_d_delay)
+
+    manter = [g for g in grupos if g not in eliminar]
+    return {'eliminar': sorted(eliminar), 'manter': sorted(manter), 'seguro': seguro}
+
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
     dist_c = (curr - prev) % 25
@@ -248,7 +309,6 @@ def processar_pendulo(df, coluna):
     dirs = dirs_history[-5:] 
     last_g = draws[-1]
     
-    # MUDANÇA DA V65.11: Pêndulo agora desperta no 3x (Teto é 5x)
     if curr_streak >= 3:
         if curr_streak == 3: status = "🚨 SATURAÇÃO ALTA"
         elif curr_streak == 4: status = "🔥 SATURAÇÃO EXTREMA"
@@ -308,14 +368,14 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.11")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🧩 Rastreador de Blocos (15G)", "📡 Extração Central"])
+    st.header("Pentágono V65.12")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Radar Sniper")
-    st.info("Visão Enxuta Ativada. Exibindo apenas alvos a exatos 2 pontos da Ruptura Crítica (Teto).")
+    st.title("🚨 Central AWACS - Desdobramento (Hedge)")
+    st.info("Visão Enxuta. Otimizando lucros com cortes automáticos de risco baseados em zonas frias.")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Analisando assinaturas de combate (Limpando Redundâncias)..."):
+        with st.spinner("Triando alvos e calculando seguros de retaguarda..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
             todos_esq = gerar_matrizes_taticas()
             
@@ -324,6 +384,7 @@ if menu == "🏠 Visão Geral (Home)":
                 if df.empty: continue
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
                 
+                # Armadilha Pêndulo Home
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     resultado_pend = processar_pendulo(df, col)
@@ -332,17 +393,24 @@ if menu == "🏠 Visão Geral (Home)":
                         if status != "Estável":
                             alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
                 
+                # Pré-Cálculo de Atrasos para o Módulo de Hedge
+                metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
                         if cfg['modo'] == 'unidade' and (banca_nome != "Tradicional" or col != "P1"): continue
-                        
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
+                
+                # Módulo AWACS & Hedge
+                for cfg in todos_esq:
+                    for i, col in enumerate(COLUNAS_DF):
+                        if (cfg['nome'], col) not in metrics_cache: continue
+                        ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], col)]
                         ap_lim = cfg['lim'] 
                         
                         is_anomaly = False; prio = 99; alerta = ""; tipo_ataque = ""
                         
-                        # MUDANÇA DA V65.11: Milhar e Centena disparam apenas no 11x
                         if am >= 11 and ac >= 11 and ap >= ap_lim:
                             is_anomaly = True; prio = 1; tipo_ataque = "TOTAL"; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
                         elif am >= 11:
@@ -355,6 +423,29 @@ if menu == "🏠 Visão Geral (Home)":
                             is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
 
                         if is_anomaly:
+                            # 🛡️ MOTOR DE DESDOBRAMENTO TÁTICO
+                            if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
+                                col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
+                                hedge_data = get_hedge_15g(df, col, cfg, col_delays)
+                                
+                                if hedge_data:
+                                    elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
+                                    mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
+                                    seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
+                                    seg_str = " | ".join(seg_list)
+                                    
+                                    alerta += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
+                                        <div style='color:#ffcc00; font-size:11px; font-weight:bold; margin-bottom:3px;'>🛡️ DESDOBRAMENTO TÁTICO</div>
+                                        <div style='color:#ff4b4b; font-size:11px;'>❌ Cortar: G {elim_str}</div>
+                                        <div style='color:#4CAF50; font-size:11px; margin-top:2px;'>✅ Jogar: {mant_str} ({len(hedge_data['manter'])}G)</div>
+                                        <div style='color:#FF851B; font-size:11px; margin-top:4px;'>🆘 Seguro: {seg_str}</div>
+                                    </div>"""
+                                else:
+                                    alerta += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
+                                        <div style='color:#ffcc00; font-size:11px; font-weight:bold;'>🛡️ DESDOBRAMENTO TÁTICO</div>
+                                        <div style='color:#ccc; font-size:11px;'>Filtros Neutros. Jogue os 15 Grupos Integrais.</div>
+                                    </div>"""
+
                             oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg, "tipo_ataque": tipo_ataque})
                         
                         elif ap == mp and mp >= ap_lim - 1:
@@ -613,64 +704,6 @@ elif menu == "🧲 Armadilha do Pêndulo":
                         else:
                             st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
 
-elif menu == "🧩 Rastreador de Blocos (15G)":
-    st.title("🧩 Rastreador de Blocos em Movimento (Escadinha)")
-    st.info("Analisa a banca empurrando o BLOCO INTEIRO de 15 grupos (Opção A). O número indica o início do Bloco.")
-    banca_bloco = st.selectbox("Selecione o Alvo de Blocos:", list(BANCAS_CONFIG.keys()))
-    
-    if st.button("🧩 RASTREAR ESCADINHA DE BLOCOS", type="primary", use_container_width=True):
-        with st.spinner(f"Mapeando o deslocamento dos blocos de 15G na {banca_bloco}..."):
-            df = carregar_dados_em_memoria(banca_bloco)
-            if df.empty:
-                st.error("Base de dados vazia. Faça uma extração primeiro.")
-            else:
-                exibir_banner_sorteio(df, banca_bloco)
-                st.markdown("### 📊 Resultado da Escadinha de Blocos")
-                cols = st.columns(5)
-                for i, col in enumerate(COLUNAS_DF):
-                    resultado = processar_pendulo(df, col) 
-                    with cols[i]:
-                        if resultado:
-                            status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
-                            setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
-                            
-                            seq_visual = f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[0])}</span> {setas[0]}<br>" \
-                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[1])}</span> {setas[1]}<br>" \
-                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[2])}</span> {setas[2]}<br>" \
-                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[3])}</span> {setas[3]}<br>" \
-                                         f"<span style='font-size:14px; font-weight:bold;'>{formatar_bloco_15g(draws[4])}</span> {setas[4]}<br>" \
-                                         f"<span style='font-size:15px; font-weight:bold; color:#ff8c00;'>{formatar_bloco_15g(draws[5])}</span>"
-                            
-                            if status != "Estável":
-                                cor_box = "border-color: #ff8c00;" 
-                                lista_jogos = ", ".join(jogos)
-                                
-                                st.markdown(f"""
-                                <div class="home-box home-box-bloco" style="{cor_box}">
-                                    <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
-                                    <div class="sniper-dado" style="margin-bottom:10px;">{seq_visual}</div>
-                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
-                                        Saturação do Bloco: <span class="sniper-valor" style="color:#ff8c00;">{curr_streak}x</span>
-                                    </div>
-                                    <div class="alerta-supremo" style="{cor_box}">{status}<br> {'Bloco subindo' if curr_dir == 'C' else 'Bloco descendo'}</div>
-                                    <div class="sniper-dado" style="margin-top:10px; color:#fff;">O Próximo Bloco tende a começar em:</div>
-                                    <div class="sniper-valor" style="color:#ffcc00; font-size:12px; word-wrap: break-word;">{lista_jogos}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"""
-                                <div class="home-box" style="background-color:#111; border-color:#333;">
-                                    <div class="home-premio" style="color:#aaa;">🏆 {TITULOS_PREMIOS[i]}</div>
-                                    <div class="sniper-dado" style="margin-bottom:10px; color:#666;">{seq_visual}</div>
-                                    <div class="sniper-dado" style="text-align:center; margin-top:-5px; margin-bottom:10px;">
-                                        Saturação do Bloco: <span class="sniper-valor" style="color:#4CAF50;">{curr_streak}x</span>
-                                    </div>
-                                    <div class="sniper-dado">Blocos estáveis.<br>Sem escadinha detectada.</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                        else:
-                            st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
-
 elif menu == "📡 Extração Central":
     st.title("📡 Extração de Resultados")
     dt = st.date_input("Data do Sorteio:", value=date.today())
@@ -718,5 +751,4 @@ elif menu == "📡 Extração Central":
                         carregar_dados_em_memoria.clear()
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-# MUDANÇA DA V65.11: Rodapé com as novas margens ("Teto - 2")
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo e Blocos = 3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
