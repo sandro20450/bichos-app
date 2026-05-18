@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.12 - Hedge & Desdobramento", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.13 - Hedge & Force Update", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -106,7 +106,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE ANÁLISE E DESDOBRAMENTO (HEDGE)
+# 👻 MOTORES DE ANÁLISE E HEDGE (DESDOBRAMENTO)
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -188,11 +188,11 @@ def deduplicar_alvos(lista):
         if ta == "MILHAR": sig = f"{item['banca']}_{item['premio']}_M_{item['cfg']['m_min']}"
         elif ta == "CENTENA": sig = f"{item['banca']}_{item['premio']}_C_{item['cfg']['c_min']}"
         else: sig = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}"
-        
         if sig not in vistos:
             vistos.add(sig); resultado.append(item)
     return resultado
 
+# 🛡️ MOTOR DE DESDOBRAMENTO (HEDGE)
 def get_hedge_15g(df, col, cfg_15g, col_delays):
     grupos = list(cfg_15g['alvos'])
     scores = {g: 0 for g in grupos}
@@ -212,7 +212,7 @@ def get_hedge_15g(df, col, cfg_15g, col_delays):
                 if g <= 12: scores[g] += 1
         if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
             for g in grupos:
-                if g >= 14: scores[g] += 1
+                if g >= 13: scores[g] += 1
     else:
         uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0),
                        col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
@@ -231,7 +231,7 @@ def get_hedge_15g(df, col, cfg_15g, col_delays):
                     if (g % 10) in [6,7,8,9,0]: scores[g] += 1
 
     sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
-    eliminar = [g for g in sorted_g[:2] if scores[g] > 0]
+    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
 
     if not eliminar:
         return None 
@@ -247,16 +247,12 @@ def get_hedge_15g(df, col, cfg_15g, col_delays):
             for i in range(len(df)-1, -1, -1):
                 m = str(df.iloc[i][col]).zfill(4)
                 if m == "----" or m == "nan": continue
-                try:
-                    dez_val = int(m[-2:])
-                except:
-                    dez_val = -1
-                if dez_val == d:
-                    break
+                try: dez_val = int(m[-2:])
+                except: dez_val = -1
+                if dez_val == d: break
                 delay_d += 1
             if delay_d > max_d_delay:
-                max_d_delay = delay_d
-                best_d = d
+                max_d_delay = delay_d; best_d = d
         seguro[g] = (best_d, max_d_delay)
 
     manter = [g for g in grupos if g not in eliminar]
@@ -368,14 +364,20 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.12")
+    st.header("Pentágono V65.13")
+    
+    # MUDANÇA: BOTÃO DE FORÇAR ATUALIZAÇÃO E LIMPAR CACHE
+    if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
+        st.cache_data.clear()
+        st.success("✅ Base de dados atualizada! A memória do radar foi limpa.")
+        
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Desdobramento (Hedge)")
-    st.info("Visão Enxuta. Otimizando lucros com cortes automáticos de risco baseados em zonas frias.")
+    st.title("🚨 Central AWACS - Desdobramento Sniper")
+    st.info("Varredura Inteligente Ativada. Os Cards de 15 Grupos processam automaticamente os cortes de lucro (Hedge).")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        with st.spinner("Triando alvos e calculando seguros de retaguarda..."):
+        with st.spinner("Triando alvos e calculando os seguros de retaguarda..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
             todos_esq = gerar_matrizes_taticas()
             
@@ -384,7 +386,7 @@ if menu == "🏠 Visão Geral (Home)":
                 if df.empty: continue
                 ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
                 
-                # Armadilha Pêndulo Home
+                # 1. Armadilha Pêndulo
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     resultado_pend = processar_pendulo(df, col)
@@ -393,7 +395,7 @@ if menu == "🏠 Visão Geral (Home)":
                         if status != "Estável":
                             alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
                 
-                # Pré-Cálculo de Atrasos para o Módulo de Hedge
+                # 2. Pré-Cálculo de Atrasos para o Motor de Hedge (Toda a Coluna)
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
@@ -402,7 +404,7 @@ if menu == "🏠 Visão Geral (Home)":
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
                 
-                # Módulo AWACS & Hedge
+                # 3. Exibição AWACS com Injeção do Hedge
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if (cfg['nome'], col) not in metrics_cache: continue
@@ -423,7 +425,7 @@ if menu == "🏠 Visão Geral (Home)":
                             is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
 
                         if is_anomaly:
-                            # 🛡️ MOTOR DE DESDOBRAMENTO TÁTICO
+                            # INJEÇÃO DO DESDOBRAMENTO (SOMENTE EM 15 GRUPOS)
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
                                 hedge_data = get_hedge_15g(df, col, cfg, col_delays)
@@ -723,7 +725,7 @@ elif menu == "📡 Extração Central":
                         if p_ins: 
                             ws.append_rows(p_ins, value_input_option="RAW")
                             st.success(f"✅ {len(p_ins)} novos registros salvos.")
-                            carregar_dados_em_memoria.clear() 
+                            st.cache_data.clear() # Limpa o cache automaticamente após extração individual
                         else: st.info("Base de dados já atualizada.")
                 else: st.error("Sem dados para extrair.")
     with col2:
@@ -748,7 +750,7 @@ elif menu == "📡 Extração Central":
                             else: st.info(f"ℹ️ {banca_alvo}: Atualizada.")
                         else: st.warning(f"⚠️ {banca_alvo}: Sem dados.")
                     if total_salvos > 0:
-                        carregar_dados_em_memoria.clear()
+                        st.cache_data.clear() # Limpa o cache automaticamente após extração global
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
