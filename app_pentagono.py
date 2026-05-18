@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.13 - Hedge & Force Update", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.14 - Unidades Globais", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -364,9 +364,9 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.13")
+    st.header("Pentágono V65.14")
     
-    # MUDANÇA: BOTÃO DE FORÇAR ATUALIZAÇÃO E LIMPAR CACHE
+    # BOTÃO DE FORÇAR ATUALIZAÇÃO E LIMPAR CACHE
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
         st.success("✅ Base de dados atualizada! A memória do radar foi limpa.")
@@ -399,8 +399,10 @@ if menu == "🏠 Visão Geral (Home)":
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
+                        # REGRA DE OURO DA TRADICIONAL PRESERVADA:
                         if banca_nome == "Tradicional" and col != "P1": continue
-                        if cfg['modo'] == 'unidade' and (banca_nome != "Tradicional" or col != "P1"): continue
+                        
+                        # A TRAVA DE UNIDADES GLOBAIS FOI REMOVIDA AQUI NA V65.14
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
                 
@@ -725,7 +727,7 @@ elif menu == "📡 Extração Central":
                         if p_ins: 
                             ws.append_rows(p_ins, value_input_option="RAW")
                             st.success(f"✅ {len(p_ins)} novos registros salvos.")
-                            st.cache_data.clear() # Limpa o cache automaticamente após extração individual
+                            st.cache_data.clear() 
                         else: st.info("Base de dados já atualizada.")
                 else: st.error("Sem dados para extrair.")
     with col2:
@@ -750,7 +752,7 @@ elif menu == "📡 Extração Central":
                             else: st.info(f"ℹ️ {banca_alvo}: Atualizada.")
                         else: st.warning(f"⚠️ {banca_alvo}: Sem dados.")
                     if total_salvos > 0:
-                        st.cache_data.clear() # Limpa o cache automaticamente após extração global
+                        st.cache_data.clear() 
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
