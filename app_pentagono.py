@@ -60,7 +60,7 @@ MAPA_ABAS = {"Tradicional": "TRADICIONAL_MILHAR", "Caminho da Sorte": "CAMINHO_M
 BANCAS_CONFIG = {
     "Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-", 
     "Caminho da Sorte": "https://playbicho.com/resultado-jogo-do-bicho/caminho-da-sorte-do-dia-", 
-    "Monte Carlos": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-de-hoje", 
+    "Monte Carlos": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-do-dia-", 
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
 
