@@ -1,3 +1,20 @@
+Posição de sentido! 🫡
+
+Comandante, ordem recebida e executada com sucesso!
+
+A **V65.15** acaba de ser forjada. Injetamos o novo esquadrão de **"Dezenas de Finais Baixos (1-5)"** e **"Dezenas de Finais Altos (6-0)"** no coração do Pentágono.
+
+**O que foi feito:**
+
+1. O motor do **AWACS (Home)** agora varre essas duas novas modalidades de Massa (50%) o tempo todo. Assim como as dezenas pares/ímpares, elas têm o Teto de 9x e o radar só vai apitar na sua tela quando baterem **7x** (a sua regra de 2 pontos para o Teto).
+2. O **Scanner de Raio-X** também recebeu a atualização. Agora o senhor pode ir lá na aba de Filtros de Massa e consultar livremente o atraso exato e o recorde histórico dessas Dezenas Finais.
+3. O Rodapé Tático e as outras lógicas (Desdobramento, Botão de Limpeza) foram mantidos intocados, como o senhor ordenou.
+
+### 💻 O Código Definitivo (Pentágono V65.15 - Dezenas Finais)
+
+Vá ao seu GitHub, **apague tudo** no arquivo `app_pentagono.py` e coloque nosso novo arsenal no ar:
+
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -12,7 +29,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.14 - Unidades Globais", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.15 - Dezenas Finais", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -125,6 +142,10 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 7, **cm})
+        
+        # INJEÇÃO DA V65.15: DEZENAS DE FINAIS ALTOS E BAIXOS
+        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 7, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 7, **cm})
     
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -364,7 +385,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.14")
+    st.header("Pentágono V65.15")
     
     # BOTÃO DE FORÇAR ATUALIZAÇÃO E LIMPAR CACHE
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
@@ -399,10 +420,7 @@ if menu == "🏠 Visão Geral (Home)":
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
-                        # REGRA DE OURO DA TRADICIONAL PRESERVADA:
                         if banca_nome == "Tradicional" and col != "P1": continue
-                        
-                        # A TRAVA DE UNIDADES GLOBAIS FOI REMOVIDA AQUI NA V65.14
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
                 
@@ -585,11 +603,13 @@ elif menu == "🎯 Scanner de Raio-X":
         elif categoria_rx == "Unidade (0 a 9)":
             alvo_rx = st.number_input("Qual Unidade?", min_value=0, max_value=9, value=0)
         else:
+            # MUDANÇA: INCLUSÃO DOS NOVOS FILTROS DE DEZENAS FINAIS NA LISTA SUSPENSA
             alvo_rx = st.selectbox("Qual Filtro?", [
                 "Grupos Pares", "Grupos Ímpares", 
                 "Dezenas Pares", "Dezenas Ímpares", 
                 "Dezenas Baixas (01-50)", "Dezenas Altas (51-00)", 
                 "Dezenas Miolo (26-75)", "Dezenas Bordas",
+                "Dezenas Finais Baixos (1-5)", "Dezenas Finais Altos (6-0)",
                 "Unidades Baixas (1-5)", "Unidades Altas (6-0)",
                 "Unidades Ímpares", "Unidades Pares"
             ])
@@ -619,6 +639,11 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Dezenas Altas (51-00)": cfg_rx['alvos'] = set(range(51, 100)) | {0}; cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Miolo (26-75)": cfg_rx['alvos'] = set(range(26, 76)); cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
+                    
+                    # MUDANÇA: LÓGICA DE CAPTURA DOS FINAIS NO RAIO-X
+                    elif alvo_rx == "Dezenas Finais Baixos (1-5)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}; cfg_rx['modo'] = 'dezena'
+                    elif alvo_rx == "Dezenas Finais Altos (6-0)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}; cfg_rx['modo'] = 'dezena'
+                    
                     elif alvo_rx == "Unidades Baixas (1-5)": cfg_rx['alvos'] = {1, 2, 3, 4, 5}; cfg_rx['modo'] = 'unidade'
                     elif alvo_rx == "Unidades Altas (6-0)": cfg_rx['alvos'] = {6, 7, 8, 9, 0}; cfg_rx['modo'] = 'unidade'
                     elif alvo_rx == "Unidades Ímpares": cfg_rx['alvos'] = {1, 3, 5, 7, 9}; cfg_rx['modo'] = 'unidade'
@@ -756,3 +781,5 @@ elif menu == "📡 Extração Central":
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
+
+```
