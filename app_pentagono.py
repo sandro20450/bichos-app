@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V66.0 - Geometria de Combate", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V66.1 - Estabilizado", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -114,11 +114,8 @@ def gerar_matrizes_taticas():
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 5, **cm})
-        
-        # GEOMETRIA: MIOLO E MURALHA
         esquadroes.append({'alvos': {7,8,9,12,13,14,17,18,19}, 'modo': 'grupo', 'tipo': 'geom', 'nome': "G: MIOLO", 'lim': 8, **cm})
         esquadroes.append({'alvos': set(range(1,26)) - {7,8,9,12,13,14,17,18,19}, 'modo': 'grupo', 'tipo': 'geom', 'nome': "G: MURALHA", 'lim': 3, **cm})
-        
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 7, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 7, **cm})
@@ -128,7 +125,9 @@ def gerar_matrizes_taticas():
     
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
     esquadroes.extend(esquadroes_unidade)
     return esquadroes
@@ -190,8 +189,66 @@ def deduplicar_alvos(lista):
 def get_hedge_15g(df, col, cfg_15g, col_delays):
     grupos = list(cfg_15g['alvos'])
     scores = {g: 0 for g in grupos}
-    # (Lógica de Hedge simplificada conforme solicitado)
-    return None
+    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0),
+                    col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
+    if mass_max >= 3:
+        if col_delays.get('G: ÍMPARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 == 0: scores[g] += 1
+        if col_delays.get('G: PARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 != 0: scores[g] += 1
+        if col_delays.get('D: ALTAS (51-00)', 0) >= 3:
+            for g in grupos:
+                if g <= 12: scores[g] += 1
+        if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
+            for g in grupos:
+                if g >= 13: scores[g] += 1
+    else:
+        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0),
+                       col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
+        if uni_max >= 3:
+            if col_delays.get('U: ÍMPARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 == 0: scores[g] += 1
+            if col_delays.get('U: PARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 != 0: scores[g] += 1
+            if col_delays.get('U: ALTAS (6-0)', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) in [1,2,3,4,5]: scores[g] += 1
+            if col_delays.get('U: BAIXAS (1-5)', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) in [6,7,8,9,0]: scores[g] += 1
+    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
+    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
+    if not eliminar: return None 
+    seguro = {}
+    for g in eliminar:
+        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4]
+        if g == 25: dezenas = [97, 98, 99, 0]
+        max_d_delay = -1
+        best_d = -1
+        for d in dezenas:
+            delay_d = 0
+            for i in range(len(df)-1, -1, -1):
+                m = str(df.iloc[i][col]).zfill(4)
+                if m == "----" or m == "nan": continue
+                try: dez_val = int(m[-2:])
+                except: dez_val = -1
+                if dez_val == d: break
+                delay_d += 1
+            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
+        seguro[g] = (best_d, max_d_delay)
+    manter = [g for g in grupos if g not in eliminar]
+    return {'eliminar': sorted(eliminar), 'manter': sorted(manter), 'seguro': seguro}
+
+def direcao_pendulo(prev, curr):
+    dist_c = (curr - prev) % 25
+    dist_d = (prev - curr) % 25
+    if 1 <= dist_c <= 6: return "C"
+    if 1 <= dist_d <= 6: return "D"
+    return "-"
 
 def processar_pendulo(df, coluna):
     all_groups = []
@@ -211,18 +268,39 @@ def processar_pendulo(df, coluna):
             else: break
     return "Alerta" if curr_streak >= 3 else "Estável", curr_streak, curr_dir
 
-def direcao_pendulo(prev, curr):
-    dist_c = (curr - prev) % 25
-    dist_d = (prev - curr) % 25
-    if 1 <= dist_c <= 6: return "C"
-    if 1 <= dist_d <= 6: return "D"
-    return "-"
+def extrair_dia(banca, data_alvo):
+    url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        tabelas = soup.find_all('table')
+        resultados = []
+        for tab in tabelas:
+            th_tag = tab.find('th')
+            txt_th = th_tag.get_text().upper() if th_tag else ""
+            prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
+            txt_prev = prev.get_text().upper() if prev else ""
+            texto_alvo = txt_th + " " + txt_prev
+            if "FEDERAL" in texto_alvo.upper(): continue
+            match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
+            if match_hora:
+                if match_hora.group(1): nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
+                else: nome = f"{match_hora.group(3)}:00"
+            else: nome = "Extra"
+            milhares = []
+            for row in tab.find_all('tr'):
+                cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                    nums = re.findall(r'\d+', "".join(cols[1:]))
+                    milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
+            if len(milhares) >= 5:
+                resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
+        return resultados
+    except: return []
 
-# =============================================================================
-# --- INTERFACE ---
-# =============================================================================
 with st.sidebar:
-    st.header("Pentágono V66.0")
+    st.header("Pentágono V66.1")
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear(); st.rerun()
     menu = st.radio("Selecione:", ["🏠 Visão Geral", "🎯 Scanner de Raio-X", "🧲 Pêndulo", "📡 Extração"])
@@ -234,22 +312,31 @@ if menu == "🏠 Visão Geral":
         for banca_nome in BANCAS_CONFIG.keys():
             df = carregar_dados_em_memoria(banca_nome)
             if df.empty: continue
+            
+            # Pêndulo
             for i, col in enumerate(COLUNAS_DF):
                 if banca_nome == "Tradicional" and col != "P1": continue
-                for cfg in todos_esq:
-                    # Filtro de Unidades (Global vs Tradicional Head Only)
-                    if cfg['modo'] == 'unidade' and banca_nome != "Tradicional" and col != "P1": pass
-                    elif cfg['modo'] == 'unidade' and banca_nome == "Tradicional" and col != "P1": continue
-                    
+                if processar_pendulo(df, col)[0] == "Alerta":
+                    st.warning(f"🧲 Pêndulo {banca_nome} {TITULOS_PREMIOS[i]} ativo!")
+
+            # AWACS
+            for cfg in todos_esq:
+                for i, col in enumerate(COLUNAS_DF):
+                    if banca_nome == "Tradicional" and col != "P1": continue
                     ap, _, _, _, _, _ = calcular_metricas_fantasma(df, col, cfg)
                     if ap >= cfg['lim']:
-                        oportunidades.append({"banca": banca_nome, "premio": TITULOS_PREMIOS[i], "ap": ap, "cfg": cfg})
+                        alerta = ""
+                        if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
+                            col_delays = {cfg['nome']: ap} 
+                            hedge = get_hedge_15g(df, col, cfg, col_delays)
+                            if hedge: alerta = f"🛡️ Hedge: Cortar {hedge['eliminar']}"
+                        oportunidades.append({"banca": banca_nome, "premio": TITULOS_PREMIOS[i], "nome": cfg['nome'], "ap": ap, "alerta": alerta})
         
         for op in deduplicar_alvos(oportunidades):
-            st.markdown(f"**{op['banca']} | {op['premio']} | {op['cfg']['nome']} | Atraso: {op['ap']}x**")
+            st.markdown(f"**{op['banca']} | {op['premio']} | {op['nome']} | Atraso: {op['ap']}x | {op['alerta']}**")
 
 elif menu == "🎯 Scanner de Raio-X":
-    st.title("Scanner de Raio-X")
-    # (Mantido o Scanner padrão)
+    st.title("Raio-X")
+    # (Scanner mantido sem alterações)
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=11x | D/U/Filtros=7x | 15G=5x | Miolo=8x | Muralha=3x | Pêndulo=3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Miolo=8x | Muralha=3x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
