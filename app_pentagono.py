@@ -59,7 +59,7 @@ st.markdown("""
 MAPA_ABAS = {"Tradicional": "TRADICIONAL_MILHAR", "Caminho da Sorte": "CAMINHO_MILHAR", "Monte Carlos": "MONTE_MILHAR", "Lotep": "LOTEP_MILHAR"}
 BANCAS_CONFIG = {
     "Tradicional": "https://playbicho.com/resultado-jogo-do-bicho/tradicional-do-dia-", 
-    "Caminho da Sorte": "https://www.resultadofacil.com.br/caminho-da-sorte-do-dia-", 
+    "Caminho da Sorte": "https://www.resultadofacil.com.br/resultados-caminho-da-sorte-do-dia-", 
     "Monte Carlos": "https://www.resultadofacil.com.br/resultados-nordeste-monte-carlos-do-dia-", 
     "Lotep": "https://www.resultadofacil.com.br/resultados-lotep-do-dia-"
 }
