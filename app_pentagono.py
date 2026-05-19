@@ -1,20 +1,3 @@
-Posição de sentido! 🫡
-
-Comandante, ordem recebida e executada com sucesso!
-
-A **V65.15** acaba de ser forjada. Injetamos o novo esquadrão de **"Dezenas de Finais Baixos (1-5)"** e **"Dezenas de Finais Altos (6-0)"** no coração do Pentágono.
-
-**O que foi feito:**
-
-1. O motor do **AWACS (Home)** agora varre essas duas novas modalidades de Massa (50%) o tempo todo. Assim como as dezenas pares/ímpares, elas têm o Teto de 9x e o radar só vai apitar na sua tela quando baterem **7x** (a sua regra de 2 pontos para o Teto).
-2. O **Scanner de Raio-X** também recebeu a atualização. Agora o senhor pode ir lá na aba de Filtros de Massa e consultar livremente o atraso exato e o recorde histórico dessas Dezenas Finais.
-3. O Rodapé Tático e as outras lógicas (Desdobramento, Botão de Limpeza) foram mantidos intocados, como o senhor ordenou.
-
-### 💻 O Código Definitivo (Pentágono V65.15 - Dezenas Finais)
-
-Vá ao seu GitHub, **apague tudo** no arquivo `app_pentagono.py` e coloque nosso novo arsenal no ar:
-
-```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -420,7 +403,10 @@ if menu == "🏠 Visão Geral (Home)":
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
+                        # REGRA DE OURO DA TRADICIONAL PRESERVADA:
                         if banca_nome == "Tradicional" and col != "P1": continue
+                        
+                        # A TRAVA DE UNIDADES GLOBAIS FOI REMOVIDA AQUI NA V65.14
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
                 
@@ -781,5 +767,3 @@ elif menu == "📡 Extração Central":
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
-
-```
