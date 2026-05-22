@@ -115,26 +115,28 @@ def gerar_matrizes_taticas():
     for cm in cms:
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 5, **cm})
+            # 15 Grupos -> limite alterado para 7
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
         
-        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 7, **cm})
-        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 7, **cm})
-        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 7, **cm})
-        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 7, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 7, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 7, **cm})
-        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 7, **cm})
-        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 7, **cm})
+        # Filtros de Massa e Dezenas -> limite alterado para 9
+        esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 9, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'tipo': 'impar', 'nome': "D: ÍMPARES", 'lim': 9, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'tipo': 'par', 'nome': "D: PARES", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 9, **cm})
         
-        # INJEÇÃO DA V65.15: DEZENAS DE FINAIS ALTOS E BAIXOS
-        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 7, **cm})
-        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 7, **cm})
+        # INJEÇÃO DA V65.15: DEZENAS DE FINAIS ALTOS E BAIXOS -> limite alterado para 9
+        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
+        esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
     
     esquadroes_unidade = [
-        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 7, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ]
     esquadroes.extend(esquadroes_unidade)
     return esquadroes
@@ -309,9 +311,10 @@ def processar_pendulo(df, coluna):
     dirs = dirs_history[-5:] 
     last_g = draws[-1]
     
-    if curr_streak >= 3:
-        if curr_streak == 3: status = "🚨 SATURAÇÃO ALTA"
-        elif curr_streak == 4: status = "🔥 SATURAÇÃO EXTREMA"
+    # MUDANÇA: Pêndulo agora exige TETO MÁXIMO DE 5x para alertar
+    if curr_streak >= 5:
+        if curr_streak == 5: status = "🚨 SATURAÇÃO ALTA"
+        elif curr_streak == 6: status = "🔥 SATURAÇÃO EXTREMA"
         else: status = f"☢️ SATURAÇÃO CRÍTICA"
         
         jogos = []; curr = last_g
@@ -403,10 +406,8 @@ if menu == "🏠 Visão Geral (Home)":
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
-                        # REGRA DE OURO DA TRADICIONAL PRESERVADA:
                         if banca_nome == "Tradicional" and col != "P1": continue
                         
-                        # A TRAVA DE UNIDADES GLOBAIS FOI REMOVIDA AQUI NA V65.14
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
                 
@@ -419,13 +420,14 @@ if menu == "🏠 Visão Geral (Home)":
                         
                         is_anomaly = False; prio = 99; alerta = ""; tipo_ataque = ""
                         
-                        if am >= 11 and ac >= 11 and ap >= ap_lim:
+                        # MUDANÇA: Milhar e Centena agora exigem teto de 13x e Unidades teto de 9x
+                        if am >= 13 and ac >= 13 and ap >= ap_lim:
                             is_anomaly = True; prio = 1; tipo_ataque = "TOTAL"; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
-                        elif am >= 11:
+                        elif am >= 13:
                             is_anomaly = True; prio = 2; tipo_ataque = "MILHAR"; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x)</div>"
-                        elif ac >= 11:
+                        elif ac >= 13:
                             is_anomaly = True; prio = 3; tipo_ataque = "CENTENA"; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x)</div>"
-                        elif cfg['modo'] == 'unidade' and ap >= 7:
+                        elif cfg['modo'] == 'unidade' and ap >= 9:
                             is_anomaly = True; prio = 4; tipo_ataque = "UNIDADE"; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
                         elif ap >= ap_lim:
                             is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
@@ -519,19 +521,19 @@ if menu == "🏠 Visão Geral (Home)":
                     elif ta == 'MILHAR':
                         lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"; titulo = f"🎯 FOCO: MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
                         dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq" 
                     elif ta == 'CENTENA':
                         lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"; titulo = f"🎯 FOCO: CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
                         dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq"
                     else:
                         lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezena"
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         titulo = op['cfg']['nome']
                         dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
-                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                        cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         
                     with cols[idx % 3]:
                         st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
@@ -589,7 +591,6 @@ elif menu == "🎯 Scanner de Raio-X":
         elif categoria_rx == "Unidade (0 a 9)":
             alvo_rx = st.number_input("Qual Unidade?", min_value=0, max_value=9, value=0)
         else:
-            # MUDANÇA: INCLUSÃO DOS NOVOS FILTROS DE DEZENAS FINAIS NA LISTA SUSPENSA
             alvo_rx = st.selectbox("Qual Filtro?", [
                 "Grupos Pares", "Grupos Ímpares", 
                 "Dezenas Pares", "Dezenas Ímpares", 
@@ -626,7 +627,6 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Dezenas Miolo (26-75)": cfg_rx['alvos'] = set(range(26, 76)); cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
                     
-                    # MUDANÇA: LÓGICA DE CAPTURA DOS FINAIS NO RAIO-X
                     elif alvo_rx == "Dezenas Finais Baixos (1-5)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}; cfg_rx['modo'] = 'dezena'
                     elif alvo_rx == "Dezenas Finais Altos (6-0)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}; cfg_rx['modo'] = 'dezena'
                     
@@ -766,4 +766,4 @@ elif menu == "📡 Extração Central":
                         st.cache_data.clear() 
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto - 2): M/C = 11x | Dezenas, Unidades e Filtros = 7x | 15 Grupos = 5x | Pêndulo = 3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
