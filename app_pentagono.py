@@ -113,12 +113,17 @@ def gerar_matrizes_taticas():
     cms = []
     for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
     for cm in cms:
+        # 15 Grupos (Mantido com Teto de 7)
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
-            # 15 Grupos -> limite alterado para 7
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G:{str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G: {str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
         
-        # Filtros de Massa e Dezenas -> limite alterado para 9
+        # 12 Grupos (Novo com Teto de 10)
+        for g in range(1, 15):
+            alvos = set(range(g, g + 12))
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G12: {str(g).zfill(2)}-{str(g+11).zfill(2)}", 'lim': 10, **cm})
+        
+        # Filtros de Massa e Dezenas -> limite 9
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
@@ -128,7 +133,7 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(26, 76)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: MIOLO (26-75)", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 9, **cm})
         
-        # INJEÇÃO DA V65.15: DEZENAS DE FINAIS ALTOS E BAIXOS -> limite alterado para 9
+        # INJEÇÃO DA V65.15: DEZENAS DE FINAIS ALTOS E BAIXOS -> limite 9
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
     
@@ -198,9 +203,9 @@ def deduplicar_alvos(lista):
             vistos.add(sig); resultado.append(item)
     return resultado
 
-# 🛡️ MOTOR DE DESDOBRAMENTO (HEDGE)
-def get_hedge_15g(df, col, cfg_15g, col_delays):
-    grupos = list(cfg_15g['alvos'])
+# 🛡️ MOTOR DE DESDOBRAMENTO (HEDGE) - Agora Dinâmico
+def get_hedge_grupos(df, col, cfg_matriz, col_delays):
+    grupos = list(cfg_matriz['alvos'])
     scores = {g: 0 for g in grupos}
 
     mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0),
@@ -382,7 +387,7 @@ with st.sidebar:
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Desdobramento Sniper")
-    st.info("Varredura Inteligente Ativada. Os Cards de 15 Grupos processam automaticamente os cortes de lucro (Hedge).")
+    st.info("Varredura Inteligente Ativada. Os Cards de Grupos Sequenciais processam automaticamente os cortes de lucro (Hedge).")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("Triando alvos e calculando os seguros de retaguarda..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
@@ -433,10 +438,10 @@ if menu == "🏠 Visão Geral (Home)":
                             is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
 
                         if is_anomaly:
-                            # INJEÇÃO DO DESDOBRAMENTO (SOMENTE EM 15 GRUPOS)
+                            # INJEÇÃO DO DESDOBRAMENTO (SOMENTE EM GRUPOS SEQUENCIAIS 12 E 15)
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
-                                hedge_data = get_hedge_15g(df, col, cfg, col_delays)
+                                hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
                                 
                                 if hedge_data:
                                     elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
@@ -453,7 +458,7 @@ if menu == "🏠 Visão Geral (Home)":
                                 else:
                                     alerta += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
                                         <div style='color:#ffcc00; font-size:11px; font-weight:bold;'>🛡️ DESDOBRAMENTO TÁTICO</div>
-                                        <div style='color:#ccc; font-size:11px;'>Filtros Neutros. Jogue os 15 Grupos Integrais.</div>
+                                        <div style='color:#ccc; font-size:11px;'>Filtros Neutros. Jogue a Matriz Integral.</div>
                                     </div>"""
 
                             oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg, "tipo_ataque": tipo_ataque})
@@ -477,7 +482,7 @@ if menu == "🏠 Visão Geral (Home)":
                 for idx, pend in enumerate(alertas_pendulo):
                     with cols_pend[idx % 3]:
                         status, jogos, draws, dirs = pend['status'], pend['jogos'], pend['draws'], pend['dirs']
-                        curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], pend['curr_dir']
+                        curr_streak, max_streak, curr_dir = pend['curr_streak'], pend['max_streak'], curr_dir = pend['curr_dir']
                         
                         setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
                         seq_visual = f"<span style='font-size:16px; font-weight:bold;'>{str(draws[0]).zfill(2)}</span> {setas[0]} " \
@@ -766,4 +771,4 @@ elif menu == "📡 Extração Central":
                         st.cache_data.clear() 
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
