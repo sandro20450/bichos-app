@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.18 - Radar Animado", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.19 - UI Tática", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -54,38 +54,80 @@ st.markdown("""
 }
 .block-container { padding-bottom: 80px; }
 
-/* === CAMUFLAGEM DO BOTÃO (ESTILO UIVERSE CYBER) === */
+/* ============================================================ */
+/* === CAMUFLAGEM DE BOTÕES - ESTILO UIVERSE (DEXTER-ST) ====== */
+/* ============================================================ */
 [data-testid="stButton"] button {
-    background: linear-gradient(145deg, #111111, #1a1a1a) !important;
-    color: #00ffff !important; /* Texto em ciano neon */
-    border: 1px solid #00ffff !important;
-    border-radius: 30px !important; /* Deixa o botão bem arredondado */
-    padding: 10px 24px !important;
-    font-weight: bold !important;
-    letter-spacing: 1.5px !important;
-    text-transform: uppercase !important;
-    box-shadow: 0 4px 15px rgba(0, 255, 255, 0.1) !important;
-    transition: all 0.3s ease-in-out !important;
+    --border-radius: 24px;
+    --padding: 4px;
+    --transition: 0.4s;
+    --button-color: #101010;
+    --highlight-color-hue: 180deg; /* Alterado para Ciano do nosso Radar */
+    
+    position: relative;
+    display: flex;
+    justify-content: center;
+    background-color: var(--button-color) !important;
+    border: solid 1px #fff2 !important;
+    border-radius: var(--border-radius) !important;
+    overflow: visible !important;
+    z-index: 1;
+    transition: box-shadow var(--transition), border var(--transition), background-color var(--transition) !important;
+    
+    /* Efeito de Vidro/Profundidade (Inset Shadows + Drop Shadows) */
+    box-shadow:
+        inset 0px 1px 1px rgba(255, 255, 255, 0.2),
+        inset 0px 2px 2px rgba(255, 255, 255, 0.15),
+        inset 0px 4px 4px rgba(255, 255, 255, 0.1),
+        inset 0px 8px 8px rgba(255, 255, 255, 0.05),
+        inset 0px 16px 16px rgba(255, 255, 255, 0.05),
+        0px -1px 1px rgba(0, 0, 0, 0.02),
+        0px -2px 2px rgba(0, 0, 0, 0.03),
+        0px -4px 4px rgba(0, 0, 0, 0.05),
+        0px -8px 8px rgba(0, 0, 0, 0.06),
+        0px -16px 16px rgba(0, 0, 0, 0.08) !important;
 }
 
-/* Efeito ao passar o mouse por cima (Glow / Brilho) */
+/* O texto do Botão */
+[data-testid="stButton"] button p {
+    position: relative;
+    z-index: 5 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
+    text-shadow: 0 0 3px #fff8 !important;
+}
+
+/* As sombras e gradientes internos (Before) */
+[data-testid="stButton"] button::before {
+    content: ""; position: absolute; top: calc(0px - var(--padding)); left: calc(0px - var(--padding));
+    width: calc(100% + var(--padding) * 2); height: calc(100% + var(--padding) * 2);
+    border-radius: calc(var(--border-radius) + var(--padding)); pointer-events: none;
+    background-image: linear-gradient(0deg, #0004, #000a); z-index: -1;
+    transition: box-shadow var(--transition), filter var(--transition);
+    box-shadow: 0 -8px 8px -6px #0000 inset, 0 -16px 16px -8px #00000000 inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001;
+}
+
+/* Hover (Ao passar o mouse) */
 [data-testid="stButton"] button:hover {
-    background: #00ffff !important;
-    color: #000000 !important;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
-    transform: translateY(-2px) !important;
-    border-color: #00ffff !important;
+    border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%) !important;
+}
+[data-testid="stButton"] button:hover::before {
+    box-shadow: 0 -8px 8px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 30%) inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001 !important;
 }
 
-/* Efeito ao clicar (aperto) */
+/* Active (Ao clicar) */
 [data-testid="stButton"] button:active {
-    transform: translateY(1px) !important;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.4) !important;
+    border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%) !important;
+    background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5) !important;
+}
+[data-testid="stButton"] button:active::before {
+    box-shadow: 0 -8px 12px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset, 1px 1px 1px #fff4, 2px 2px 2px #fff2, -1px -1px 1px #0002, -2px -2px 2px #0001 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# === ANIMAÇÃO HELIX (CSS/HTML DO USUÁRIO ADAPTADO) ===
+# === ANIMAÇÃO HELIX ===
 HELIX_LOADER_HTML = """
 <style>
 .radar-container {
@@ -94,19 +136,13 @@ HELIX_LOADER_HTML = """
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
 }
 .uib-container {
-  --uib-size: 60px;
-  --uib-color: #00ffff;
-  --uib-speed: 2.5s;
+  --uib-size: 60px; --uib-color: #00ffff; --uib-speed: 2.5s;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   height: var(--uib-size); width: var(--uib-size);
 }
-.uib-slice {
-  position: relative; height: calc(var(--uib-size) / 6); width: 100%;
-}
-.uib-slice::before,
-.uib-slice::after {
-  --uib-a: calc(var(--uib-speed) / -2);
-  --uib-b: calc(var(--uib-speed) / -6);
+.uib-slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
+.uib-slice::before, .uib-slice::after {
+  --uib-a: calc(var(--uib-speed) / -2); --uib-b: calc(var(--uib-speed) / -6);
   content: ''; position: absolute; top: 0; left: calc(50% - var(--uib-size) / 12);
   height: 100%; width: calc(100% / 6); border-radius: 50%; background-color: var(--uib-color);
   flex-shrink: 0; animation: orbit var(--uib-speed) linear infinite; transition: background-color 0.3s ease;
@@ -490,7 +526,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.18")
+    st.header("Pentágono V65.19")
     
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
@@ -500,10 +536,9 @@ with st.sidebar:
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Desdobramento Sniper")
-    st.info("Varredura Inteligente Ativada. Rastreadores 8D e 9D operacionais com novo motor visual.")
+    st.info("Varredura Inteligente Ativada. Botões Uiverse operacionais.")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
-        # ATIVANDO A NOVA ANIMAÇÃO HELIX
         tela_carregamento = st.empty()
         tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "📡 CALIBRANDO MATRIZES E CALCULANDO RUPTURAS..."), unsafe_allow_html=True)
         
@@ -515,7 +550,6 @@ if menu == "🏠 Visão Geral (Home)":
             if df.empty: continue
             ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
             
-            # 1. Armadilha Pêndulo
             for i, col in enumerate(COLUNAS_DF):
                 if banca_nome == "Tradicional" and col != "P1": continue
                 resultado_pend = processar_pendulo(df, col)
@@ -524,7 +558,6 @@ if menu == "🏠 Visão Geral (Home)":
                     if status != "Estável":
                         alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
             
-            # 2. Pré-Cálculo de Atrasos
             metrics_cache = {}
             for cfg in todos_esq:
                 for i, col in enumerate(COLUNAS_DF):
@@ -532,7 +565,6 @@ if menu == "🏠 Visão Geral (Home)":
                     ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                     metrics_cache[(cfg['nome'], col)] = (ap, ac, am, mp, mc, mm)
             
-            # 3. Exibição AWACS
             for cfg in todos_esq:
                 for i, col in enumerate(COLUNAS_DF):
                     if (cfg['nome'], col) not in metrics_cache: continue
@@ -553,7 +585,6 @@ if menu == "🏠 Visão Geral (Home)":
                         is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
 
                     if is_anomaly:
-                        # Hedge
                         if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                             col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
                             hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
@@ -588,7 +619,6 @@ if menu == "🏠 Visão Geral (Home)":
                         tipo_rec = "CENTENA"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE CENTENA</div>"
                         recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
         
-        # DESATIVA A ANIMAÇÃO E MOSTRA OS CARDS
         tela_carregamento.empty()
         
         oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
