@@ -101,11 +101,17 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO DA V65.16: INVERSÃO 7 DÍGITOS
-        bases_inv = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
-        for b in bases_inv:
+        # INJEÇÃO 7D (DEZENAS)
+        bases_inv_7 = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
+        for b in bases_inv_7:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
             esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 7D ({b[0]} AO {b[-1]})", 'lim': 12, **cm})
+            
+        # INJEÇÃO 9D (CENTENAS)
+        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+        for b in bases_inv_9:
+            alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
+            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': f"C: INV 9D ({b[0]} AO {b[-1]})", 'lim': 9, **cm})
     
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -132,6 +138,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
+        elif modo == 'centena' and c in alvos: hit_p = True # GATILHO CENTENA ATIVO
         
         if not achou_p:
             if hit_p: achou_p = True
