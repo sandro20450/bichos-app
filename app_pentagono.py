@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.16 - Missil Inversão 7D", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.17 - Artilharia 9D", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -113,17 +113,15 @@ def gerar_matrizes_taticas():
     cms = []
     for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
     for cm in cms:
-        # 15 Grupos (Teto 7)
+        # 15 Grupos e 12 Grupos
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G: {str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
-        
-        # 12 Grupos (Teto 10)
         for g in range(1, 15):
             alvos = set(range(g, g + 12))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G12: {str(g).zfill(2)}-{str(g+11).zfill(2)}", 'lim': 10, **cm})
         
-        # Filtros de Massa e Dezenas -> limite 9
+        # Filtros e Dezenas (Teto 9)
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
@@ -135,16 +133,19 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO DA V65.16: INVERSÃO 7 DÍGITOS (TETO 12x)
-        bases_inv = [
-            [0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9],
-            [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3],
-            [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]
-        ]
-        for b in bases_inv:
+        # INJEÇÃO: INVERSÃO 7 DÍGITOS (TETO 12x)
+        bases_inv_7 = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
+        for b in bases_inv_7:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
             nome_inv = f"D: INV 7D ({b[0]} AO {b[-1]})"
             esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': nome_inv, 'lim': 12, **cm})
+
+        # NOVA INJEÇÃO: INVERSÃO 9 DÍGITOS (CENTENAS - TETO 9x)
+        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+        for b in bases_inv_9:
+            alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
+            nome_inv_c = f"C: INV 9D ({b[0]} AO {b[-1]})"
+            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': nome_inv_c, 'lim': 9, **cm})
 
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -171,6 +172,8 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
+        elif modo == 'centena' and c in alvos: hit_p = True # NOVO GATILHO CENTENA
+        
         if not achou_p:
             if hit_p: achou_p = True
             else: atr_p += 1
@@ -193,6 +196,8 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
+        elif modo == 'centena' and c in alvos: hit_p = True # NOVO GATILHO CENTENA
+        
         cur_p = 0 if hit_p else cur_p + 1
         max_p = max(max_p, cur_p)
         cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
@@ -384,7 +389,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.16")
+    st.header("Pentágono V65.17")
     
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
@@ -394,7 +399,7 @@ with st.sidebar:
 
 if menu == "🏠 Visão Geral (Home)":
     st.title("🚨 Central AWACS - Desdobramento Sniper")
-    st.info("Varredura Inteligente Ativada. Rastreador de Inversão 7D e matrizes Hedge integrados.")
+    st.info("Varredura Inteligente Ativada. Rastreadores 7D e 9D (Artilharia de Centenas) operacionais.")
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         with st.spinner("Triando alvos e calculando os seguros de retaguarda..."):
             oportunidades, recordes, alertas_pendulo = [], [], []
@@ -540,7 +545,7 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq"
                     else:
-                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezenas"
+                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else ("Centena" if op['cfg']['modo'] == 'centena' else "Dezena")
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         titulo = op['cfg']['nome']
                         dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
@@ -573,7 +578,7 @@ if menu == "🏠 Visão Geral (Home)":
                         cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                         css_class = "home-box-seq"
                     else:
-                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else "Dezenas"
+                        lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else ("Centena" if op['cfg']['modo'] == 'centena' else "Dezena")
                         sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                         titulo = op['cfg']['nome']
                         dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
@@ -610,10 +615,14 @@ elif menu == "🎯 Scanner de Raio-X":
                 "Dezenas Finais Baixos (1-5)", "Dezenas Finais Altos (6-0)",
                 "Unidades Baixas (1-5)", "Unidades Altas (6-0)",
                 "Unidades Ímpares", "Unidades Pares",
-                "Inversão 7D (0 ao 6)", "Inversão 7D (1 ao 7)", "Inversão 7D (2 ao 8)", 
-                "Inversão 7D (3 ao 9)", "Inversão 7D (4 ao 0)", "Inversão 7D (5 ao 1)", 
-                "Inversão 7D (6 ao 2)", "Inversão 7D (7 ao 3)", "Inversão 7D (8 ao 4)", 
-                "Inversão 7D (9 ao 5)"
+                "Inversão 7D Dezena (0 ao 6)", "Inversão 7D Dezena (1 ao 7)", "Inversão 7D Dezena (2 ao 8)", 
+                "Inversão 7D Dezena (3 ao 9)", "Inversão 7D Dezena (4 ao 0)", "Inversão 7D Dezena (5 ao 1)", 
+                "Inversão 7D Dezena (6 ao 2)", "Inversão 7D Dezena (7 ao 3)", "Inversão 7D Dezena (8 ao 4)", 
+                "Inversão 7D Dezena (9 ao 5)",
+                "Inversão 9D Centena (0 ao 8)", "Inversão 9D Centena (1 ao 9)", "Inversão 9D Centena (2 ao 0)", 
+                "Inversão 9D Centena (3 ao 1)", "Inversão 9D Centena (4 ao 2)", "Inversão 9D Centena (5 ao 3)", 
+                "Inversão 9D Centena (6 ao 4)", "Inversão 9D Centena (7 ao 5)", "Inversão 9D Centena (8 ao 6)", 
+                "Inversão 9D Centena (9 ao 7)"
             ])
             
     if st.button("🔎 EXECUTAR RAIO-X", type="primary", use_container_width=True):
@@ -651,7 +660,7 @@ elif menu == "🎯 Scanner de Raio-X":
                     elif alvo_rx == "Unidades Pares": cfg_rx['alvos'] = {0, 2, 4, 6, 8}; cfg_rx['modo'] = 'unidade'
                     
                     elif alvo_rx.startswith("Inversão 7D"):
-                        nums_str = alvo_rx.replace("Inversão 7D (", "").replace(")", "").split(" ao ")
+                        nums_str = alvo_rx.replace("Inversão 7D Dezena (", "").replace(")", "").split(" ao ")
                         start_n = int(nums_str[0])
                         bases_list = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
                         for b in bases_list:
@@ -659,6 +668,16 @@ elif menu == "🎯 Scanner de Raio-X":
                                 cfg_rx['alvos'] = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
                                 break
                         cfg_rx['modo'] = 'dezena'
+                        
+                    elif alvo_rx.startswith("Inversão 9D"):
+                        nums_str = alvo_rx.replace("Inversão 9D Centena (", "").replace(")", "").split(" ao ")
+                        start_n = int(nums_str[0])
+                        bases_list_c = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+                        for b in bases_list_c:
+                            if b[0] == start_n:
+                                cfg_rx['alvos'] = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
+                                break
+                        cfg_rx['modo'] = 'centena'
 
                 st.markdown(f"### 📡 Relatório de Escaneamento: <span style='color:#00ffff;'>{cfg_rx['nome']}</span>", unsafe_allow_html=True)
                 
@@ -669,7 +688,9 @@ elif menu == "🎯 Scanner de Raio-X":
                 elif categoria_rx == "Unidade (0 a 9)":
                     st.info("🧠 **INTELIGÊNCIA TÁTICA:** Uma Unidade seca tem **10% de chance** de acerto. O elástico atinge sua tensão máxima de ruptura lá pela casa dos **45x a 50x** de atraso.")
                 elif alvo_rx.startswith("Inversão 7D"):
-                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** A Inversão de 7 Dígitos forma **42 Dezenas** e cobre **42% da roleta**. A chance da banca escapar zera estatisticamente por volta dos **12x de atraso**.")
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** A Inversão 7D forma **42 Dezenas** e cobre **42% da roleta**. A chance da banca escapar zera estatisticamente por volta dos **12x de atraso**.")
+                elif alvo_rx.startswith("Inversão 9D"):
+                    st.info("🧠 **INTELIGÊNCIA TÁTICA:** A Inversão 9D forma **504 Centenas** e cobre **50,4% da roleta**. O poder de fogo é máximo e a zona de ruptura crítica acontece rapidamente aos **9x de atraso**.")
                 else:
                     st.info("🧠 **INTELIGÊNCIA TÁTICA:** Filtros de Massa cobrem **50% da roleta**. A banca tem pouco espaço de fuga. A zona de ruptura matemática absoluta ocorre entre **7x e 9x**.")
                 
@@ -793,4 +814,4 @@ elif menu == "📡 Extração Central":
                         st.cache_data.clear() 
                         st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Inversão 7D = 12x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Inversão 7D = 12x | Inversão 9D = 9x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
