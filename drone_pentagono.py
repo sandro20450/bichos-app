@@ -101,13 +101,13 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO 7D (DEZENAS)
-        bases_inv_7 = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
-        for b in bases_inv_7:
+        # INJEÇÃO 8D (DEZENAS - TETO 8x)
+        bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
+        for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
-            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 7D ({b[0]} AO {b[-1]})", 'lim': 12, **cm})
+            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 8, **cm})
             
-        # INJEÇÃO 9D (CENTENAS)
+        # INJEÇÃO 9D (CENTENAS - TETO 9x)
         bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9:
             alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
@@ -291,7 +291,6 @@ def rodar_drone():
     msg_telegram = ""
     achou_algo = False
     
-    # FILTRO DE ECO: Guarda os alvos que já foram reportados para não repetir a mensagem
     alvos_vistos = set()
 
     for banca_nome, df in dados_bancas.items():
@@ -344,7 +343,6 @@ def rodar_drone():
                 if is_anomaly:
                     c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
                     
-                    # FILTRO DE ECO TÁTICO
                     if "MILHAR" in tipo_ataque:
                         sig = f"{banca_nome}_{col}_M_{m_min}"
                     elif "CENTENA" in tipo_ataque:
@@ -353,7 +351,7 @@ def rodar_drone():
                         sig = f"{banca_nome}_{col}_{cfg['nome']}"
                         
                     if sig in alvos_vistos:
-                        continue  # Já vimos este alvo, ignora e não repete!
+                        continue
                     
                     alvos_vistos.add(sig)
 
@@ -389,7 +387,6 @@ def rodar_drone():
     elif total_salvos > 0:
         enviar_telegram(f"🟢 <b>ROTAÇÃO CONCLUÍDA</b>\n{total_salvos} novos sorteios salvos. Mercado estável, sem alvos no teto máximo.")
     else:
-        # AVISO DE PATRULHA: Quando não tem dados novos nem alertas, ele manda isso.
         enviar_telegram("🟢 <b>ROTAÇÃO CONCLUÍDA (MODO FURTIVO)</b>\nNenhum sorteio novo nas bancas. Monitoramento ativo.")
 
 if __name__ == "__main__":
