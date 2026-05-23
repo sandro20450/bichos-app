@@ -138,7 +138,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
-        elif modo == 'centena' and c in alvos: hit_p = True # GATILHO CENTENA ATIVO
+        elif modo == 'centena' and c in alvos: hit_p = True
         
         if not achou_p:
             if hit_p: achou_p = True
@@ -290,6 +290,9 @@ def rodar_drone():
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""
     achou_algo = False
+    
+    # FILTRO DE ECO: Guarda os alvos que já foram reportados para não repetir a mensagem
+    alvos_vistos = set()
 
     for banca_nome, df in dados_bancas.items():
         if df.empty: continue
@@ -301,11 +304,15 @@ def rodar_drone():
             if res_pendulo:
                 curr_streak, curr_dir, jogos = res_pendulo
                 dir_texto = "Decrescente" if curr_dir == "C" else "Crescente"
-                msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n"
-                msg_telegram += f"🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\n"
-                msg_telegram += f"Direção: {dir_texto}\n"
-                msg_telegram += f"Jogar: {', '.join(jogos)}\n\n"
-                achou_algo = True
+                
+                sig_pendulo = f"PENDULO_{banca_nome}_{col}"
+                if sig_pendulo not in alvos_vistos:
+                    msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n"
+                    msg_telegram += f"🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\n"
+                    msg_telegram += f"Direção: {dir_texto}\n"
+                    msg_telegram += f"Jogar: {', '.join(jogos)}\n\n"
+                    achou_algo = True
+                    alvos_vistos.add(sig_pendulo)
 
         metrics_cache = {}
         for cfg in todos_esq:
@@ -336,6 +343,20 @@ def rodar_drone():
 
                 if is_anomaly:
                     c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
+                    
+                    # FILTRO DE ECO TÁTICO
+                    if "MILHAR" in tipo_ataque:
+                        sig = f"{banca_nome}_{col}_M_{m_min}"
+                    elif "CENTENA" in tipo_ataque:
+                        sig = f"{banca_nome}_{col}_C_{c_min}"
+                    else:
+                        sig = f"{banca_nome}_{col}_{cfg['nome']}"
+                        
+                    if sig in alvos_vistos:
+                        continue  # Já vimos este alvo, ignora e não repete!
+                    
+                    alvos_vistos.add(sig)
+
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n"
                     msg_telegram += f"🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n"
                     msg_telegram += f"Alvo: <b>{cfg['nome']}</b>\n"
@@ -367,6 +388,9 @@ def rodar_drone():
         enviar_telegram(cabecalho + msg_telegram)
     elif total_salvos > 0:
         enviar_telegram(f"🟢 <b>ROTAÇÃO CONCLUÍDA</b>\n{total_salvos} novos sorteios salvos. Mercado estável, sem alvos no teto máximo.")
+    else:
+        # AVISO DE PATRULHA: Quando não tem dados novos nem alertas, ele manda isso.
+        enviar_telegram("🟢 <b>ROTAÇÃO CONCLUÍDA (MODO FURTIVO)</b>\nNenhum sorteio novo nas bancas. Monitoramento ativo.")
 
 if __name__ == "__main__":
     rodar_drone()
