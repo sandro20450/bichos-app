@@ -53,6 +53,35 @@ st.markdown("""
     z-index: 9999;
 }
 .block-container { padding-bottom: 80px; }
+
+/* === CAMUFLAGEM DO BOTÃO (ESTILO UIVERSE CYBER) === */
+[data-testid="stButton"] button {
+    background: linear-gradient(145deg, #111111, #1a1a1a) !important;
+    color: #00ffff !important; /* Texto em ciano neon */
+    border: 1px solid #00ffff !important;
+    border-radius: 30px !important; /* Deixa o botão bem arredondado */
+    padding: 10px 24px !important;
+    font-weight: bold !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    box-shadow: 0 4px 15px rgba(0, 255, 255, 0.1) !important;
+    transition: all 0.3s ease-in-out !important;
+}
+
+/* Efeito ao passar o mouse por cima (Glow / Brilho) */
+[data-testid="stButton"] button:hover {
+    background: #00ffff !important;
+    color: #000000 !important;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6) !important;
+    transform: translateY(-2px) !important;
+    border-color: #00ffff !important;
+}
+
+/* Efeito ao clicar (aperto) */
+[data-testid="stButton"] button:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.4) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
