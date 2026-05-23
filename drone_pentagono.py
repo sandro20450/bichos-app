@@ -27,7 +27,6 @@ TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "
 # --- FUNÇÕES BÁSICAS DE CONEXÃO E EXTRAÇÃO ---
 def enviar_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    # O Telegram tem limite de tamanho, então quebramos se for muito grande
     if len(mensagem) > 4000:
         partes = [mensagem[i:i+4000] for i in range(0, len(mensagem), 4000)]
         for parte in partes:
@@ -101,6 +100,12 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BORDAS", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
+        
+        # INJEÇÃO DA V65.16: INVERSÃO 7 DÍGITOS
+        bases_inv = [[0,1,2,3,4,5,6], [1,2,3,4,5,6,7], [2,3,4,5,6,7,8], [3,4,5,6,7,8,9], [4,5,6,7,8,9,0], [5,6,7,8,9,0,1], [6,7,8,9,0,1,2], [7,8,9,0,1,2,3], [8,9,0,1,2,3,4], [9,0,1,2,3,4,5]]
+        for b in bases_inv:
+            alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
+            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 7D ({b[0]} AO {b[-1]})", 'lim': 12, **cm})
     
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -168,7 +173,6 @@ def processar_pendulo(df, coluna):
             if d == curr_dir: curr_streak += 1
             else: break
             
-    # Teto Pendulo: 5
     if curr_streak >= 5:
         jogos = []; curr = all_groups[-1]
         if curr_dir == "C":
@@ -188,7 +192,6 @@ def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
     grupos = list(cfg_matriz['alvos'])
     scores = {g: 0 for g in grupos}
 
-    # Pegar atrasos da coluna atual para as matrizes globais
     col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
 
     mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0),
@@ -260,7 +263,6 @@ def rodar_drone():
     total_salvos = 0
     dados_bancas = {}
     
-    # 1. FAZ A EXTRAÇÃO E SALVA NO BANCO
     for banca_nome, aba_nome in MAPA_ABAS.items():
         res = extrair_dia(banca_nome, dt)
         if res:
@@ -272,14 +274,12 @@ def rodar_drone():
                 ws.append_rows(p_ins, value_input_option="RAW")
                 total_salvos += len(p_ins)
             
-            # Carrega para análise (com os dados novos se houver)
             dados_atualizados = ws.get_all_values()
             if len(dados_atualizados) > 1:
                 df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
                 df = df[df["P1"].astype(str).str.strip() != ""]
                 dados_bancas[banca_nome] = df
 
-    # 2. INICIA A VARREDURA IDÊNTICA AO APP PENTÁGONO
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""
     achou_algo = False
@@ -288,7 +288,6 @@ def rodar_drone():
         if df.empty: continue
         ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
 
-        # A) Varredura do Pêndulo (Teto 5x)
         for i, col in enumerate(COLUNAS_DF):
             if banca_nome == "Tradicional" and col != "P1": continue
             res_pendulo = processar_pendulo(df, col)
@@ -301,7 +300,6 @@ def rodar_drone():
                 msg_telegram += f"Jogar: {', '.join(jogos)}\n\n"
                 achou_algo = True
 
-        # B) Varredura das Matrizes (Teto 13x, 10x, 9x, 7x)
         metrics_cache = {}
         for cfg in todos_esq:
             for i, col in enumerate(COLUNAS_DF):
@@ -339,7 +337,6 @@ def rodar_drone():
                         msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)} | M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}\n"
                     msg_telegram += f"Atraso C: {ac}x | Atraso M: {am}x\n"
 
-                    # Se for matriz sequencial, calcula o Hedge
                     if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                         hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache)
                         if hedge_data:
