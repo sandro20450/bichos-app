@@ -726,7 +726,6 @@ if menu == "🏠 Visão Geral (Home)":
         
         if not oportunidades and not alertas_pendulo and not recordes: 
             st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
-
 elif menu == "🎯 Scanner de Raio-X":
     st.title("🎯 Scanner de Raio-X (Consulta Manual)")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
@@ -794,40 +793,41 @@ elif menu == "🎯 Scanner de Raio-X":
                 tela_carregamento.empty()
                 st.error("Base de dados vazia. Execute uma extração central primeiro.")
             else:
-                # 1. Filtros Padrões
+                # 1. Filtros Padrões (Com seus respectivos Tetos 'lim' injetados)
                 filtros_lista = [
-                    ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo'}),
-                    ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo'}),
-                    ("Dezenas Baixas (01-50)", {'alvos': set(range(1, 51)), 'modo': 'dezena'}),
-                    ("Dezenas Altas (51-00)", {'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena'}),
-                    ("Dezenas Ímpares", {'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena'}),
-                    ("Dezenas Pares", {'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena'}),
-                    ("Dezenas Miolo (26-75)", {'alvos': set(range(26, 76)), 'modo': 'dezena'}),
-                    ("Dezenas Bordas", {'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena'}),
-                    ("Dezenas Finais Baixos (1-5)", {'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena'}),
-                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena'}),
-                    ("Unidades Baixas (1-5)", {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade'}),
-                    ("Unidades Altas (6-0)", {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade'}),
-                    ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade'}),
-                    ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade'})
+                    ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'lim': 9}),
+                    ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'lim': 9}),
+                    ("Dezenas Baixas (01-50)", {'alvos': set(range(1, 51)), 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Altas (51-00)", {'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Ímpares", {'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Pares", {'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Miolo (26-75)", {'alvos': set(range(26, 76)), 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Bordas", {'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Finais Baixos (1-5)", {'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Unidades Baixas (1-5)", {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Altas (6-0)", {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
-                # 2. Injeção de Inversões 8D (Dezenas)
+                # 2. Injeção de Inversões 8D (Dezenas - Teto 8)
                 bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
                 for b in bases_inv_8:
                     alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
-                    filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena'}))
+                    filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena', 'lim': 8}))
                     
-                # 3. Injeção de Inversões 9D (Centenas)
+                # 3. Injeção de Inversões 9D (Centenas - Teto 9)
                 bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
                 for b in bases_inv_9:
                     alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
-                    filtros_lista.append((f"Inversão 9D Centena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv_c, 'modo': 'centena'}))
+                    filtros_lista.append((f"Inversão 9D Centena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv_c, 'modo': 'centena', 'lim': 9}))
                 
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
-                    linha = {"FILTRO TÁTICO": nome_filtro}
+                    # Salvamos o TETO oculto na tabela para a função de cor conseguir ler depois
+                    linha = {"FILTRO TÁTICO": nome_filtro, "TETO": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         linha[TITULOS_PREMIOS[i]] = f"{ap}x  (Rec: {mp}x)"
@@ -838,39 +838,52 @@ elif menu == "🎯 Scanner de Raio-X":
                 exibir_banner_sorteio(df, banca_rx)
                 st.markdown(f"### 📊 MAPA DE CALOR COMPLETO: Filtros e Inversões da {banca_rx}")
                 
-                # --- FUNÇÃO DE DESTAQUE TÁTICO (CONDITIONAL FORMATTING) ---
-                def destacar_recordes(row):
+                # --- MOTOR BICOLOR DE DESTAQUE ---
+                def destacar_niveis_alerta(row):
                     estilos = [''] * len(row)
-                    tem_alerta = False
+                    tem_teto = False
+                    tem_recorde = False
                     
-                    # Ignora a primeira coluna (que é o texto "FILTRO TÁTICO")
+                    # Tenta ler qual é o limite tático deste filtro específico
+                    try: teto_limite = int(row['TETO'])
+                    except: teto_limite = 99
+                    
                     for idx in range(1, len(row)):
+                        if row.index[idx] == 'TETO': continue # Ignora a coluna invisível
+                        
                         val = str(row.iloc[idx])
                         if "(Rec:" in val:
                             try:
-                                # Extrai os números do texto gerado (ex: "10x  (Rec: 10x)")
                                 ap = int(val.split("x")[0].strip())
                                 mp = int(val.split("(Rec: ")[1].split("x")[0].strip())
                                 
-                                # SE BATEU OU PASSOU O RECORDE (e o atraso é maior que 0)
-                                if ap >= mp and ap > 0:
-                                    # Pinta a célula específica de amarelo neon e fundo leve
+                                # PRIORIDADE 1: Atingiu o Teto (Verde Neon)
+                                if ap >= teto_limite and ap > 0:
+                                    estilos[idx] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); text-shadow: 0 0 5px #00ff00;'
+                                    tem_teto = True
+                                # PRIORIDADE 2: Bateu o Recorde, mas não o Teto (Amarelo Ouro)
+                                elif ap >= mp and ap > 0:
                                     estilos[idx] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
-                                    tem_alerta = True
+                                    tem_recorde = True
                             except:
                                 pass
                                 
-                    # Se encontrou algum recorde naquela linha, pinta também o NOME DO FILTRO
-                    if tem_alerta:
-                        estilos[0] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
+                    # Pinta a primeira coluna (O Nome do Filtro) com a cor de maior prioridade encontrada na linha
+                    if tem_teto:
+                        estilos[0] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); border-left: 4px solid #00ff00;'
+                    elif tem_recorde:
+                        estilos[0] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1); border-left: 4px solid #ffcc00;'
                         
                     return estilos
                 
-                # Cria a tabela bruta
+                # Renderização da Tabela Ocultando a coluna "TETO"
                 df_tabela = pd.DataFrame(dados_tabela)
-                
-                # Aplica o filtro visual (Styler) e injeta na tela
-                df_estilizado = df_tabela.style.apply(destacar_recordes, axis=1)
+                try:
+                    df_estilizado = df_tabela.style.apply(destacar_niveis_alerta, axis=1).hide(subset=['TETO'], axis=1)
+                except:
+                    # Fallback de segurança para versões antigas do Pandas
+                    df_estilizado = df_tabela.drop(columns=['TETO']).style.apply(destacar_niveis_alerta, axis=1)
+                    
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
 elif menu == "🧲 Armadilha do Pêndulo":
