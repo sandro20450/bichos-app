@@ -838,8 +838,40 @@ elif menu == "🎯 Scanner de Raio-X":
                 exibir_banner_sorteio(df, banca_rx)
                 st.markdown(f"### 📊 MAPA DE CALOR COMPLETO: Filtros e Inversões da {banca_rx}")
                 
+                # --- FUNÇÃO DE DESTAQUE TÁTICO (CONDITIONAL FORMATTING) ---
+                def destacar_recordes(row):
+                    estilos = [''] * len(row)
+                    tem_alerta = False
+                    
+                    # Ignora a primeira coluna (que é o texto "FILTRO TÁTICO")
+                    for idx in range(1, len(row)):
+                        val = str(row.iloc[idx])
+                        if "(Rec:" in val:
+                            try:
+                                # Extrai os números do texto gerado (ex: "10x  (Rec: 10x)")
+                                ap = int(val.split("x")[0].strip())
+                                mp = int(val.split("(Rec: ")[1].split("x")[0].strip())
+                                
+                                # SE BATEU OU PASSOU O RECORDE (e o atraso é maior que 0)
+                                if ap >= mp and ap > 0:
+                                    # Pinta a célula específica de amarelo neon e fundo leve
+                                    estilos[idx] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
+                                    tem_alerta = True
+                            except:
+                                pass
+                                
+                    # Se encontrou algum recorde naquela linha, pinta também o NOME DO FILTRO
+                    if tem_alerta:
+                        estilos[0] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
+                        
+                    return estilos
+                
+                # Cria a tabela bruta
                 df_tabela = pd.DataFrame(dados_tabela)
-                st.dataframe(df_tabela, use_container_width=True, hide_index=True)
+                
+                # Aplica o filtro visual (Styler) e injeta na tela
+                df_estilizado = df_tabela.style.apply(destacar_recordes, axis=1)
+                st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
 elif menu == "🧲 Armadilha do Pêndulo":
     st.title("🧲 Armadilha de Saturação (Pêndulo)")
