@@ -744,112 +744,102 @@ elif menu == "🎯 Scanner de Raio-X":
         elif categoria_rx == "Unidade (0 a 9)":
             alvo_rx = st.number_input("Qual Unidade?", min_value=0, max_value=9, value=0)
         else:
-            alvo_rx = st.selectbox("Qual Filtro?", [
-                "Grupos Pares", "Grupos Ímpares", 
-                "Dezenas Pares", "Dezenas Ímpares", 
-                "Dezenas Baixas (01-50)", "Dezenas Altas (51-00)", 
-                "Dezenas Miolo (26-75)", "Dezenas Bordas",
-                "Dezenas Finais Baixos (1-5)", "Dezenas Finais Altos (6-0)",
-                "Unidades Baixas (1-5)", "Unidades Altas (6-0)",
-                "Unidades Ímpares", "Unidades Pares",
-                "Inversão 8D Dezena (0 ao 7)", "Inversão 8D Dezena (1 ao 8)", "Inversão 8D Dezena (2 ao 9)", 
-                "Inversão 8D Dezena (3 ao 0)", "Inversão 8D Dezena (4 ao 1)", "Inversão 8D Dezena (5 ao 2)", 
-                "Inversão 8D Dezena (6 ao 3)", "Inversão 8D Dezena (7 ao 4)", "Inversão 8D Dezena (8 ao 5)", 
-                "Inversão 8D Dezena (9 ao 6)",
-                "Inversão 9D Centena (0 ao 8)", "Inversão 9D Centena (1 ao 9)", "Inversão 9D Centena (2 ao 0)", 
-                "Inversão 9D Centena (3 ao 1)", "Inversão 9D Centena (4 ao 2)", "Inversão 9D Centena (5 ao 3)", 
-                "Inversão 9D Centena (6 ao 4)", "Inversão 9D Centena (7 ao 5)", "Inversão 9D Centena (8 ao 6)", 
-                "Inversão 9D Centena (9 ao 7)"
-            ])
+            st.markdown("<div style='margin-top: 32px; color: #00ffff; font-weight: bold;'>Modo Varredura Total Ativo</div>", unsafe_allow_html=True)
             
-    if st.button("🔎 EXECUTAR RAIO-X", type="primary", use_container_width=True):
-        tela_carregamento = st.empty()
-        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"📡 ESCANEANDO HISTÓRICO DA {banca_rx.upper()}..."), unsafe_allow_html=True)
-        
-        df = carregar_dados_em_memoria(banca_rx)
-        if df.empty:
-            tela_carregamento.empty()
-            st.error("Base de dados vazia. Execute uma extração central primeiro.")
-        else:
-            exibir_banner_sorteio(df, banca_rx)
+    if categoria_rx != "Filtros de Massa":
+        if st.button("🔎 EXECUTAR RAIO-X INDIVIDUAL", type="primary", use_container_width=True):
+            tela_carregamento = st.empty()
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"📡 ESCANEANDO HISTÓRICO DA {banca_rx.upper()}..."), unsafe_allow_html=True)
             
-            cfg_rx = {'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999, 'lim': 0}
-            if categoria_rx == "Grupo (1 a 25)":
-                cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'grupo'; cfg_rx['nome'] = f"GRUPO {str(alvo_rx).zfill(2)}"
-            elif categoria_rx == "Dezena (00 a 99)":
-                cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'dezena'; cfg_rx['nome'] = f"DEZENA {str(alvo_rx).zfill(2)}"
-            elif categoria_rx == "Unidade (0 a 9)":
-                cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'unidade'; cfg_rx['nome'] = f"UNIDADE {alvo_rx}"
+            df = carregar_dados_em_memoria(banca_rx)
+            if df.empty:
+                tela_carregamento.empty()
+                st.error("Base de dados vazia. Execute uma extração central primeiro.")
             else:
-                cfg_rx['nome'] = alvo_rx.upper()
-                if alvo_rx == "Grupos Pares": cfg_rx['alvos'] = set(range(2, 26, 2)); cfg_rx['modo'] = 'grupo'
-                elif alvo_rx == "Grupos Ímpares": cfg_rx['alvos'] = set(range(1, 26, 2)); cfg_rx['modo'] = 'grupo'
-                elif alvo_rx == "Dezenas Pares": cfg_rx['alvos'] = {x for x in range(100) if x % 2 == 0}; cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Ímpares": cfg_rx['alvos'] = {x for x in range(100) if x % 2 != 0}; cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Baixas (01-50)": cfg_rx['alvos'] = set(range(1, 51)); cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Altas (51-00)": cfg_rx['alvos'] = set(range(51, 100)) | {0}; cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Miolo (26-75)": cfg_rx['alvos'] = set(range(26, 76)); cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Bordas": cfg_rx['alvos'] = set(range(1, 26)) | set(range(76, 100)) | {0}; cfg_rx['modo'] = 'dezena'
+                exibir_banner_sorteio(df, banca_rx)
                 
-                elif alvo_rx == "Dezenas Finais Baixos (1-5)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}; cfg_rx['modo'] = 'dezena'
-                elif alvo_rx == "Dezenas Finais Altos (6-0)": cfg_rx['alvos'] = {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}; cfg_rx['modo'] = 'dezena'
+                cfg_rx = {'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999, 'lim': 0}
+                if categoria_rx == "Grupo (1 a 25)":
+                    cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'grupo'; cfg_rx['nome'] = f"GRUPO {str(alvo_rx).zfill(2)}"
+                elif categoria_rx == "Dezena (00 a 99)":
+                    cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'dezena'; cfg_rx['nome'] = f"DEZENA {str(alvo_rx).zfill(2)}"
+                elif categoria_rx == "Unidade (0 a 9)":
+                    cfg_rx['alvos'] = {int(alvo_rx)}; cfg_rx['modo'] = 'unidade'; cfg_rx['nome'] = f"UNIDADE {alvo_rx}"
                 
-                elif alvo_rx == "Unidades Baixas (1-5)": cfg_rx['alvos'] = {1, 2, 3, 4, 5}; cfg_rx['modo'] = 'unidade'
-                elif alvo_rx == "Unidades Altas (6-0)": cfg_rx['alvos'] = {6, 7, 8, 9, 0}; cfg_rx['modo'] = 'unidade'
-                elif alvo_rx == "Unidades Ímpares": cfg_rx['alvos'] = {1, 3, 5, 7, 9}; cfg_rx['modo'] = 'unidade'
-                elif alvo_rx == "Unidades Pares": cfg_rx['alvos'] = {0, 2, 4, 6, 8}; cfg_rx['modo'] = 'unidade'
+                tela_carregamento.empty()
+                st.markdown(f"### 📡 Relatório de Escaneamento: <span style='color:#00ffff;'>{cfg_rx['nome']}</span>", unsafe_allow_html=True)
                 
-                elif alvo_rx.startswith("Inversão 8D"):
-                    nums_str = alvo_rx.replace("Inversão 8D Dezena (", "").replace(")", "").split(" ao ")
-                    start_n = int(nums_str[0])
-                    bases_list = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
-                    for b in bases_list:
-                        if b[0] == start_n:
-                            cfg_rx['alvos'] = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
-                            break
-                    cfg_rx['modo'] = 'dezena'
+                cols_rx = st.columns(5)
+                for i, col in enumerate(COLUNAS_DF):
+                    ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
                     
-                elif alvo_rx.startswith("Inversão 9D"):
-                    nums_str = alvo_rx.replace("Inversão 9D Centena (", "").replace(")", "").split(" ao ")
-                    start_n = int(nums_str[0])
-                    bases_list_c = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
-                    for b in bases_list_c:
-                        if b[0] == start_n:
-                            cfg_rx['alvos'] = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
-                            break
-                    cfg_rx['modo'] = 'centena'
-
-            tela_carregamento.empty()
-            st.markdown(f"### 📡 Relatório de Escaneamento: <span style='color:#00ffff;'>{cfg_rx['nome']}</span>", unsafe_allow_html=True)
+                    with cols_rx[i]:
+                        cor_atraso = "#ff4b4b" if ap >= 7 else "#4CAF50" 
+                        st.markdown(f"""
+                        <div class="home-box" style="background-color:#111; border-color:#444;">
+                            <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
+                            <div class="sniper-dado" style="font-size:13px; margin-top:10px;">ATRASO ATUAL:</div>
+                            <div class="sniper-valor" style="color:{cor_atraso}; font-size:26px;">{ap}x</div>
+                            <div class="sniper-dado" style="margin-top:10px;">RECORDE MÁXIMO:</div>
+                            <div class="sniper-valor" style="color:#FF851B; font-size:18px;">{mp}x</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+    else:
+        if st.button("📊 GERAR PLANILHA DE MASSA", type="primary", use_container_width=True):
+            tela_carregamento = st.empty()
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "📡 PROCESSANDO TODOS OS FILTROS DE MASSA E INVERSÕES..."), unsafe_allow_html=True)
             
-            if categoria_rx == "Grupo (1 a 25)":
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** Um Grupo seco tem **4% de chance** de acerto. A banca tem 96% de chance de fugir dele no sorteio. A zona de ruptura crítica do elástico ocorre lá pela casa dos **115x a 120x** de atraso.")
-            elif categoria_rx == "Dezena (00 a 99)":
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** Uma Dezena seca tem apenas **1% de chance** de acerto. A banca tem 99% de chance de fugir. A zona de ruptura matemática crítica ocorre muito longe, lá pela casa dos **450x a 460x** de atraso.")
-            elif categoria_rx == "Unidade (0 a 9)":
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** Uma Unidade seca tem **10% de chance** de acerto. O elástico atinge sua tensão máxima de ruptura lá pela casa dos **45x a 50x** de atraso.")
-            elif alvo_rx.startswith("Inversão 8D"):
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** A Inversão 8D forma **56 Dezenas** e cobre **56% da roleta**. A chance da banca escapar zera estatisticamente por volta dos **8x de atraso**.")
-            elif alvo_rx.startswith("Inversão 9D"):
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** A Inversão 9D forma **504 Centenas** e cobre **50,4% da roleta**. O poder de fogo é máximo e a zona de ruptura crítica acontece rapidamente aos **9x de atraso**.")
+            df = carregar_dados_em_memoria(banca_rx)
+            if df.empty:
+                tela_carregamento.empty()
+                st.error("Base de dados vazia. Execute uma extração central primeiro.")
             else:
-                st.info("🧠 **INTELIGÊNCIA TÁTICA:** Filtros de Massa cobrem **50% da roleta**. A banca tem pouco espaço de fuga. A zona de ruptura matemática absoluta ocorre entre **7x e 9x**.")
-            
-            cols_rx = st.columns(5)
-            for i, col in enumerate(COLUNAS_DF):
-                ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
+                # 1. Filtros Padrões
+                filtros_lista = [
+                    ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo'}),
+                    ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo'}),
+                    ("Dezenas Baixas (01-50)", {'alvos': set(range(1, 51)), 'modo': 'dezena'}),
+                    ("Dezenas Altas (51-00)", {'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena'}),
+                    ("Dezenas Ímpares", {'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena'}),
+                    ("Dezenas Pares", {'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena'}),
+                    ("Dezenas Miolo (26-75)", {'alvos': set(range(26, 76)), 'modo': 'dezena'}),
+                    ("Dezenas Bordas", {'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena'}),
+                    ("Dezenas Finais Baixos (1-5)", {'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena'}),
+                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena'}),
+                    ("Unidades Baixas (1-5)", {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade'}),
+                    ("Unidades Altas (6-0)", {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade'}),
+                    ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade'}),
+                    ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade'})
+                ]
                 
-                with cols_rx[i]:
-                    cor_atraso = "#ff4b4b" if ap >= 7 else "#4CAF50" 
-                    st.markdown(f"""
-                    <div class="home-box" style="background-color:#111; border-color:#444;">
-                        <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
-                        <div class="sniper-dado" style="font-size:13px; margin-top:10px;">ATRASO ATUAL:</div>
-                        <div class="sniper-valor" style="color:{cor_atraso}; font-size:26px;">{ap}x</div>
-                        <div class="sniper-dado" style="margin-top:10px;">RECORDE MÁXIMO:</div>
-                        <div class="sniper-valor" style="color:#FF851B; font-size:18px;">{mp}x</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # 2. Injeção de Inversões 8D (Dezenas)
+                bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
+                for b in bases_inv_8:
+                    alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
+                    filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena'}))
+                    
+                # 3. Injeção de Inversões 9D (Centenas)
+                bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+                for b in bases_inv_9:
+                    alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
+                    filtros_lista.append((f"Inversão 9D Centena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv_c, 'modo': 'centena'}))
+                
+                dados_tabela = []
+                for nome_filtro, cfg in filtros_lista:
+                    cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
+                    linha = {"FILTRO TÁTICO": nome_filtro}
+                    for i, col in enumerate(COLUNAS_DF):
+                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        linha[TITULOS_PREMIOS[i]] = f"{ap}x  (Rec: {mp}x)"
+                    
+                    dados_tabela.append(linha)
+                
+                tela_carregamento.empty()
+                exibir_banner_sorteio(df, banca_rx)
+                st.markdown(f"### 📊 MAPA DE CALOR COMPLETO: Filtros e Inversões da {banca_rx}")
+                
+                df_tabela = pd.DataFrame(dados_tabela)
+                st.dataframe(df_tabela, use_container_width=True, hide_index=True)
 
 elif menu == "🧲 Armadilha do Pêndulo":
     st.title("🧲 Armadilha de Saturação (Pêndulo)")
