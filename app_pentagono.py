@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.19 - UI Tática", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.20 - Teto 10x", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -270,19 +270,19 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO: INVERSÃO 8 DÍGITOS (TETO 8x)
+        # INJEÇÃO: INVERSÃO 8 DÍGITOS (TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
             nome_inv = f"D: INV 8D ({b[0]} AO {b[-1]})"
-            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': nome_inv, 'lim': 8, **cm})
+            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': nome_inv, 'lim': 10, **cm})
 
-        # INJEÇÃO: INVERSÃO 9 DÍGITOS (CENTENAS - TETO 9x)
+        # INJEÇÃO: INVERSÃO 9 DÍGITOS (CENTENAS - TETO 10x)
         bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9:
             alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
             nome_inv_c = f"C: INV 9D ({b[0]} AO {b[-1]})"
-            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': nome_inv_c, 'lim': 9, **cm})
+            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': nome_inv_c, 'lim': 10, **cm})
 
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -526,7 +526,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.19")
+    st.header("Pentágono V65.20")
     
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
@@ -726,6 +726,7 @@ if menu == "🏠 Visão Geral (Home)":
         
         if not oportunidades and not alertas_pendulo and not recordes: 
             st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
+
 elif menu == "🎯 Scanner de Raio-X":
     st.title("🎯 Scanner de Raio-X (Consulta Manual)")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
@@ -811,17 +812,17 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
-                # 2. Injeção de Inversões 8D (Dezenas - Teto 8)
+                # 2. Injeção de Inversões 8D (Dezenas - NOVO TETO 10)
                 bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
                 for b in bases_inv_8:
                     alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
-                    filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena', 'lim': 8}))
+                    filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena', 'lim': 10}))
                     
-                # 3. Injeção de Inversões 9D (Centenas - Teto 9)
+                # 3. Injeção de Inversões 9D (Centenas - NOVO TETO 10)
                 bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
                 for b in bases_inv_9:
                     alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
-                    filtros_lista.append((f"Inversão 9D Centena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv_c, 'modo': 'centena', 'lim': 9}))
+                    filtros_lista.append((f"Inversão 9D Centena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv_c, 'modo': 'centena', 'lim': 10}))
                 
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
@@ -1003,4 +1004,4 @@ elif menu == "📡 Extração Central":
                     st.cache_data.clear() 
                     st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Inversão 8D = 8x | Inversão 9D = 9x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Inversão 8D = 10x | Inversão 9D = 10x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
