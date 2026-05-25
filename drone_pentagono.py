@@ -101,13 +101,13 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO 8D (DEZENAS - NOVO TETO 10x)
+        # INJEÇÃO 8D (DEZENAS - TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
             esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
             
-        # INJEÇÃO 9D (CENTENAS - NOVO TETO 10x)
+        # INJEÇÃO 9D (CENTENAS - TETO 10x)
         bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9:
             alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
@@ -271,21 +271,28 @@ def rodar_drone():
     dados_bancas = {}
     
     for banca_nome, aba_nome in MAPA_ABAS.items():
+        # 1. Raspa os dados de hoje na internet
         res = extrair_dia(banca_nome, dt)
+        
+        # 2. Conecta na aba específica daquela banca
+        ws = sh.worksheet(aba_nome)
+        
+        # 3. SE houver dados novos raspados, ele insere na planilha
         if res:
-            ws = sh.worksheet(aba_nome)
             existentes = ws.get_all_values()
             set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
             p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
             if p_ins:
                 ws.append_rows(p_ins, value_input_option="RAW")
                 total_salvos += len(p_ins)
-            
-            dados_atualizados = ws.get_all_values()
-            if len(dados_atualizados) > 1:
-                df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
-                df = df[df["P1"].astype(str).str.strip() != ""]
-                dados_bancas[banca_nome] = df
+        
+        # 4. AGORA ELE SEMPRE LÊ A PLANILHA (A Trava foi removida daqui)
+        # Ele vai carregar a base de dados para procurar anomalias, mesmo se não salvou nada de novo
+        dados_atualizados = ws.get_all_values()
+        if len(dados_atualizados) > 1:
+            df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
+            df = df[df["P1"].astype(str).str.strip() != ""]
+            dados_bancas[banca_nome] = df
 
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""
@@ -341,7 +348,7 @@ def rodar_drone():
                     is_anomaly = True; tipo_ataque = f"🟡 ATAQUE FORTE ({cfg['modo'].upper()})"
 
                 if is_anomaly:
-                    c_min, c_max, m_min, m_max = cfg['c_min'], c_max = cfg['c_max'], cfg['m_min'], cfg['m_max']
+                    c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
                     
                     if "MILHAR" in tipo_ataque:
                         sig = f"{banca_nome}_{col}_M_{m_min}"
