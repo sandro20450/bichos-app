@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.21 - Quantum UI", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.22 - Radar Pings", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -38,14 +38,12 @@ st.markdown("""
 .alerta-azul { background-color: #001a33; border: 1px solid #0099ff; color: #0099ff; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 .alerta-amarelo { background-color: rgba(0,0,0,0.5); border: 1px solid #ffcc00; color: #ffcc00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 
-.rodape-tatico {
-    position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(17, 17, 17, 0.95);
-    color: #ffcc00; text-align: center; padding: 12px; font-size: 15px; font-weight: bold;
-    border-top: 2px solid #ff4b4b; z-index: 9999;
-}
+.rodape-tatico { position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(17, 17, 17, 0.95); color: #ffcc00; text-align: center; padding: 12px; font-size: 15px; font-weight: bold; border-top: 2px solid #ff4b4b; z-index: 9999; }
 .block-container { padding-bottom: 80px; }
 
-/* === BOTOES UIVERSE === */
+/* ============================================================ */
+/* === CAMUFLAGEM DE BOTÕES - ESTILO UIVERSE (DEXTER-ST) ====== */
+/* ============================================================ */
 [data-testid="stButton"] button {
     --border-radius: 24px; --padding: 4px; --transition: 0.4s; --button-color: #101010; --highlight-color-hue: 180deg;
     position: relative; display: flex; justify-content: center; background-color: var(--button-color) !important;
@@ -53,12 +51,50 @@ st.markdown("""
     transition: box-shadow var(--transition), border var(--transition), background-color var(--transition) !important;
     box-shadow: inset 0px 1px 1px rgba(255, 255, 255, 0.2), inset 0px 2px 2px rgba(255, 255, 255, 0.15), inset 0px 4px 4px rgba(255, 255, 255, 0.1), inset 0px 8px 8px rgba(255, 255, 255, 0.05), inset 0px 16px 16px rgba(255, 255, 255, 0.05), 0px -1px 1px rgba(0, 0, 0, 0.02), 0px -2px 2px rgba(0, 0, 0, 0.03), 0px -4px 4px rgba(0, 0, 0, 0.05), 0px -8px 8px rgba(0, 0, 0, 0.06), 0px -16px 16px rgba(0, 0, 0, 0.08) !important;
 }
-[data-testid="stButton"] button p { position: relative; z-index: 5 !important; color: #ffffff !important; font-weight: 600 !important; letter-spacing: 1px !important; text-shadow: 0 0 3px #fff8 !important; }
+
 [data-testid="stButton"] button::before { content: ""; position: absolute; top: calc(0px - var(--padding)); left: calc(0px - var(--padding)); width: calc(100% + var(--padding) * 2); height: calc(100% + var(--padding) * 2); border-radius: calc(var(--border-radius) + var(--padding)); pointer-events: none; background-image: linear-gradient(0deg, #0004, #000a); z-index: -1; transition: box-shadow var(--transition), filter var(--transition); box-shadow: 0 -8px 8px -6px #0000 inset, 0 -16px 16px -8px #00000000 inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001; }
 [data-testid="stButton"] button:hover { border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%) !important; }
 [data-testid="stButton"] button:hover::before { box-shadow: 0 -8px 8px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 30%) inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001 !important; }
 [data-testid="stButton"] button:active { border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%) !important; background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5) !important; }
 [data-testid="stButton"] button:active::before { box-shadow: 0 -8px 12px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset, 1px 1px 1px #fff4, 2px 2px 2px #fff2, -1px -1px 1px #0002, -2px -2px 2px #0001 !important; }
+
+/* ============================================================ */
+/* === PING ANIMATION (MICRO-ÍCONE DENTRO DO BOTÃO) =========== */
+/* ============================================================ */
+[data-testid="stButton"] button p {
+    position: relative;
+    z-index: 5 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
+    text-shadow: 0 0 3px #fff8 !important;
+    padding-left: 24px !important; /* Espaço para o radar ping */
+}
+
+/* O Radar Ping injetado no texto do botão */
+[data-testid="stButton"] button p::before,
+[data-testid="stButton"] button p::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    margin-top: -6px; /* Centraliza verticalmente (metade de 12px) */
+    height: 12px;
+    width: 12px;
+    border-radius: 50%;
+    /* A cor será controlada dinamicamente pelo Python por página via variável css, default ciano */
+    background-color: var(--ping-btn-color, #00ffff);
+    animation: btn-ping-pulse 2s linear infinite;
+    opacity: 0;
+}
+[data-testid="stButton"] button p::after {
+    animation-delay: -1s;
+}
+
+@keyframes btn-ping-pulse {
+    0% { transform: scale(0); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
 
 /* ============================================================ */
 /* === ANIMAÇÃO QUANTUM PARA OS TÍTULOS (CABEÇALHOS) ========== */
@@ -86,33 +122,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# FUNÇÃO PARA GERAR OS TÍTULOS COM A ANIMAÇÃO QUANTUM
-def exibir_titulo_animado(texto, cor="#00ffff"):
-    html_titulo = f"""
+# FUNÇÃO PARA GERAR OS TÍTULOS E CONFIGURAR A COR DO PING DA PÁGINA
+def configurar_ui_pagina(texto_titulo, cor_neon):
+    # O HTML constrói o título Quantum e também injeta a variável CSS que muda a cor do Ping dos botões
+    html_injecao = f"""
+    <style>
+        :root {{
+            --ping-btn-color: {cor_neon} !important;
+        }}
+    </style>
     <div class="titulo-container">
-        <div class="quantum-container" style="--q-color: {cor};">
+        <div class="quantum-container" style="--q-color: {cor_neon};">
           <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
           <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
           <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
           <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
           <div class="q-particle"></div>
         </div>
-        <h1 class="titulo-texto">{texto}</h1>
+        <h1 class="titulo-texto">{texto_titulo}</h1>
     </div>
     """
-    st.markdown(html_titulo, unsafe_allow_html=True)
+    st.markdown(html_injecao, unsafe_allow_html=True)
 
 
 # === ANIMAÇÃO HELIX DO BOTÃO DE VARREDURA ===
 HELIX_LOADER_HTML = """
 <style>
-.radar-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background-color: #0e1117; border: 1px solid #00ffff; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
-.uib-container { --uib-size: 60px; --uib-color: #00ffff; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }
+.radar-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background-color: #0e1117; border: 1px solid var(--ping-btn-color, #00ffff); border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
+.uib-container { --uib-size: 60px; --uib-color: var(--ping-btn-color, #00ffff); --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }
 .uib-slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
 .uib-slice::before, .uib-slice::after { --uib-a: calc(var(--uib-speed) / -2); --uib-b: calc(var(--uib-speed) / -6); content: ''; position: absolute; top: 0; left: calc(50% - var(--uib-size) / 12); height: 100%; width: calc(100% / 6); border-radius: 50%; background-color: var(--uib-color); flex-shrink: 0; animation: orbit var(--uib-speed) linear infinite; }
 .uib-slice:nth-child(1)::after { animation-delay: var(--uib-a); } .uib-slice:nth-child(2)::before { animation-delay: var(--uib-b); } .uib-slice:nth-child(2)::after { animation-delay: calc(var(--uib-a) + var(--uib-b)); } .uib-slice:nth-child(3)::before { animation-delay: calc(var(--uib-b) * 2); } .uib-slice:nth-child(3)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 2); } .uib-slice:nth-child(4)::before { animation-delay: calc(var(--uib-b) * 3); } .uib-slice:nth-child(4)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 3); } .uib-slice:nth-child(5)::before { animation-delay: calc(var(--uib-b) * 4); } .uib-slice:nth-child(5)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 4); } .uib-slice:nth-child(6)::before { animation-delay: calc(var(--uib-b) * 5); } .uib-slice:nth-child(6)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 5); }
 @keyframes orbit { 0% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } 5% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208); opacity: 0.58; } 10% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576); opacity: 0.51; } 15% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944); opacity: 0.44; } 20% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312); opacity: 0.37; } 25% { transform: translateX(0%) scale(0.47368); opacity: 0.3; } 30% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312); opacity: 0.37; } 35% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944); opacity: 0.44; } 40% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576); opacity: 0.51; } 45% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208); opacity: 0.58; } 50% { transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684); opacity: 0.65; } 55% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.789472); opacity: 0.72; } 60% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.842104); opacity: 0.79; } 65% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.894736); opacity: 0.86; } 70% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.947368); opacity: 0.93; } 75% { transform: translateX(0%) scale(1); opacity: 1; } 80% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.947368); opacity: 0.93; } 85% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.894736); opacity: 0.86; } 90% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.842104); opacity: 0.79; } 95% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.789472); opacity: 0.72; } 100% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } }
-.texto-carregamento { color: #00ffff; margin-top: 25px; font-size: 15px; font-weight: bold; font-family: monospace; letter-spacing: 2px; animation: piscar 1s infinite; text-align: center;}
+.texto-carregamento { color: var(--ping-btn-color, #00ffff); margin-top: 25px; font-size: 15px; font-weight: bold; font-family: monospace; letter-spacing: 2px; animation: piscar 1s infinite; text-align: center;}
 @keyframes piscar { 50% { opacity: 0.4; } }
 </style>
 <div class="radar-container"><div class="uib-container"><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div></div><div class="texto-carregamento">MSG_REPLACE</div></div>
@@ -175,7 +217,6 @@ def gerar_matrizes_taticas():
     cms = []
     for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
     for cm in cms:
-        # 15 Grupos e 12 Grupos
         for g in range(1, 12):
             alvos = set(range(g, g + 15))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G: {str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
@@ -183,7 +224,6 @@ def gerar_matrizes_taticas():
             alvos = set(range(g, g + 12))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G12: {str(g).zfill(2)}-{str(g+11).zfill(2)}", 'lim': 10, **cm})
         
-        # Filtros e Dezenas (Teto 9)
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
@@ -195,19 +235,15 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO: INVERSÃO 8 DÍGITOS (TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
-            nome_inv = f"D: INV 8D ({b[0]} AO {b[-1]})"
-            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': nome_inv, 'lim': 10, **cm})
+            esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
 
-        # INJEÇÃO: INVERSÃO 9 DÍGITOS (CENTENAS - TETO 10x)
         bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9:
             alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
-            nome_inv_c = f"C: INV 9D ({b[0]} AO {b[-1]})"
-            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': nome_inv_c, 'lim': 10, **cm})
+            esquadroes.append({'alvos': alvos_inv_c, 'modo': 'centena', 'tipo': 'seq', 'nome': f"C: INV 9D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
 
     esquadroes_unidade = [
         {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
@@ -451,21 +487,21 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.21")
+    st.header("Pentágono V65.22")
     
-    if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
+    if st.button("FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
         st.success("✅ Base de dados atualizada! A memória do radar foi limpa.")
         
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    exibir_titulo_animado("Central AWACS - Desdobramento Sniper", cor="#00ffff")
+    configurar_ui_pagina("Central AWACS - Desdobramento Sniper", cor_neon="#00ffff")
     st.info("Varredura Inteligente Ativada. Botões Uiverse e Quantum UI operacionais.")
     
-    if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
+    if st.button("INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         tela_carregamento = st.empty()
-        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "📡 CALIBRANDO MATRIZES E CALCULANDO RUPTURAS..."), unsafe_allow_html=True)
+        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "CALIBRANDO MATRIZES E CALCULANDO RUPTURAS..."), unsafe_allow_html=True)
         
         oportunidades, recordes, alertas_pendulo = [], [], []
         todos_esq = gerar_matrizes_taticas()
@@ -615,45 +651,12 @@ if menu == "🏠 Visão Geral (Home)":
                     
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
-            st.markdown("---") 
-        
-        if recordes:
-            st.warning("⚠️ RECORDES HISTÓRICOS ALCANÇADOS (Radar Secundário):")
-            cols = st.columns(3)
-            for idx, op in enumerate(recordes):
-                c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
-                ta = op.get('tipo_ataque', '')
-                css_class = f"home-box-{op['cfg']['tipo']}"
-                
-                if ta == 'UNIDADE':
-                    lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"; titulo = op['cfg']['nome']
-                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff4b4b;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
-                    cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
-                elif ta == 'MILHAR':
-                    lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"; titulo = f"🏆 RECORDE MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
-                    dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
-                    css_class = "home-box-seq"
-                elif ta == 'CENTENA':
-                    lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"; titulo = f"🏆 RECORDE CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
-                    dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
-                    css_class = "home-box-seq"
-                else:
-                    lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else ("Centena" if op['cfg']['modo'] == 'centena' else "Dezena")
-                    sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
-                    titulo = op['cfg']['nome']
-                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']==op['mp'] else '#aaa'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']==op['mc'] else '#aaa'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']==op['mm'] else '#aaa'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
-                    
-                with cols[idx % 3]:
-                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
         
         if not oportunidades and not alertas_pendulo and not recordes: 
             st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
 elif menu == "🎯 Scanner de Raio-X":
-    exibir_titulo_animado("Scanner de Raio-X (Consulta)", cor="#ffcc00")
+    configurar_ui_pagina("Scanner de Raio-X (Consulta)", cor_neon="#ffcc00")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
     
     col1, col2, col3 = st.columns(3)
@@ -672,9 +675,9 @@ elif menu == "🎯 Scanner de Raio-X":
             st.markdown("<div style='margin-top: 32px; color: #00ffff; font-weight: bold;'>Modo Varredura Total Ativo</div>", unsafe_allow_html=True)
             
     if categoria_rx != "Filtros de Massa":
-        if st.button("🔎 EXECUTAR RAIO-X INDIVIDUAL", type="primary", use_container_width=True):
+        if st.button("EXECUTAR RAIO-X INDIVIDUAL", type="primary", use_container_width=True):
             tela_carregamento = st.empty()
-            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"📡 ESCANEANDO HISTÓRICO DA {banca_rx.upper()}..."), unsafe_allow_html=True)
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"ESCANEANDO HISTÓRICO DA {banca_rx.upper()}..."), unsafe_allow_html=True)
             
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty:
@@ -710,9 +713,9 @@ elif menu == "🎯 Scanner de Raio-X":
                         </div>
                         """, unsafe_allow_html=True)
     else:
-        if st.button("📊 GERAR PLANILHA DE MASSA", type="primary", use_container_width=True):
+        if st.button("GERAR PLANILHA DE MASSA", type="primary", use_container_width=True):
             tela_carregamento = st.empty()
-            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "📡 PROCESSANDO TODOS OS FILTROS DE MASSA E INVERSÕES..."), unsafe_allow_html=True)
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "PROCESSANDO TODOS OS FILTROS DE MASSA E INVERSÕES..."), unsafe_allow_html=True)
             
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty:
@@ -802,13 +805,13 @@ elif menu == "🎯 Scanner de Raio-X":
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
 elif menu == "🧲 Armadilha do Pêndulo":
-    exibir_titulo_animado("Armadilha de Saturação (Pêndulo)", cor="#ff00aa")
+    configurar_ui_pagina("Armadilha de Saturação (Pêndulo)", cor_neon="#ff00aa")
     st.info("Analisa a física circular de **Passos Curtos (1 a 6 casas)** dos últimos 6 sorteios. Pulos longos (✖️) quebram a saturação.")
     banca_pendulo = st.selectbox("Selecione o Alvo de Rastreador Circular:", list(BANCAS_CONFIG.keys()))
     
-    if st.button("🧲 ANALISAR MOMENTUM CIRCULAR", type="primary", use_container_width=True):
+    if st.button("ANALISAR MOMENTUM CIRCULAR", type="primary", use_container_width=True):
         tela_carregamento = st.empty()
-        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"📡 CALCULANDO DISTÂNCIA CIRCULAR NA {banca_pendulo.upper()}..."), unsafe_allow_html=True)
+        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"CALCULANDO DISTÂNCIA CIRCULAR NA {banca_pendulo.upper()}..."), unsafe_allow_html=True)
         
         df = carregar_dados_em_memoria(banca_pendulo)
         if df.empty:
@@ -863,14 +866,14 @@ elif menu == "🧲 Armadilha do Pêndulo":
                         st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
 
 elif menu == "📡 Extração Central":
-    exibir_titulo_animado("Extração de Resultados", cor="#00ff00")
+    configurar_ui_pagina("Extração de Resultados", cor_neon="#00ff00")
     dt = st.date_input("Data do Sorteio:", value=date.today())
     col1, col2 = st.columns(2)
     with col1:
         banca_ex = st.selectbox("Selecione o Alvo Individual:", list(BANCAS_CONFIG.keys()))
-        if st.button("🚀 COLETA INDIVIDUAL", type="primary", use_container_width=True):
+        if st.button("COLETA INDIVIDUAL", type="primary", use_container_width=True):
             tela_carregamento = st.empty()
-            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"📡 CONECTANDO AOS SERVIDORES DA {banca_ex.upper()}..."), unsafe_allow_html=True)
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", f"CONECTANDO AOS SERVIDORES DA {banca_ex.upper()}..."), unsafe_allow_html=True)
             res = extrair_dia(banca_ex, dt)
             tela_carregamento.empty()
             
@@ -889,9 +892,9 @@ elif menu == "📡 Extração Central":
             else: st.error("Sem dados para extrair.")
     with col2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        if st.button("🌍 EXTRAÇÃO GLOBAL", type="primary", use_container_width=True):
+        if st.button("EXTRAÇÃO GLOBAL", type="primary", use_container_width=True):
             tela_carregamento = st.empty()
-            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "📡 VARRENDO TODOS OS SERVIDORES..."), unsafe_allow_html=True)
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "VARRENDO TODOS OS SERVIDORES..."), unsafe_allow_html=True)
             
             sh = conectar_sheets()
             if not sh: 
