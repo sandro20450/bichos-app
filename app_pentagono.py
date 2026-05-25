@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.20 - Teto 10x", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.21 - Quantum UI", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -39,158 +39,83 @@ st.markdown("""
 .alerta-amarelo { background-color: rgba(0,0,0,0.5); border: 1px solid #ffcc00; color: #ffcc00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 11px; }
 
 .rodape-tatico {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: rgba(17, 17, 17, 0.95);
-    color: #ffcc00;
-    text-align: center;
-    padding: 12px;
-    font-size: 15px;
-    font-weight: bold;
-    border-top: 2px solid #ff4b4b;
-    z-index: 9999;
+    position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(17, 17, 17, 0.95);
+    color: #ffcc00; text-align: center; padding: 12px; font-size: 15px; font-weight: bold;
+    border-top: 2px solid #ff4b4b; z-index: 9999;
 }
 .block-container { padding-bottom: 80px; }
 
-/* ============================================================ */
-/* === CAMUFLAGEM DE BOTÕES - ESTILO UIVERSE (DEXTER-ST) ====== */
-/* ============================================================ */
+/* === BOTOES UIVERSE === */
 [data-testid="stButton"] button {
-    --border-radius: 24px;
-    --padding: 4px;
-    --transition: 0.4s;
-    --button-color: #101010;
-    --highlight-color-hue: 180deg; /* Alterado para Ciano do nosso Radar */
-    
-    position: relative;
-    display: flex;
-    justify-content: center;
-    background-color: var(--button-color) !important;
-    border: solid 1px #fff2 !important;
-    border-radius: var(--border-radius) !important;
-    overflow: visible !important;
-    z-index: 1;
+    --border-radius: 24px; --padding: 4px; --transition: 0.4s; --button-color: #101010; --highlight-color-hue: 180deg;
+    position: relative; display: flex; justify-content: center; background-color: var(--button-color) !important;
+    border: solid 1px #fff2 !important; border-radius: var(--border-radius) !important; overflow: visible !important; z-index: 1;
     transition: box-shadow var(--transition), border var(--transition), background-color var(--transition) !important;
-    
-    /* Efeito de Vidro/Profundidade (Inset Shadows + Drop Shadows) */
-    box-shadow:
-        inset 0px 1px 1px rgba(255, 255, 255, 0.2),
-        inset 0px 2px 2px rgba(255, 255, 255, 0.15),
-        inset 0px 4px 4px rgba(255, 255, 255, 0.1),
-        inset 0px 8px 8px rgba(255, 255, 255, 0.05),
-        inset 0px 16px 16px rgba(255, 255, 255, 0.05),
-        0px -1px 1px rgba(0, 0, 0, 0.02),
-        0px -2px 2px rgba(0, 0, 0, 0.03),
-        0px -4px 4px rgba(0, 0, 0, 0.05),
-        0px -8px 8px rgba(0, 0, 0, 0.06),
-        0px -16px 16px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: inset 0px 1px 1px rgba(255, 255, 255, 0.2), inset 0px 2px 2px rgba(255, 255, 255, 0.15), inset 0px 4px 4px rgba(255, 255, 255, 0.1), inset 0px 8px 8px rgba(255, 255, 255, 0.05), inset 0px 16px 16px rgba(255, 255, 255, 0.05), 0px -1px 1px rgba(0, 0, 0, 0.02), 0px -2px 2px rgba(0, 0, 0, 0.03), 0px -4px 4px rgba(0, 0, 0, 0.05), 0px -8px 8px rgba(0, 0, 0, 0.06), 0px -16px 16px rgba(0, 0, 0, 0.08) !important;
 }
+[data-testid="stButton"] button p { position: relative; z-index: 5 !important; color: #ffffff !important; font-weight: 600 !important; letter-spacing: 1px !important; text-shadow: 0 0 3px #fff8 !important; }
+[data-testid="stButton"] button::before { content: ""; position: absolute; top: calc(0px - var(--padding)); left: calc(0px - var(--padding)); width: calc(100% + var(--padding) * 2); height: calc(100% + var(--padding) * 2); border-radius: calc(var(--border-radius) + var(--padding)); pointer-events: none; background-image: linear-gradient(0deg, #0004, #000a); z-index: -1; transition: box-shadow var(--transition), filter var(--transition); box-shadow: 0 -8px 8px -6px #0000 inset, 0 -16px 16px -8px #00000000 inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001; }
+[data-testid="stButton"] button:hover { border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%) !important; }
+[data-testid="stButton"] button:hover::before { box-shadow: 0 -8px 8px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 30%) inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001 !important; }
+[data-testid="stButton"] button:active { border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%) !important; background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5) !important; }
+[data-testid="stButton"] button:active::before { box-shadow: 0 -8px 12px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset, 1px 1px 1px #fff4, 2px 2px 2px #fff2, -1px -1px 1px #0002, -2px -2px 2px #0001 !important; }
 
-/* O texto do Botão */
-[data-testid="stButton"] button p {
-    position: relative;
-    z-index: 5 !important;
-    color: #ffffff !important;
-    font-weight: 600 !important;
-    letter-spacing: 1px !important;
-    text-shadow: 0 0 3px #fff8 !important;
-}
-
-/* As sombras e gradientes internos (Before) */
-[data-testid="stButton"] button::before {
-    content: ""; position: absolute; top: calc(0px - var(--padding)); left: calc(0px - var(--padding));
-    width: calc(100% + var(--padding) * 2); height: calc(100% + var(--padding) * 2);
-    border-radius: calc(var(--border-radius) + var(--padding)); pointer-events: none;
-    background-image: linear-gradient(0deg, #0004, #000a); z-index: -1;
-    transition: box-shadow var(--transition), filter var(--transition);
-    box-shadow: 0 -8px 8px -6px #0000 inset, 0 -16px 16px -8px #00000000 inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001;
-}
-
-/* Hover (Ao passar o mouse) */
-[data-testid="stButton"] button:hover {
-    border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%) !important;
-}
-[data-testid="stButton"] button:hover::before {
-    box-shadow: 0 -8px 8px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 30%) inset, 1px 1px 1px #fff2, 2px 2px 2px #fff1, -1px -1px 1px #0002, -2px -2px 2px #0001 !important;
-}
-
-/* Active (Ao clicar) */
-[data-testid="stButton"] button:active {
-    border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%) !important;
-    background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5) !important;
-}
-[data-testid="stButton"] button:active::before {
-    box-shadow: 0 -8px 12px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset, 1px 1px 1px #fff4, 2px 2px 2px #fff2, -1px -1px 1px #0002, -2px -2px 2px #0001 !important;
-}
+/* ============================================================ */
+/* === ANIMAÇÃO QUANTUM PARA OS TÍTULOS (CABEÇALHOS) ========== */
+/* ============================================================ */
+.titulo-container { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
+.titulo-texto { margin: 0; padding: 0; font-size: 34px; font-weight: bold; color: #ffffff; letter-spacing: 1px;}
+.quantum-container { --uib-size: 40px; --uib-speed: 1.75s; position: relative; height: var(--uib-size); width: var(--uib-size); animation: q-rotate calc(var(--uib-speed) * 4) linear infinite; }
+@keyframes q-rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.q-particle { position: absolute; top: 0%; left: 0; display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; }
+.q-particle:nth-child(1) { --uib-delay: 0; transform: rotate(8deg); }
+.q-particle:nth-child(2) { --uib-delay: -0.4; transform: rotate(36deg); }
+.q-particle:nth-child(3) { --uib-delay: -0.9; transform: rotate(72deg); }
+.q-particle:nth-child(4) { --uib-delay: -0.5; transform: rotate(90deg); }
+.q-particle:nth-child(5) { --uib-delay: -0.3; transform: rotate(144deg); }
+.q-particle:nth-child(6) { --uib-delay: -0.2; transform: rotate(180deg); }
+.q-particle:nth-child(7) { --uib-delay: -0.6; transform: rotate(216deg); }
+.q-particle:nth-child(8) { --uib-delay: -0.7; transform: rotate(252deg); }
+.q-particle:nth-child(9) { --uib-delay: -0.1; transform: rotate(300deg); }
+.q-particle:nth-child(10) { --uib-delay: -0.8; transform: rotate(324deg); }
+.q-particle:nth-child(11) { --uib-delay: -1.2; transform: rotate(335deg); }
+.q-particle:nth-child(12) { --uib-delay: -0.5; transform: rotate(290deg); }
+.q-particle:nth-child(13) { --uib-delay: -0.2; transform: rotate(240deg); }
+.q-particle::before { content: ''; position: absolute; height: 17.5%; width: 17.5%; border-radius: 50%; background-color: var(--q-color); flex-shrink: 0; transition: background-color 0.3s ease; --uib-d: calc(var(--uib-delay) * var(--uib-speed)); animation: q-orbit var(--uib-speed) linear var(--uib-d) infinite; box-shadow: 0 0 10px var(--q-color); }
+@keyframes q-orbit { 0% { transform: translate(calc(var(--uib-size) * 0.5)) scale(0.73684); opacity: 0.65; } 5% { transform: translate(calc(var(--uib-size) * 0.4)) scale(0.684208); opacity: 0.58; } 10% { transform: translate(calc(var(--uib-size) * 0.3)) scale(0.631576); opacity: 0.51; } 15% { transform: translate(calc(var(--uib-size) * 0.2)) scale(0.578944); opacity: 0.44; } 20% { transform: translate(calc(var(--uib-size) * 0.1)) scale(0.526312); opacity: 0.37; } 25% { transform: translate(0%) scale(0.47368); opacity: 0.3; } 30% { transform: translate(calc(var(--uib-size) * -0.1)) scale(0.526312); opacity: 0.37; } 35% { transform: translate(calc(var(--uib-size) * -0.2)) scale(0.578944); opacity: 0.44; } 40% { transform: translate(calc(var(--uib-size) * -0.3)) scale(0.631576); opacity: 0.51; } 45% { transform: translate(calc(var(--uib-size) * -0.4)) scale(0.684208); opacity: 0.58; } 50% { transform: translate(calc(var(--uib-size) * -0.5)) scale(0.73684); opacity: 0.65; } 55% { transform: translate(calc(var(--uib-size) * -0.4)) scale(0.789472); opacity: 0.72; } 60% { transform: translate(calc(var(--uib-size) * -0.3)) scale(0.842104); opacity: 0.79; } 65% { transform: translate(calc(var(--uib-size) * -0.2)) scale(0.894736); opacity: 0.86; } 70% { transform: translate(calc(var(--uib-size) * -0.1)) scale(0.947368); opacity: 0.93; } 75% { transform: translate(0%) scale(1); opacity: 1; } 80% { transform: translate(calc(var(--uib-size) * 0.1)) scale(0.947368); opacity: 0.93; } 85% { transform: translate(calc(var(--uib-size) * 0.2)) scale(0.894736); opacity: 0.86; } 90% { transform: translate(calc(var(--uib-size) * 0.3)) scale(0.842104); opacity: 0.79; } 95% { transform: translate(calc(var(--uib-size) * 0.4)) scale(0.789472); opacity: 0.72; } 100% { transform: translate(calc(var(--uib-size) * 0.5)) scale(0.73684); opacity: 0.65; } }
 </style>
 """, unsafe_allow_html=True)
 
-# === ANIMAÇÃO HELIX ===
+# FUNÇÃO PARA GERAR OS TÍTULOS COM A ANIMAÇÃO QUANTUM
+def exibir_titulo_animado(texto, cor="#00ffff"):
+    html_titulo = f"""
+    <div class="titulo-container">
+        <div class="quantum-container" style="--q-color: {cor};">
+          <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
+          <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
+          <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
+          <div class="q-particle"></div><div class="q-particle"></div><div class="q-particle"></div>
+          <div class="q-particle"></div>
+        </div>
+        <h1 class="titulo-texto">{texto}</h1>
+    </div>
+    """
+    st.markdown(html_titulo, unsafe_allow_html=True)
+
+
+# === ANIMAÇÃO HELIX DO BOTÃO DE VARREDURA ===
 HELIX_LOADER_HTML = """
 <style>
-.radar-container {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 50px; background-color: #0e1117; border: 1px solid #00ffff; border-radius: 12px; margin-bottom: 20px;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
-}
-.uib-container {
-  --uib-size: 60px; --uib-color: #00ffff; --uib-speed: 2.5s;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: var(--uib-size); width: var(--uib-size);
-}
+.radar-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background-color: #0e1117; border: 1px solid #00ffff; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
+.uib-container { --uib-size: 60px; --uib-color: #00ffff; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }
 .uib-slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
-.uib-slice::before, .uib-slice::after {
-  --uib-a: calc(var(--uib-speed) / -2); --uib-b: calc(var(--uib-speed) / -6);
-  content: ''; position: absolute; top: 0; left: calc(50% - var(--uib-size) / 12);
-  height: 100%; width: calc(100% / 6); border-radius: 50%; background-color: var(--uib-color);
-  flex-shrink: 0; animation: orbit var(--uib-speed) linear infinite; transition: background-color 0.3s ease;
-}
-.uib-slice:nth-child(1)::after { animation-delay: var(--uib-a); }
-.uib-slice:nth-child(2)::before { animation-delay: var(--uib-b); }
-.uib-slice:nth-child(2)::after { animation-delay: calc(var(--uib-a) + var(--uib-b)); }
-.uib-slice:nth-child(3)::before { animation-delay: calc(var(--uib-b) * 2); }
-.uib-slice:nth-child(3)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 2); }
-.uib-slice:nth-child(4)::before { animation-delay: calc(var(--uib-b) * 3); }
-.uib-slice:nth-child(4)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 3); }
-.uib-slice:nth-child(5)::before { animation-delay: calc(var(--uib-b) * 4); }
-.uib-slice:nth-child(5)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 4); }
-.uib-slice:nth-child(6)::before { animation-delay: calc(var(--uib-b) * 5); }
-.uib-slice:nth-child(6)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 5); }
-@keyframes orbit {
-  0% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; }
-  5% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208); opacity: 0.58; }
-  10% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576); opacity: 0.51; }
-  15% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944); opacity: 0.44; }
-  20% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312); opacity: 0.37; }
-  25% { transform: translateX(0%) scale(0.47368); opacity: 0.3; }
-  30% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312); opacity: 0.37; }
-  35% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944); opacity: 0.44; }
-  40% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576); opacity: 0.51; }
-  45% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208); opacity: 0.58; }
-  50% { transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684); opacity: 0.65; }
-  55% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.789472); opacity: 0.72; }
-  60% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.842104); opacity: 0.79; }
-  65% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.894736); opacity: 0.86; }
-  70% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.947368); opacity: 0.93; }
-  75% { transform: translateX(0%) scale(1); opacity: 1; }
-  80% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.947368); opacity: 0.93; }
-  85% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.894736); opacity: 0.86; }
-  90% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.842104); opacity: 0.79; }
-  95% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.789472); opacity: 0.72; }
-  100% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; }
-}
+.uib-slice::before, .uib-slice::after { --uib-a: calc(var(--uib-speed) / -2); --uib-b: calc(var(--uib-speed) / -6); content: ''; position: absolute; top: 0; left: calc(50% - var(--uib-size) / 12); height: 100%; width: calc(100% / 6); border-radius: 50%; background-color: var(--uib-color); flex-shrink: 0; animation: orbit var(--uib-speed) linear infinite; }
+.uib-slice:nth-child(1)::after { animation-delay: var(--uib-a); } .uib-slice:nth-child(2)::before { animation-delay: var(--uib-b); } .uib-slice:nth-child(2)::after { animation-delay: calc(var(--uib-a) + var(--uib-b)); } .uib-slice:nth-child(3)::before { animation-delay: calc(var(--uib-b) * 2); } .uib-slice:nth-child(3)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 2); } .uib-slice:nth-child(4)::before { animation-delay: calc(var(--uib-b) * 3); } .uib-slice:nth-child(4)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 3); } .uib-slice:nth-child(5)::before { animation-delay: calc(var(--uib-b) * 4); } .uib-slice:nth-child(5)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 4); } .uib-slice:nth-child(6)::before { animation-delay: calc(var(--uib-b) * 5); } .uib-slice:nth-child(6)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 5); }
+@keyframes orbit { 0% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } 5% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208); opacity: 0.58; } 10% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576); opacity: 0.51; } 15% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944); opacity: 0.44; } 20% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312); opacity: 0.37; } 25% { transform: translateX(0%) scale(0.47368); opacity: 0.3; } 30% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312); opacity: 0.37; } 35% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944); opacity: 0.44; } 40% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576); opacity: 0.51; } 45% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208); opacity: 0.58; } 50% { transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684); opacity: 0.65; } 55% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.789472); opacity: 0.72; } 60% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.842104); opacity: 0.79; } 65% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.894736); opacity: 0.86; } 70% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.947368); opacity: 0.93; } 75% { transform: translateX(0%) scale(1); opacity: 1; } 80% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.947368); opacity: 0.93; } 85% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.894736); opacity: 0.86; } 90% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.842104); opacity: 0.79; } 95% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.789472); opacity: 0.72; } 100% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } }
 .texto-carregamento { color: #00ffff; margin-top: 25px; font-size: 15px; font-weight: bold; font-family: monospace; letter-spacing: 2px; animation: piscar 1s infinite; text-align: center;}
 @keyframes piscar { 50% { opacity: 0.4; } }
 </style>
-<div class="radar-container">
-    <div class="uib-container">
-      <div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div>
-      <div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div>
-    </div>
-    <div class="texto-carregamento">MSG_REPLACE</div>
-</div>
+<div class="radar-container"><div class="uib-container"><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div><div class="uib-slice"></div></div><div class="texto-carregamento">MSG_REPLACE</div></div>
 """
 
 MAPA_ABAS = {"Tradicional": "TRADICIONAL_MILHAR", "Caminho da Sorte": "CAMINHO_MILHAR", "Monte Carlos": "MONTE_MILHAR", "Lotep": "LOTEP_MILHAR"}
@@ -526,7 +451,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.20")
+    st.header("Pentágono V65.21")
     
     if st.button("🔄 FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
@@ -535,8 +460,8 @@ with st.sidebar:
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
-    st.title("🚨 Central AWACS - Desdobramento Sniper")
-    st.info("Varredura Inteligente Ativada. Botões Uiverse operacionais.")
+    exibir_titulo_animado("Central AWACS - Desdobramento Sniper", cor="#00ffff")
+    st.info("Varredura Inteligente Ativada. Botões Uiverse e Quantum UI operacionais.")
     
     if st.button("🚀 INICIAR VARREDURA GLOBAL", use_container_width=True, type="primary"):
         tela_carregamento = st.empty()
@@ -728,7 +653,7 @@ if menu == "🏠 Visão Geral (Home)":
             st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
 
 elif menu == "🎯 Scanner de Raio-X":
-    st.title("🎯 Scanner de Raio-X (Consulta Manual)")
+    exibir_titulo_animado("Scanner de Raio-X (Consulta)", cor="#ffcc00")
     st.info("Consulte o atraso exato e o recorde histórico de qualquer alvo em todos os prêmios da banca escolhida.")
     
     col1, col2, col3 = st.columns(3)
@@ -794,7 +719,6 @@ elif menu == "🎯 Scanner de Raio-X":
                 tela_carregamento.empty()
                 st.error("Base de dados vazia. Execute uma extração central primeiro.")
             else:
-                # 1. Filtros Padrões (Com seus respectivos Tetos 'lim' injetados)
                 filtros_lista = [
                     ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'lim': 9}),
                     ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'lim': 9}),
@@ -812,13 +736,11 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
-                # 2. Injeção de Inversões 8D (Dezenas - NOVO TETO 10)
                 bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
                 for b in bases_inv_8:
                     alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
                     filtros_lista.append((f"Inversão 8D Dezena ({b[0]} ao {b[-1]})", {'alvos': alvos_inv, 'modo': 'dezena', 'lim': 10}))
                     
-                # 3. Injeção de Inversões 9D (Centenas - NOVO TETO 10)
                 bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
                 for b in bases_inv_9:
                     alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
@@ -827,7 +749,6 @@ elif menu == "🎯 Scanner de Raio-X":
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
-                    # Salvamos o TETO oculto na tabela para a função de cor conseguir ler depois
                     linha = {"FILTRO TÁTICO": nome_filtro, "TETO": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
@@ -839,18 +760,16 @@ elif menu == "🎯 Scanner de Raio-X":
                 exibir_banner_sorteio(df, banca_rx)
                 st.markdown(f"### 📊 MAPA DE CALOR COMPLETO: Filtros e Inversões da {banca_rx}")
                 
-                # --- MOTOR BICOLOR DE DESTAQUE ---
                 def destacar_niveis_alerta(row):
                     estilos = [''] * len(row)
                     tem_teto = False
                     tem_recorde = False
                     
-                    # Tenta ler qual é o limite tático deste filtro específico
                     try: teto_limite = int(row['TETO'])
                     except: teto_limite = 99
                     
                     for idx in range(1, len(row)):
-                        if row.index[idx] == 'TETO': continue # Ignora a coluna invisível
+                        if row.index[idx] == 'TETO': continue
                         
                         val = str(row.iloc[idx])
                         if "(Rec:" in val:
@@ -858,18 +777,15 @@ elif menu == "🎯 Scanner de Raio-X":
                                 ap = int(val.split("x")[0].strip())
                                 mp = int(val.split("(Rec: ")[1].split("x")[0].strip())
                                 
-                                # PRIORIDADE 1: Atingiu o Teto (Verde Neon)
                                 if ap >= teto_limite and ap > 0:
                                     estilos[idx] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); text-shadow: 0 0 5px #00ff00;'
                                     tem_teto = True
-                                # PRIORIDADE 2: Bateu o Recorde, mas não o Teto (Amarelo Ouro)
                                 elif ap >= mp and ap > 0:
                                     estilos[idx] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
                                     tem_recorde = True
                             except:
                                 pass
                                 
-                    # Pinta a primeira coluna (O Nome do Filtro) com a cor de maior prioridade encontrada na linha
                     if tem_teto:
                         estilos[0] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); border-left: 4px solid #00ff00;'
                     elif tem_recorde:
@@ -877,18 +793,16 @@ elif menu == "🎯 Scanner de Raio-X":
                         
                     return estilos
                 
-                # Renderização da Tabela Ocultando a coluna "TETO"
                 df_tabela = pd.DataFrame(dados_tabela)
                 try:
                     df_estilizado = df_tabela.style.apply(destacar_niveis_alerta, axis=1).hide(subset=['TETO'], axis=1)
                 except:
-                    # Fallback de segurança para versões antigas do Pandas
                     df_estilizado = df_tabela.drop(columns=['TETO']).style.apply(destacar_niveis_alerta, axis=1)
                     
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
 elif menu == "🧲 Armadilha do Pêndulo":
-    st.title("🧲 Armadilha de Saturação (Pêndulo)")
+    exibir_titulo_animado("Armadilha de Saturação (Pêndulo)", cor="#ff00aa")
     st.info("Analisa a física circular de **Passos Curtos (1 a 6 casas)** dos últimos 6 sorteios. Pulos longos (✖️) quebram a saturação.")
     banca_pendulo = st.selectbox("Selecione o Alvo de Rastreador Circular:", list(BANCAS_CONFIG.keys()))
     
@@ -949,7 +863,7 @@ elif menu == "🧲 Armadilha do Pêndulo":
                         st.write(f"Sem dados suficientes em {TITULOS_PREMIOS[i]}")
 
 elif menu == "📡 Extração Central":
-    st.title("📡 Extração de Resultados")
+    exibir_titulo_animado("Extração de Resultados", cor="#00ff00")
     dt = st.date_input("Data do Sorteio:", value=date.today())
     col1, col2 = st.columns(2)
     with col1:
