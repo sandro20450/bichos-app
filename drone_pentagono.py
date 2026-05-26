@@ -101,13 +101,11 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INJEÇÃO 8D (DEZENAS - TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
             esquadroes.append({'alvos': alvos_inv, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
             
-        # INJEÇÃO 9D (CENTENAS - TETO 10x)
         bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9:
             alvos_inv_c = {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}
@@ -261,6 +259,41 @@ def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
     manter = [g for g in grupos if g not in eliminar]
     return {'eliminar': sorted(eliminar), 'manter': sorted(manter), 'seguro': seguro}
 
+def get_cobertura_massa(df, col, cfg_nome):
+    opostos = {
+        "G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "D: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "D: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "D: ALTAS (51-00)": ("Grupo Baixo", list(range(1, 14))),
+        "D: BAIXAS (01-50)": ("Grupo Alto", list(range(14, 26))),
+        "U: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "U: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "U: ALTAS (6-0)": ("Grupo Baixo", list(range(1, 14))),
+        "U: BAIXAS (1-5)": ("Grupo Alto", list(range(14, 26)))
+    }
+    
+    if cfg_nome not in opostos:
+        return None
+        
+    desc_oposto, lista_grupos = opostos[cfg_nome]
+    max_delay = -1
+    best_g = -1
+    
+    for g in lista_grupos:
+        delay_g = 0
+        for i in range(len(df)-1, -1, -1):
+            m = str(df.iloc[i][col]).zfill(4)
+            if m == "----" or m == "nan": continue
+            g_val = get_grupo_int(m)
+            if g_val == g: break
+            delay_g += 1
+        if delay_g > max_delay:
+            max_delay = delay_g
+            best_g = g
+            
+    return best_g, max_delay, desc_oposto
+
 # --- MOTOR PRINCIPAL DO DRONE ---
 def rodar_drone():
     sh = conectar_sheets()
@@ -271,13 +304,8 @@ def rodar_drone():
     dados_bancas = {}
     
     for banca_nome, aba_nome in MAPA_ABAS.items():
-        # 1. Raspa os dados de hoje na internet
         res = extrair_dia(banca_nome, dt)
-        
-        # 2. Conecta na aba específica daquela banca
         ws = sh.worksheet(aba_nome)
-        
-        # 3. SE houver dados novos raspados, ele insere na planilha
         if res:
             existentes = ws.get_all_values()
             set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
@@ -286,8 +314,6 @@ def rodar_drone():
                 ws.append_rows(p_ins, value_input_option="RAW")
                 total_salvos += len(p_ins)
         
-        # 4. AGORA ELE SEMPRE LÊ A PLANILHA (A Trava foi removida daqui)
-        # Ele vai carregar a base de dados para procurar anomalias, mesmo se não salvou nada de novo
         dados_atualizados = ws.get_all_values()
         if len(dados_atualizados) > 1:
             df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
@@ -297,7 +323,6 @@ def rodar_drone():
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""
     achou_algo = False
-    
     alvos_vistos = set()
 
     for banca_nome, df in dados_bancas.items():
@@ -357,9 +382,7 @@ def rodar_drone():
                     else:
                         sig = f"{banca_nome}_{col}_{cfg['nome']}"
                         
-                    if sig in alvos_vistos:
-                        continue
-                    
+                    if sig in alvos_vistos: continue
                     alvos_vistos.add(sig)
 
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n"
@@ -384,7 +407,15 @@ def rodar_drone():
                             msg_telegram += f"🆘 Seguro: {seg_str}\n"
                         else:
                             msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
-                    
+                    else:
+                        # NOVO: MOTOR DE COBERTURA PARA DRONE
+                        cob_data = get_cobertura_massa(df, col, cfg['nome'])
+                        if cob_data:
+                            g_alvo, delay_g, desc_oposto = cob_data
+                            msg_telegram += f"🛡️ <b>Cobertura Tática:</b>\n"
+                            msg_telegram += f"O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).\n"
+                            msg_telegram += f"🎯 Aposta Sniper sugerida nele.\n"
+                            
                     msg_telegram += "\n"
                     achou_algo = True
 
