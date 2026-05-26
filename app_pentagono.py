@@ -763,16 +763,18 @@ elif menu == "🎯 Scanner de Raio-X":
                 exibir_banner_sorteio(df, banca_rx)
                 st.markdown(f"### 📊 MAPA DE CALOR COMPLETO: Filtros e Inversões da {banca_rx}")
                 
+                # --- MOTOR TRICOLOR DE DESTAQUE ---
                 def destacar_niveis_alerta(row):
                     estilos = [''] * len(row)
                     tem_teto = False
+                    tem_quase_teto = False
                     tem_recorde = False
                     
                     try: teto_limite = int(row['TETO'])
                     except: teto_limite = 99
                     
                     for idx in range(1, len(row)):
-                        if row.index[idx] == 'TETO': continue
+                        if row.index[idx] == 'TETO': continue # Ignora a coluna invisível
                         
                         val = str(row.iloc[idx])
                         if "(Rec:" in val:
@@ -780,17 +782,26 @@ elif menu == "🎯 Scanner de Raio-X":
                                 ap = int(val.split("x")[0].strip())
                                 mp = int(val.split("(Rec: ")[1].split("x")[0].strip())
                                 
+                                # PRIORIDADE 1: Atingiu ou passou o Teto (Verde Neon)
                                 if ap >= teto_limite and ap > 0:
                                     estilos[idx] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); text-shadow: 0 0 5px #00ff00;'
                                     tem_teto = True
+                                # PRIORIDADE 2: Faltam 2 pontos ou 1 ponto para o Teto (Laranja Neon)
+                                elif ap >= (teto_limite - 2) and ap > 0:
+                                    estilos[idx] = 'color: #ff6600; font-weight: bold; background-color: rgba(255, 102, 0, 0.1); text-shadow: 0 0 2px #ff6600;'
+                                    tem_quase_teto = True
+                                # PRIORIDADE 3: Bateu o Recorde, mas não está a 2 pontos do Teto (Amarelo Ouro)
                                 elif ap >= mp and ap > 0:
                                     estilos[idx] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1);'
                                     tem_recorde = True
                             except:
                                 pass
                                 
+                    # Pinta a primeira coluna (O Nome do Filtro) com a cor de MAIOR prioridade encontrada na linha
                     if tem_teto:
                         estilos[0] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); border-left: 4px solid #00ff00;'
+                    elif tem_quase_teto:
+                        estilos[0] = 'color: #ff6600; font-weight: bold; background-color: rgba(255, 102, 0, 0.1); border-left: 4px solid #ff6600;'
                     elif tem_recorde:
                         estilos[0] = 'color: #ffcc00; font-weight: bold; background-color: rgba(255, 204, 0, 0.1); border-left: 4px solid #ffcc00;'
                         
@@ -803,7 +814,6 @@ elif menu == "🎯 Scanner de Raio-X":
                     df_estilizado = df_tabela.drop(columns=['TETO']).style.apply(destacar_niveis_alerta, axis=1)
                     
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-
 elif menu == "🧲 Armadilha do Pêndulo":
     configurar_ui_pagina("Armadilha de Saturação (Pêndulo)", cor_neon="#ff00aa")
     st.info("Analisa a física circular de **Passos Curtos (1 a 6 casas)** dos últimos 6 sorteios. Pulos longos (✖️) quebram a saturação.")
