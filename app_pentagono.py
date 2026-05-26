@@ -931,4 +931,4 @@ elif menu == "📡 Extração Central":
                     st.cache_data.clear() 
                     st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x | Inversão 8D = 10x | Inversão 9D = 10x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS (Teto Máximo): M/C = 13x | Dezenas, Unidades e Filtros = 9x | 15 Grupos = 7x | 12 Grupos = 10x(rec13x) | Inversão 8D = 10x | Inversão 9D = 10x | Pêndulo = 5x</div>""", unsafe_allow_html=True)
