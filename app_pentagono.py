@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.28 - Hyper Speed", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.29 - Assinatura Genética", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -50,15 +50,6 @@ def configurar_ui_pagina(titulo, cor):
         <h1 class="titulo-texto">{titulo}</h1>
     </div>
     """, unsafe_allow_html=True)
-
-HELIX_LOADER_HTML = """
-<style>
-.radar-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background-color: #0e1117; border: 1px solid #00ffff; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
-.texto-carregamento { color: #00ffff; margin-top: 25px; font-size: 15px; font-weight: bold; font-family: monospace; letter-spacing: 2px; animation: piscar 1s infinite; text-align: center;}
-@keyframes piscar { 50% { opacity: 0.4; } }
-</style>
-<div class="radar-container"><div class="texto-carregamento">MSG_REPLACE</div></div>
-"""
 
 MAPA_ABAS = {"Tradicional": "TRADICIONAL_MILHAR", "Caminho da Sorte": "CAMINHO_MILHAR", "Monte Carlos": "MONTE_MILHAR", "Lotep": "LOTEP_MILHAR"}
 BANCAS_CONFIG = {
@@ -109,6 +100,9 @@ def get_grupo_int(m):
         return 25 if d == 0 else math.ceil(d/4)
     except: return None
 
+# =============================================================================
+# 👻 MOTORES DE CÁLCULO E HEDGE (ULTRA VELOCIDADE)
+# =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
@@ -360,6 +354,9 @@ def processar_pendulo(df, coluna):
         
     return "Estável", [], all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
 
+# =============================================================================
+# --- MOTOR DE EXTRAÇÃO BLINDADO (DEDUPLICAÇÃO GENÉTICA) ---
+# =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -368,6 +365,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
+        vistos_assinaturas = set() # Trava anti-clone dentro do mesmo dia
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -383,11 +381,14 @@ def extrair_dia(banca, data_alvo):
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
-                resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
+                assinatura = "".join(milhares)
+                if assinatura not in vistos_assinaturas and milhares[0] != "----":
+                    vistos_assinaturas.add(assinatura)
+                    resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
         return resultados
     except: return []
 
@@ -396,7 +397,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.28")
+    st.header("Pentágono V65.29")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -406,73 +407,70 @@ if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
     
     if st.button("INICIAR VARREDURA GLOBAL", type="primary"):
-        tela_carregamento = st.empty()
-        tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "CALIBRANDO MATRIZES E CALCULANDO RUPTURAS..."), unsafe_allow_html=True)
-        
-        alvos_teto = []
-        alvos_alerta = []
-        alertas_pendulo = []
-        todos_esq = gerar_matrizes_taticas()
-        
-        for banca_nome in BANCAS_CONFIG.keys():
-            df = carregar_dados_em_memoria(banca_nome)
-            if df.empty: continue
-            ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
+        with st.spinner("Processando histórico completo em Hiper Velocidade..."):
+            alvos_teto = []
+            alvos_alerta = []
+            alertas_pendulo = []
+            todos_esq = gerar_matrizes_taticas()
             
-            for i, col in enumerate(COLUNAS_DF):
-                if banca_nome == "Tradicional" and col != "P1": continue
-                resultado_pend = processar_pendulo(df, col)
-                if resultado_pend:
-                    status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado_pend
-                    if status != "Estável":
-                        alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
-            
-            metrics_cache = {}
-            for cfg in todos_esq:
+            for banca_nome in BANCAS_CONFIG.keys():
+                df = carregar_dados_em_memoria(banca_nome)
+                if df.empty: continue
+                ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
+                
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
-                    ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
-                    metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm)
-            
-            for cfg in todos_esq:
-                for i, col in enumerate(COLUNAS_DF):
-                    if banca_nome == "Tradicional" and col != "P1": continue
-                    ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
-                    ap_lim = cfg['lim'] 
-                    
-                    estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
-                    
-                    if am >= 13 and ac >= 13 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
-                    elif am >= 13: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
-                    elif ac >= 13: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
-                    elif cfg['modo'] == 'unidade' and ap >= 9: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
-                    elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
-                    elif am >= 11 and ac >= 11 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
-                    elif am >= 11: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/13)</div>"
-                    elif ac >= 11: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/13)</div>"
-                    elif cfg['modo'] == 'unidade' and ap >= 7: estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}/9)</div>"
-                    elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
+                    resultado_pend = processar_pendulo(df, col)
+                    if resultado_pend:
+                        status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado_pend
+                        if status != "Estável":
+                            alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
+                
+                metrics_cache = {}
+                for cfg in todos_esq:
+                    for i, col in enumerate(COLUNAS_DF):
+                        if banca_nome == "Tradicional" and col != "P1": continue
+                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm)
+                
+                for cfg in todos_esq:
+                    for i, col in enumerate(COLUNAS_DF):
+                        if banca_nome == "Tradicional" and col != "P1": continue
+                        ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                        ap_lim = cfg['lim'] 
+                        
+                        estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
+                        
+                        if am >= 13 and ac >= 13 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
+                        elif am >= 13: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
+                        elif ac >= 13: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
+                        elif cfg['modo'] == 'unidade' and ap >= 9: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
+                        elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
+                        elif am >= 11 and ac >= 11 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
+                        elif am >= 11: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/13)</div>"
+                        elif ac >= 11: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/13)</div>"
+                        elif cfg['modo'] == 'unidade' and ap >= 7: estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}/9)</div>"
+                        elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
-                    if estado_alvo:
-                        if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                            col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
-                            hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
-                            if hedge_data:
-                                elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
-                                mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                                seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                                alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
-                        else:
-                            cob_data = get_cobertura_massa(df, col, cfg['nome'])
-                            if cob_data:
-                                g_alvo, delay_g, desc_oposto = cob_data
-                                alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
+                        if estado_alvo:
+                            if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
+                                col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
+                                hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
+                                if hedge_data:
+                                    elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
+                                    mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
+                                    seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
+                            else:
+                                cob_data = get_cobertura_massa(df, col, cfg['nome'])
+                                if cob_data:
+                                    g_alvo, delay_g, desc_oposto = cob_data
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
 
-                        op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
-                        if estado_alvo == "TETO": alvos_teto.append(op_data)
-                        elif estado_alvo == "ALERTA": alvos_alerta.append(op_data)
+                            op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
+                            if estado_alvo == "TETO": alvos_teto.append(op_data)
+                            elif estado_alvo == "ALERTA": alvos_alerta.append(op_data)
             
-        tela_carregamento.empty()
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         
@@ -601,28 +599,33 @@ elif menu == "📡 Extração Central":
             if res:
                 sh = conectar_sheets()
                 ws = sh.worksheet(MAPA_ABAS[banca_ex])
-                exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in ws.get_all_values() if len(r)>=2}
-                p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in exist]
+                existentes = ws.get_all_values()
+                # Deduplicação Rigorosa de Coleta Individual
+                set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
+                p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
                 if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); st.success(f"✅ {len(p_ins)} novos registros salvos."); st.cache_data.clear() 
                 else: st.info("Base de dados já atualizada.")
             else: st.error("Sem dados para extrair.")
     with col2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         if st.button("EXTRAÇÃO GLOBAL", type="primary"):
-            sh = conectar_sheets()
-            if not sh: st.error("Erro Crítico de Conexão.")
-            else:
-                total_salvos = 0; bancas_atualizadas = []
-                for banca_alvo in BANCAS_CONFIG.keys():
-                    res = extrair_dia(banca_alvo, dt)
-                    if res:
-                        ws = sh.worksheet(MAPA_ABAS[banca_alvo])
-                        exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in ws.get_all_values() if len(r)>=2}
-                        p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in exist]
-                        if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total_salvos += len(p_ins); bancas_atualizadas.append(f"{banca_alvo} (+{len(p_ins)})")
-                        else: bancas_atualizadas.append(f"{banca_alvo} (OK)")
-                    else: st.warning(f"⚠️ {banca_alvo}: Sem dados hoje.")
-                st.info(f"🔄 Status: {', '.join(bancas_atualizadas)}")
-                if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 CONCLUÍDO: {total_salvos} novos registros.")
+            with st.spinner("Varrendo servidores..."):
+                sh = conectar_sheets()
+                if not sh: st.error("Erro Crítico de Conexão.")
+                else:
+                    total_salvos = 0; bancas_atualizadas = []
+                    for banca_alvo in BANCAS_CONFIG.keys():
+                        res = extrair_dia(banca_alvo, dt)
+                        if res:
+                            ws = sh.worksheet(MAPA_ABAS[banca_alvo])
+                            existentes = ws.get_all_values()
+                            # Deduplicação Rigorosa Genética
+                            set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
+                            p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
+                            if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total_salvos += len(p_ins); bancas_atualizadas.append(f"{banca_alvo} (+{len(p_ins)})")
+                            else: bancas_atualizadas.append(f"{banca_alvo} (OK)")
+                        else: bancas_atualizadas.append(f"{banca_alvo} (Sem dados)")
+                    st.info(f"🔄 Relatório: {', '.join(bancas_atualizadas)}")
+                    if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 CONCLUÍDO: {total_salvos} novos registros salvos.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=13x | Dezenas, Unidades e Filtros=9x | 15 Grupos=7x | 12 Grupos=10x(rec13x) | Inv 8D=10x | Inv 9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=13x | Dezenas e Unidades=9x | 15 Grupos=7x | 12 Grupos=10x(rec13x) | Inv 8D/9D=10x</div>""", unsafe_allow_html=True)
