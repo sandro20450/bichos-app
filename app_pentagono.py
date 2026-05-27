@@ -12,7 +12,7 @@ import itertools
 # =============================================================================
 # --- 1. CONFIGURAÇÕES, CSS E CONEXÃO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.22 - Radar Pings", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.26 - Radar Real", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -41,9 +41,7 @@ st.markdown("""
 .rodape-tatico { position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(17, 17, 17, 0.95); color: #ffcc00; text-align: center; padding: 12px; font-size: 15px; font-weight: bold; border-top: 2px solid #ff4b4b; z-index: 9999; }
 .block-container { padding-bottom: 80px; }
 
-/* ============================================================ */
-/* === CAMUFLAGEM DE BOTÕES - ESTILO UIVERSE (DEXTER-ST) ====== */
-/* ============================================================ */
+/* === CAMUFLAGEM DE BOTÕES === */
 [data-testid="stButton"] button {
     --border-radius: 24px; --padding: 4px; --transition: 0.4s; --button-color: #101010; --highlight-color-hue: 180deg;
     position: relative; display: flex; justify-content: center; background-color: var(--button-color) !important;
@@ -58,47 +56,18 @@ st.markdown("""
 [data-testid="stButton"] button:active { border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%) !important; background-color: hsla(var(--highlight-color-hue), 50%, 20%, 0.5) !important; }
 [data-testid="stButton"] button:active::before { box-shadow: 0 -8px 12px -6px #fffa inset, 0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset, 1px 1px 1px #fff4, 2px 2px 2px #fff2, -1px -1px 1px #0002, -2px -2px 2px #0001 !important; }
 
-/* ============================================================ */
-/* === PING ANIMATION (MICRO-ÍCONE DENTRO DO BOTÃO) =========== */
-/* ============================================================ */
+/* === PING ANIMATION BOTOES === */
 [data-testid="stButton"] button p {
-    position: relative;
-    z-index: 5 !important;
-    color: #ffffff !important;
-    font-weight: 600 !important;
-    letter-spacing: 1px !important;
-    text-shadow: 0 0 3px #fff8 !important;
-    padding-left: 24px !important; /* Espaço para o radar ping */
+    position: relative; z-index: 5 !important; color: #ffffff !important; font-weight: 600 !important; letter-spacing: 1px !important; text-shadow: 0 0 3px #fff8 !important; padding-left: 24px !important; 
 }
+[data-testid="stButton"] button p::before, [data-testid="stButton"] button p::after {
+    content: ''; position: absolute; left: 0; top: 50%; margin-top: -6px; height: 12px; width: 12px; border-radius: 50%;
+    background-color: var(--ping-btn-color, #00ffff); animation: btn-ping-pulse 2s linear infinite; opacity: 0;
+}
+[data-testid="stButton"] button p::after { animation-delay: -1s; }
+@keyframes btn-ping-pulse { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 
-/* O Radar Ping injetado no texto do botão */
-[data-testid="stButton"] button p::before,
-[data-testid="stButton"] button p::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    margin-top: -6px; /* Centraliza verticalmente (metade de 12px) */
-    height: 12px;
-    width: 12px;
-    border-radius: 50%;
-    /* A cor será controlada dinamicamente pelo Python por página via variável css, default ciano */
-    background-color: var(--ping-btn-color, #00ffff);
-    animation: btn-ping-pulse 2s linear infinite;
-    opacity: 0;
-}
-[data-testid="stButton"] button p::after {
-    animation-delay: -1s;
-}
-
-@keyframes btn-ping-pulse {
-    0% { transform: scale(0); opacity: 1; }
-    100% { transform: scale(1.5); opacity: 0; }
-}
-
-/* ============================================================ */
-/* === ANIMAÇÃO QUANTUM PARA OS TÍTULOS (CABEÇALHOS) ========== */
-/* ============================================================ */
+/* === ANIMAÇÃO QUANTUM === */
 .titulo-container { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
 .titulo-texto { margin: 0; padding: 0; font-size: 34px; font-weight: bold; color: #ffffff; letter-spacing: 1px;}
 .quantum-container { --uib-size: 40px; --uib-speed: 1.75s; position: relative; height: var(--uib-size); width: var(--uib-size); animation: q-rotate calc(var(--uib-speed) * 4) linear infinite; }
@@ -122,14 +91,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# FUNÇÃO PARA GERAR OS TÍTULOS E CONFIGURAR A COR DO PING DA PÁGINA
 def configurar_ui_pagina(texto_titulo, cor_neon):
-    # O HTML constrói o título Quantum e também injeta a variável CSS que muda a cor do Ping dos botões
     html_injecao = f"""
     <style>
-        :root {{
-            --ping-btn-color: {cor_neon} !important;
-        }}
+        :root {{ --ping-btn-color: {cor_neon} !important; }}
     </style>
     <div class="titulo-container">
         <div class="quantum-container" style="--q-color: {cor_neon};">
@@ -144,8 +109,7 @@ def configurar_ui_pagina(texto_titulo, cor_neon):
     """
     st.markdown(html_injecao, unsafe_allow_html=True)
 
-
-# === ANIMAÇÃO HELIX DO BOTÃO DE VARREDURA ===
+# === ANIMAÇÃO HELIX ===
 HELIX_LOADER_HTML = """
 <style>
 .radar-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background-color: #0e1117; border: 1px solid var(--ping-btn-color, #00ffff); border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
@@ -153,7 +117,7 @@ HELIX_LOADER_HTML = """
 .uib-slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
 .uib-slice::before, .uib-slice::after { --uib-a: calc(var(--uib-speed) / -2); --uib-b: calc(var(--uib-speed) / -6); content: ''; position: absolute; top: 0; left: calc(50% - var(--uib-size) / 12); height: 100%; width: calc(100% / 6); border-radius: 50%; background-color: var(--uib-color); flex-shrink: 0; animation: orbit var(--uib-speed) linear infinite; }
 .uib-slice:nth-child(1)::after { animation-delay: var(--uib-a); } .uib-slice:nth-child(2)::before { animation-delay: var(--uib-b); } .uib-slice:nth-child(2)::after { animation-delay: calc(var(--uib-a) + var(--uib-b)); } .uib-slice:nth-child(3)::before { animation-delay: calc(var(--uib-b) * 2); } .uib-slice:nth-child(3)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 2); } .uib-slice:nth-child(4)::before { animation-delay: calc(var(--uib-b) * 3); } .uib-slice:nth-child(4)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 3); } .uib-slice:nth-child(5)::before { animation-delay: calc(var(--uib-b) * 4); } .uib-slice:nth-child(5)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 4); } .uib-slice:nth-child(6)::before { animation-delay: calc(var(--uib-b) * 5); } .uib-slice:nth-child(6)::after { animation-delay: calc(var(--uib-a) + var(--uib-b) * 5); }
-@keyframes orbit { 0% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } 5% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208); opacity: 0.58; } 10% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576); opacity: 0.51; } 15% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944); opacity: 0.44; } 20% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312); opacity: 0.37; } 25% { transform: translateX(0%) scale(0.47368); opacity: 0.3; } 30% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312); opacity: 0.37; } 35% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944); opacity: 0.44; } 40% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576); opacity: 0.51; } 45% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208); opacity: 0.58; } 50% { transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684); opacity: 0.65; } 55% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.789472); opacity: 0.72; } 60% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.842104); opacity: 0.79; } 65% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.894736); opacity: 0.86; } 70% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.947368); opacity: 0.93; } 75% { transform: translateX(0%) scale(1); opacity: 1; } 80% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.947368); opacity: 0.93; } 85% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.894736); opacity: 0.86; } 90% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.842104); opacity: 0.79; } 95% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.789472); opacity: 0.72; } 100% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } }
+@keyframes orbit { 0% { transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684); opacity: 0.65; } 5% { transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208); opacity: 0.58; } 10% { transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576); opacity: 0.51; } 15% { transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944); opacity: 0.44; } 20% { transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312); opacity: 0.37; } 25% { transform: translateX(0%) scale(0.47368); opacity: 0.3; } 30% { transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312); opacity: 0.37; } 35% { transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944); opacity: 0.44; } 40% { transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576); opacity: 0.51; } 45% { transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208); opacity: 0.58; } 50% { transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684); opacity: 0.65; } 55% { transform: translateX(calc(var(--uib-size) * -0.4)) scale(0.789472); opacity: 0.72; } 60% { transform: translateX(calc(var(--uib-size) * -0.3)) scale(0.842104); opacity: 0.79; } 65% { transform: translateX(calc(var(--uib-size) * -0.2)) scale(0.894736); opacity: 0.86; } 70% { transform: translateX(calc(var(--uib-size) * -0.1)) scale(0.947368); opacity: 0.93; } 75% { transform: translateX(0%) scale(1); opacity: 1; } 80% { transform: translateX(calc(var(--uib-size) * 0.1)) scale(0.947368); opacity: 0.93; } 85% { transform: translateX(calc(var(--uib-size) * 0.2)) scale(0.894736); opacity: 0.86; } 90% { transform: translateX(calc(var(--uib-size) * 0.3)) scale(0.842104); opacity: 0.79; } 95% { transform: translateX(calc(var(--uib-size) * 0.4)) scale(0.789472); opacity: 0.72; } 100% { transform: translateX(calc(var(--uib-size) * 0.5)) scale(0.73684); opacity: 0.65; } }
 .texto-carregamento { color: var(--ping-btn-color, #00ffff); margin-top: 25px; font-size: 15px; font-weight: bold; font-family: monospace; letter-spacing: 2px; animation: piscar 1s infinite; text-align: center;}
 @keyframes piscar { 50% { opacity: 0.4; } }
 </style>
@@ -209,9 +173,6 @@ def get_grupo_int(m):
         return 25 if d == 0 else math.ceil(d/4)
     except: return None
 
-# =============================================================================
-# 👻 MOTORES DE ANÁLISE E HEDGE (DESDOBRAMENTO)
-# =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
@@ -254,55 +215,54 @@ def gerar_matrizes_taticas():
     esquadroes.extend(esquadroes_unidade)
     return esquadroes
 
-def calcular_metricas_fantasma(df_analise, coluna, cfg, janela=50):
+# 🚀 NOVA FUNÇÃO DE MÉTRICA CORRIGIDA (SEM CAP DE 16x)
+def calcular_metricas_fantasma(df_analise, coluna, cfg):
     alvos, modo = cfg['alvos'], cfg['modo']
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
-    atr_p, atr_c, atr_m = 0, 0, 0 
-    achou_p, achou_c, achou_m = False, False, False
-    for i in range(len(df_analise)-1, -1, -1):
-        milhar = str(df_analise.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "nan" or not milhar.strip(): continue
+    
+    cur_p, cur_c, cur_m = 0, 0, 0
+    max_p, max_c, max_m = 0, 0, 0
+    
+    # Percorre todo o histórico, do mais antigo (0) ao mais novo (len-1)
+    for i in range(len(df_analise)):
+        milhar = str(df_analise.iloc[i][coluna]).strip().zfill(4)
+        if milhar == "----" or milhar == "0nan" or milhar == "nan" or not milhar:
+            continue
+            
         g = get_grupo_int(milhar)
-        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:]) 
-        except: c, m, d, u = -1, -1, -1, -1
+        try:
+            c = int(milhar[-3:])
+            m = int(milhar)
+            d = int(milhar[-2:])
+            u = int(milhar[-1:])
+        except: continue
+        
         hit_p = False
         if modo == 'grupo' and g is not None and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
         elif modo == 'centena' and c in alvos: hit_p = True
         
-        if not achou_p:
-            if hit_p: achou_p = True
-            else: atr_p += 1
-        if not achou_c:
-            if c_min <= c <= c_max: achou_c = True
-            else: atr_c += 1
-        if not achou_m:
-            if m_min <= m <= m_max: achou_m = True
-            else: atr_m += 1
-        if achou_p and achou_c and achou_m: break
-    df_janela = df_analise.tail(janela)
-    cur_p, cur_c, cur_m, max_p, max_c, max_m = 0, 0, 0, 0, 0, 0
-    for i in range(len(df_janela)):
-        milhar = str(df_janela.iloc[i][coluna]).zfill(4)
-        if milhar == "----" or milhar == "nan": continue
-        g = get_grupo_int(milhar)
-        try: c = int(milhar[-3:]); m = int(milhar); d = int(milhar[-2:]); u = int(milhar[-1:])
-        except: c, m, d, u = -1, -1, -1, -1
-        hit_p = False
-        if modo == 'grupo' and g is not None and g in alvos: hit_p = True
-        elif modo == 'dezena' and d in alvos: hit_p = True
-        elif modo == 'unidade' and u in alvos: hit_p = True
-        elif modo == 'centena' and c in alvos: hit_p = True
+        hit_c = (c_min <= c <= c_max)
+        hit_m = (m_min <= m <= m_max)
         
-        cur_p = 0 if hit_p else cur_p + 1
-        max_p = max(max_p, cur_p)
-        cur_c = 0 if (c_min <= c <= c_max) else cur_c + 1
-        max_c = max(max_c, cur_c)
-        cur_m = 0 if (m_min <= m <= m_max) else cur_m + 1
-        max_m = max(max_m, cur_m)
-    return atr_p, atr_c, atr_m, max(max_p, atr_p), max(max_c, atr_c), max(max_m, atr_m)
+        if hit_p: cur_p = 0
+        else: 
+            cur_p += 1
+            if cur_p > max_p: max_p = cur_p
+            
+        if hit_c: cur_c = 0
+        else: 
+            cur_c += 1
+            if cur_c > max_c: max_c = cur_c
+            
+        if hit_m: cur_m = 0
+        else: 
+            cur_m += 1
+            if cur_m > max_m: max_m = cur_m
+            
+    return cur_p, cur_c, cur_m, max(max_p, cur_p), max(max_c, cur_c), max(max_m, cur_m)
 
 def deduplicar_alvos(lista):
     vistos = set(); resultado = []
@@ -380,6 +340,41 @@ def get_hedge_grupos(df, col, cfg_matriz, col_delays):
 
     manter = [g for g in grupos if g not in eliminar]
     return {'eliminar': sorted(eliminar), 'manter': sorted(manter), 'seguro': seguro}
+
+def get_cobertura_massa(df, col, cfg_nome):
+    opostos = {
+        "G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "D: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "D: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "D: ALTAS (51-00)": ("Grupo Baixo", list(range(1, 14))),
+        "D: BAIXAS (01-50)": ("Grupo Alto", list(range(14, 26))),
+        "U: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "U: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
+        "U: ALTAS (6-0)": ("Grupo Baixo", list(range(1, 14))),
+        "U: BAIXAS (1-5)": ("Grupo Alto", list(range(14, 26)))
+    }
+    
+    if cfg_nome not in opostos:
+        return None
+        
+    desc_oposto, lista_grupos = opostos[cfg_nome]
+    max_delay = -1
+    best_g = -1
+    
+    for g in lista_grupos:
+        delay_g = 0
+        for i in range(len(df)-1, -1, -1):
+            m = str(df.iloc[i][col]).zfill(4)
+            if m == "----" or m == "nan": continue
+            g_val = get_grupo_int(m)
+            if g_val == g: break
+            delay_g += 1
+        if delay_g > max_delay:
+            max_delay = delay_g
+            best_g = g
+            
+    return best_g, max_delay, desc_oposto
 
 def direcao_pendulo(prev, curr):
     if prev == curr: return "="
@@ -487,7 +482,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.22")
+    st.header("Pentágono V65.26")
     
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary", use_container_width=True):
         st.cache_data.clear()
@@ -503,7 +498,11 @@ if menu == "🏠 Visão Geral (Home)":
         tela_carregamento = st.empty()
         tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "CALIBRANDO MATRIZES E CALCULANDO RUPTURAS..."), unsafe_allow_html=True)
         
-        oportunidades, recordes, alertas_pendulo = [], [], []
+        # 🚀 FILTROS SEPARADOS DE ALERTA NOVO
+        alvos_teto = []
+        alvos_alerta = []
+        alertas_pendulo = []
+        
         todos_esq = gerar_matrizes_taticas()
         
         for banca_nome in BANCAS_CONFIG.keys():
@@ -532,20 +531,47 @@ if menu == "🏠 Visão Geral (Home)":
                     ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], col)]
                     ap_lim = cfg['lim'] 
                     
-                    is_anomaly = False; prio = 99; alerta = ""; tipo_ataque = ""
+                    estado_alvo = None
+                    prio = 99
+                    tipo_ataque = ""
+                    alerta_html = ""
                     
+                    # 1. Checagem de TETO
                     if am >= 13 and ac >= 13 and ap >= ap_lim:
-                        is_anomaly = True; prio = 1; tipo_ataque = "TOTAL"; alerta = f"<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M)</div>"
+                        estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"
+                        alerta_html = "<div class='alerta-supremo'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
                     elif am >= 13:
-                        is_anomaly = True; prio = 2; tipo_ataque = "MILHAR"; alerta = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x)</div>"
+                        estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"
+                        alerta_html = f"<div class='alerta-azul'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
                     elif ac >= 13:
-                        is_anomaly = True; prio = 3; tipo_ataque = "CENTENA"; alerta = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x)</div>"
+                        estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"
+                        alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
                     elif cfg['modo'] == 'unidade' and ap >= 9:
-                        is_anomaly = True; prio = 4; tipo_ataque = "UNIDADE"; alerta = f"<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE</div>"
+                        estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"
+                        alerta_html = "<div class='alerta-supremo' style='border-color:#ff00aa; color:#ff00aa;'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
                     elif ap >= ap_lim:
-                        is_anomaly = True; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta = f"<div class='alerta-amarelo'>🟡 ATAQUE FORTE ({cfg['modo'].upper()})</div>"
+                        estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"
+                        alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
+                        
+                    # 2. Checagem de ALERTA (Faltam 1 ou 2 pontos para o Teto)
+                    elif am >= 11 and ac >= 11 and ap >= (ap_lim - 2):
+                        estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"
+                        alerta_html = f"<div class='alerta-amarelo' style='color:#ff6600; border-color:#ff6600;'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
+                    elif am >= 11:
+                        estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"
+                        alerta_html = f"<div class='alerta-amarelo' style='color:#ff6600; border-color:#ff6600;'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/13)</div>"
+                    elif ac >= 11:
+                        estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"
+                        alerta_html = f"<div class='alerta-amarelo' style='color:#ff6600; border-color:#ff6600;'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/13)</div>"
+                    elif cfg['modo'] == 'unidade' and ap >= 7:
+                        estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"
+                        alerta_html = f"<div class='alerta-amarelo' style='color:#ff6600; border-color:#ff6600;'>🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}/9)</div>"
+                    elif ap >= (ap_lim - 2):
+                        estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"
+                        alerta_html = f"<div class='alerta-amarelo' style='color:#ff6600; border-color:#ff6600;'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
-                    if is_anomaly:
+                    # Se encaixou em TETO ou ALERTA, constrói os avisos de cobertura
+                    if estado_alvo:
                         if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                             col_delays = {k_name: val[0] for (k_name, k_col), val in metrics_cache.items() if k_col == col}
                             hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
@@ -556,34 +582,38 @@ if menu == "🏠 Visão Geral (Home)":
                                 seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
                                 seg_str = " | ".join(seg_list)
                                 
-                                alerta += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
+                                alerta_html += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
                                     <div style='color:#ffcc00; font-size:11px; font-weight:bold; margin-bottom:3px;'>🛡️ DESDOBRAMENTO TÁTICO</div>
                                     <div style='color:#ff4b4b; font-size:11px;'>❌ Cortar: G {elim_str}</div>
                                     <div style='color:#4CAF50; font-size:11px; margin-top:2px;'>✅ Jogar: {mant_str} ({len(hedge_data['manter'])}G)</div>
                                     <div style='color:#FF851B; font-size:11px; margin-top:4px;'>🆘 Seguro: {seg_str}</div>
                                 </div>"""
                             else:
-                                alerta += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
+                                alerta_html += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>
                                     <div style='color:#ffcc00; font-size:11px; font-weight:bold;'>🛡️ DESDOBRAMENTO TÁTICO</div>
                                     <div style='color:#ccc; font-size:11px;'>Filtros Neutros. Jogue a Matriz Integral.</div>
                                 </div>"""
+                        else:
+                            cob_data = get_cobertura_massa(df, col, cfg['nome'])
+                            if cob_data:
+                                g_alvo, delay_g, desc_oposto = cob_data
+                                alerta_html += f"""<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px; border-left: 3px solid #ffcc00;'>
+                                    <div style='color:#ffcc00; font-size:11px; font-weight:bold; margin-bottom:3px;'>🛡️ COBERTURA TÁTICA SUGERIDA</div>
+                                    <div style='color:#ccc; font-size:11px;'>O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>
+                                    <div style='color:#4CAF50; font-size:11px; margin-top:2px;'>🎯 Dica: Aposta Sniper nele para blindar a operação.</div>
+                                </div>"""
 
-                        oportunidades.append({"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta, "cfg": cfg, "tipo_ataque": tipo_ataque})
-                    
-                    elif ap == mp and mp >= ap_lim - 1:
-                        tipo_rec = "ALVO_PRINCIPAL"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE ALCANÇADO</div>"
-                        recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
-                    elif am == mm and mm >= 9:
-                        tipo_rec = "MILHAR"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE MILHAR</div>"
-                        recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
-                    elif ac == mc and mc >= 9:
-                        tipo_rec = "CENTENA"; alerta_rec = f"<div class='alerta-amarelo' style='border-color:#FF851B; color:#FF851B;'>🏆 RECORDE CENTENA</div>"
-                        recordes.append({"prio": 99, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_rec, "cfg": cfg, "tipo_ataque": tipo_rec})
+                        op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
+                        
+                        if estado_alvo == "TETO":
+                            alvos_teto.append(op_data)
+                        elif estado_alvo == "ALERTA":
+                            alvos_alerta.append(op_data)
         
         tela_carregamento.empty()
         
-        oportunidades = deduplicar_alvos(sorted(oportunidades, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
-        recordes = deduplicar_alvos(sorted(recordes, key=lambda x: (-max(x['ap'], x['ac'], x['am']))))
+        alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
+        alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         
         if alertas_pendulo:
             st.success(f"🧲 ALERTA GRAVITACIONAL: {len(alertas_pendulo)} Pêndulos Saturados Detectados!")
@@ -620,40 +650,77 @@ if menu == "🏠 Visão Geral (Home)":
                     """, unsafe_allow_html=True)
             st.markdown("---")
         
-        if oportunidades:
-            st.success(f"🎯 ALVOS TRAVADOS: {len(oportunidades)} Oportunidades de Ruptura Encontradas!")
+        # EXIBIÇÃO: ALVOS NO TETO
+        if alvos_teto:
+            st.success(f"🎯 ALVOS CRÍTICOS (TETO ATINGIDO): {len(alvos_teto)} Encontrados!")
             cols = st.columns(3)
-            for idx, op in enumerate(oportunidades):
+            for idx, op in enumerate(alvos_teto):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
                 ta = op.get('tipo_ataque', '')
                 css_class = f"home-box-{op['cfg']['tipo']}"
                 
                 if ta == 'UNIDADE':
                     lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"; titulo = op['cfg']['nome']
-                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff4b4b;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
+                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#00ff00;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
                     cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
                 elif ta == 'MILHAR':
                     lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"; titulo = f"🎯 FOCO: MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
                     dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#00ff00' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#00ff00;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     css_class = "home-box-seq" 
                 elif ta == 'CENTENA':
                     lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"; titulo = f"🎯 FOCO: CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
                     dado_principal = f"<span style='float:right;color:#555;'>---</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff4b4b;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#00ff00;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#00ff00' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     css_class = "home-box-seq"
                 else:
                     lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else ("Centena" if op['cfg']['modo'] == 'centena' else "Dezena")
                     sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
                     titulo = op['cfg']['nome']
-                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:{'#ff4b4b' if op['ap']>=op['cfg']['lim'] else '#4CAF50'};'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
-                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff4b4b' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#00ff00;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#00ff00' if op['ac']>=13 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#00ff00' if op['am']>=13 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
                     
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+            st.markdown("---") 
+
+        # EXIBIÇÃO: ALVOS PRÓXIMOS AO TETO (ALERTA)
+        if alvos_alerta:
+            st.warning(f"🟠 ALERTA DE APROXIMAÇÃO (FALTAM 1 OU 2 PONTOS): {len(alvos_alerta)} Encontrados!")
+            cols = st.columns(3)
+            for idx, op in enumerate(alvos_alerta):
+                c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
+                ta = op.get('tipo_ataque', '')
+                css_class = f"home-box-{op['cfg']['tipo']}"
+                
+                if ta == 'UNIDADE':
+                    lbl_alvo = "Unidade"; sub_titulo = "ALVO EXCLUSIVO: UNIDADE"; titulo = op['cfg']['nome']
+                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff6600;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
+                    cm_html = """Centena: <span style="float:right;color:#555;">---</span><br>Milhar: <span style="float:right;color:#555;">---</span>"""
+                elif ta == 'MILHAR':
+                    lbl_alvo = "Filtro Base"; sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}"; titulo = f"🎯 FOCO: MILHAR {str(m_min).zfill(4)} AO {str(m_max).zfill(4)}"
+                    dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff6600' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:#ff6600;">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    css_class = "home-box-seq" 
+                elif ta == 'CENTENA':
+                    lbl_alvo = "Filtro Base"; sub_titulo = f"M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"; titulo = f"🎯 FOCO: CENTENA {str(c_min).zfill(3)} AO {str(c_max).zfill(3)}"
+                    dado_principal = f"<span style='float:right;color:#555;'>---</span>"
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:#ff6600;">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff6600' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    css_class = "home-box-seq"
+                else:
+                    lbl_alvo = "Grupo" if op['cfg']['modo'] == 'grupo' else ("Centena" if op['cfg']['modo'] == 'centena' else "Dezena")
+                    sub_titulo = f"C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}<br>M: {str(m_min).zfill(4)} ao {str(m_max).zfill(4)}"
+                    titulo = op['cfg']['nome']
+                    dado_principal = f"<span style='float:right;'><span class='sniper-valor' style='color:#ff6600;'>{op['ap']}x</span> (Rec: {op['mp']})</span>"
+                    cm_html = f"""Centena: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff6600' if op['ac']>=11 else '#4CAF50'};">{op['ac']}x</span> (Rec: {op['mc']})</span><br>Milhar: <span style="float:right;"><span class="sniper-valor" style="color:{'#ff6600' if op['am']>=11 else '#4CAF50'};">{op['am']}x</span> (Rec: {op['mm']})</span>"""
+                    
+                with cols[idx % 3]:
+                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-horario">🕒 ÚLTIMO: {op['ultimo_sorteio']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}<br>{sub_titulo}</div><div class="sniper-dado" style="text-align:left;">{lbl_alvo}: {dado_principal}<br>{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+            st.markdown("---")
         
-        if not oportunidades and not alertas_pendulo and not recordes: 
-            st.success("🟢 Modo Stealth: Nenhum alvo atingiu a zona de ruptura crítica ainda.")
+        # MODO STEALTH
+        if not alvos_teto and not alvos_alerta and not alertas_pendulo: 
+            st.success("🟢 MODO STEALTH: Não temos alvos no teto ou próximos a ele no momento. Mercado estável.")
 
 elif menu == "🎯 Scanner de Raio-X":
     configurar_ui_pagina("Scanner de Raio-X (Consulta)", cor_neon="#ffcc00")
@@ -797,7 +864,7 @@ elif menu == "🎯 Scanner de Raio-X":
                             except:
                                 pass
                                 
-                    # Pinta a primeira coluna (O Nome do Filtro) com a cor de MAIOR prioridade encontrada na linha
+                    # Pinta a primeira coluna com a cor de MAIOR prioridade da linha
                     if tem_teto:
                         estilos[0] = 'color: #00ff00; font-weight: bold; background-color: rgba(0, 255, 0, 0.1); border-left: 4px solid #00ff00;'
                     elif tem_quase_teto:
@@ -814,6 +881,7 @@ elif menu == "🎯 Scanner de Raio-X":
                     df_estilizado = df_tabela.drop(columns=['TETO']).style.apply(destacar_niveis_alerta, axis=1)
                     
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
+
 elif menu == "🧲 Armadilha do Pêndulo":
     configurar_ui_pagina("Armadilha de Saturação (Pêndulo)", cor_neon="#ff00aa")
     st.info("Analisa a física circular de **Passos Curtos (1 a 6 casas)** dos últimos 6 sorteios. Pulos longos (✖️) quebram a saturação.")
