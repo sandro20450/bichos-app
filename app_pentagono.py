@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.30 - Táticas 50%", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.31 - Táticas 50%", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -198,9 +198,13 @@ def deduplicar_alvos(lista):
     vistos = set(); resultado = []
     for item in lista:
         ta = item.get('tipo_ataque', '')
-        if "MILHAR" in ta: sig = f"{item['banca']}_{item['premio']}_M_{item['cfg']['m_min']}"
-        elif "CENTENA" in ta: sig = f"{item['banca']}_{item['premio']}_C_{item['cfg']['c_min']}"
-        else: sig = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}_{item['cfg']['c_min']}"
+        # CORREÇÃO CRÍTICA: Remoção do `c_min` para alvos gerais para evitar duplicação em tela!
+        if "MILHAR" in ta: 
+            sig = f"{item['banca']}_{item['premio']}_M_{item['cfg']['m_min']}"
+        elif "CENTENA" in ta: 
+            sig = f"{item['banca']}_{item['premio']}_C_{item['cfg']['c_min']}"
+        else: 
+            sig = f"{item['banca']}_{item['premio']}_{item['cfg']['nome']}"
         
         if sig not in vistos:
             vistos.add(sig); resultado.append(item)
@@ -357,9 +361,6 @@ def processar_pendulo(df, coluna):
         
     return "Estável", [], all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
 
-# =============================================================================
-# --- MOTOR DE EXTRAÇÃO BLINDADO (DEDUPLICAÇÃO GENÉTICA) ---
-# =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -368,7 +369,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set() # Trava anti-clone dentro do mesmo dia
+        vistos_assinaturas = set()
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -384,7 +385,7 @@ def extrair_dia(banca, data_alvo):
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -400,7 +401,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.30")
+    st.header("Pentágono V65.31")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -444,13 +445,11 @@ if menu == "🏠 Visão Geral (Home)":
                         
                         estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
                         
-                        # OS LIMITES DE MILHAR E CENTENA FORAM REBAIXADOS PARA 9x E 7x
                         if am >= 9 and ac >= 9 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
                         elif am >= 9: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
                         elif ac >= 9: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
                         elif cfg['modo'] == 'unidade' and ap >= 9: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
                         elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
-                        
                         elif am >= 7 and ac >= 7 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
                         elif am >= 7: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/9)</div>"
                         elif ac >= 7: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/9)</div>"
@@ -609,33 +608,49 @@ elif menu == "📡 Extração Central":
                 set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
                 p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
                 if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); st.success(f"✅ {len(p_ins)} novos registros salvos."); st.cache_data.clear() 
-                else: st.info("Base de dados já atualizada.")
-            else: st.error("Sem dados para extrair.")
+                else: st.info("Base de dados já atualizada. Nenhum resultado novo encontrado.")
+            else: st.error("Sem dados para extrair hoje nesta banca.")
     with col2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        # RELATÓRIO DE EXTRAÇÃO GLOBAL RECONSTRUÍDO
         if st.button("EXTRAÇÃO GLOBAL", type="primary"):
-            with st.spinner("Varrendo servidores..."):
-                sh = conectar_sheets()
-                if not sh: st.error("Erro Crítico de Conexão.")
-                else:
-                    total_salvos = 0; bancas_atualizadas = []
-                    for banca_alvo in BANCAS_CONFIG.keys():
-                        res = extrair_dia(banca_alvo, dt)
-                        if res:
-                            ws = sh.worksheet(MAPA_ABAS[banca_alvo])
-                            existentes = ws.get_all_values()
-                            # Deduplicação Rigorosa Genética
-                            set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
-                            p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
-                            if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total_salvos += len(p_ins); bancas_atualizadas.append(f"✅ {banca_alvo} (+{len(p_ins)})")
-                            else: bancas_atualizadas.append(f"ℹ️ {banca_alvo} (Sem novos)")
-                        else: bancas_atualizadas.append(f"⚠️ {banca_alvo} (Sem dados)")
+            painel_status = st.empty()
+            painel_status.info("Varrendo servidores da web e validando assinaturas genéticas... Aguarde.")
+            
+            sh = conectar_sheets()
+            if not sh: 
+                painel_status.error("Erro Crítico de Conexão com o Google Sheets.")
+            else:
+                total_salvos = 0
+                bancas_atualizadas = []
+                for banca_alvo in BANCAS_CONFIG.keys():
+                    res = extrair_dia(banca_alvo, dt)
+                    if res:
+                        ws = sh.worksheet(MAPA_ABAS[banca_alvo])
+                        existentes = ws.get_all_values()
+                        # Deduplicação Rigorosa Genética
+                        set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
+                        p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
+                        if p_ins: 
+                            ws.append_rows(p_ins, value_input_option="RAW")
+                            total_salvos += len(p_ins)
+                            bancas_atualizadas.append(f"✅ **{banca_alvo}:** {len(p_ins)} novos registros inseridos.")
+                        else: 
+                            bancas_atualizadas.append(f"ℹ️ **{banca_alvo}:** Base já está atualizada (0 novos).")
+                    else: 
+                        bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
+                
+                painel_status.empty() # Remove a mensagem de 'Aguarde'
+                
+                # Componentes Nativos do Streamlit (Permanece na tela)
+                st.markdown("### 📊 Relatório de Extração:")
+                for b_msg in bancas_atualizadas:
+                    st.markdown(b_msg)
                     
-                    st.markdown("### 📊 Relatório das Bancas:")
-                    for b_msg in bancas_atualizadas:
-                        st.write(b_msg)
-                        
-                    if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
-                    else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
+                if total_salvos > 0: 
+                    st.cache_data.clear()
+                    st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
+                else: 
+                    st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
