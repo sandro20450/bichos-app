@@ -25,7 +25,11 @@ TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "
 
 def enviar_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": mensagem[:4000], "parse_mode": "HTML"})
+    if len(mensagem) > 4000:
+        partes = [mensagem[i:i+4000] for i in range(0, len(mensagem), 4000)]
+        for parte in partes: requests.post(url, data={"chat_id": CHAT_ID, "text": parte, "parse_mode": "HTML"})
+    else:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": mensagem, "parse_mode": "HTML"})
 
 def conectar_sheets():
     try:
@@ -33,7 +37,9 @@ def conectar_sheets():
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         return gspread.authorize(creds).open("CentralBichos")
-    except Exception as e: return None
+    except Exception as e:
+        enviar_telegram(f"❌ <b>ERRO NO DRONE:</b> Falha ao conectar no Google Sheets. Erro: {e}")
+        return None
 
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -51,7 +57,10 @@ def extrair_dia(banca, data_alvo):
             texto_alvo = txt_th + " " + txt_prev
             if "FEDERAL" in texto_alvo.upper(): continue
             match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
-            nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
+            if match_hora:
+                if match_hora.group(1): nome = f"{match_hora.group(1)}:{match_hora.group(2)}"
+                else: nome = f"{match_hora.group(3)}:00"
+            else: nome = "Extra"
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
@@ -63,6 +72,10 @@ def extrair_dia(banca, data_alvo):
         return resultados
     except: return []
 
+def get_grupo_int(m):
+    try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
+    except: return None
+
 def gerar_matrizes_taticas():
     esquadroes = []; cms = []
     for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
@@ -71,8 +84,8 @@ def gerar_matrizes_taticas():
         for g in range(1, 15): esquadroes.append({'alvos': set(range(g, g+12)), 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G12: {str(g).zfill(2)}-{str(g+11).zfill(2)}", 'lim': 10, **cm})
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS (51-00)", 'lim': 9, **cm})
         
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8]]
         for b in bases_inv_8: esquadroes.append({'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1!=d2}, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
@@ -100,21 +113,123 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
         
         if hit_p: cur_p = 0
-        else: 
-            cur_p += 1
-            if cur_p > max_p: max_p = cur_p
-            
+        else: cur_p += 1; max_p = max(max_p, cur_p)
         if (c_min <= c <= c_max): cur_c = 0
-        else: 
-            cur_c += 1
-            if cur_c > max_c: max_c = cur_c
-            
+        else: cur_c += 1; max_c = max(max_c, cur_c)
         if (m_min <= m <= m_max): cur_m = 0
-        else: 
-            cur_m += 1
-            if cur_m > max_m: max_m = cur_m
+        else: cur_m += 1; max_m = max(max_m, cur_m)
             
     return cur_p, cur_c, cur_m, max(max_p, cur_p), max(max_c, cur_c), max(max_m, cur_m)
+
+def direcao_pendulo(prev, curr):
+    if prev == curr: return "="
+    dist_c = (curr - prev) % 25
+    dist_d = (prev - curr) % 25
+    if 1 <= dist_c <= 6: return "C"
+    if 1 <= dist_d <= 6: return "D"
+    return "-" 
+
+def processar_pendulo(df, coluna):
+    all_groups = []
+    valores = df[coluna].astype(str).tolist()
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                d = int(m[-2:])
+                g = 25 if d == 0 else math.ceil(d/4)
+                all_groups.append(g)
+            except: pass
+                
+    if len(all_groups) < 6: return None
+    dirs_history = []
+    for i in range(1, len(all_groups)):
+        dirs_history.append(direcao_pendulo(all_groups[i-1], all_groups[i]))
+        
+    curr_streak = 0
+    curr_dir = dirs_history[-1]
+    if curr_dir in ["C", "D"]:
+        for d in reversed(dirs_history):
+            if d == curr_dir: curr_streak += 1
+            else: break
+            
+    if curr_streak >= 5:
+        jogos = []; curr = all_groups[-1]
+        if curr_dir == "C":
+            for _ in range(15): jogos.append(str(curr).zfill(2)); curr = 25 if curr-1 < 1 else curr-1
+        else:
+            for _ in range(15): jogos.append(str(curr).zfill(2)); curr = 1 if curr+1 > 25 else curr+1
+        return curr_streak, curr_dir, jogos
+    return None
+
+def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
+    grupos = list(cfg_matriz['alvos'])
+    scores = {g: 0 for g in grupos}
+    col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg_matriz['c_min']}
+    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
+
+    if mass_max >= 3:
+        if col_delays.get('G: ÍMPARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 == 0: scores[g] += 1
+        if col_delays.get('G: PARES', 0) >= 3:
+            for g in grupos:
+                if g % 2 != 0: scores[g] += 1
+    else:
+        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0), col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
+        if uni_max >= 3:
+            if col_delays.get('U: ÍMPARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 == 0: scores[g] += 1
+
+    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
+    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
+    if not eliminar: return None 
+
+    seguro = {}
+    valores = df[col].astype(str).tolist()
+    for g in eliminar:
+        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4]
+        if g == 25: dezenas = [97, 98, 99, 0]
+        max_d_delay = -1; best_d = -1
+        for d in dezenas:
+            delay_d = 0
+            for val in reversed(valores):
+                m = val.strip().zfill(4)
+                if m == "----" or m == "0nan" or m == "nan": continue
+                try: dez_val = int(m[-2:])
+                except: dez_val = -1
+                if dez_val == d: break
+                delay_d += 1
+            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
+        seguro[g] = (best_d, max_d_delay)
+
+    manter = [g for g in grupos if g not in eliminar]
+    return {'eliminar': sorted(eliminar), 'manter': sorted(manter), 'seguro': seguro}
+
+def get_cobertura_massa(df, col, cfg_nome):
+    opostos = {
+        "G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]),
+        "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24])
+    }
+    if cfg_nome not in opostos: return None
+    desc_oposto, lista_grupos = opostos[cfg_nome]
+    max_delay = -1; best_g = -1
+    valores = df[col].astype(str).tolist()
+    
+    for g in lista_grupos:
+        delay_g = 0
+        for val in reversed(valores):
+            m = val.strip().zfill(4)
+            if m == "----" or m == "0nan" or m == "nan": continue
+            try: d = int(m[-2:])
+            except: continue
+            g_val = 25 if d == 0 else math.ceil(d/4)
+            if g_val == g: break
+            delay_g += 1
+        if delay_g > max_delay: max_delay = delay_g; best_g = g
+            
+    return best_g, max_delay, desc_oposto
 
 def rodar_drone():
     sh = conectar_sheets()
@@ -124,20 +239,22 @@ def rodar_drone():
     
     for banca_nome, aba_nome in MAPA_ABAS.items():
         res = extrair_dia(banca_nome, dt)
+        ws = sh.worksheet(aba_nome)
+        
         if res:
-            ws = sh.worksheet(aba_nome)
             existentes = ws.get_all_values()
             set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
             p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
             if p_ins:
                 ws.append_rows(p_ins, value_input_option="RAW")
                 total_salvos += len(p_ins)
-            
-            dados_atualizados = ws.get_all_values()
-            if len(dados_atualizados) > 1:
-                df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
-                df = df[df["P1"].astype(str).str.strip() != ""]
-                dados_bancas[banca_nome] = df
+        
+        # O DRONE AGORA SEMPRE LÊ O HISTÓRICO, MESMO SEM SOTRTEIOS NOVOS
+        dados_atualizados = ws.get_all_values()
+        if len(dados_atualizados) > 1:
+            df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
+            df = df[df["P1"].astype(str).str.strip() != ""]
+            dados_bancas[banca_nome] = df
 
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""; achou_algo = False; alvos_vistos = set()
@@ -145,6 +262,17 @@ def rodar_drone():
     for banca_nome, df in dados_bancas.items():
         if df.empty: continue
         ultimo_sorteio = str(df.iloc[-1]["Sorteio"])
+
+        for i, col in enumerate(COLUNAS_DF):
+            if banca_nome == "Tradicional" and col != "P1": continue
+            res_pendulo = processar_pendulo(df, col)
+            if res_pendulo:
+                curr_streak, curr_dir, jogos = res_pendulo
+                dir_texto = "Decrescente" if curr_dir == "C" else "Crescente"
+                sig_pendulo = f"PENDULO_{banca_nome}_{col}"
+                if sig_pendulo not in alvos_vistos:
+                    msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\nDireção: {dir_texto}\nJogar: {', '.join(jogos)}\n\n"
+                    achou_algo = True; alvos_vistos.add(sig_pendulo)
 
         metrics_cache = {}
         for cfg in todos_esq:
@@ -154,7 +282,7 @@ def rodar_drone():
                 metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am)
 
         for cfg in todos_esq:
-            for col in COLUNAS_DF:
+            for i, col in enumerate(COLUNAS_DF):
                 if (cfg['nome'], cfg['c_min'], col) not in metrics_cache: continue
                 ap, ac, am = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
                 ap_lim = cfg['lim']
@@ -172,12 +300,33 @@ def rodar_drone():
 
                 if is_anomaly or is_alerta:
                     c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
-                    sig = f"{banca_nome}_{col}_C_{c_min}" if "CENTENA" in tipo_ataque else f"{banca_nome}_{col}_{cfg['nome']}"
+                    
+                    # CHAVE BLINDADA DE DEDUPLICAÇÃO
+                    if "MILHAR" in tipo_ataque: sig = f"{banca_nome}_{col}_M_{m_min}"
+                    elif "CENTENA" in tipo_ataque: sig = f"{banca_nome}_{col}_C_{c_min}"
+                    else: sig = f"{banca_nome}_{col}_{cfg['nome']}_{c_min}"
+                    
                     if sig in alvos_vistos: continue
                     alvos_vistos.add(sig)
 
-                    msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {col}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
-                    msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n\n"
+                    msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
+                    msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n"
+
+                    if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
+                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache)
+                        if hedge_data:
+                            elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
+                            mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
+                            seg_list = [f"D:{str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
+                            msg_telegram += f"🛡️ <b>Desdobramento:</b>\n❌ Cortar: G {elim_str}\n✅ Jogar: {mant_str}\n🆘 Seguro: {' | '.join(seg_list)}\n"
+                        else: msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
+                    else:
+                        cob_data = get_cobertura_massa(df, col, cfg['nome'])
+                        if cob_data:
+                            g_alvo, delay_g, desc_oposto = cob_data
+                            msg_telegram += f"🛡️ <b>Cobertura:</b> O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).\n🎯 Aposta Sniper nele.\n"
+                            
+                    msg_telegram += "\n"
                     achou_algo = True
 
     if achou_algo: enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
