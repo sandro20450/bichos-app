@@ -11,8 +11,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.31 - Táticas 50%", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.32 - Raio-X 50%", page_icon="🎯", layout="wide")
 
+# Utilizando o design padrão e limpo do Streamlit (Nativo / Dark Mode)
 st.markdown("""
 <style>
 .home-box { border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; border: 1px solid #444; background-color: #111; }
@@ -111,7 +112,7 @@ def gerar_matrizes_taticas():
     cms.append({'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999})
     
     for cm in cms:
-        # NOVO: 13 GRUPOS SEQUENCIAIS (TETO 9x)
+        # 13 GRUPOS SEQUENCIAIS (TETO 9x)
         for g in range(1, 14):
             alvos = set(range(g, g + 13))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G13: {str(g).zfill(2)}-{str(g+12).zfill(2)}", 'lim': 9, **cm})
@@ -172,10 +173,12 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         g = 25 if d == 0 else math.ceil(d/4)
         
         hit_p = False
+        # Adicionado o suporte nativo para 'milhar' exigido pelo Scanner de Raio-X
         if modo == 'grupo' and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
         elif modo == 'centena' and c in alvos: hit_p = True
+        elif modo == 'milhar' and m in alvos: hit_p = True 
         
         if hit_p: cur_p = 0
         else: 
@@ -198,7 +201,6 @@ def deduplicar_alvos(lista):
     vistos = set(); resultado = []
     for item in lista:
         ta = item.get('tipo_ataque', '')
-        # CORREÇÃO CRÍTICA: Remoção do `c_min` para alvos gerais para evitar duplicação em tela!
         if "MILHAR" in ta: 
             sig = f"{item['banca']}_{item['premio']}_M_{item['cfg']['m_min']}"
         elif "CENTENA" in ta: 
@@ -361,6 +363,9 @@ def processar_pendulo(df, coluna):
         
     return "Estável", [], all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
 
+# =============================================================================
+# --- MOTOR DE EXTRAÇÃO BLINDADO (DEDUPLICAÇÃO GENÉTICA) ---
+# =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -369,7 +374,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set()
+        vistos_assinaturas = set() # Trava anti-clone dentro do mesmo dia
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -385,7 +390,7 @@ def extrair_dia(banca, data_alvo):
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -401,7 +406,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.31")
+    st.header("Pentágono V65.32")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -546,6 +551,11 @@ elif menu == "🎯 Scanner de Raio-X":
             if df.empty: st.error("Sem dados.")
             else:
                 filtros_lista = [
+                    # AQUI ESTÃO AS NOVAS FAIXAS DE 50% NO SCANNER
+                    ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
+                    ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
+                    ("Centenas Baixas (000-499)", {'alvos': set(range(0, 500)), 'modo': 'centena', 'lim': 9}),
+                    ("Centenas Altas (500-999)", {'alvos': set(range(500, 1000)), 'modo': 'centena', 'lim': 9}),
                     ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'lim': 9}),
                     ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'lim': 9}),
                     ("Dezenas Baixas (01-50)", {'alvos': set(range(1, 51)), 'modo': 'dezena', 'lim': 9}),
@@ -604,7 +614,6 @@ elif menu == "📡 Extração Central":
                 sh = conectar_sheets()
                 ws = sh.worksheet(MAPA_ABAS[banca_ex])
                 existentes = ws.get_all_values()
-                # Deduplicação Rigorosa Genética
                 set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
                 p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
                 if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); st.success(f"✅ {len(p_ins)} novos registros salvos."); st.cache_data.clear() 
@@ -612,7 +621,6 @@ elif menu == "📡 Extração Central":
             else: st.error("Sem dados para extrair hoje nesta banca.")
     with col2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        # RELATÓRIO DE EXTRAÇÃO GLOBAL RECONSTRUÍDO
         if st.button("EXTRAÇÃO GLOBAL", type="primary"):
             painel_status = st.empty()
             painel_status.info("Varrendo servidores da web e validando assinaturas genéticas... Aguarde.")
@@ -628,7 +636,6 @@ elif menu == "📡 Extração Central":
                     if res:
                         ws = sh.worksheet(MAPA_ABAS[banca_alvo])
                         existentes = ws.get_all_values()
-                        # Deduplicação Rigorosa Genética
                         set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
                         p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
                         if p_ins: 
@@ -640,9 +647,8 @@ elif menu == "📡 Extração Central":
                     else: 
                         bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
                 
-                painel_status.empty() # Remove a mensagem de 'Aguarde'
+                painel_status.empty() 
                 
-                # Componentes Nativos do Streamlit (Permanece na tela)
                 st.markdown("### 📊 Relatório de Extração:")
                 for b_msg in bancas_atualizadas:
                     st.markdown(b_msg)
