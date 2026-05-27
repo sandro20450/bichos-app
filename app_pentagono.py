@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.29 - Assinatura Genética", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.30 - Táticas 50%", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -101,20 +101,22 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE CÁLCULO E HEDGE (ULTRA VELOCIDADE)
+# 👻 MOTORES DE CÁLCULO E HEDGE (ULTRA VELOCIDADE - 50%)
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
-    for c in range(7): cms.append({'c_min': c*100, 'c_max': c*100+399, 'm_min': c*1000, 'm_max': c*1000+3999})
+    # COBERTURA 50% MILHAR E CENTENA
+    cms.append({'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999})
+    cms.append({'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999})
+    
     for cm in cms:
-        for g in range(1, 12):
-            alvos = set(range(g, g + 15))
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G: {str(g).zfill(2)}-{str(g+14).zfill(2)}", 'lim': 7, **cm})
-        for g in range(1, 15):
-            alvos = set(range(g, g + 12))
-            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G12: {str(g).zfill(2)}-{str(g+11).zfill(2)}", 'lim': 10, **cm})
+        # NOVO: 13 GRUPOS SEQUENCIAIS (TETO 9x)
+        for g in range(1, 14):
+            alvos = set(range(g, g + 13))
+            esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G13: {str(g).zfill(2)}-{str(g+12).zfill(2)}", 'lim': 9, **cm})
         
+        # FILTROS DE MASSA (TETO 9x)
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
@@ -126,6 +128,7 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
+        # INVERSÕES (TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
@@ -397,7 +400,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.29")
+    st.header("Pentágono V65.30")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -441,14 +444,16 @@ if menu == "🏠 Visão Geral (Home)":
                         
                         estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
                         
-                        if am >= 13 and ac >= 13 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
-                        elif am >= 13: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
-                        elif ac >= 13: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
+                        # OS LIMITES DE MILHAR E CENTENA FORAM REBAIXADOS PARA 9x E 7x
+                        if am >= 9 and ac >= 9 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
+                        elif am >= 9: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
+                        elif ac >= 9: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
                         elif cfg['modo'] == 'unidade' and ap >= 9: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
                         elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
-                        elif am >= 11 and ac >= 11 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
-                        elif am >= 11: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/13)</div>"
-                        elif ac >= 11: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/13)</div>"
+                        
+                        elif am >= 7 and ac >= 7 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
+                        elif am >= 7: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/9)</div>"
+                        elif ac >= 7: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/9)</div>"
                         elif cfg['modo'] == 'unidade' and ap >= 7: estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}/9)</div>"
                         elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
@@ -600,7 +605,7 @@ elif menu == "📡 Extração Central":
                 sh = conectar_sheets()
                 ws = sh.worksheet(MAPA_ABAS[banca_ex])
                 existentes = ws.get_all_values()
-                # Deduplicação Rigorosa de Coleta Individual
+                # Deduplicação Rigorosa Genética
                 set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
                 p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
                 if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); st.success(f"✅ {len(p_ins)} novos registros salvos."); st.cache_data.clear() 
@@ -622,10 +627,15 @@ elif menu == "📡 Extração Central":
                             # Deduplicação Rigorosa Genética
                             set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
                             p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
-                            if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total_salvos += len(p_ins); bancas_atualizadas.append(f"{banca_alvo} (+{len(p_ins)})")
-                            else: bancas_atualizadas.append(f"{banca_alvo} (OK)")
-                        else: bancas_atualizadas.append(f"{banca_alvo} (Sem dados)")
-                    st.info(f"🔄 Relatório: {', '.join(bancas_atualizadas)}")
-                    if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 CONCLUÍDO: {total_salvos} novos registros salvos.")
+                            if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total_salvos += len(p_ins); bancas_atualizadas.append(f"✅ {banca_alvo} (+{len(p_ins)})")
+                            else: bancas_atualizadas.append(f"ℹ️ {banca_alvo} (Sem novos)")
+                        else: bancas_atualizadas.append(f"⚠️ {banca_alvo} (Sem dados)")
+                    
+                    st.markdown("### 📊 Relatório das Bancas:")
+                    for b_msg in bancas_atualizadas:
+                        st.write(b_msg)
+                        
+                    if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
+                    else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=13x | Dezenas e Unidades=9x | 15 Grupos=7x | 12 Grupos=10x(rec13x) | Inv 8D/9D=10x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
