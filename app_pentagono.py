@@ -593,18 +593,35 @@ elif menu == "🧲 Armadilha do Pêndulo":
 elif menu == "📡 Extração Central":
     st.markdown("<h1 style='color:#00ff00;'>📡 Extração</h1>", unsafe_allow_html=True)
     dt = st.date_input("Data:", value=date.today())
-    if st.button("EXTRAÇÃO GLOBAL", type="primary"):
-        sh = conectar_sheets()
-        if not sh: st.error("Erro")
-        else:
-            total = 0
-            for b in BANCAS_CONFIG.keys():
-                res = extrair_dia(b, dt)
-                if res:
-                    ws = sh.worksheet(MAPA_ABAS[b])
-                    exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in ws.get_all_values() if len(r)>=2}
-                    p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in exist]
-                    if p_ins: ws.append_rows(p_ins, value_input_option="RAW"); total += len(p_ins)
-            if total > 0: st.cache_data.clear(); st.success(f"{total} inseridos.")
+    if st.button("EXTRAÇÃO GLOBAL", type="primary", use_container_width=True):
+            tela_carregamento = st.empty()
+            tela_carregamento.markdown(HELIX_LOADER_HTML.replace("MSG_REPLACE", "VARRENDO TODOS OS SERVIDORES..."), unsafe_allow_html=True)
+            
+            sh = conectar_sheets()
+            if not sh: 
+                tela_carregamento.empty()
+                st.error("Erro Crítico de Conexão.")
+            else:
+                total_salvos = 0
+                bancas_atualizadas = []
+                for banca_alvo in BANCAS_CONFIG.keys():
+                    res = extrair_dia(banca_alvo, dt)
+                    if res:
+                        ws = sh.worksheet(MAPA_ABAS[banca_alvo])
+                        existentes = ws.get_all_values()
+                        set_exist = {f"{str(r[0]).strip()}_{str(r[1]).strip()}" for r in existentes if len(r) >= 2}
+                        p_ins = [l for l in res if f"{str(l[0]).strip()}_{str(l[1]).strip()}" not in set_exist]
+                        if p_ins:
+                            ws.append_rows(p_ins, value_input_option="RAW")
+                            total_salvos += len(p_ins)
+                            bancas_atualizadas.append(f"{banca_alvo} (+{len(p_ins)})")
+                        else: bancas_atualizadas.append(f"{banca_alvo} (OK)")
+                    else: st.warning(f"⚠️ {banca_alvo}: Sem dados hoje.")
+                
+                tela_carregamento.empty()
+                st.info(f"🔄 Status Global: {', '.join(bancas_atualizadas)}")
+                if total_salvos > 0:
+                    st.cache_data.clear() 
+                    st.success(f"🎯 MISSÃO CONCLUÍDA: {total_salvos} novos registros inseridos.")
 
 st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=13x | Dezenas e Unidades=9x | 15 Grupos=7x | 12 Grupos=10x(rec13x) | Inv 8D/9D=10x</div>""", unsafe_allow_html=True)
