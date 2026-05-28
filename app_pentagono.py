@@ -11,9 +11,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.32 - Raio-X 50%", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.33 - Radar de Anomalias", page_icon="🎯", layout="wide")
 
-# Utilizando o design padrão e limpo do Streamlit (Nativo / Dark Mode)
 st.markdown("""
 <style>
 .home-box { border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; border: 1px solid #444; background-color: #111; }
@@ -102,22 +101,19 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE CÁLCULO E HEDGE (ULTRA VELOCIDADE - 50%)
+# 👻 MOTORES DE CÁLCULO E HEDGE
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
     cms = []
-    # COBERTURA 50% MILHAR E CENTENA
     cms.append({'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999})
     cms.append({'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999})
     
     for cm in cms:
-        # 13 GRUPOS SEQUENCIAIS (TETO 9x)
         for g in range(1, 14):
             alvos = set(range(g, g + 13))
             esquadroes.append({'alvos': alvos, 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G13: {str(g).zfill(2)}-{str(g+12).zfill(2)}", 'lim': 9, **cm})
         
-        # FILTROS DE MASSA (TETO 9x)
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS (01-50)", 'lim': 9, **cm})
@@ -129,7 +125,6 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS BAIXOS (1-5)", 'lim': 9, **cm})
         esquadroes.append({'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: FINAIS ALTOS (6-0)", 'lim': 9, **cm})
         
-        # INVERSÕES (TETO 10x)
         bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8:
             alvos_inv = {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}
@@ -173,7 +168,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         g = 25 if d == 0 else math.ceil(d/4)
         
         hit_p = False
-        # Adicionado o suporte nativo para 'milhar' exigido pelo Scanner de Raio-X
         if modo == 'grupo' and g in alvos: hit_p = True
         elif modo == 'dezena' and d in alvos: hit_p = True
         elif modo == 'unidade' and u in alvos: hit_p = True
@@ -363,9 +357,6 @@ def processar_pendulo(df, coluna):
         
     return "Estável", [], all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
 
-# =============================================================================
-# --- MOTOR DE EXTRAÇÃO BLINDADO (DEDUPLICAÇÃO GENÉTICA) ---
-# =============================================================================
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -374,7 +365,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set() # Trava anti-clone dentro do mesmo dia
+        vistos_assinaturas = set() 
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -406,7 +397,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.32")
+    st.header("Pentágono V65.33")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -416,7 +407,7 @@ if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
     
     if st.button("INICIAR VARREDURA GLOBAL", type="primary"):
-        with st.spinner("Processando histórico completo em Hiper Velocidade..."):
+        with st.spinner("Processando histórico e escaneando anomalias..."):
             alvos_teto = []
             alvos_alerta = []
             alertas_pendulo = []
@@ -462,6 +453,19 @@ if menu == "🏠 Visão Geral (Home)":
                         elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
                         if estado_alvo:
+                            # -------- RADAR DE RISCO DE ANOMALIA --------
+                            if estado_alvo == "TETO":
+                                teto_alvo = 9 if tipo_ataque in ["MILHAR", "CENTENA", "TOTAL"] else ap_lim
+                                recorde_alvo = mp
+                                if tipo_ataque == "MILHAR": recorde_alvo = mm
+                                elif tipo_ataque == "CENTENA": recorde_alvo = mc
+                                elif tipo_ataque == "TOTAL": recorde_alvo = max(mp, mc, mm)
+                                
+                                if recorde_alvo > teto_alvo + 2:
+                                    espera_sugerida = teto_alvo + 2
+                                    alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
+                            # --------------------------------------------
+                            
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
                                 hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
@@ -570,16 +574,10 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'lim': 9}),
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
-                
-                # Injetando as 10 Inversões de 8D (Dezenas)
                 bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
-                for b in bases_inv_8: 
-                    filtros_lista.append((f"INV 8D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}, 'modo': 'dezena', 'lim': 10}))
-                
-                # Injetando as 10 Inversões de 9D (Centenas)
+                for b in bases_inv_8: filtros_lista.append((f"INV 8D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}, 'modo': 'dezena', 'lim': 10}))
                 bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
-                for b in bases_inv_9: 
-                    filtros_lista.append((f"INV 9D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}, 'modo': 'centena', 'lim': 10}))
+                for b in bases_inv_9: filtros_lista.append((f"INV 9D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}, 'modo': 'centena', 'lim': 10}))
                 
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
