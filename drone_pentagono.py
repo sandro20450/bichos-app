@@ -41,37 +41,49 @@ def conectar_sheets():
         enviar_telegram(f"❌ <b>ERRO NO DRONE:</b> Falha ao conectar no Google Sheets. Erro: {e}")
         return None
 
-def extrair_dia(banca, data_alvo):
-    url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        tabelas = soup.find_all('table')
-        resultados = []
-        vistos_assinaturas = set()
-        for tab in tabelas:
-            th_tag = tab.find('th')
-            txt_th = th_tag.get_text().upper() if th_tag else ""
-            prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
-            txt_prev = prev.get_text().upper() if prev else ""
-            texto_alvo = txt_th + " " + txt_prev
-            if "FEDERAL" in texto_alvo.upper(): continue
-            match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
-            nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
-            milhares = []
-            for row in tab.find_all('tr'):
-                cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
-                    nums = re.findall(r'\d+', "".join(cols[1:]))
-                    milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
-            if len(milhares) >= 5:
-                assinatura = "".join(milhares)
-                if assinatura not in vistos_assinaturas and milhares[0] != "----":
-                    vistos_assinaturas.add(assinatura)
-                    resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
-        return resultados
-    except: return []
+# =============================================================================
+# 🐺 NOVO MOTOR: CAÇA 9D POR ANOMALIA (EXCLUSÃO DE DÍGITO FRIO)
+# =============================================================================
+def processar_caca_9d_anomalia(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return None
+    
+    c1 = validos[-1][-3:] 
+    c2 = validos[-2][-3:] 
+    
+    if len(set(c1)) < 3 and len(set(c2)) < 3:
+        seen_digits = set()
+        cold_digit = None
+        
+        for val in reversed(validos):
+            centena = val[-3:]
+            for char in centena:
+                d = int(char)
+                if d not in seen_digits:
+                    seen_digits.add(d)
+                    if len(seen_digits) == 9:
+                        cold_digit = (set(range(10)) - seen_digits).pop()
+                        break
+            if cold_digit is not None:
+                break
+                
+        if cold_digit is not None:
+            seq = [str((cold_digit - i) % 10) for i in range(9)]
+            seq_str = " - ".join(seq)
+            excluido = (cold_digit + 1) % 10 
+            return cold_digit, seq_str, excluido
+            
+    return None
 
 def get_grupo_int(m):
     try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
@@ -89,10 +101,10 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
         
-        bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
+        bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8]]
         for b in bases_inv_8: esquadroes.append({'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1!=d2}, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
             
-        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9]]
         for b in bases_inv_9: esquadroes.append({'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1!=d2 and d2!=d3 and d1!=d3}, 'modo': 'centena', 'tipo': 'seq', 'nome': f"C: INV 9D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
     return esquadroes
 
@@ -112,7 +124,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         
         g = 25 if d == 0 else math.ceil(d/4)
-        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
+        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
         
         if hit_p: cur_p = 0
         else: cur_p += 1; max_p = max(max_p, cur_p)
@@ -233,6 +245,38 @@ def get_cobertura_massa(df, col, cfg_nome):
             
     return best_g, max_delay, desc_oposto
 
+def extrair_dia(banca, data_alvo):
+    url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        tabelas = soup.find_all('table')
+        resultados = []
+        vistos_assinaturas = set() 
+        for tab in tabelas:
+            th_tag = tab.find('th')
+            txt_th = th_tag.get_text().upper() if th_tag else ""
+            prev = tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b'])
+            txt_prev = prev.get_text().upper() if prev else ""
+            texto_alvo = txt_th + " " + txt_prev
+            if "FEDERAL" in texto_alvo.upper(): continue
+            match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
+            nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
+            milhares = []
+            for row in tab.find_all('tr'):
+                cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
+                    nums = re.findall(r'\d+', "".join(cols[1:]))
+                    milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
+            if len(milhares) >= 5:
+                assinatura = "".join(milhares)
+                if assinatura not in vistos_assinaturas and milhares[0] != "----":
+                    vistos_assinaturas.add(assinatura)
+                    resultados.append([data_alvo.strftime('%Y-%m-%d'), nome, milhares[0], milhares[1], milhares[2], milhares[3], milhares[4]])
+        return resultados
+    except: return []
+
 def rodar_drone():
     sh = conectar_sheets()
     if not sh: return
@@ -266,6 +310,8 @@ def rodar_drone():
 
         for i, col in enumerate(COLUNAS_DF):
             if banca_nome == "Tradicional" and col != "P1": continue
+            
+            # 1. PÊNDULO
             res_pendulo = processar_pendulo(df, col)
             if res_pendulo:
                 curr_streak, curr_dir, jogos = res_pendulo
@@ -275,17 +321,26 @@ def rodar_drone():
                     msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\nDireção: {dir_texto}\nJogar: {', '.join(jogos)}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_pendulo)
 
+            # 2. CAÇA 9D POR ANOMALIA (GATILHO IMEDIATO)
+            res_caca = processar_caca_9d_anomalia(df, col)
+            if res_caca:
+                cold_digit, seq_str, excluido = res_caca
+                sig_caca = f"CACA9D_{banca_nome}_{col}"
+                if sig_caca not in alvos_vistos:
+                    msg_telegram += f"🐺 <b>CAÇA 9D POR ANOMALIA (IMEDIATO)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ Gatilho: 2x Centenas Duplicadas Consecutivas\n❄️ Dígito Frio: <b>{cold_digit}</b>\n🎯 <b>Ataque 9D:</b> {seq_str}\n❌ Excluir: {excluido}\n\n"
+                    achou_algo = True; alvos_vistos.add(sig_caca)
+
         metrics_cache = {}
         for cfg in todos_esq:
             for col in COLUNAS_DF:
                 if banca_nome == "Tradicional" and col != "P1": continue
                 ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
-                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm)
+                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am)
 
         for cfg in todos_esq:
             for i, col in enumerate(COLUNAS_DF):
                 if (cfg['nome'], cfg['c_min'], col) not in metrics_cache: continue
-                ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                ap, ac, am = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
                 ap_lim = cfg['lim']
                 
                 is_anomaly = False; is_alerta = False; tipo_ataque = ""
@@ -315,10 +370,12 @@ def rodar_drone():
                     # -------- RADAR DE RISCO DE ANOMALIA (DRONE) --------
                     if is_anomaly:
                         teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
-                        recorde_alvo = mp
-                        if "MILHAR" in tipo_ataque: recorde_alvo = mm
-                        elif "CENTENA" in tipo_ataque: recorde_alvo = mc
-                        elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp, mc, mm)
+                        # AQUI PUXAMOS A MEMÓRIA DE RECORDE
+                        _, _, _, mp_r, mc_r, mm_r = calcular_metricas_fantasma(df, col, cfg) 
+                        recorde_alvo = mp_r
+                        if "MILHAR" in tipo_ataque: recorde_alvo = mm_r
+                        elif "CENTENA" in tipo_ataque: recorde_alvo = mc_r
+                        elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp_r, mc_r, mm_r)
                         
                         if recorde_alvo > teto_alvo + 2:
                             espera_sugerida = teto_alvo + 2
