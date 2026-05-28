@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.33 - Radar de Anomalias", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.34 - Caça 9D", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -101,7 +101,58 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 👻 MOTORES DE CÁLCULO E HEDGE
+# 🐺 NOVO MOTOR: CAÇA 9D POR ANOMALIA (EXCLUSÃO DE DÍGITO FRIO)
+# =============================================================================
+def processar_caca_9d_anomalia(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    
+    # Filtrar apenas dados válidos
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return None
+    
+    # Analisar os dois últimos sorteios (O Gatilho)
+    c1 = validos[-1][-3:] # Centena do sorteio mais recente
+    c2 = validos[-2][-3:] # Centena do penúltimo sorteio
+    
+    # Se a centena tiver menos que 3 dígitos únicos, significa que houve duplicação ou triplicação
+    if len(set(c1)) < 3 and len(set(c2)) < 3:
+        seen_digits = set()
+        cold_digit = None
+        
+        # Rastreio reverso: lendo de baixo para cima
+        for val in reversed(validos):
+            centena = val[-3:]
+            for char in centena:
+                d = int(char)
+                if d not in seen_digits:
+                    seen_digits.add(d)
+                    if len(seen_digits) == 9:
+                        # Achamos os 9 primeiros dígitos a aparecer. O que sobrou é o dígito frio!
+                        cold_digit = (set(range(10)) - seen_digits).pop()
+                        break
+            if cold_digit is not None:
+                break
+                
+        if cold_digit is not None:
+            # Formação de Ataque (Decrescente)
+            seq = [str((cold_digit - i) % 10) for i in range(9)]
+            seq_str = " - ".join(seq)
+            excluido = (cold_digit + 1) % 10 # O excluído é sempre o vizinho posterior
+            
+            return cold_digit, seq_str, excluido
+            
+    return None
+
+# =============================================================================
+# 👻 MOTORES DE CÁLCULO E HEDGE 
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -365,7 +416,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set() 
+        vistos_assinaturas = set()
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -381,7 +432,7 @@ def extrair_dia(banca, data_alvo):
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -397,7 +448,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.33")
+    st.header("Pentágono V65.34")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -411,6 +462,7 @@ if menu == "🏠 Visão Geral (Home)":
             alvos_teto = []
             alvos_alerta = []
             alertas_pendulo = []
+            alertas_caca_9d = [] # NOVO: Lista para a Caça 9D
             todos_esq = gerar_matrizes_taticas()
             
             for banca_nome in BANCAS_CONFIG.keys():
@@ -420,12 +472,20 @@ if menu == "🏠 Visão Geral (Home)":
                 
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
+                    
+                    # 1. PÊNDULO
                     resultado_pend = processar_pendulo(df, col)
                     if resultado_pend:
                         status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado_pend
                         if status != "Estável":
                             alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
-                
+                    
+                    # 2. CAÇA 9D POR ANOMALIA (GATILHO IMEDIATO)
+                    resultado_9d = processar_caca_9d_anomalia(df, col)
+                    if resultado_9d:
+                        cold_digit, seq_str, excluido = resultado_9d
+                        alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido})
+
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
@@ -453,7 +513,6 @@ if menu == "🏠 Visão Geral (Home)":
                         elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
                         if estado_alvo:
-                            # -------- RADAR DE RISCO DE ANOMALIA --------
                             if estado_alvo == "TETO":
                                 teto_alvo = 9 if tipo_ataque in ["MILHAR", "CENTENA", "TOTAL"] else ap_lim
                                 recorde_alvo = mp
@@ -464,7 +523,6 @@ if menu == "🏠 Visão Geral (Home)":
                                 if recorde_alvo > teto_alvo + 2:
                                     espera_sugerida = teto_alvo + 2
                                     alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
-                            # --------------------------------------------
                             
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
@@ -487,6 +545,26 @@ if menu == "🏠 Visão Geral (Home)":
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         
+        # --- RENDERIZAÇÃO DA CAÇA 9D POR ANOMALIA ---
+        if alertas_caca_9d:
+            st.error(f"🐺 CAÇA 9D ANOMALIA (GATILHO IMEDIATO): {len(alertas_caca_9d)} Encontrados!")
+            cols = st.columns(3)
+            for idx, op in enumerate(alertas_caca_9d):
+                with cols[idx % 3]:
+                    st.markdown(f"""
+                    <div class="home-box" style="border-color:#ff4b4b; box-shadow: 0 0 15px rgba(255,0,0,0.4);">
+                        <div class="home-banca">🏦 {op['banca']}</div>
+                        <div class="home-premio">🏆 {op['premio']}</div>
+                        <div class="sniper-titulo" style="color:#ff4b4b;">🐺 GATILHO DUPLO DETECTADO</div>
+                        <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Sequência de Ataque 9D:</b></div>
+                        <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
+                        <div style="font-size:12px; color:#ff4b4b; margin-top:8px; font-weight:bold;">❌ Excluir Dígito: {op['excluido']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown("---") 
+
+        # --- RENDERIZAÇÃO DOS OUTROS ALVOS ---
         if alvos_teto:
             st.success(f"🎯 ALVOS CRÍTICOS (TETO ATINGIDO): {len(alvos_teto)} Encontrados!")
             cols = st.columns(3)
@@ -520,7 +598,7 @@ if menu == "🏠 Visão Geral (Home)":
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#ff6600;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
 
-        if not alvos_teto and not alvos_alerta and not alertas_pendulo: 
+        if not alvos_teto and not alvos_alerta and not alertas_pendulo and not alertas_caca_9d: 
             st.success("🟢 MODO STEALTH: Não temos alvos no teto ou próximos a ele no momento. Mercado estável.")
 
 elif menu == "🎯 Scanner de Raio-X":
