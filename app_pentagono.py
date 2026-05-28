@@ -551,7 +551,6 @@ elif menu == "🎯 Scanner de Raio-X":
             if df.empty: st.error("Sem dados.")
             else:
                 filtros_lista = [
-                    # AQUI ESTÃO AS NOVAS FAIXAS DE 50% NO SCANNER
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
                     ("Centenas Baixas (000-499)", {'alvos': set(range(0, 500)), 'modo': 'centena', 'lim': 9}),
@@ -562,13 +561,25 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Dezenas Altas (51-00)", {'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Ímpares", {'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Pares", {'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Miolo (26-75)", {'alvos': set(range(26, 76)), 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Bordas", {'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
-                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'lim': 9})
+                    ("Dezenas Finais Baixos (1-5)", {'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Unidades Baixas (1-5)", {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Altas (6-0)", {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
-                bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8]]
-                for b in bases_inv_8: filtros_lista.append((f"INV 8D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}, 'modo': 'dezena', 'lim': 10}))
-                bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9]]
-                for b in bases_inv_9: filtros_lista.append((f"INV 9D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}, 'modo': 'centena', 'lim': 10}))
+                
+                # Injetando as 10 Inversões de 8D (Dezenas)
+                bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
+                for b in bases_inv_8: 
+                    filtros_lista.append((f"INV 8D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1 != d2}, 'modo': 'dezena', 'lim': 10}))
+                
+                # Injetando as 10 Inversões de 9D (Centenas)
+                bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
+                for b in bases_inv_9: 
+                    filtros_lista.append((f"INV 9D ({b[0]} ao {b[-1]})", {'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1 != d2 and d2 != d3 and d1 != d3}, 'modo': 'centena', 'lim': 10}))
                 
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
