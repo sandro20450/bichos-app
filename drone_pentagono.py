@@ -49,7 +49,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set() # Trava anti-clone dentro do mesmo dia
+        vistos_assinaturas = set()
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -79,7 +79,6 @@ def get_grupo_int(m):
 
 def gerar_matrizes_taticas():
     esquadroes = []; cms = []
-    # COBERTURA 50% MILHAR E CENTENA
     cms.append({'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999})
     cms.append({'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999})
     
@@ -90,10 +89,10 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
         
-        bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8]]
+        bases_inv_8 = [[0,1,2,3,4,5,6,7], [1,2,3,4,5,6,7,8], [2,3,4,5,6,7,8,9], [3,4,5,6,7,8,9,0], [4,5,6,7,8,9,0,1], [5,6,7,8,9,0,1,2], [6,7,8,9,0,1,2,3], [7,8,9,0,1,2,3,4], [8,9,0,1,2,3,4,5], [9,0,1,2,3,4,5,6]]
         for b in bases_inv_8: esquadroes.append({'alvos': {int(f"{d1}{d2}") for d1 in b for d2 in b if d1!=d2}, 'modo': 'dezena', 'tipo': 'dez', 'nome': f"D: INV 8D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
             
-        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9]]
+        bases_inv_9 = [[0,1,2,3,4,5,6,7,8], [1,2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9,0], [3,4,5,6,7,8,9,0,1], [4,5,6,7,8,9,0,1,2], [5,6,7,8,9,0,1,2,3], [6,7,8,9,0,1,2,3,4], [7,8,9,0,1,2,3,4,5], [8,9,0,1,2,3,4,5,6], [9,0,1,2,3,4,5,6,7]]
         for b in bases_inv_9: esquadroes.append({'alvos': {int(f"{d1}{d2}{d3}") for d1 in b for d2 in b for d3 in b if d1!=d2 and d2!=d3 and d1!=d3}, 'modo': 'centena', 'tipo': 'seq', 'nome': f"C: INV 9D ({b[0]} AO {b[-1]})", 'lim': 10, **cm})
     return esquadroes
 
@@ -113,7 +112,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         
         g = 25 if d == 0 else math.ceil(d/4)
-        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
+        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
         else: cur_p += 1; max_p = max(max_p, cur_p)
@@ -246,14 +245,12 @@ def rodar_drone():
         
         if res:
             existentes = ws.get_all_values()
-            # Deduplicação Rigorosa Genética no DRONE
             set_exist = {f"{str(r[0]).strip()}_{''.join(str(x).strip() for x in r[2:7])}" for r in existentes if len(r) >= 7}
             p_ins = [l for l in res if f"{str(l[0]).strip()}_{''.join(str(x).strip() for x in l[2:7])}" not in set_exist]
             if p_ins:
                 ws.append_rows(p_ins, value_input_option="RAW")
                 total_salvos += len(p_ins)
         
-        # O DRONE AGORA SEMPRE LÊ O HISTÓRICO PARA PROCURAR ALVOS
         dados_atualizados = ws.get_all_values()
         if len(dados_atualizados) > 1:
             df = pd.DataFrame(dados_atualizados[1:], columns=["Data", "Sorteio", "P1", "P2", "P3", "P4", "P5"])
@@ -283,12 +280,12 @@ def rodar_drone():
             for col in COLUNAS_DF:
                 if banca_nome == "Tradicional" and col != "P1": continue
                 ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
-                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am)
+                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm)
 
         for cfg in todos_esq:
             for i, col in enumerate(COLUNAS_DF):
                 if (cfg['nome'], cfg['c_min'], col) not in metrics_cache: continue
-                ap, ac, am = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
                 ap_lim = cfg['lim']
                 
                 is_anomaly = False; is_alerta = False; tipo_ataque = ""
@@ -305,7 +302,6 @@ def rodar_drone():
                 if is_anomaly or is_alerta:
                     c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
                     
-                    # CORREÇÃO CRÍTICA DE DEDUPLICAÇÃO NO DRONE (Removemos o c_min para alvos gerais)
                     if "MILHAR" in tipo_ataque: sig = f"{banca_nome}_{col}_M_{m_min}"
                     elif "CENTENA" in tipo_ataque: sig = f"{banca_nome}_{col}_C_{c_min}"
                     else: sig = f"{banca_nome}_{col}_{cfg['nome']}"
@@ -315,6 +311,19 @@ def rodar_drone():
 
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
                     msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n"
+
+                    # -------- RADAR DE RISCO DE ANOMALIA (DRONE) --------
+                    if is_anomaly:
+                        teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
+                        recorde_alvo = mp
+                        if "MILHAR" in tipo_ataque: recorde_alvo = mm
+                        elif "CENTENA" in tipo_ataque: recorde_alvo = mc
+                        elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp, mc, mm)
+                        
+                        if recorde_alvo > teto_alvo + 2:
+                            espera_sugerida = teto_alvo + 2
+                            msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
+                    # ----------------------------------------------------
 
                     if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                         hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache)
