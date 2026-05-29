@@ -42,7 +42,7 @@ def conectar_sheets():
         return None
 
 # =============================================================================
-# 🐺 NOVO MOTOR: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
+# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
 # =============================================================================
 def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -86,6 +86,42 @@ def processar_caca_9d_continua(df, coluna):
                 
         return cold_digit, seq_str, excluido, atraso_isca
         
+    return None
+
+# =============================================================================
+# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
+# =============================================================================
+def processar_anomalia_duplas(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return None
+    
+    c1 = validos[-1][-3:] 
+    c2 = validos[-2][-3:] 
+    
+    if len(set(c1)) < 3 and len(set(c2)) < 3:
+        seen_digits = set()
+        cold_digit = None
+        for val in reversed(validos):
+            for char in val[-3:]:
+                seen_digits.add(int(char))
+                if len(seen_digits) == 9:
+                    cold_digit = (set(range(10)) - seen_digits).pop()
+                    break
+            if cold_digit is not None: break
+                
+        if cold_digit is not None:
+            excluido = (cold_digit + 1) % 10
+            seq_str = " - ".join([str((cold_digit - i) % 10) for i in range(9)])
+            return cold_digit, seq_str, excluido
     return None
 
 def get_grupo_int(m):
@@ -333,6 +369,16 @@ def rodar_drone():
                     if sig_caca not in alvos_vistos:
                         msg_telegram += f"🐺 <b>CAÇA 9D (TEIMOSIA DA ISCA)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n🚨 <b>Atraso da Isca: {atraso_isca}x</b>\n❄️ Dígito Frio: {cold_digit}\n🎯 <b>Ataque 9D:</b> {seq_str}\n❌ Excluir: {excluido}\n\n"
                         achou_algo = True; alvos_vistos.add(sig_caca)
+
+            # 3. ANOMALIA DE DUPLAS/TRIPLAS SEGUIDAS
+            res_duplas = processar_anomalia_duplas(df, col)
+            if res_duplas:
+                cold_d, seq_s, excl = res_duplas
+                sig_dupla = f"DUPLA_{banca_nome}_{col}"
+                if sig_dupla not in alvos_vistos:
+                    msg_telegram += f"🚨 <b>GATILHO DE ANOMALIA (DUPLAS SEGUIDAS)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ 2x Sorteios com Centenas Duplas/Triplas!\n❄️ Dígito Frio: <b>{cold_d}</b>\n🎯 <b>Ataque 9D:</b> {seq_s}\n❌ Excluir Isca: {excl}\n\n"
+                    achou_algo = True; alvos_vistos.add(sig_dupla)
+
 
         metrics_cache = {}
         for cfg in todos_esq:
