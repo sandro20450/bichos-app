@@ -42,9 +42,9 @@ def conectar_sheets():
         return None
 
 # =============================================================================
-# 🐺 NOVO MOTOR: CAÇA 9D POR ANOMALIA (EXCLUSÃO DE DÍGITO FRIO)
+# 🐺 NOVO MOTOR: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
 # =============================================================================
-def processar_caca_9d_anomalia(df, coluna):
+def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = []
     
@@ -56,33 +56,36 @@ def processar_caca_9d_anomalia(df, coluna):
                 validos.append(m)
             except: pass
             
-    if len(validos) < 2: return None
+    if len(validos) < 5: return None
     
-    c1 = validos[-1][-3:] 
-    c2 = validos[-2][-3:] 
+    seen_digits = set()
+    cold_digit = None
     
-    if len(set(c1)) < 3 and len(set(c2)) < 3:
-        seen_digits = set()
-        cold_digit = None
+    for val in reversed(validos):
+        centena = val[-3:]
+        for char in centena:
+            seen_digits.add(int(char))
+            if len(seen_digits) == 9:
+                cold_digit = (set(range(10)) - seen_digits).pop()
+                break
+        if cold_digit is not None:
+            break
+            
+    if cold_digit is not None:
+        excluido = (cold_digit + 1) % 10
+        seq = [str((cold_digit - i) % 10) for i in range(9)]
+        seq_str = " - ".join(seq)
         
+        atraso_isca = 0
         for val in reversed(validos):
             centena = val[-3:]
-            for char in centena:
-                d = int(char)
-                if d not in seen_digits:
-                    seen_digits.add(d)
-                    if len(seen_digits) == 9:
-                        cold_digit = (set(range(10)) - seen_digits).pop()
-                        break
-            if cold_digit is not None:
-                break
+            if str(excluido) in centena:
+                atraso_isca += 1
+            else:
+                break 
                 
-        if cold_digit is not None:
-            seq = [str((cold_digit - i) % 10) for i in range(9)]
-            seq_str = " - ".join(seq)
-            excluido = (cold_digit + 1) % 10 
-            return cold_digit, seq_str, excluido
-            
+        return cold_digit, seq_str, excluido, atraso_isca
+        
     return None
 
 def get_grupo_int(m):
@@ -321,14 +324,15 @@ def rodar_drone():
                     msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\nDireção: {dir_texto}\nJogar: {', '.join(jogos)}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_pendulo)
 
-            # 2. CAÇA 9D POR ANOMALIA (GATILHO IMEDIATO)
-            res_caca = processar_caca_9d_anomalia(df, col)
+            # 2. CAÇA 9D (TEIMOSIA DA ISCA) - ALERTA SE >= 2
+            res_caca = processar_caca_9d_continua(df, col)
             if res_caca:
-                cold_digit, seq_str, excluido = res_caca
-                sig_caca = f"CACA9D_{banca_nome}_{col}"
-                if sig_caca not in alvos_vistos:
-                    msg_telegram += f"🐺 <b>CAÇA 9D POR ANOMALIA (IMEDIATO)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ Gatilho: 2x Centenas Duplicadas Consecutivas\n❄️ Dígito Frio: <b>{cold_digit}</b>\n🎯 <b>Ataque 9D:</b> {seq_str}\n❌ Excluir: {excluido}\n\n"
-                    achou_algo = True; alvos_vistos.add(sig_caca)
+                cold_digit, seq_str, excluido, atraso_isca = res_caca
+                if atraso_isca >= 2:
+                    sig_caca = f"CACA9D_{banca_nome}_{col}"
+                    if sig_caca not in alvos_vistos:
+                        msg_telegram += f"🐺 <b>CAÇA 9D (TEIMOSIA DA ISCA)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n🚨 <b>Atraso da Isca: {atraso_isca}x</b>\n❄️ Dígito Frio: {cold_digit}\n🎯 <b>Ataque 9D:</b> {seq_str}\n❌ Excluir: {excluido}\n\n"
+                        achou_algo = True; alvos_vistos.add(sig_caca)
 
         metrics_cache = {}
         for cfg in todos_esq:
@@ -370,7 +374,6 @@ def rodar_drone():
                     # -------- RADAR DE RISCO DE ANOMALIA (DRONE) --------
                     if is_anomaly:
                         teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
-                        # AQUI PUXAMOS A MEMÓRIA DE RECORDE
                         _, _, _, mp_r, mc_r, mm_r = calcular_metricas_fantasma(df, col, cfg) 
                         recorde_alvo = mp_r
                         if "MILHAR" in tipo_ataque: recorde_alvo = mm_r
