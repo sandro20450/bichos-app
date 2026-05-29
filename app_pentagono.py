@@ -483,7 +483,7 @@ if menu == "🏠 Visão Geral (Home)":
                     if resultado_9d:
                         cold_digit, seq_str, excluido, atraso_isca = resultado_9d
                         # Só manda para a Visão Geral se a teimosia (atraso) for perigosa (>= 2)
-                        if atraso_isca >= 2:
+                        if atraso_isca >= 3:
                             alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido, "atraso": atraso_isca})
 
                 metrics_cache = {}
@@ -709,8 +709,8 @@ elif menu == "🐺 Caça 9D (Isca)":
                 with cols[i]:
                     if resultado:
                         cold_digit, seq_str, excluido, atraso_isca = resultado
-                        cor_box = "#ff4b4b" if atraso_isca >= 2 else "#ffcc00" if atraso_isca == 1 else "#00ff00"
-                        status_msg = "🔥 PERIGO: ISCA TEIMOSA" if atraso_isca >= 2 else "Aguardando teimosia..."
+                        cor_box = "#ff4b4b" if atraso_isca >= 3 else "#ffcc00" if atraso_isca == 1 else "#00ff00"
+                        status_msg = "🔥 PERIGO: ISCA TEIMOSA" if atraso_isca >= 3 else "Aguardando teimosia..."
                         
                         st.markdown(f"""
                         <div class="home-box" style="border-color:{cor_box};">
@@ -783,4 +783,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=9x | Dezenas/Unid=9x | 13 Grupos=9x | Inv=10x | Pêndulo=5x | Caça 9D=2x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=9x | Dezenas/Unid=9x | 13 Grupos=9x | Inv=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
