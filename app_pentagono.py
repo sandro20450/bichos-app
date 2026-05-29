@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.34 - Caça 9D", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.35 - Caça 9D Contínua", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -101,13 +101,12 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 🐺 NOVO MOTOR: CAÇA 9D POR ANOMALIA (EXCLUSÃO DE DÍGITO FRIO)
+# 🐺 NOVO MOTOR: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
 # =============================================================================
-def processar_caca_9d_anomalia(df, coluna):
+def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = []
     
-    # Filtrar apenas dados válidos
     for val in valores:
         m = val.strip().zfill(4)
         if m != "----" and m != "0nan" and m != "nan" and m.strip():
@@ -116,39 +115,38 @@ def processar_caca_9d_anomalia(df, coluna):
                 validos.append(m)
             except: pass
             
-    if len(validos) < 2: return None
+    if len(validos) < 5: return None
     
-    # Analisar os dois últimos sorteios (O Gatilho)
-    c1 = validos[-1][-3:] # Centena do sorteio mais recente
-    c2 = validos[-2][-3:] # Centena do penúltimo sorteio
+    seen_digits = set()
+    cold_digit = None
     
-    # Se a centena tiver menos que 3 dígitos únicos, significa que houve duplicação ou triplicação
-    if len(set(c1)) < 3 and len(set(c2)) < 3:
-        seen_digits = set()
-        cold_digit = None
+    # Busca do Dígito Frio de forma contínua
+    for val in reversed(validos):
+        centena = val[-3:]
+        for char in centena:
+            seen_digits.add(int(char))
+            if len(seen_digits) == 9:
+                cold_digit = (set(range(10)) - seen_digits).pop()
+                break
+        if cold_digit is not None:
+            break
+            
+    if cold_digit is not None:
+        excluido = (cold_digit + 1) % 10
+        seq = [str((cold_digit - i) % 10) for i in range(9)]
+        seq_str = " - ".join(seq)
         
-        # Rastreio reverso: lendo de baixo para cima
+        # O Rastreador de Atraso (A Teimosia da Isca)
+        atraso_isca = 0
         for val in reversed(validos):
             centena = val[-3:]
-            for char in centena:
-                d = int(char)
-                if d not in seen_digits:
-                    seen_digits.add(d)
-                    if len(seen_digits) == 9:
-                        # Achamos os 9 primeiros dígitos a aparecer. O que sobrou é o dígito frio!
-                        cold_digit = (set(range(10)) - seen_digits).pop()
-                        break
-            if cold_digit is not None:
-                break
+            if str(excluido) in centena:
+                atraso_isca += 1
+            else:
+                break # A isca falhou, a sequência foi interrompida
                 
-        if cold_digit is not None:
-            # Formação de Ataque (Decrescente)
-            seq = [str((cold_digit - i) % 10) for i in range(9)]
-            seq_str = " - ".join(seq)
-            excluido = (cold_digit + 1) % 10 # O excluído é sempre o vizinho posterior
-            
-            return cold_digit, seq_str, excluido
-            
+        return cold_digit, seq_str, excluido, atraso_isca
+        
     return None
 
 # =============================================================================
@@ -416,7 +414,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set()
+        vistos_assinaturas = set() 
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -448,11 +446,11 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.34")
+    st.header("Pentágono V65.35")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "📡 Extração Central"])
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🐺 Caça 9D (Isca)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
@@ -462,7 +460,7 @@ if menu == "🏠 Visão Geral (Home)":
             alvos_teto = []
             alvos_alerta = []
             alertas_pendulo = []
-            alertas_caca_9d = [] # NOVO: Lista para a Caça 9D
+            alertas_caca_9d = [] # NOVO: Lista para a Caça 9D (Teimosia)
             todos_esq = gerar_matrizes_taticas()
             
             for banca_nome in BANCAS_CONFIG.keys():
@@ -480,11 +478,13 @@ if menu == "🏠 Visão Geral (Home)":
                         if status != "Estável":
                             alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
                     
-                    # 2. CAÇA 9D POR ANOMALIA (GATILHO IMEDIATO)
-                    resultado_9d = processar_caca_9d_anomalia(df, col)
+                    # 2. CAÇA 9D (TEIMOSIA DA ISCA)
+                    resultado_9d = processar_caca_9d_continua(df, col)
                     if resultado_9d:
-                        cold_digit, seq_str, excluido = resultado_9d
-                        alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido})
+                        cold_digit, seq_str, excluido, atraso_isca = resultado_9d
+                        # Só manda para a Visão Geral se a teimosia (atraso) for perigosa (>= 2)
+                        if atraso_isca >= 2:
+                            alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido, "atraso": atraso_isca})
 
                 metrics_cache = {}
                 for cfg in todos_esq:
@@ -545,9 +545,9 @@ if menu == "🏠 Visão Geral (Home)":
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         
-        # --- RENDERIZAÇÃO DA CAÇA 9D POR ANOMALIA ---
+        # --- RENDERIZAÇÃO DA CAÇA 9D POR ANOMALIA (TEIMOSIA) ---
         if alertas_caca_9d:
-            st.error(f"🐺 CAÇA 9D ANOMALIA (GATILHO IMEDIATO): {len(alertas_caca_9d)} Encontrados!")
+            st.error(f"🐺 CAÇA 9D (TEIMOSIA DA ISCA): {len(alertas_caca_9d)} Encontrados!")
             cols = st.columns(3)
             for idx, op in enumerate(alertas_caca_9d):
                 with cols[idx % 3]:
@@ -555,11 +555,11 @@ if menu == "🏠 Visão Geral (Home)":
                     <div class="home-box" style="border-color:#ff4b4b; box-shadow: 0 0 15px rgba(255,0,0,0.4);">
                         <div class="home-banca">🏦 {op['banca']}</div>
                         <div class="home-premio">🏆 {op['premio']}</div>
-                        <div class="sniper-titulo" style="color:#ff4b4b;">🐺 GATILHO DUPLO DETECTADO</div>
+                        <div class="sniper-titulo" style="color:#ff4b4b;">🐺 ALERTA: ISCA TEIMOSA ({op['atraso']}x)</div>
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
                         <div class="sniper-dado" style="margin-top:5px;"><b>Sequência de Ataque 9D:</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
-                        <div style="font-size:12px; color:#ff4b4b; margin-top:8px; font-weight:bold;">❌ Excluir Dígito: {op['excluido']}</div>
+                        <div style="font-size:12px; color:#ff4b4b; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
                     </div>
                     """, unsafe_allow_html=True)
             st.markdown("---") 
@@ -689,6 +689,43 @@ elif menu == "🧲 Armadilha do Pêndulo":
                         st.markdown(f"""<div class="home-box" style="border-color:{cor_box};"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-dado">{seq_visual}</div><div class="sniper-dado">Saturação: {curr_streak}x (Rec: {max_streak})</div><div style="color:{cor_box}; font-weight:bold; font-size:11px;">{status}</div><div style="font-size:10px; color:#fff; margin-top:5px;">Alvos: {', '.join(jogos)}</div></div>""", unsafe_allow_html=True)
                     else: st.write("Dados insuficientes.")
 
+# =============================================================================
+# --- NOVA PÁGINA: CAÇA 9D (ISCA) ---
+# =============================================================================
+elif menu == "🐺 Caça 9D (Isca)":
+    configurar_ui_pagina("Caça 9D (Teimosia da Isca)", "#ff4b4b")
+    st.markdown("Monitore a teimosia das iscas (dígitos excluídos) e descubra as melhores anomalias de entrada.")
+    
+    banca_9d = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
+    if st.button("RASTREAR ISCAS", type="primary"):
+        df = carregar_dados_em_memoria(banca_9d)
+        if df.empty: 
+            st.error("Sem dados.")
+        else:
+            exibir_banner_sorteio(df, banca_9d)
+            cols = st.columns(5)
+            for i, col in enumerate(COLUNAS_DF):
+                resultado = processar_caca_9d_continua(df, col)
+                with cols[i]:
+                    if resultado:
+                        cold_digit, seq_str, excluido, atraso_isca = resultado
+                        cor_box = "#ff4b4b" if atraso_isca >= 2 else "#ffcc00" if atraso_isca == 1 else "#00ff00"
+                        status_msg = "🔥 PERIGO: ISCA TEIMOSA" if atraso_isca >= 2 else "Aguardando teimosia..."
+                        
+                        st.markdown(f"""
+                        <div class="home-box" style="border-color:{cor_box};">
+                            <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
+                            <div style="font-size:12px; color:#ccc; margin-top:8px;">Dígito Frio Base: <b>{cold_digit}</b></div>
+                            <div style="font-size:13px; font-weight:bold; color:{cor_box}; margin:10px 0;">ATRASO DA ISCA: {atraso_isca}x</div>
+                            <div style="font-size:11px; color:#fff;">Ataque 9D:</div>
+                            <div style="color:#00ffff; font-size:14px; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">{seq_str}</div>
+                            <div style="color:{cor_box}; font-size:12px;">❌ Isca (Excluído): {excluido}</div>
+                            <div style="font-size:10px; color:#fff; margin-top:10px;">{status_msg}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else: 
+                        st.write("Dados insuficientes.")
+
 elif menu == "📡 Extração Central":
     configurar_ui_pagina("Extração Central", "#00ff00")
     dt = st.date_input("Data:", value=date.today())
@@ -746,4 +783,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=9x | Dezenas/Unid=9x | 13 Grupos=9x | Inv=10x | Pêndulo=5x | Caça 9D=2x</div>""", unsafe_allow_html=True)
