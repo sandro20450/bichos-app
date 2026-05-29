@@ -150,6 +150,43 @@ def processar_caca_9d_continua(df, coluna):
     return None
 
 # =============================================================================
+# 🚨 MOTOR EXTRA: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
+# =============================================================================
+def processar_anomalia_duplas(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return None
+    
+    c1 = validos[-1][-3:] # Centena mais recente
+    c2 = validos[-2][-3:] # Penúltima centena
+    
+    # Se as duas últimas centenas tiveram dígitos repetidos (menos de 3 únicos)
+    if len(set(c1)) < 3 and len(set(c2)) < 3:
+        seen_digits = set()
+        cold_digit = None
+        for val in reversed(validos):
+            for char in val[-3:]:
+                seen_digits.add(int(char))
+                if len(seen_digits) == 9:
+                    cold_digit = (set(range(10)) - seen_digits).pop()
+                    break
+            if cold_digit is not None: break
+                
+        if cold_digit is not None:
+            excluido = (cold_digit + 1) % 10
+            seq_str = " - ".join([str((cold_digit - i) % 10) for i in range(9)])
+            return cold_digit, seq_str, excluido
+    return None
+
+# =============================================================================
 # 👻 MOTORES DE CÁLCULO E HEDGE 
 # =============================================================================
 def gerar_matrizes_taticas():
@@ -461,6 +498,7 @@ if menu == "🏠 Visão Geral (Home)":
             alvos_alerta = []
             alertas_pendulo = []
             alertas_caca_9d = [] # NOVO: Lista para a Caça 9D (Teimosia)
+            alertas_duplas = [] # NOVO: Lista para Centenas Duplas Seguidas
             todos_esq = gerar_matrizes_taticas()
             
             for banca_nome in BANCAS_CONFIG.keys():
@@ -544,6 +582,31 @@ if menu == "🏠 Visão Geral (Home)":
             
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
+
+        # 3. GATILHO DE ANOMALIA (DUPLAS/TRIPLAS SEGUIDAS)
+                    res_duplas = processar_anomalia_duplas(df, col)
+                    if res_duplas:
+                        cold_d, seq_s, excl = res_duplas
+                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl})
+        
+        # --- RENDERIZAÇÃO DAS CENTENAS DUPLAS SEGUIDAS ---
+        if alertas_duplas:
+            st.error(f"🚨 ANOMALIA DETECTADA (CENTENAS DUPLAS): {len(alertas_duplas)} Encontrados!")
+            cols = st.columns(3)
+            for idx, op in enumerate(alertas_duplas):
+                with cols[idx % 3]:
+                    st.markdown(f"""
+                    <div class="home-box" style="border-color:#ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.4);">
+                        <div class="home-banca">🏦 {op['banca']}</div>
+                        <div class="home-premio">🏆 {op['premio']}</div>
+                        <div class="sniper-titulo" style="color:#ff00ff;">🚨 GATILHO: 2x DUPLAS SEGUIDAS</div>
+                        <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D Recomendado:</b></div>
+                        <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
+                        <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown("---")
         
         # --- RENDERIZAÇÃO DA CAÇA 9D POR ANOMALIA (TEIMOSIA) ---
         if alertas_caca_9d:
