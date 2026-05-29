@@ -124,6 +124,30 @@ def processar_anomalia_duplas(df, coluna):
             return cold_digit, seq_str, excluido
     return None
 
+# =============================================================================
+# 🟡🔵 MOTOR 3: ANOMALIAS DE DEZENAS (REPETIDAS E DUPLAS CONSECUTIVAS)
+# =============================================================================
+def processar_anomalias_dezenas(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return False, False, "", ""
+    
+    d1 = validos[-1][-2:] # Mais recente
+    d2 = validos[-2][-2:] # Penúltima
+    
+    alerta_repetida = (d1 == d2)
+    alerta_duplas = (d1[0] == d1[1] and d2[0] == d2[1])
+    
+    return alerta_repetida, alerta_duplas, d1, d2
+
 def get_grupo_int(m):
     try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
     except: return None
@@ -379,6 +403,19 @@ def rodar_drone():
                     msg_telegram += f"🚨 <b>GATILHO DE ANOMALIA (DUPLAS SEGUIDAS)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ 2x Sorteios com Centenas Duplas/Triplas!\n❄️ Dígito Frio: <b>{cold_d}</b>\n🎯 <b>Ataque 9D:</b> {seq_s}\n❌ Excluir Isca: {excl}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
+            # 4. ANOMALIAS DE DEZENAS
+            rep, dup, d1, d2 = processar_anomalias_dezenas(df, col)
+            if rep:
+                sig_rep = f"DEZ_REP_{banca_nome}_{col}"
+                if sig_rep not in alvos_vistos:
+                    msg_telegram += f"🚨 <b>ANOMALIA: DEZENAS REPETIDAS</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ A dezena <b>{d1}</b> saiu duas vezes seguidas!\n🎯 Sugestão: Calcular Inversão 8D.\n\n"
+                    achou_algo = True; alvos_vistos.add(sig_rep)
+            if dup:
+                sig_dup = f"DEZ_DUP_{banca_nome}_{col}"
+                if sig_dup not in alvos_vistos:
+                    msg_telegram += f"🚨 <b>ANOMALIA: DUPLAS EM SEQUÊNCIA</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ Saíram as duplas <b>{d2}</b> e <b>{d1}</b> em sequência!\n🎯 Calcule o próximo alvo.\n\n"
+                    achou_algo = True; alvos_vistos.add(sig_dup)
+
 
         metrics_cache = {}
         for cfg in todos_esq:
@@ -417,7 +454,6 @@ def rodar_drone():
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
                     msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n"
 
-                    # -------- RADAR DE RISCO DE ANOMALIA (DRONE) --------
                     if is_anomaly:
                         teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
                         _, _, _, mp_r, mc_r, mm_r = calcular_metricas_fantasma(df, col, cfg) 
@@ -429,7 +465,6 @@ def rodar_drone():
                         if recorde_alvo > teto_alvo + 2:
                             espera_sugerida = teto_alvo + 2
                             msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
-                    # ----------------------------------------------------
 
                     if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                         hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache)
