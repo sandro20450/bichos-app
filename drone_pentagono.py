@@ -324,11 +324,11 @@ def rodar_drone():
                     msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\nDireção: {dir_texto}\nJogar: {', '.join(jogos)}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_pendulo)
 
-            # 2. CAÇA 9D (TEIMOSIA DA ISCA) - ALERTA SE >= 2
+            # 2. CAÇA 9D (TEIMOSIA DA ISCA) - ALERTA SE >= 3
             res_caca = processar_caca_9d_continua(df, col)
             if res_caca:
                 cold_digit, seq_str, excluido, atraso_isca = res_caca
-                if atraso_isca >= 2:
+                if atraso_isca >= 3:
                     sig_caca = f"CACA9D_{banca_nome}_{col}"
                     if sig_caca not in alvos_vistos:
                         msg_telegram += f"🐺 <b>CAÇA 9D (TEIMOSIA DA ISCA)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n🚨 <b>Atraso da Isca: {atraso_isca}x</b>\n❄️ Dígito Frio: {cold_digit}\n🎯 <b>Ataque 9D:</b> {seq_str}\n❌ Excluir: {excluido}\n\n"
