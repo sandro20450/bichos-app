@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.36 - Dupla Tática 9D", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.37 - Radar de Dezenas", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -163,10 +163,9 @@ def processar_anomalia_duplas(df, coluna):
             
     if len(validos) < 2: return None
     
-    c1 = validos[-1][-3:] # Centena mais recente
-    c2 = validos[-2][-3:] # Penúltima centena
+    c1 = validos[-1][-3:]
+    c2 = validos[-2][-3:]
     
-    # Se as duas últimas centenas tiveram dígitos repetidos (menos de 3 únicos)
     if len(set(c1)) < 3 and len(set(c2)) < 3:
         seen_digits = set()
         cold_digit = None
@@ -183,6 +182,30 @@ def processar_anomalia_duplas(df, coluna):
             seq_str = " - ".join([str((cold_digit - i) % 10) for i in range(9)])
             return cold_digit, seq_str, excluido
     return None
+
+# =============================================================================
+# 🟡🔵 MOTOR 3: ANOMALIAS DE DEZENAS (REPETIDAS E DUPLAS EM SEQUÊNCIA)
+# =============================================================================
+def processar_anomalias_dezenas(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = []
+    for val in valores:
+        m = val.strip().zfill(4)
+        if m != "----" and m != "0nan" and m != "nan" and m.strip():
+            try:
+                _ = int(m)
+                validos.append(m)
+            except: pass
+            
+    if len(validos) < 2: return False, False, "", ""
+    
+    d1 = validos[-1][-2:] # Mais recente
+    d2 = validos[-2][-2:] # Penúltima
+    
+    alerta_repetida = (d1 == d2)
+    alerta_duplas = (d1[0] == d1[1] and d2[0] == d2[1])
+    
+    return alerta_repetida, alerta_duplas, d1, d2
 
 # =============================================================================
 # 👻 MOTORES DE CÁLCULO E HEDGE 
@@ -481,7 +504,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.36")
+    st.header("Pentágono V65.37")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -497,6 +520,9 @@ if menu == "🏠 Visão Geral (Home)":
             alertas_pendulo = []
             alertas_caca_9d = [] 
             alertas_duplas = [] 
+            alertas_dezena_repetida = [] # Amarelo
+            alertas_dezena_dupla = []    # Ciano
+            
             todos_esq = gerar_matrizes_taticas()
             
             for banca_nome in BANCAS_CONFIG.keys():
@@ -521,11 +547,19 @@ if menu == "🏠 Visão Geral (Home)":
                         if atraso_isca >= 3:
                             alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido, "atraso": atraso_isca})
 
-                    # 3. GATILHO DE ANOMALIA (DUPLAS/TRIPLAS SEGUIDAS)
+                    # 3. GATILHO DE ANOMALIA (CENTENAS DUPLAS/TRIPLAS SEGUIDAS)
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
                         cold_d, seq_s, excl = res_duplas
                         alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl})
+
+                    # 4. ANOMALIAS DE DEZENAS (Amarelo e Azul)
+                    rep, dup, d1, d2 = processar_anomalias_dezenas(df, col)
+                    if rep:
+                        alertas_dezena_repetida.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "d1": d1})
+                    if dup:
+                        alertas_dezena_dupla.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "d1": d1, "d2": d2})
+
 
                 metrics_cache = {}
                 for cfg in todos_esq:
@@ -586,6 +620,40 @@ if menu == "🏠 Visão Geral (Home)":
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         
+        # --- RENDERIZAÇÃO DAS DEZENAS REPETIDAS (AMARELO) ---
+        if alertas_dezena_repetida:
+            st.warning(f"🟡 ANOMALIA DETECTADA (DEZENA REPETIDA): {len(alertas_dezena_repetida)} Encontrados!")
+            cols = st.columns(3)
+            for idx, op in enumerate(alertas_dezena_repetida):
+                with cols[idx % 3]:
+                    st.markdown(f"""
+                    <div class="home-box" style="border-color:#ffff00; box-shadow: 0 0 15px rgba(255,255,0,0.3);">
+                        <div class="home-banca">🏦 {op['banca']}</div>
+                        <div class="home-premio">🏆 {op['premio']}</div>
+                        <div class="sniper-titulo" style="color:#ffff00;">🟡 DEZENA REPETIDA</div>
+                        <div class="sniper-dado">A dezena <b style='color:#fff; font-size:16px;'>{op['d1']}</b> saiu duas vezes seguidas!</div>
+                        <div style="font-size:12px; color:#ffff00; margin-top:8px; font-weight:bold;">🎯 Sugestão: Armar Inversão 8D</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown("---") 
+
+        # --- RENDERIZAÇÃO DAS DUPLAS EM SEQUÊNCIA (AZUL CIANO) ---
+        if alertas_dezena_dupla:
+            st.info(f"🔵 ANOMALIA DETECTADA (GÊMEAS EM SEQUÊNCIA): {len(alertas_dezena_dupla)} Encontrados!")
+            cols = st.columns(3)
+            for idx, op in enumerate(alertas_dezena_dupla):
+                with cols[idx % 3]:
+                    st.markdown(f"""
+                    <div class="home-box" style="border-color:#00ffff; box-shadow: 0 0 15px rgba(0,255,255,0.3);">
+                        <div class="home-banca">🏦 {op['banca']}</div>
+                        <div class="home-premio">🏆 {op['premio']}</div>
+                        <div class="sniper-titulo" style="color:#00ffff;">🔵 GÊMEAS EM SEQUÊNCIA</div>
+                        <div class="sniper-dado">Saíram as duplas <b style='color:#fff; font-size:16px;'>{op['d2']}</b> e <b style='color:#fff; font-size:16px;'>{op['d1']}</b> seguidas!</div>
+                        <div style="font-size:12px; color:#00ffff; margin-top:8px; font-weight:bold;">🎯 Verifique o cálculo de alvo!</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown("---") 
+
         # --- RENDERIZAÇÃO DAS CENTENAS DUPLAS SEGUIDAS ---
         if alertas_duplas:
             st.error(f"🚨 ANOMALIA DETECTADA (CENTENAS DUPLAS): {len(alertas_duplas)} Encontrados!")
@@ -658,7 +726,7 @@ if menu == "🏠 Visão Geral (Home)":
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#ff6600;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
 
-        if not alvos_teto and not alvos_alerta and not alertas_pendulo and not alertas_caca_9d and not alertas_duplas: 
+        if not alvos_teto and not alvos_alerta and not alertas_pendulo and not alertas_caca_9d and not alertas_duplas and not alertas_dezena_repetida and not alertas_dezena_dupla: 
             st.success("🟢 MODO STEALTH: Não temos alvos no teto ou próximos a ele no momento. Mercado estável.")
 
 elif menu == "🎯 Scanner de Raio-X":
@@ -840,4 +908,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C=9x | Dezenas/Unid=9x | 13 Grupos=9x | Inv=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
