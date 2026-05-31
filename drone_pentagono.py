@@ -38,11 +38,11 @@ def conectar_sheets():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         return gspread.authorize(creds).open("CentralBichos")
     except Exception as e:
-        enviar_telegram(f"❌ <b>ERRO NO DRONE:</b> Falha ao conectar no Google Sheets. Erro: {e}")
+        enviar_telegram(f"❌ <b>ERRO NO DRONE:</b> Falha a conectar no Google Sheets. Erro: {e}")
         return None
 
 # =============================================================================
-# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
+# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA) - CRONOLÓGICO
 # =============================================================================
 def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -58,23 +58,26 @@ def processar_caca_9d_continua(df, coluna):
             
     if len(validos) < 5: return None
     
-    seen_digits = set()
+    seen_digits_set = set()
+    seen_digits_list = [] # Lógica Cronológica
     cold_digit = None
     
     for val in reversed(validos):
         centena = val[-3:]
         for char in centena:
-            seen_digits.add(int(char))
-            if len(seen_digits) == 9:
-                cold_digit = (set(range(10)) - seen_digits).pop()
+            d = int(char)
+            if d not in seen_digits_set:
+                seen_digits_set.add(d)
+                seen_digits_list.append(str(d))
+            if len(seen_digits_set) == 9:
+                cold_digit = (set(range(10)) - seen_digits_set).pop()
                 break
         if cold_digit is not None:
             break
             
     if cold_digit is not None:
         excluido = (cold_digit + 1) % 10
-        seq = [str((cold_digit - i) % 10) for i in range(9)]
-        seq_str = " - ".join(seq)
+        seq_str = " - ".join(seen_digits_list)
         
         atraso_isca = 0
         for val in reversed(validos):
@@ -89,7 +92,7 @@ def processar_caca_9d_continua(df, coluna):
     return None
 
 # =============================================================================
-# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
+# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS) - CRONOLÓGICO
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -108,19 +111,23 @@ def processar_anomalia_duplas(df, coluna):
     c2 = validos[-2][-3:] 
     
     if len(set(c1)) < 3 and len(set(c2)) < 3:
-        seen_digits = set()
+        seen_digits_set = set()
+        seen_digits_list = []
         cold_digit = None
         for val in reversed(validos):
             for char in val[-3:]:
-                seen_digits.add(int(char))
-                if len(seen_digits) == 9:
-                    cold_digit = (set(range(10)) - seen_digits).pop()
+                d = int(char)
+                if d not in seen_digits_set:
+                    seen_digits_set.add(d)
+                    seen_digits_list.append(str(d))
+                if len(seen_digits_set) == 9:
+                    cold_digit = (set(range(10)) - seen_digits_set).pop()
                     break
             if cold_digit is not None: break
                 
         if cold_digit is not None:
             excluido = (cold_digit + 1) % 10
-            seq_str = " - ".join([str((cold_digit - i) % 10) for i in range(9)])
+            seq_str = " - ".join(seen_digits_list)
             return cold_digit, seq_str, excluido
     return None
 
@@ -140,8 +147,8 @@ def processar_anomalias_dezenas(df, coluna):
             
     if len(validos) < 2: return False, False, "", ""
     
-    d1 = validos[-1][-2:] # Mais recente
-    d2 = validos[-2][-2:] # Penúltima
+    d1 = validos[-1][-2:] 
+    d2 = validos[-2][-2:] 
     
     alerta_repetida = (d1 == d2)
     alerta_duplas = (d1[0] == d1[1] and d2[0] == d2[1])
@@ -408,12 +415,12 @@ def rodar_drone():
             if rep:
                 sig_rep = f"DEZ_REP_{banca_nome}_{col}"
                 if sig_rep not in alvos_vistos:
-                    msg_telegram += f"🚨 <b>ANOMALIA: DEZENAS REPETIDAS</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ A dezena <b>{d1}</b> saiu duas vezes seguidas!\n🎯 Sugestão: Calcular Inversão 8D.\n\n"
+                    msg_telegram += f"🟡 <b>ANOMALIA: DEZENAS REPETIDAS</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ A dezena <b>{d1}</b> saiu duas vezes seguidas!\n🎯 Sugestão: Calcular Inversão 8D.\n\n"
                     achou_algo = True; alvos_vistos.add(sig_rep)
             if dup:
                 sig_dup = f"DEZ_DUP_{banca_nome}_{col}"
                 if sig_dup not in alvos_vistos:
-                    msg_telegram += f"🚨 <b>ANOMALIA: DUPLAS EM SEQUÊNCIA</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ Saíram as duplas <b>{d2}</b> e <b>{d1}</b> em sequência!\n🎯 Calcule o próximo alvo.\n\n"
+                    msg_telegram += f"🔵 <b>ANOMALIA: DUPLAS EM SEQUÊNCIA</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ Saíram as duplas <b>{d2}</b> e <b>{d1}</b> em sequência!\n🎯 Calcule o próximo alvo.\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dup)
 
 
