@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.37 - Radar de Dezenas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.38 - Cronologia 9D", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -101,7 +101,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
+# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA) - CRONOLÓGICO
 # =============================================================================
 def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -117,23 +117,27 @@ def processar_caca_9d_continua(df, coluna):
             
     if len(validos) < 5: return None
     
-    seen_digits = set()
+    seen_digits_set = set()
+    seen_digits_list = [] # NOVA LÓGICA: Lista para guardar a ordem de aparição
     cold_digit = None
     
     for val in reversed(validos):
         centena = val[-3:]
         for char in centena:
-            seen_digits.add(int(char))
-            if len(seen_digits) == 9:
-                cold_digit = (set(range(10)) - seen_digits).pop()
+            d = int(char)
+            if d not in seen_digits_set:
+                seen_digits_set.add(d)
+                seen_digits_list.append(str(d))
+            if len(seen_digits_set) == 9:
+                cold_digit = (set(range(10)) - seen_digits_set).pop()
                 break
         if cold_digit is not None:
             break
             
     if cold_digit is not None:
         excluido = (cold_digit + 1) % 10
-        seq = [str((cold_digit - i) % 10) for i in range(9)]
-        seq_str = " - ".join(seq)
+        # Sequência agora é montada pela ordem de chegada no radar!
+        seq_str = " - ".join(seen_digits_list)
         
         atraso_isca = 0
         for val in reversed(validos):
@@ -148,7 +152,7 @@ def processar_caca_9d_continua(df, coluna):
     return None
 
 # =============================================================================
-# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
+# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS) - CRONOLÓGICO
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -167,19 +171,24 @@ def processar_anomalia_duplas(df, coluna):
     c2 = validos[-2][-3:]
     
     if len(set(c1)) < 3 and len(set(c2)) < 3:
-        seen_digits = set()
+        seen_digits_set = set()
+        seen_digits_list = [] # NOVA LÓGICA: Lista para guardar a ordem de aparição
         cold_digit = None
         for val in reversed(validos):
             for char in val[-3:]:
-                seen_digits.add(int(char))
-                if len(seen_digits) == 9:
-                    cold_digit = (set(range(10)) - seen_digits).pop()
+                d = int(char)
+                if d not in seen_digits_set:
+                    seen_digits_set.add(d)
+                    seen_digits_list.append(str(d))
+                if len(seen_digits_set) == 9:
+                    cold_digit = (set(range(10)) - seen_digits_set).pop()
                     break
             if cold_digit is not None: break
                 
         if cold_digit is not None:
             excluido = (cold_digit + 1) % 10
-            seq_str = " - ".join([str((cold_digit - i) % 10) for i in range(9)])
+            # Sequência agora é montada pela ordem de chegada no radar!
+            seq_str = " - ".join(seen_digits_list)
             return cold_digit, seq_str, excluido
     return None
 
@@ -199,8 +208,8 @@ def processar_anomalias_dezenas(df, coluna):
             
     if len(validos) < 2: return False, False, "", ""
     
-    d1 = validos[-1][-2:] # Mais recente
-    d2 = validos[-2][-2:] # Penúltima
+    d1 = validos[-1][-2:] 
+    d2 = validos[-2][-2:] 
     
     alerta_repetida = (d1 == d2)
     alerta_duplas = (d1[0] == d1[1] and d2[0] == d2[1])
@@ -472,7 +481,7 @@ def extrair_dia(banca, data_alvo):
         soup = BeautifulSoup(res.text, 'html.parser')
         tabelas = soup.find_all('table')
         resultados = []
-        vistos_assinaturas = set()
+        vistos_assinaturas = set() 
         for tab in tabelas:
             th_tag = tab.find('th')
             txt_th = th_tag.get_text().upper() if th_tag else ""
@@ -504,7 +513,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.37")
+    st.header("Pentágono V65.38")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -514,14 +523,14 @@ if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
     
     if st.button("INICIAR VARREDURA GLOBAL", type="primary"):
-        with st.spinner("Processando histórico e escaneando anomalias..."):
+        with st.spinner("A processar histórico e sondar anomalias..."):
             alvos_teto = []
             alvos_alerta = []
             alertas_pendulo = []
             alertas_caca_9d = [] 
             alertas_duplas = [] 
-            alertas_dezena_repetida = [] # Amarelo
-            alertas_dezena_dupla = []    # Ciano
+            alertas_dezena_repetida = [] 
+            alertas_dezena_dupla = []    
             
             todos_esq = gerar_matrizes_taticas()
             
@@ -666,7 +675,7 @@ if menu == "🏠 Visão Geral (Home)":
                         <div class="home-premio">🏆 {op['premio']}</div>
                         <div class="sniper-titulo" style="color:#ff00ff;">🚨 GATILHO: 2x DUPLAS SEGUIDAS</div>
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D Recomendado:</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D (Por Ordem de Aparição):</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
                         <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
                     </div>
@@ -685,7 +694,7 @@ if menu == "🏠 Visão Geral (Home)":
                         <div class="home-premio">🏆 {op['premio']}</div>
                         <div class="sniper-titulo" style="color:#ff4b4b;">🐺 ALERTA: ISCA TEIMOSA ({op['atraso']}x)</div>
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Sequência de Ataque 9D:</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D (Por Ordem de Aparição):</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
                         <div style="font-size:12px; color:#ff4b4b; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
                     </div>
@@ -842,7 +851,7 @@ elif menu == "🐺 Caça 9D (Isca)":
                             <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
                             <div style="font-size:12px; color:#ccc; margin-top:8px;">Dígito Frio Base: <b>{cold_digit}</b></div>
                             <div style="font-size:13px; font-weight:bold; color:{cor_box}; margin:10px 0;">ATRASO DA ISCA: {atraso_isca}x</div>
-                            <div style="font-size:11px; color:#fff;">Ataque 9D:</div>
+                            <div style="font-size:11px; color:#fff;">Ataque 9D (Ordem de Aparição):</div>
                             <div style="color:#00ffff; font-size:14px; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">{seq_str}</div>
                             <div style="color:{cor_box}; font-size:12px;">❌ Isca (Excluído): {excluido}</div>
                             <div style="font-size:10px; color:#fff; margin-top:10px;">{status_msg}</div>
@@ -908,4 +917,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv 8D/9D=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
