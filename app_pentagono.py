@@ -961,4 +961,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: IA Z-Score Calibrada (Piso Blindado) | Inv=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS:| Inv=10x | Pêndulo=5x | Caça 9D=3x | M,C,U,=9x</div>""", unsafe_allow_html=True)
