@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.39 - IA Z-Score", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.40 - IA Calibrada", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -101,7 +101,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA) - CRONOLÓGICO
+# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
 # =============================================================================
 def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -151,7 +151,7 @@ def processar_caca_9d_continua(df, coluna):
     return None
 
 # =============================================================================
-# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS) - CRONOLÓGICO
+# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -215,7 +215,7 @@ def processar_anomalias_dezenas(df, coluna):
     return alerta_repetida, alerta_duplas, d1, d2
 
 # =============================================================================
-# 👻 MOTORES DE CÁLCULO E HEDGE (AGORA COM Z-SCORE IA)
+# 👻 MOTORES DE CÁLCULO E HEDGE (Z-SCORE CALIBRADO)
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -259,7 +259,6 @@ def gerar_matrizes_taticas():
     return esquadroes
 
 def calcular_metricas_fantasma(df_analise, coluna, cfg):
-    # ALGORITMO Z-SCORE INTEGRADO (O TETO DINÂMICO)
     alvos, modo = cfg['alvos'], cfg['modo']
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
@@ -312,20 +311,21 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
             cur_m += 1
             if cur_m > max_m: max_m = cur_m
             
-    # Motor de Cálculo do Z-Score
+    # MATEMÁTICA CALIBRADA (Piso de Segurança)
     def calc_zscore_metrics(hist, default_lim):
         if len(hist) < 2: return float(default_lim), 0.0
         mean = sum(hist) / len(hist)
         variance = sum((x - mean)**2 for x in hist) / len(hist)
         std = math.sqrt(variance)
-        # Z-Score de 2.5 (Segurança Absoluta)
-        teto_dinamico = mean + (2.5 * std)
-        # Assegura que o teto dinâmico nunca seja menor que 3.0 para evitar SPAM
-        teto_dinamico = max(teto_dinamico, 3.0)
+        
+        teto_dinamico = mean + (3.0 * std)
+        # BLINDAGEM: O teto NUNCA cai mais do que 1 ponto abaixo do limite original. Fim dos alarmes falsos!
+        teto_dinamico = max(teto_dinamico, float(default_lim - 1))
+        
         return round(teto_dinamico, 1), round(std, 1)
 
     tp, sp = calc_zscore_metrics(hist_p, cfg['lim'])
-    tc, sc = calc_zscore_metrics(hist_c, 9.0)
+    tc, sc = calc_zscore_metrics(hist_c, 9.0) # Milhar/Centena limit default = 9
     tm, sm = calc_zscore_metrics(hist_m, 9.0)
     
     return cur_p, cur_c, cur_m, max_p, max_c, max_m, tp, tc, tm, sp, sc, sm
@@ -536,17 +536,17 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.39")
+    st.header("Pentágono V65.40")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
-        st.success("✅ Memória do radar limpa!")
+        st.success("✅ Memória limpa e IA Recalibrada!")
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🐺 Caça 9D (Isca)", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
     
     if st.button("INICIAR VARREDURA GLOBAL", type="primary"):
-        with st.spinner("Processando histórico e avaliando Clima Z-Score..."):
+        with st.spinner("Processando IA e avaliando Clima Z-Score..."):
             alvos_teto = []
             alvos_alerta = []
             alertas_pendulo = []
@@ -579,7 +579,7 @@ if menu == "🏠 Visão Geral (Home)":
                         if atraso_isca >= 3:
                             alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido, "atraso": atraso_isca})
 
-                    # 3. GATILHO DE ANOMALIA (CENTENAS DUPLAS/TRIPLAS SEGUIDAS)
+                    # 3. GATILHO DE ANOMALIA (DUPLAS/TRIPLAS SEGUIDAS)
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
                         cold_d, seq_s, excl = res_duplas
@@ -603,16 +603,18 @@ if menu == "🏠 Visão Geral (Home)":
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
                         ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                        ap_lim = cfg['lim']
                         
                         estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
                         teto_alvo = 0.0; std_alvo = 0.0; delay_alvo = 0
                         
-                        # AVALIAÇÃO COM TETO DINÂMICO (Z-SCORE IA)
+                        # AVALIAÇÃO COM TETO DINÂMICO (Z-SCORE IA CALIBRADO)
                         if am >= tm and ac >= tc and ap >= tp: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
                         elif am >= tm: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
                         elif ac >= tc: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
                         elif cfg['modo'] == 'unidade' and ap >= tp: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
                         elif ap >= tp: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
+                        # Alertas mantêm o parâmetro teto - 2, mas de forma limpa
                         elif am >= tm - 2 and ac >= tc - 2 and ap >= tp - 2: estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
                         elif am >= tm - 2: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
                         elif ac >= tc - 2: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
@@ -627,7 +629,8 @@ if menu == "🏠 Visão Geral (Home)":
                                 elif tipo_ataque == "TOTAL": recorde_alvo = max(mp, mc, mm)
                                 
                                 if recorde_alvo > teto_alvo + 2:
-                                    espera_sugerida = round(teto_alvo + 2, 1)
+                                    # Espera sugerida calibrada (nunca sugere menos que o limite da sua estratégia normal)
+                                    espera_sugerida = math.ceil(max(teto_alvo + 2, ap_lim))
                                     alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
                             
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
@@ -644,19 +647,20 @@ if menu == "🏠 Visão Geral (Home)":
                                     g_alvo, delay_g, desc_oposto = cob_data
                                     alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
 
-                            # Painel Visual Z-Score
-                            clima = "Selvagem 🌪️" if std_alvo > 3.0 else "Moderado 🌊" if std_alvo >= 1.5 else "Calmo 🧊"
-                            cor_alerta = "alerta-verde" if estado_alvo == "TETO" else "alerta-amarelo"
-                            
-                            zscore_html = f"""
-                            <div class='{cor_alerta}' style='margin-bottom:8px;'>🎯 {tipo_ataque}</div>
-                            <div style='background:rgba(0,0,0,0.5); border:1px solid #555; padding:8px; border-radius:5px; margin-bottom:8px; text-align:left; font-size:11px;'>
-                                <b style='color:#00ffff;'>📊 RADAR Z-SCORE (2.5σ)</b><br>
-                                🌡️ Clima da Banca: {clima}<br>
-                                📏 Teto Dinâmico: <b style='color:#ffcc00; font-size:13px;'>{teto_alvo}x</b>
-                            </div>
-                            """
-                            alerta_html = zscore_html + alerta_html
+                            # Painel Visual Z-Score APENAS QUANDO ATINGE O TETO (Declutter)
+                            if estado_alvo == "TETO":
+                                clima = "Selvagem 🌪️" if std_alvo > 3.0 else "Moderado 🌊" if std_alvo >= 1.5 else "Calmo 🧊"
+                                zscore_html = f"""
+                                <div class='alerta-verde' style='margin-bottom:8px;'>🎯 {tipo_ataque}</div>
+                                <div style='background:rgba(0,0,0,0.4); border:1px solid #555; padding:6px; border-radius:5px; margin-bottom:8px; text-align:left; font-size:11px;'>
+                                    <b style='color:#00ffff;'>📊 Z-SCORE IA</b> | Clima: {clima}<br>
+                                    📏 Teto Dinâmico: <b style='color:#ffcc00; font-size:13px;'>{teto_alvo}x</b>
+                                </div>
+                                """
+                                alerta_html = zscore_html + alerta_html
+                            else:
+                                # Alerta limpo e simples para alvos que ainda estão amadurecendo
+                                alerta_html = f"<div class='alerta-amarelo' style='margin-bottom:8px;'>🟠 {tipo_ataque}</div>" + alerta_html
 
                             op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque, "delay_alvo": delay_alvo, "estado_alvo": estado_alvo}
                             if estado_alvo == "TETO": alvos_teto.append(op_data)
@@ -711,7 +715,7 @@ if menu == "🏠 Visão Geral (Home)":
                         <div class="home-premio">🏆 {op['premio']}</div>
                         <div class="sniper-titulo" style="color:#ff00ff;">🚨 GATILHO: 2x DUPLAS SEGUIDAS</div>
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D (Por Ordem de Aparição):</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D Recomendado:</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
                         <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
                     </div>
@@ -743,14 +747,12 @@ if menu == "🏠 Visão Geral (Home)":
             cols = st.columns(3)
             for idx, op in enumerate(alvos_teto):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
-                ta = op.get('tipo_ataque', '')
                 css_class = f"home-box-seq"
+                titulo = op['cfg']['nome']
+                if "MILHAR" in op['tipo_ataque']: titulo = f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}"
+                elif "CENTENA" in op['tipo_ataque']: titulo = f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}"
+                cm_html = f"Centena: {op['ac']}x | Milhar: {op['am']}x" if op['cfg']['modo'] != 'unidade' else ""
                 
-                if ta == 'UNIDADE': lbl_alvo, titulo, cm_html = "Unidade", op['cfg']['nome'], ""
-                elif ta == 'MILHAR': lbl_alvo, titulo, cm_html = "Filtro", f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                elif ta == 'CENTENA': lbl_alvo, titulo, cm_html = "Filtro", f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                else: lbl_alvo, titulo, cm_html = "Atraso", op['cfg']['nome'], f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                    
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#00ff00;">{op['delay_alvo']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             st.markdown("---") 
@@ -760,14 +762,12 @@ if menu == "🏠 Visão Geral (Home)":
             cols = st.columns(3)
             for idx, op in enumerate(alvos_alerta):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
-                ta = op.get('tipo_ataque', '')
                 css_class = f"home-box-seq"
+                titulo = op['cfg']['nome']
+                if "MILHAR" in op['tipo_ataque']: titulo = f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}"
+                elif "CENTENA" in op['tipo_ataque']: titulo = f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}"
+                cm_html = f"Centena: {op['ac']}x | Milhar: {op['am']}x" if op['cfg']['modo'] != 'unidade' else ""
                 
-                if ta == 'UNIDADE': lbl_alvo, titulo, cm_html = "Unidade", op['cfg']['nome'], ""
-                elif ta == 'MILHAR': lbl_alvo, titulo, cm_html = "Filtro", f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                elif ta == 'CENTENA': lbl_alvo, titulo, cm_html = "Filtro", f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                else: lbl_alvo, titulo, cm_html = "Atraso", op['cfg']['nome'], f"Centena: {op['ac']}x | Milhar: {op['am']}x"
-                    
                 with cols[idx % 3]:
                     st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#ff6600;">{op['delay_alvo']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
 
@@ -799,7 +799,7 @@ elif menu == "🎯 Scanner de Raio-X":
                 for i, col in enumerate(COLUNAS_DF):
                     ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg_rx)
                     with cols_rx[i]:
-                        st.markdown(f"""<div class="home-box"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="font-size:11px; color:#aaa;">Teto Z: {tp}x | Rec: {mp}x</div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="font-size:11px; color:#aaa;">Teto IA: {tp}x | Rec: {mp}x</div></div>""", unsafe_allow_html=True)
     else:
         if st.button("GERAR PLANILHA DE MASSA", type="primary"):
             df = carregar_dados_em_memoria(banca_rx)
@@ -833,7 +833,7 @@ elif menu == "🎯 Scanner de Raio-X":
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
-                    linha = {"FILTRO": nome_filtro, "TETO": cfg['lim']}
+                    linha = {"FILTRO": nome_filtro, "LIM_P": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
                         ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg)
                         linha[TITULOS_PREMIOS[i]] = f"{ap}x (T:{tp} | R:{mp})"
@@ -953,4 +953,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: IA Z-Score Ativado (Média + 2.5σ) | Inv=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: IA Z-Score Calibrada (Piso Blindado) | Inv=10x | Pêndulo=5x | Caça 9D=3x</div>""", unsafe_allow_html=True)
