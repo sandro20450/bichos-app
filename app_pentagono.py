@@ -34,11 +34,16 @@ def aplicar_estilos_ui(cor_neon):
     <style>
         .titulo-container {{ display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}}
         .titulo-texto {{ margin: 0; font-size: 34px; font-weight: bold; color: #ffffff; }}
-        .quantum-container {{ --uib-size: 40px; --uib-speed: 1.75s; position: relative; height: var(--uib-size); width: var(--uib-size); animation: q-rotate 7s linear infinite; }}
-        @keyframes q-rotate {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
-        .q-particle {{ position: absolute; height: 100%; width: 100%; }}
-        .q-particle::before {{ content: ''; position: absolute; height: 17%; width: 17%; border-radius: 50%; background-color: {cor_neon}; box-shadow: 0 0 10px {cor_neon}; animation: q-orbit var(--uib-speed) linear infinite; }}
-        @keyframes q-orbit {{ 0% {{ transform: translate(20px); }} 50% {{ transform: translate(-20px); }} 100% {{ transform: translate(20px); }} }}
+        
+        /* NOVO CSS: Radar Ping Tático */
+        .radar-container {{ position: relative; width: 34px; height: 34px; display: flex; justify-content: center; align-items: center; }}
+        .radar-core {{ position: absolute; width: 10px; height: 10px; background-color: {cor_neon}; border-radius: 50%; box-shadow: 0 0 10px {cor_neon}; z-index: 2; }}
+        .radar-pulse {{ position: absolute; width: 10px; height: 10px; border: 2px solid {cor_neon}; border-radius: 50%; z-index: 1; animation: radar-ping 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }}
+        
+        @keyframes radar-ping {{
+            0% {{ width: 10px; height: 10px; opacity: 1; }}
+            100% {{ width: 45px; height: 45px; opacity: 0; }}
+        }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,7 +51,10 @@ def configurar_ui_pagina(titulo, cor):
     aplicar_estilos_ui(cor)
     st.markdown(f"""
     <div class="titulo-container">
-        <div class="quantum-container"><div class="q-particle"></div></div>
+        <div class="radar-container">
+            <div class="radar-core"></div>
+            <div class="radar-pulse"></div>
+        </div>
         <h1 class="titulo-texto">{titulo}</h1>
     </div>
     """, unsafe_allow_html=True)
