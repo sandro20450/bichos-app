@@ -42,7 +42,7 @@ def conectar_sheets():
         return None
 
 # =============================================================================
-# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA) - CRONOLÓGICO
+# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
 # =============================================================================
 def processar_caca_9d_continua(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -92,7 +92,7 @@ def processar_caca_9d_continua(df, coluna):
     return None
 
 # =============================================================================
-# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS) - CRONOLÓGICO
+# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -179,65 +179,51 @@ def gerar_matrizes_taticas():
     return esquadroes
 
 def calcular_metricas_fantasma(df_analise, coluna, cfg):
-    # ALGORITMO Z-SCORE INTEGRADO
+    # ALGORITMO Z-SCORE CALIBRADO E BLINDADO
     alvos, modo = cfg['alvos'], cfg['modo']
     c_min, c_max = cfg['c_min'], cfg['c_max']
     m_min, m_max = cfg['m_min'], cfg['m_max']
-    
     cur_p, cur_c, cur_m = 0, 0, 0
     max_p, max_c, max_m = 0, 0, 0
     hist_p, hist_c, hist_m = [], [], []
     
     valores = df_analise[coluna].astype(str).tolist()
-    
     for val in valores:
         milhar = val.strip().zfill(4)
         if milhar == "----" or milhar == "0nan" or milhar == "nan" or not milhar: continue
-            
         try:
-            m = int(milhar)
-            c = int(milhar[-3:])
-            d = int(milhar[-2:])
-            u = int(milhar[-1:])
+            m = int(milhar); c = int(milhar[-3:]); d = int(milhar[-2:]); u = int(milhar[-1:])
         except: continue
         
         g = 25 if d == 0 else math.ceil(d/4)
-        
-        hit_p = False
-        if modo == 'grupo' and g in alvos: hit_p = True
-        elif modo == 'dezena' and d in alvos: hit_p = True
-        elif modo == 'unidade' and u in alvos: hit_p = True
-        elif modo == 'centena' and c in alvos: hit_p = True
-        elif modo == 'milhar' and m in alvos: hit_p = True 
+        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
         
         if hit_p: 
             hist_p.append(cur_p)
             cur_p = 0
         else: 
-            cur_p += 1
-            if cur_p > max_p: max_p = cur_p
+            cur_p += 1; max_p = max(max_p, cur_p)
             
         if (c_min <= c <= c_max): 
             hist_c.append(cur_c)
             cur_c = 0
         else: 
-            cur_c += 1
-            if cur_c > max_c: max_c = cur_c
+            cur_c += 1; max_c = max(max_c, cur_c)
             
         if (m_min <= m <= m_max): 
             hist_m.append(cur_m)
             cur_m = 0
         else: 
-            cur_m += 1
-            if cur_m > max_m: max_m = cur_m
+            cur_m += 1; max_m = max(max_m, cur_m)
             
     def calc_zscore_metrics(hist, default_lim):
         if len(hist) < 2: return float(default_lim), 0.0
         mean = sum(hist) / len(hist)
         variance = sum((x - mean)**2 for x in hist) / len(hist)
         std = math.sqrt(variance)
-        teto_dinamico = mean + (2.5 * std)
-        teto_dinamico = max(teto_dinamico, 3.0)
+        teto_dinamico = mean + (3.0 * std)
+        # O piso nunca deve abaixar muito do seu teto original seguro
+        teto_dinamico = max(teto_dinamico, float(default_lim - 1))
         return round(teto_dinamico, 1), round(std, 1)
 
     tp, sp = calc_zscore_metrics(hist_p, cfg['lim'])
@@ -432,7 +418,7 @@ def rodar_drone():
                     msg_telegram += f"🧲 <b>PÊNDULO ({curr_streak}x)</b>\n🏦 {banca_nome} | 🏆 {TITULOS_PREMIOS[i]}\nDireção: {dir_texto}\nJogar: {', '.join(jogos)}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_pendulo)
 
-            # 2. CAÇA 9D (TEIMOSIA DA ISCA) - ALERTA SE >= 3
+            # 2. CAÇA 9D (TEIMOSIA DA ISCA)
             res_caca = processar_caca_9d_continua(df, col)
             if res_caca:
                 cold_digit, seq_str, excluido, atraso_isca = res_caca
@@ -470,26 +456,27 @@ def rodar_drone():
             for col in COLUNAS_DF:
                 if banca_nome == "Tradicional" and col != "P1": continue
                 ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg)
-                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, tp, tc, tm, sp, sc, sm)
+                metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm)
 
         for cfg in todos_esq:
             for i, col in enumerate(COLUNAS_DF):
                 if (cfg['nome'], cfg['c_min'], col) not in metrics_cache: continue
-                ap, ac, am, tp, tc, tm, sp, sc, sm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                ap, ac, am, mp_r, mc_r, mm_r, tp_r, tc_r, tm_r, sp_r, sc_r, sm_r = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                ap_lim = cfg['lim']
                 
                 is_anomaly = False; is_alerta = False; tipo_ataque = ""
                 teto_alvo = 0.0; std_alvo = 0.0; delay_alvo = 0
                 
-                if am >= tm and ac >= tc and ap >= tp: is_anomaly = True; tipo_ataque = "🔥 ATAQUE TOTAL (G+C+M)"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                elif am >= tm: is_anomaly = True; tipo_ataque = f"🔵 ATAQUE MILHAR ({am}x)"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
-                elif ac >= tc: is_anomaly = True; tipo_ataque = f"🟢 ATAQUE CENTENA ({ac}x)"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
-                elif cfg['modo'] == 'unidade' and ap >= tp: is_anomaly = True; tipo_ataque = f"🔥 ATAQUE UNIDADE"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                elif ap >= tp: is_anomaly = True; tipo_ataque = f"🟡 ATAQUE FORTE ({cfg['modo'].upper()})"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                elif am >= tm - 2 and ac >= tc - 2 and ap >= tp - 2: is_alerta = True; tipo_ataque = "🟠 ALERTA: APROXIMAÇÃO TETO TOTAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                elif am >= tm - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}x)"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
-                elif ac >= tc - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}x)"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
-                elif cfg['modo'] == 'unidade' and ap >= tp - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}x)"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                elif ap >= tp - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}x)"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
+                if am >= tm_r and ac >= tc_r and ap >= tp_r: is_anomaly = True; tipo_ataque = "🔥 ATAQUE TOTAL (G+C+M)"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
+                elif am >= tm_r: is_anomaly = True; tipo_ataque = f"🔵 ATAQUE MILHAR ({am}x)"; teto_alvo=tm_r; std_alvo=sm_r; delay_alvo=am
+                elif ac >= tc_r: is_anomaly = True; tipo_ataque = f"🟢 ATAQUE CENTENA ({ac}x)"; teto_alvo=tc_r; std_alvo=sc_r; delay_alvo=ac
+                elif cfg['modo'] == 'unidade' and ap >= tp_r: is_anomaly = True; tipo_ataque = f"🔥 ATAQUE UNIDADE"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
+                elif ap >= tp_r: is_anomaly = True; tipo_ataque = f"🟡 ATAQUE FORTE ({cfg['modo'].upper()})"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
+                elif am >= tm_r - 2 and ac >= tc_r - 2 and ap >= tp_r - 2: is_alerta = True; tipo_ataque = "🟠 ALERTA: APROXIMAÇÃO TETO TOTAL"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
+                elif am >= tm_r - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}x)"; teto_alvo=tm_r; std_alvo=sm_r; delay_alvo=am
+                elif ac >= tc_r - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}x)"; teto_alvo=tc_r; std_alvo=sc_r; delay_alvo=ac
+                elif cfg['modo'] == 'unidade' and ap >= tp_r - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}x)"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
+                elif ap >= tp_r - 2: is_alerta = True; tipo_ataque = f"🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}x)"; teto_alvo=tp_r; std_alvo=sp_r; delay_alvo=ap
 
                 if is_anomaly or is_alerta:
                     c_min, c_max, m_min, m_max = cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
@@ -501,14 +488,27 @@ def rodar_drone():
                     if sig in alvos_vistos: continue
                     alvos_vistos.add(sig)
                     
-                    clima = "Selvagem 🌪️" if std_alvo > 3.0 else "Moderado 🌊" if std_alvo >= 1.5 else "Calmo 🧊"
-
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Atual: {delay_alvo}x\n"
-                    msg_telegram += f"📊 <b>RADAR Z-SCORE:</b>\n🌡️ Clima: {clima} (σ={std_alvo})\n📏 Teto Dinâmico: <b>{teto_alvo}x</b>\n"
+                    
+                    if is_anomaly:
+                        clima = "Selvagem 🌪️" if std_alvo > 3.0 else "Moderado 🌊" if std_alvo >= 1.5 else "Calmo 🧊"
+                        msg_telegram += f"📊 <b>RADAR Z-SCORE:</b> Clima {clima} | Teto Dinâmico: <b>{teto_alvo}x</b>\n"
+                    
                     msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\n\n"
 
+                    if is_anomaly:
+                        recorde_alvo = mp_r
+                        teto_atual = tp_r
+                        if "MILHAR" in tipo_ataque: recorde_alvo = mm_r; teto_atual = tm_r
+                        elif "CENTENA" in tipo_ataque: recorde_alvo = mc_r; teto_atual = tc_r
+                        elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp_r, mc_r, mm_r); teto_atual = tp_r
+                        
+                        if recorde_alvo > teto_atual + 2:
+                            espera_sugerida = math.ceil(max(teto_atual + 2, ap_lim))
+                            msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
+
                     if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache) # Ajuste tático
+                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache) 
                         if hedge_data:
                             elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
                             mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
