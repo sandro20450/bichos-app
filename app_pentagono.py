@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS DA INTERFACE ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.46 - Radar de Tendência", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.47 - Correção Raio-X", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -81,14 +81,12 @@ def exibir_banner_sorteio(df, banca):
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
-    # Motor Reconstruído: Cálculo de Probabilidade e Tendência
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
     
     streak_counts = {}
     temp_streak = 0
-    # Leitura do passado ao presente para construir a matemática real
     for val in validos:
         c = val[-3:]
         if len(set(c)) < 3: 
@@ -119,10 +117,7 @@ def processar_anomalia_duplas(df, coluna):
             seq_str = " - ".join(seen_digits_list)
             max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
             
-            # --- MOTOR DE TENDÊNCIA PROBABILÍSTICA ---
-            # Total de vezes que o histórico chegou pelo menos até o streak atual
             total_reached = sum(v for k, v in streak_counts.items() if k >= current_streak) + 1
-            # Quantas vezes quebrou exatamente neste streak
             broke_at_current = streak_counts.get(current_streak, 0)
             
             prob_break = (broke_at_current / total_reached) * 100 if total_reached > 0 else 0
@@ -164,7 +159,9 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         try: m = int(milhar); c = int(milhar[-3:]); d = int(milhar[-2:]); u = int(milhar[-1:])
         except: continue
         g = 25 if d == 0 else math.ceil(d/4)
-        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
+        
+        # BUG DA MILHAR CORRIGIDO AQUI!
+        hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
         else: cur_p += 1; max_p = max(max_p, cur_p)
@@ -184,7 +181,6 @@ def deduplicar_alvos(lista):
         if sig not in vistos: vistos.add(sig); resultado.append(item)
     return resultado
 
-# Funções de Proteção e Cobertura mantidas
 def get_hedge_grupos(df, col, cfg_matriz, col_delays):
     grupos = list(cfg_matriz['alvos'])
     scores = {g: 0 for g in grupos}
@@ -285,11 +281,10 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.46")
+    st.header("Pentágono V65.47")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
-    # O MENU DE EXTRAÇÃO VOLTOU AQUI, COMANDANTE!
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
