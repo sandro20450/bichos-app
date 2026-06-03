@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.40 - IA Calibrada", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.41 - Core Tático", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -35,7 +35,7 @@ def aplicar_estilos_ui(cor_neon):
         .titulo-container {{ display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}}
         .titulo-texto {{ margin: 0; font-size: 34px; font-weight: bold; color: #ffffff; }}
         
-        /* NOVO CSS: Radar Ping Tático */
+        /* CSS: Radar Ping Tático */
         .radar-container {{ position: relative; width: 34px; height: 34px; display: flex; justify-content: center; align-items: center; }}
         .radar-core {{ position: absolute; width: 10px; height: 10px; background-color: {cor_neon}; border-radius: 50%; box-shadow: 0 0 10px {cor_neon}; z-index: 2; }}
         .radar-pulse {{ position: absolute; width: 10px; height: 10px; border: 2px solid {cor_neon}; border-radius: 50%; z-index: 1; animation: radar-ping 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }}
@@ -109,57 +109,7 @@ def get_grupo_int(m):
     except: return None
 
 # =============================================================================
-# 🐺 MOTOR 1: CAÇA 9D CONTÍNUA (TEIMOSIA DA ISCA)
-# =============================================================================
-def processar_caca_9d_continua(df, coluna):
-    valores = df[coluna].astype(str).tolist()
-    validos = []
-    
-    for val in valores:
-        m = val.strip().zfill(4)
-        if m != "----" and m != "0nan" and m != "nan" and m.strip():
-            try:
-                _ = int(m)
-                validos.append(m)
-            except: pass
-            
-    if len(validos) < 5: return None
-    
-    seen_digits_set = set()
-    seen_digits_list = [] 
-    cold_digit = None
-    
-    for val in reversed(validos):
-        centena = val[-3:]
-        for char in centena:
-            d = int(char)
-            if d not in seen_digits_set:
-                seen_digits_set.add(d)
-                seen_digits_list.append(str(d))
-            if len(seen_digits_set) == 9:
-                cold_digit = (set(range(10)) - seen_digits_set).pop()
-                break
-        if cold_digit is not None:
-            break
-            
-    if cold_digit is not None:
-        excluido = (cold_digit + 1) % 10
-        seq_str = " - ".join(seen_digits_list)
-        
-        atraso_isca = 0
-        for val in reversed(validos):
-            centena = val[-3:]
-            if str(excluido) in centena:
-                atraso_isca += 1
-            else:
-                break 
-                
-        return cold_digit, seq_str, excluido, atraso_isca
-        
-    return None
-
-# =============================================================================
-# 🚨 MOTOR 2: GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
+# 🚨 GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS) - CRONOLÓGICO
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -199,31 +149,7 @@ def processar_anomalia_duplas(df, coluna):
     return None
 
 # =============================================================================
-# 🟡🔵 MOTOR 3: ANOMALIAS DE DEZENAS (REPETIDAS E DUPLAS EM SEQUÊNCIA)
-# =============================================================================
-def processar_anomalias_dezenas(df, coluna):
-    valores = df[coluna].astype(str).tolist()
-    validos = []
-    for val in valores:
-        m = val.strip().zfill(4)
-        if m != "----" and m != "0nan" and m != "nan" and m.strip():
-            try:
-                _ = int(m)
-                validos.append(m)
-            except: pass
-            
-    if len(validos) < 2: return False, False, "", ""
-    
-    d1 = validos[-1][-2:] 
-    d2 = validos[-2][-2:] 
-    
-    alerta_repetida = (d1 == d2)
-    alerta_duplas = (d1[0] == d1[1] and d2[0] == d2[1])
-    
-    return alerta_repetida, alerta_duplas, d1, d2
-
-# =============================================================================
-# 👻 MOTORES DE CÁLCULO E HEDGE (Z-SCORE CALIBRADO)
+# 👻 MOTORES DE CÁLCULO E HEDGE 
 # =============================================================================
 def gerar_matrizes_taticas():
     esquadroes = []
@@ -274,8 +200,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
     cur_p, cur_c, cur_m = 0, 0, 0
     max_p, max_c, max_m = 0, 0, 0
     
-    hist_p, hist_c, hist_m = [], [], []
-    
     valores = df_analise[coluna].astype(str).tolist()
     
     for val in valores:
@@ -298,45 +222,22 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         elif modo == 'centena' and c in alvos: hit_p = True
         elif modo == 'milhar' and m in alvos: hit_p = True 
         
-        if hit_p: 
-            hist_p.append(cur_p)
-            cur_p = 0
+        if hit_p: cur_p = 0
         else: 
             cur_p += 1
             if cur_p > max_p: max_p = cur_p
             
-        if (c_min <= c <= c_max): 
-            hist_c.append(cur_c)
-            cur_c = 0
+        if (c_min <= c <= c_max): cur_c = 0
         else: 
             cur_c += 1
             if cur_c > max_c: max_c = cur_c
             
-        if (m_min <= m <= m_max): 
-            hist_m.append(cur_m)
-            cur_m = 0
+        if (m_min <= m <= m_max): cur_m = 0
         else: 
             cur_m += 1
             if cur_m > max_m: max_m = cur_m
             
-    # MATEMÁTICA CALIBRADA (Piso de Segurança)
-    def calc_zscore_metrics(hist, default_lim):
-        if len(hist) < 2: return float(default_lim), 0.0
-        mean = sum(hist) / len(hist)
-        variance = sum((x - mean)**2 for x in hist) / len(hist)
-        std = math.sqrt(variance)
-        
-        teto_dinamico = mean + (3.0 * std)
-        # BLINDAGEM: O teto NUNCA cai mais do que 1 ponto abaixo do limite original. Fim dos alarmes falsos!
-        teto_dinamico = max(teto_dinamico, float(default_lim - 1))
-        
-        return round(teto_dinamico, 1), round(std, 1)
-
-    tp, sp = calc_zscore_metrics(hist_p, cfg['lim'])
-    tc, sc = calc_zscore_metrics(hist_c, 9.0) # Milhar/Centena limit default = 9
-    tm, sm = calc_zscore_metrics(hist_m, 9.0)
-    
-    return cur_p, cur_c, cur_m, max_p, max_c, max_m, tp, tc, tm, sp, sc, sm
+    return cur_p, cur_c, cur_m, max_p, max_c, max_m
 
 def deduplicar_alvos(lista):
     vistos = set(); resultado = []
@@ -440,70 +341,6 @@ def get_cobertura_massa(df, col, cfg_nome):
             
     return best_g, max_delay, desc_oposto
 
-def direcao_pendulo(prev, curr):
-    if prev == curr: return "="
-    dist_c = (curr - prev) % 25
-    dist_d = (prev - curr) % 25
-    if 1 <= dist_c <= 6: return "C"; 
-    if 1 <= dist_d <= 6: return "D"; 
-    return "-" 
-
-def processar_pendulo(df, coluna):
-    all_groups = []
-    valores = df[coluna].astype(str).tolist()
-    for val in valores:
-        m = val.strip().zfill(4)
-        if m != "----" and m != "0nan" and m != "nan" and m.strip():
-            try:
-                d = int(m[-2:])
-                g = 25 if d == 0 else math.ceil(d/4)
-                all_groups.append(g)
-            except: pass
-                
-    if len(all_groups) < 6: return None
-    dirs_history = []
-    for i in range(1, len(all_groups)):
-        dirs_history.append(direcao_pendulo(all_groups[i-1], all_groups[i]))
-        
-    curr_streak = 0
-    curr_dir = dirs_history[-1]
-    if curr_dir in ["C", "D"]:
-        for d in reversed(dirs_history):
-            if d == curr_dir: curr_streak += 1
-            else: break
-            
-    max_streak = 0; temp_streak = 0; temp_dir = None
-    for d in dirs_history:
-        if d in ["C", "D"]:
-            if d == temp_dir: temp_streak += 1
-            else: temp_dir = d; temp_streak = 1
-            if temp_streak > max_streak: max_streak = temp_streak
-        else:
-            temp_dir = None; temp_streak = 0
-            
-    dirs = dirs_history[-5:] 
-    last_g = all_groups[-1]
-    
-    if curr_streak >= 5:
-        if curr_streak == 5: status = "🚨 SATURAÇÃO ALTA"
-        elif curr_streak == 6: status = "🔥 SATURAÇÃO EXTREMA"
-        else: status = f"☢️ SATURAÇÃO CRÍTICA"
-        
-        jogos = []; curr = last_g
-        if curr_dir == "C":
-            for _ in range(15):
-                jogos.append(str(curr).zfill(2))
-                curr -= 1
-                if curr < 1: curr = 25
-        else:
-            for _ in range(15):
-                jogos.append(str(curr).zfill(2))
-                curr += 1
-                if curr > 25: curr = 1
-        return status, jogos, all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
-        
-    return "Estável", [], all_groups[-6:], dirs, curr_streak, max_streak, curr_dir
-
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -544,24 +381,20 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.40")
+    st.header("Pentágono V65.41")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
-        st.success("✅ Memória limpa e IA Recalibrada!")
-    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "🧲 Armadilha do Pêndulo", "🐺 Caça 9D (Isca)", "📡 Extração Central"])
+        st.success("✅ Memória do radar limpa!")
+    menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
     configurar_ui_pagina("Central AWACS", "#00ffff")
     
     if st.button("INICIAR VARREDURA GLOBAL", type="primary"):
-        with st.spinner("Processando IA e avaliando Clima Z-Score..."):
+        with st.spinner("Processando histórico e escaneando anomalias..."):
             alvos_teto = []
             alvos_alerta = []
-            alertas_pendulo = []
-            alertas_caca_9d = [] 
             alertas_duplas = [] 
-            alertas_dezena_repetida = [] 
-            alertas_dezena_dupla = []    
             
             todos_esq = gerar_matrizes_taticas()
             
@@ -573,72 +406,48 @@ if menu == "🏠 Visão Geral (Home)":
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     
-                    # 1. PÊNDULO
-                    resultado_pend = processar_pendulo(df, col)
-                    if resultado_pend:
-                        status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado_pend
-                        if status != "Estável":
-                            alertas_pendulo.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "status": status, "jogos": jogos, "draws": draws, "dirs": dirs, "curr_streak": curr_streak, "max_streak": max_streak, "curr_dir": curr_dir})
-                    
-                    # 2. CAÇA 9D (TEIMOSIA DA ISCA)
-                    resultado_9d = processar_caca_9d_continua(df, col)
-                    if resultado_9d:
-                        cold_digit, seq_str, excluido, atraso_isca = resultado_9d
-                        if atraso_isca >= 3:
-                            alertas_caca_9d.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_digit, "seq": seq_str, "excluido": excluido, "atraso": atraso_isca})
-
-                    # 3. GATILHO DE ANOMALIA (DUPLAS/TRIPLAS SEGUIDAS)
+                    # 1. GATILHO DE ANOMALIA (CENTENAS DUPLAS SEGUIDAS)
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
                         cold_d, seq_s, excl = res_duplas
                         alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl})
 
-                    # 4. ANOMALIAS DE DEZENAS (Amarelo e Azul)
-                    rep, dup, d1, d2 = processar_anomalias_dezenas(df, col)
-                    if rep:
-                        alertas_dezena_repetida.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "d1": d1})
-                    if dup:
-                        alertas_dezena_dupla.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "d1": d1, "d2": d2})
-
                 metrics_cache = {}
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
-                        ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg)
-                        metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm)
+                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        metrics_cache[(cfg['nome'], cfg['c_min'], col)] = (ap, ac, am, mp, mc, mm)
                 
                 for cfg in todos_esq:
                     for i, col in enumerate(COLUNAS_DF):
                         if banca_nome == "Tradicional" and col != "P1": continue
-                        ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
-                        ap_lim = cfg['lim']
+                        ap, ac, am, mp, mc, mm = metrics_cache[(cfg['nome'], cfg['c_min'], col)]
+                        ap_lim = cfg['lim'] 
                         
                         estado_alvo = None; prio = 99; tipo_ataque = ""; alerta_html = ""
-                        teto_alvo = 0.0; std_alvo = 0.0; delay_alvo = 0
                         
-                        # AVALIAÇÃO COM TETO DINÂMICO (Z-SCORE IA CALIBRADO)
-                        if am >= tm and ac >= tc and ap >= tp: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                        elif am >= tm: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
-                        elif ac >= tc: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
-                        elif cfg['modo'] == 'unidade' and ap >= tp: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                        elif ap >= tp: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                        # Alertas mantêm o parâmetro teto - 2, mas de forma limpa
-                        elif am >= tm - 2 and ac >= tc - 2 and ap >= tp - 2: estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                        elif am >= tm - 2: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; teto_alvo=tm; std_alvo=sm; delay_alvo=am
-                        elif ac >= tc - 2: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; teto_alvo=tc; std_alvo=sc; delay_alvo=ac
-                        elif cfg['modo'] == 'unidade' and ap >= tp - 2: estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
-                        elif ap >= tp - 2: estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; teto_alvo=tp; std_alvo=sp; delay_alvo=ap
+                        if am >= 9 and ac >= 9 and ap >= ap_lim: estado_alvo = "TETO"; prio = 1; tipo_ataque = "TOTAL"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE TOTAL (G+C+M) - TETO ATINGIDO</div>"
+                        elif am >= 9: estado_alvo = "TETO"; prio = 2; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-verde'>🔵 ATAQUE MILHAR ({am}x) - TETO ATINGIDO</div>"
+                        elif ac >= 9: estado_alvo = "TETO"; prio = 3; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE CENTENA ({ac}x) - TETO ATINGIDO</div>"
+                        elif cfg['modo'] == 'unidade' and ap >= 9: estado_alvo = "TETO"; prio = 4; tipo_ataque = "UNIDADE"; alerta_html = "<div class='alerta-verde'>🔥 ATAQUE UNIDADE - TETO ATINGIDO</div>"
+                        elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
+                        elif am >= 7 and ac >= 7 and ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 6; tipo_ataque = "TOTAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: APROXIMAÇÃO DE TETO TOTAL</div>"
+                        elif am >= 7: estado_alvo = "ALERTA"; prio = 7; tipo_ataque = "MILHAR"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: MILHAR PRÓXIMO AO TETO ({am}/9)</div>"
+                        elif ac >= 7: estado_alvo = "ALERTA"; prio = 8; tipo_ataque = "CENTENA"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: CENTENA PRÓXIMA AO TETO ({ac}/9)</div>"
+                        elif cfg['modo'] == 'unidade' and ap >= 7: estado_alvo = "ALERTA"; prio = 9; tipo_ataque = "UNIDADE"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: UNIDADE PRÓXIMA AO TETO ({ap}/9)</div>"
+                        elif ap >= (ap_lim - 2): estado_alvo = "ALERTA"; prio = 10; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-amarelo'>🟠 ALERTA: {cfg['modo'].upper()} PRÓXIMO AO TETO ({ap}/{ap_lim})</div>"
 
                         if estado_alvo:
                             if estado_alvo == "TETO":
+                                teto_alvo = 9 if tipo_ataque in ["MILHAR", "CENTENA", "TOTAL"] else ap_lim
                                 recorde_alvo = mp
                                 if tipo_ataque == "MILHAR": recorde_alvo = mm
                                 elif tipo_ataque == "CENTENA": recorde_alvo = mc
                                 elif tipo_ataque == "TOTAL": recorde_alvo = max(mp, mc, mm)
                                 
                                 if recorde_alvo > teto_alvo + 2:
-                                    # Espera sugerida calibrada (nunca sugere menos que o limite da sua estratégia normal)
-                                    espera_sugerida = math.ceil(max(teto_alvo + 2, ap_lim))
+                                    espera_sugerida = teto_alvo + 2
                                     alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
                             
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
@@ -655,61 +464,12 @@ if menu == "🏠 Visão Geral (Home)":
                                     g_alvo, delay_g, desc_oposto = cob_data
                                     alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
 
-                            # Painel Visual Z-Score APENAS QUANDO ATINGE O TETO (Declutter)
-                            if estado_alvo == "TETO":
-                                clima = "Selvagem 🌪️" if std_alvo > 3.0 else "Moderado 🌊" if std_alvo >= 1.5 else "Calmo 🧊"
-                                zscore_html = f"""
-                                <div class='alerta-verde' style='margin-bottom:8px;'>🎯 {tipo_ataque}</div>
-                                <div style='background:rgba(0,0,0,0.4); border:1px solid #555; padding:6px; border-radius:5px; margin-bottom:8px; text-align:left; font-size:11px;'>
-                                    <b style='color:#00ffff;'>📊 Z-SCORE IA</b> | Clima: {clima}<br>
-                                    📏 Teto Dinâmico: <b style='color:#ffcc00; font-size:13px;'>{teto_alvo}x</b>
-                                </div>
-                                """
-                                alerta_html = zscore_html + alerta_html
-                            else:
-                                # Alerta limpo e simples para alvos que ainda estão amadurecendo
-                                alerta_html = f"<div class='alerta-amarelo' style='margin-bottom:8px;'>🟠 {tipo_ataque}</div>" + alerta_html
-
-                            op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque, "delay_alvo": delay_alvo, "estado_alvo": estado_alvo}
+                            op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
                             if estado_alvo == "TETO": alvos_teto.append(op_data)
                             elif estado_alvo == "ALERTA": alvos_alerta.append(op_data)
             
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
         alvos_alerta = deduplicar_alvos(sorted(alvos_alerta, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
-        
-        # --- RENDERIZAÇÃO DAS DEZENAS REPETIDAS (AMARELO) ---
-        if alertas_dezena_repetida:
-            st.warning(f"🟡 ANOMALIA DETECTADA (DEZENA REPETIDA): {len(alertas_dezena_repetida)} Encontrados!")
-            cols = st.columns(3)
-            for idx, op in enumerate(alertas_dezena_repetida):
-                with cols[idx % 3]:
-                    st.markdown(f"""
-                    <div class="home-box" style="border-color:#ffff00; box-shadow: 0 0 15px rgba(255,255,0,0.3);">
-                        <div class="home-banca">🏦 {op['banca']}</div>
-                        <div class="home-premio">🏆 {op['premio']}</div>
-                        <div class="sniper-titulo" style="color:#ffff00;">🟡 DEZENA REPETIDA</div>
-                        <div class="sniper-dado">A dezena <b style='color:#fff; font-size:16px;'>{op['d1']}</b> saiu duas vezes seguidas!</div>
-                        <div style="font-size:12px; color:#ffff00; margin-top:8px; font-weight:bold;">🎯 Sugestão: Armar Inversão 8D</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            st.markdown("---") 
-
-        # --- RENDERIZAÇÃO DAS DUPLAS EM SEQUÊNCIA (AZUL CIANO) ---
-        if alertas_dezena_dupla:
-            st.info(f"🔵 ANOMALIA DETECTADA (GÊMEAS EM SEQUÊNCIA): {len(alertas_dezena_dupla)} Encontrados!")
-            cols = st.columns(3)
-            for idx, op in enumerate(alertas_dezena_dupla):
-                with cols[idx % 3]:
-                    st.markdown(f"""
-                    <div class="home-box" style="border-color:#00ffff; box-shadow: 0 0 15px rgba(0,255,255,0.3);">
-                        <div class="home-banca">🏦 {op['banca']}</div>
-                        <div class="home-premio">🏆 {op['premio']}</div>
-                        <div class="sniper-titulo" style="color:#00ffff;">🔵 GÊMEAS EM SEQUÊNCIA</div>
-                        <div class="sniper-dado">Saíram as duplas <b style='color:#fff; font-size:16px;'>{op['d2']}</b> e <b style='color:#fff; font-size:16px;'>{op['d1']}</b> seguidas!</div>
-                        <div style="font-size:12px; color:#00ffff; margin-top:8px; font-weight:bold;">🎯 Verifique o cálculo de alvo!</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            st.markdown("---") 
 
         # --- RENDERIZAÇÃO DAS CENTENAS DUPLAS SEGUIDAS ---
         if alertas_duplas:
@@ -730,57 +490,42 @@ if menu == "🏠 Visão Geral (Home)":
                     """, unsafe_allow_html=True)
             st.markdown("---") 
 
-        # --- RENDERIZAÇÃO DA CAÇA 9D POR ANOMALIA (TEIMOSIA) ---
-        if alertas_caca_9d:
-            st.error(f"🐺 CAÇA 9D (TEIMOSIA DA ISCA): {len(alertas_caca_9d)} Encontrados!")
-            cols = st.columns(3)
-            for idx, op in enumerate(alertas_caca_9d):
-                with cols[idx % 3]:
-                    st.markdown(f"""
-                    <div class="home-box" style="border-color:#ff4b4b; box-shadow: 0 0 15px rgba(255,0,0,0.4);">
-                        <div class="home-banca">🏦 {op['banca']}</div>
-                        <div class="home-premio">🏆 {op['premio']}</div>
-                        <div class="sniper-titulo" style="color:#ff4b4b;">🐺 ALERTA: ISCA TEIMOSA ({op['atraso']}x)</div>
-                        <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque 9D (Por Ordem de Aparição):</b></div>
-                        <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
-                        <div style="font-size:12px; color:#ff4b4b; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            st.markdown("---") 
-
         # --- RENDERIZAÇÃO DOS OUTROS ALVOS ---
         if alvos_teto:
-            st.success(f"🎯 ALVOS CRÍTICOS (TETO DINÂMICO ATINGIDO): {len(alvos_teto)} Encontrados!")
+            st.success(f"🎯 ALVOS CRÍTICOS (TETO ATINGIDO): {len(alvos_teto)} Encontrados!")
             cols = st.columns(3)
             for idx, op in enumerate(alvos_teto):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
+                ta = op.get('tipo_ataque', '')
                 css_class = f"home-box-seq"
-                titulo = op['cfg']['nome']
-                if "MILHAR" in op['tipo_ataque']: titulo = f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}"
-                elif "CENTENA" in op['tipo_ataque']: titulo = f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}"
-                cm_html = f"Centena: {op['ac']}x | Milhar: {op['am']}x" if op['cfg']['modo'] != 'unidade' else ""
                 
+                if ta == 'UNIDADE': lbl_alvo, titulo, cm_html = "Unidade", op['cfg']['nome'], ""
+                elif ta == 'MILHAR': lbl_alvo, titulo, cm_html = "Filtro", f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                elif ta == 'CENTENA': lbl_alvo, titulo, cm_html = "Filtro", f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                else: lbl_alvo, titulo, cm_html = "Atraso", op['cfg']['nome'], f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                    
                 with cols[idx % 3]:
-                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#00ff00;">{op['delay_alvo']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#00ff00;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             st.markdown("---") 
 
         if alvos_alerta:
-            st.warning(f"🟠 ALERTA Z-SCORE (FALTAM 1 OU 2 PONTOS PRO TETO): {len(alvos_alerta)} Encontrados!")
+            st.warning(f"🟠 ALERTA DE APROXIMAÇÃO (FALTAM 1 OU 2 PONTOS): {len(alvos_alerta)} Encontrados!")
             cols = st.columns(3)
             for idx, op in enumerate(alvos_alerta):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
+                ta = op.get('tipo_ataque', '')
                 css_class = f"home-box-seq"
-                titulo = op['cfg']['nome']
-                if "MILHAR" in op['tipo_ataque']: titulo = f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}"
-                elif "CENTENA" in op['tipo_ataque']: titulo = f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}"
-                cm_html = f"Centena: {op['ac']}x | Milhar: {op['am']}x" if op['cfg']['modo'] != 'unidade' else ""
                 
+                if ta == 'UNIDADE': lbl_alvo, titulo, cm_html = "Unidade", op['cfg']['nome'], ""
+                elif ta == 'MILHAR': lbl_alvo, titulo, cm_html = "Filtro", f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                elif ta == 'CENTENA': lbl_alvo, titulo, cm_html = "Filtro", f"C: {str(c_min).zfill(3)} A {str(c_max).zfill(3)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                else: lbl_alvo, titulo, cm_html = "Atraso", op['cfg']['nome'], f"Centena: {op['ac']}x | Milhar: {op['am']}x"
+                    
                 with cols[idx % 3]:
-                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#ff6600;">{op['delay_alvo']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#ff6600;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
 
-        if not alvos_teto and not alvos_alerta and not alertas_pendulo and not alertas_caca_9d and not alertas_duplas and not alertas_dezena_repetida and not alertas_dezena_dupla: 
-            st.success("🟢 MODO STEALTH: O Z-Score não autorizou nenhuma entrada. Mercado estável.")
+        if not alvos_teto and not alvos_alerta and not alertas_duplas: 
+            st.success("🟢 MODO STEALTH: Não temos alvos no teto ou próximos a ele no momento. Mercado estável.")
 
 elif menu == "🎯 Scanner de Raio-X":
     configurar_ui_pagina("Scanner de Raio-X", "#ffcc00")
@@ -805,9 +550,9 @@ elif menu == "🎯 Scanner de Raio-X":
                 
                 cols_rx = st.columns(5)
                 for i, col in enumerate(COLUNAS_DF):
-                    ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg_rx)
+                    ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
                     with cols_rx[i]:
-                        st.markdown(f"""<div class="home-box"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="font-size:11px; color:#aaa;">Teto IA: {tp}x | Rec: {mp}x</div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div>Rec: {mp}x</div></div>""", unsafe_allow_html=True)
     else:
         if st.button("GERAR PLANILHA DE MASSA", type="primary"):
             df = carregar_dados_em_memoria(banca_rx)
@@ -841,68 +586,14 @@ elif menu == "🎯 Scanner de Raio-X":
                 dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
-                    linha = {"FILTRO": nome_filtro, "LIM_P": cfg['lim']}
+                    linha = {"FILTRO": nome_filtro, "TETO": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
-                        ap, ac, am, mp, mc, mm, tp, tc, tm, sp, sc, sm = calcular_metricas_fantasma(df, col, cfg)
-                        linha[TITULOS_PREMIOS[i]] = f"{ap}x (T:{tp} | R:{mp})"
+                        ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
+                        linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp})"
                     dados_tabela.append(linha)
                 
                 exibir_banner_sorteio(df, banca_rx)
                 st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, hide_index=True)
-
-elif menu == "🧲 Armadilha do Pêndulo":
-    configurar_ui_pagina("Armadilha do Pêndulo", "#ff00aa")
-    banca_pendulo = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("ANALISAR MOMENTUM CIRCULAR", type="primary"):
-        df = carregar_dados_em_memoria(banca_pendulo)
-        if df.empty: st.error("Sem dados.")
-        else:
-            exibir_banner_sorteio(df, banca_pendulo)
-            cols = st.columns(5)
-            for i, col in enumerate(COLUNAS_DF):
-                resultado = processar_pendulo(df, col)
-                with cols[i]:
-                    if resultado:
-                        status, jogos, draws, dirs, curr_streak, max_streak, curr_dir = resultado
-                        setas = ["➡️" if d == "C" else "⬅️" if d == "D" else "⏸️" if d == "=" else "✖️" for d in dirs]
-                        seq_visual = f"<span style='font-size:16px;'>{str(draws[0]).zfill(2)}</span> {setas[0]} <span style='font-size:16px;'>{str(draws[1]).zfill(2)}</span> {setas[1]} <span style='font-size:16px;'>{str(draws[2]).zfill(2)}</span> {setas[2]} <span style='font-size:16px;'>{str(draws[3]).zfill(2)}</span> {setas[3]} <span style='font-size:16px;'>{str(draws[4]).zfill(2)}</span> {setas[4]} <span style='font-size:16px; color:#ff4b4b;'>{str(draws[5]).zfill(2)}</span>"
-                        cor_box = "#ff00aa" if curr_dir == "C" else "#00ffff"
-                        st.markdown(f"""<div class="home-box" style="border-color:{cor_box};"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-dado">{seq_visual}</div><div class="sniper-dado">Saturação: {curr_streak}x (Rec: {max_streak})</div><div style="color:{cor_box}; font-weight:bold; font-size:11px;">{status}</div><div style="font-size:10px; color:#fff; margin-top:5px;">Alvos: {', '.join(jogos)}</div></div>""", unsafe_allow_html=True)
-                    else: st.write("Dados insuficientes.")
-
-elif menu == "🐺 Caça 9D (Isca)":
-    configurar_ui_pagina("Caça 9D (Teimosia da Isca)", "#ff4b4b")
-    st.markdown("Monitore a teimosia das iscas (dígitos excluídos) e descubra as melhores anomalias de entrada.")
-    
-    banca_9d = st.selectbox("Selecione a Banca:", list(BANCAS_CONFIG.keys()))
-    if st.button("RASTREAR ISCAS", type="primary"):
-        df = carregar_dados_em_memoria(banca_9d)
-        if df.empty: 
-            st.error("Sem dados.")
-        else:
-            exibir_banner_sorteio(df, banca_9d)
-            cols = st.columns(5)
-            for i, col in enumerate(COLUNAS_DF):
-                resultado = processar_caca_9d_continua(df, col)
-                with cols[i]:
-                    if resultado:
-                        cold_digit, seq_str, excluido, atraso_isca = resultado
-                        cor_box = "#ff4b4b" if atraso_isca >= 3 else "#ffcc00" if atraso_isca == 2 else "#00ff00"
-                        status_msg = "🔥 PERIGO: ISCA TEIMOSA" if atraso_isca >= 3 else "Aguardando teimosia..."
-                        
-                        st.markdown(f"""
-                        <div class="home-box" style="border-color:{cor_box};">
-                            <div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div>
-                            <div style="font-size:12px; color:#ccc; margin-top:8px;">Dígito Frio Base: <b>{cold_digit}</b></div>
-                            <div style="font-size:13px; font-weight:bold; color:{cor_box}; margin:10px 0;">ATRASO DA ISCA: {atraso_isca}x</div>
-                            <div style="font-size:11px; color:#fff;">Ataque 9D (Ordem de Aparição):</div>
-                            <div style="color:#00ffff; font-size:14px; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">{seq_str}</div>
-                            <div style="color:{cor_box}; font-size:12px;">❌ Isca (Excluído): {excluido}</div>
-                            <div style="font-size:10px; color:#fff; margin-top:10px;">{status_msg}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else: 
-                        st.write("Dados insuficientes.")
 
 elif menu == "📡 Extração Central":
     configurar_ui_pagina("Extração Central", "#00ff00")
@@ -961,4 +652,4 @@ elif menu == "📡 Extração Central":
                 else: 
                     st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS:| Inv=10x | Pêndulo=5x | Caça 9D=3x | M,C,U,=9x</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Inv=10x | Gatilho Duplas</div>""", unsafe_allow_html=True)
