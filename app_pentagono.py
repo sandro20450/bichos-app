@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS DA INTERFACE ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.42 - Foco Teto", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.43 - Ponto Cego", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -27,7 +27,6 @@ div.stButton > button { width: 100%; border-radius: 8px; font-weight: bold; min-
 """, unsafe_allow_html=True)
 
 def aplicar_estilos_ui(cor_neon):
-    # Função para criar o efeito visual de pulso de radar no título
     st.markdown(f"""
     <style>
         .titulo-container {{ display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}}
@@ -82,7 +81,7 @@ def exibir_banner_sorteio(df, banca):
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
-    # Motor mantido para rastrear unicamente centenas duplas consecutivas
+    # Motor para rastrear centenas duplas consecutivas e aplicar a Tática do Centro de Gravidade
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
@@ -93,15 +92,22 @@ def processar_anomalia_duplas(df, coluna):
         for val in reversed(validos):
             for char in val[-3:]:
                 d = int(char)
-                if d not in seen_digits_set: seen_digits_set.add(d); seen_digits_list.append(str(d))
-                if len(seen_digits_set) == 9: cold_digit = (set(range(10)) - seen_digits_set).pop(); break
+                if d not in seen_digits_set: 
+                    seen_digits_set.add(d)
+                    seen_digits_list.append(str(d))
+                if len(seen_digits_set) == 9: 
+                    cold_digit = (set(range(10)) - seen_digits_set).pop()
+                    break
             if cold_digit is not None: break
+        
         if cold_digit is not None:
-            return cold_digit, " - ".join(seen_digits_list), (cold_digit + 1) % 10
+            # TÁTICA DO PONTO CEGO: Seleciona o 5º elemento da lista cronológica (índice 4)
+            excluido = seen_digits_list[4] 
+            seq_str = " - ".join(seen_digits_list)
+            return cold_digit, seq_str, excluido
     return None
 
 def gerar_matrizes_taticas():
-    # Matrizes de Inversão 8D e 9D removidas conforme diretriz. Mantidos Grupos, Dezenas e Unidades.
     esquadroes = []
     cms = [{'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999}, {'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999}]
     
@@ -127,7 +133,6 @@ def gerar_matrizes_taticas():
     return esquadroes
 
 def calcular_metricas_fantasma(df_analise, coluna, cfg):
-    # Calcula os atrasos atuais e os recordes de atraso da matriz escolhida
     alvos, modo, c_min, c_max, m_min, m_max = cfg['alvos'], cfg['modo'], cfg['c_min'], cfg['c_max'], cfg['m_min'], cfg['m_max']
     cur_p, cur_c, cur_m, max_p, max_c, max_m = 0, 0, 0, 0, 0, 0
     
@@ -158,7 +163,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
     return cur_p, cur_c, cur_m, max_p, max_c, max_m
 
 def deduplicar_alvos(lista):
-    # Previne que o app mostre o mesmo alerta duas vezes
     vistos = set(); resultado = []
     for item in lista:
         ta = item.get('tipo_ataque', '')
@@ -168,7 +172,7 @@ def deduplicar_alvos(lista):
         if sig not in vistos: vistos.add(sig); resultado.append(item)
     return resultado
 
-# Funções de Proteção e Cobertura mantidas intactas
+# Funções de Proteção e Cobertura
 def get_hedge_grupos(df, col, cfg_matriz, col_delays):
     grupos = list(cfg_matriz['alvos'])
     scores = {g: 0 for g in grupos}
@@ -270,11 +274,10 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.42")
+    st.header("Pentágono V65.43")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
-    # Menus reduzidos conforme instrução
     menu = st.radio("Selecione Tática:", ["🏠 Visão Geral (Home)", "🎯 Scanner de Raio-X", "📡 Extração Central"])
 
 if menu == "🏠 Visão Geral (Home)":
@@ -366,7 +369,7 @@ if menu == "🏠 Visão Geral (Home)":
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
                         <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado:</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
-                        <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Isca: {op['excluido']}</div>
+                        <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Ponto Cego: {op['excluido']}</div>
                     </div>
                     """, unsafe_allow_html=True)
             st.markdown("---") 
@@ -422,7 +425,6 @@ elif menu == "🎯 Scanner de Raio-X":
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty: st.error("Sem dados.")
             else:
-                # Remoção das combinações de INV 8D e INV 9D na visualização geral
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -483,7 +485,8 @@ elif menu == "📡 Extração Central":
             if not sh: 
                 painel_status.error("Erro Crítico de Conexão com o Google Sheets.")
             else:
-                total_salvos = 0; bancas_atualizadas = []
+                total_salvos = 0
+                bancas_atualizadas = []
                 for banca_alvo in BANCAS_CONFIG.keys():
                     res = extrair_dia(banca_alvo, dt)
                     if res:
@@ -495,14 +498,21 @@ elif menu == "📡 Extração Central":
                             ws.append_rows(p_ins, value_input_option="RAW")
                             total_salvos += len(p_ins)
                             bancas_atualizadas.append(f"✅ **{banca_alvo}:** {len(p_ins)} novos registros inseridos.")
-                        else: bancas_atualizadas.append(f"ℹ️ **{banca_alvo}:** Base já está atualizada (0 novos).")
-                    else: bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
+                        else: 
+                            bancas_atualizadas.append(f"ℹ️ **{banca_alvo}:** Base já está atualizada (0 novos).")
+                    else: 
+                        bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
                 
                 painel_status.empty() 
+                
                 st.markdown("### 📊 Relatório de Extração:")
-                for b_msg in bancas_atualizadas: st.markdown(b_msg)
+                for b_msg in bancas_atualizadas:
+                    st.markdown(b_msg)
                     
-                if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
-                else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
+                if total_salvos > 0: 
+                    st.cache_data.clear()
+                    st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
+                else: 
+                    st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Gatilho Duplas</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Gatilho Duplas (Ponto Cego)</div>""", unsafe_allow_html=True)
