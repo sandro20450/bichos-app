@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS DA INTERFACE ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.47 - Correção Raio-X", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.48 - Raio-X Duplas", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -80,6 +80,25 @@ def exibir_banner_sorteio(df, banca):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def metricas_duplas_raiox(df, coluna):
+    # Novo Motor Especial para a Planilha de Massa
+    valores = df[coluna].astype(str).tolist()
+    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+    if len(validos) < 2: return 0, 0
+    streak_counts = {}
+    temp_streak = 0
+    for val in validos:
+        c = val[-3:]
+        if len(set(c)) < 3: 
+            temp_streak += 1
+        else:
+            if temp_streak > 0:
+                streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
+                temp_streak = 0
+    current_streak = temp_streak
+    max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
+    return current_streak, max_historico
+
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
@@ -160,7 +179,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         g = 25 if d == 0 else math.ceil(d/4)
         
-        # BUG DA MILHAR CORRIGIDO AQUI!
+        # Bug da Milhar resolvido definitivamente
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
@@ -182,9 +201,8 @@ def deduplicar_alvos(lista):
     return resultado
 
 def get_hedge_grupos(df, col, cfg_matriz, col_delays):
-    grupos = list(cfg_matriz['alvos'])
-    scores = {g: 0 for g in grupos}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
+    grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
+    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS', 0), col_delays.get('D: BAIXAS', 0)])
     if mass_max >= 3:
         if col_delays.get('G: ÍMPARES', 0) >= 3:
             for g in grupos:
@@ -192,21 +210,6 @@ def get_hedge_grupos(df, col, cfg_matriz, col_delays):
         if col_delays.get('G: PARES', 0) >= 3:
             for g in grupos:
                 if g % 2 != 0: scores[g] += 1
-        if col_delays.get('D: ALTAS (51-00)', 0) >= 3:
-            for g in grupos:
-                if g <= 12: scores[g] += 1
-        if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
-            for g in grupos:
-                if g >= 13: scores[g] += 1
-    else:
-        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0), col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
-        if uni_max >= 3:
-            if col_delays.get('U: ÍMPARES', 0) >= 3:
-                for g in grupos:
-                    if (g % 10) % 2 == 0: scores[g] += 1
-            if col_delays.get('U: PARES', 0) >= 3:
-                for g in grupos:
-                    if (g % 10) % 2 != 0: scores[g] += 1
     sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
     eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
     if not eliminar: return None 
@@ -256,17 +259,17 @@ def extrair_dia(banca, data_alvo):
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
-        resultados = []; vistos_assinaturas = set()
+        resultados = []; vistos_assinaturas = set() 
         for tab in soup.find_all('table'):
             th_tag = tab.find('th')
             texto_alvo = (th_tag.get_text().upper() if th_tag else "") + " " + (tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']).get_text().upper() if tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']) else "")
-            if "FEDERAL" in texto_alvo: continue
+            if "FEDERAL" in texto_alvo.upper(): continue
             match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
             nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -281,7 +284,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.47")
+    st.header("Pentágono V65.48")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -444,6 +447,16 @@ elif menu == "🎯 Scanner de Raio-X":
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty: st.error("Sem dados.")
             else:
+                dados_tabela = []
+                
+                # --- NOVIDADE V65.48: A LINHA DAS DUPLAS NO RAIO-X ---
+                linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
+                for i, col in enumerate(COLUNAS_DF):
+                    curr_strk, max_hist = metricas_duplas_raiox(df, col)
+                    linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
+                dados_tabela.append(linha_duplas)
+                
+                # Demais Filtros Normais
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -465,7 +478,6 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
-                dados_tabela = []
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
                     linha = {"FILTRO": nome_filtro, "TETO": cfg['lim']}
