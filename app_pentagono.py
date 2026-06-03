@@ -9,9 +9,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES E CSS DA INTERFACE ---
+# --- 1. CONFIGURAÇÕES E CSS ULTRA-RÁPIDO ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.43 - Ponto Cego", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.44 - Radar 10D Dinâmico", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -81,14 +81,26 @@ def exibir_banner_sorteio(df, banca):
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
 def processar_anomalia_duplas(df, coluna):
-    # Motor para rastrear centenas duplas consecutivas e aplicar a Tática do Centro de Gravidade
+    # Motor para rastrear centenas duplas consecutivas e contar a força da anomalia
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
     
-    c1, c2 = validos[-1][-3:], validos[-2][-3:]
-    if len(set(c1)) < 3 and len(set(c2)) < 3:
-        seen_digits_set = set(); seen_digits_list = []; cold_digit = None
+    # Conta quantas duplas/triplas saíram em sequência
+    streak = 0
+    for val in reversed(validos):
+        c = val[-3:]
+        if len(set(c)) < 3: # É dupla ou tripla
+            streak += 1
+        else:
+            break
+            
+    # Se a sequência de duplas for de 2 ou mais, dispara o gatilho
+    if streak >= 2:
+        seen_digits_set = set()
+        seen_digits_list = [] 
+        cold_digit = None
+        
         for val in reversed(validos):
             for char in val[-3:]:
                 d = int(char)
@@ -101,10 +113,15 @@ def processar_anomalia_duplas(df, coluna):
             if cold_digit is not None: break
         
         if cold_digit is not None:
-            # TÁTICA DO PONTO CEGO: Seleciona o 5º elemento da lista cronológica (índice 4)
+            # TÁTICA DO PONTO CEGO: Seleciona o 5º elemento da lista (índice 4)
             excluido = seen_digits_list[4] 
+            
+            # Adiciona o dígito frio no final para mostrar TODOS OS 10 DÍGITOS
+            seen_digits_list.append(str(cold_digit))
             seq_str = " - ".join(seen_digits_list)
-            return cold_digit, seq_str, excluido
+            
+            return cold_digit, seq_str, excluido, streak
+            
     return None
 
 def gerar_matrizes_taticas():
@@ -172,7 +189,7 @@ def deduplicar_alvos(lista):
         if sig not in vistos: vistos.add(sig); resultado.append(item)
     return resultado
 
-# Funções de Proteção e Cobertura
+# Funções de Proteção e Cobertura mantidas
 def get_hedge_grupos(df, col, cfg_matriz, col_delays):
     grupos = list(cfg_matriz['alvos'])
     scores = {g: 0 for g in grupos}
@@ -274,7 +291,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.43")
+    st.header("Pentágono V65.44")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -297,11 +314,11 @@ if menu == "🏠 Visão Geral (Home)":
                 for i, col in enumerate(COLUNAS_DF):
                     if banca_nome == "Tradicional" and col != "P1": continue
                     
-                    # Rastreio do Gatilho Especial
+                    # Rastreio do Gatilho Especial de Duplas Seguidas
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
-                        cold_d, seq_s, excl = res_duplas
-                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl})
+                        cold_d, seq_s, excl, streak = res_duplas
+                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl, "streak": streak})
 
                 metrics_cache = {}
                 for cfg in todos_esq:
@@ -357,19 +374,23 @@ if menu == "🏠 Visão Geral (Home)":
 
         # --- EXIBIÇÃO NA TELA ---
         if alertas_duplas:
-            st.error(f"🚨 ANOMALIA DETECTADA (CENTENAS DUPLAS): {len(alertas_duplas)} Encontrados!")
+            st.error(f"🚨 ANOMALIA DETECTADA: {len(alertas_duplas)} Encontrados!")
             cols = st.columns(3)
             for idx, op in enumerate(alertas_duplas):
+                streak_count = op['streak']
+                cor_box = "#ffff00" if streak_count == 2 else "#00ff00" # Amarelo para 2x, Verde para 3x ou mais
+                sombra_cor = "255,255,0" if streak_count == 2 else "0,255,0"
+                
                 with cols[idx % 3]:
                     st.markdown(f"""
-                    <div class="home-box" style="border-color:#ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.4);">
+                    <div class="home-box" style="border-color:{cor_box}; box-shadow: 0 0 15px rgba({sombra_cor},0.3);">
                         <div class="home-banca">🏦 {op['banca']}</div>
                         <div class="home-premio">🏆 {op['premio']}</div>
-                        <div class="sniper-titulo" style="color:#ff00ff;">🚨 GATILHO: 2x DUPLAS SEGUIDAS</div>
+                        <div class="sniper-titulo" style="color:{cor_box};">🚨 GATILHO: {streak_count}x DUPLAS SEGUIDAS</div>
                         <div class="sniper-dado">Dígito Frio (Base): <b style='color:#fff; font-size:16px;'>{op['cold_digit']}</b></div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado:</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
                         <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
-                        <div style="font-size:12px; color:#ff00ff; margin-top:8px; font-weight:bold;">❌ Excluir Ponto Cego: {op['excluido']}</div>
+                        <div style="font-size:12px; color:{cor_box}; margin-top:8px; font-weight:bold;">❌ Excluir Ponto Cego: {op['excluido']}</div>
                     </div>
                     """, unsafe_allow_html=True)
             st.markdown("---") 
@@ -485,8 +506,7 @@ elif menu == "📡 Extração Central":
             if not sh: 
                 painel_status.error("Erro Crítico de Conexão com o Google Sheets.")
             else:
-                total_salvos = 0
-                bancas_atualizadas = []
+                total_salvos = 0; bancas_atualizadas = []
                 for banca_alvo in BANCAS_CONFIG.keys():
                     res = extrair_dia(banca_alvo, dt)
                     if res:
@@ -498,21 +518,14 @@ elif menu == "📡 Extração Central":
                             ws.append_rows(p_ins, value_input_option="RAW")
                             total_salvos += len(p_ins)
                             bancas_atualizadas.append(f"✅ **{banca_alvo}:** {len(p_ins)} novos registros inseridos.")
-                        else: 
-                            bancas_atualizadas.append(f"ℹ️ **{banca_alvo}:** Base já está atualizada (0 novos).")
-                    else: 
-                        bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
+                        else: bancas_atualizadas.append(f"ℹ️ **{banca_alvo}:** Base já está atualizada (0 novos).")
+                    else: bancas_atualizadas.append(f"⚠️ **{banca_alvo}:** Nenhum dado encontrado no site para hoje.")
                 
                 painel_status.empty() 
-                
                 st.markdown("### 📊 Relatório de Extração:")
-                for b_msg in bancas_atualizadas:
-                    st.markdown(b_msg)
+                for b_msg in bancas_atualizadas: st.markdown(b_msg)
                     
-                if total_salvos > 0: 
-                    st.cache_data.clear()
-                    st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
-                else: 
-                    st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
+                if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
+                else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Gatilho Duplas (Ponto Cego)</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Gatilho Duplas (10D + Ponto Cego)</div>""", unsafe_allow_html=True)
