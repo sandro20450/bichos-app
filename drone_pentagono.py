@@ -38,28 +38,40 @@ def processar_anomalia_duplas(df, coluna):
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
     
-    streak = 0
-    for val in reversed(validos):
+    streak_counts = {}
+    temp_streak = 0
+    for val in validos:
         c = val[-3:]
-        if len(set(c)) < 3:
-            streak += 1
+        if len(set(c)) < 3: 
+            temp_streak += 1
         else:
-            break
-            
-    if streak >= 2:
+            if temp_streak > 0:
+                streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
+                temp_streak = 0
+                
+    current_streak = temp_streak
+    if current_streak > 0:
+        streak_counts[current_streak] = streak_counts.get(current_streak, 0) + 1
+        
+    if current_streak >= 2:
         seen_digits_set = set(); seen_digits_list = []; cold_digit = None
         for val in reversed(validos):
             for char in val[-3:]:
                 d = int(char)
-                if d not in seen_digits_set: seen_digits_set.add(d); seen_digits_list.append(str(d))
-                if len(seen_digits_set) == 9: cold_digit = (set(range(10)) - seen_digits_set).pop(); break
+                if d not in seen_digits_set: 
+                    seen_digits_set.add(d)
+                    seen_digits_list.append(str(d))
+                if len(seen_digits_set) == 9: 
+                    cold_digit = (set(range(10)) - seen_digits_set).pop()
+                    break
             if cold_digit is not None: break
         
         if cold_digit is not None:
             excluido = seen_digits_list[4] 
             seen_digits_list.append(str(cold_digit))
             seq_str = " - ".join(seen_digits_list)
-            return cold_digit, seq_str, excluido, streak
+            max_historico = max(streak_counts.keys()) if streak_counts else current_streak
+            return cold_digit, seq_str, excluido, current_streak, max_historico, streak_counts
             
     return None
 
@@ -86,7 +98,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if milhar in ["----", "0nan", "nan", ""]: continue
         try: m = int(milhar); c = int(milhar[-3:]); d = int(milhar[-2:]); u = int(milhar[-1:])
         except: continue
-        
         g = 25 if d == 0 else math.ceil(d/4)
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos)
         
@@ -97,56 +108,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if (m_min <= m <= m_max): cur_m = 0
         else: cur_m += 1; max_m = max(max_m, cur_m)
     return cur_p, cur_c, cur_m, max_p, max_c, max_m
-
-def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
-    grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
-    col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg_matriz['c_min']}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS', 0), col_delays.get('D: BAIXAS', 0)])
-    if mass_max >= 3:
-        if col_delays.get('G: ÍMPARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 == 0: scores[g] += 1
-        if col_delays.get('G: PARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 != 0: scores[g] += 1
-    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
-    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
-    if not eliminar: return None 
-
-    seguro = {}; valores = df[col].astype(str).tolist()
-    for g in eliminar:
-        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4] if g != 25 else [97, 98, 99, 0]
-        max_d_delay = -1; best_d = -1
-        for d in dezenas:
-            delay_d = 0
-            for val in reversed(valores):
-                m = val.strip().zfill(4)
-                if m in ["----", "0nan", "nan"]: continue
-                try: dez_val = int(m[-2:])
-                except: dez_val = -1
-                if dez_val == d: break
-                delay_d += 1
-            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
-        seguro[g] = (best_d, max_d_delay)
-    return {'eliminar': sorted(eliminar), 'manter': sorted([g for g in grupos if g not in eliminar]), 'seguro': seguro}
-
-def get_cobertura_massa(df, col, cfg_nome):
-    opostos = {"G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24])}
-    if cfg_nome not in opostos: return None
-    desc_oposto, lista_grupos = opostos[cfg_nome]
-    max_delay = -1; best_g = -1
-    valores = df[col].astype(str).tolist()
-    for g in lista_grupos:
-        delay_g = 0
-        for val in reversed(valores):
-            m = val.strip().zfill(4)
-            if m in ["----", "0nan", "nan"]: continue
-            try: d = int(m[-2:])
-            except: continue
-            if (25 if d == 0 else math.ceil(d/4)) == g: break
-            delay_g += 1
-        if delay_g > max_delay: max_delay = delay_g; best_g = g
-    return best_g, max_delay, desc_oposto
 
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -206,14 +167,22 @@ def rodar_drone():
             
             res_duplas = processar_anomalia_duplas(df, col)
             if res_duplas:
-                cold_d, seq_s, excl, streak = res_duplas
-                # Inclui o número do atraso na assinatura para não repetir mensagens à toa, 
-                # mas emitir de novo se o atraso for pra 3
+                cold_d, seq_s, excl, streak, max_hist, historico = res_duplas
                 sig_dupla = f"DUPLA_{banca_nome}_{col}_{streak}"
                 
                 if sig_dupla not in alvos_vistos:
+                    freq_str = f"2x: {historico.get(2, 0)}v"
+                    if 3 in historico: freq_str += f" | 3x: {historico.get(3, 0)}v"
+                    if 4 in historico: freq_str += f" | 4x: {historico.get(4, 0)}v"
+                    if max_hist > 4: freq_str += f" | {max_hist}x: {historico.get(max_hist, 0)}v"
+
                     icone_cor = "🟡" if streak == 2 else "🟢"
-                    msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA ({streak}x DUPLAS SEGUIDAS)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ {streak}x Sorteios com Centenas Duplas/Triplas!\n❄️ Dígito Frio: <b>{cold_d}</b>\n🎯 <b>Ataque Recomendado (10D):</b> {seq_s}\n❌ Excluir Ponto Cego: {excl}\n\n"
+                    msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA ({streak}x DUPLAS SEGUIDAS)</b>\n"
+                    msg_telegram += f"🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n"
+                    msg_telegram += f"📊 <b>HISTÓRICO (RAIO-X DO PRÊMIO):</b>\n"
+                    msg_telegram += f"Recorde: {max_hist}x | Freq: {freq_str}\n\n"
+                    msg_telegram += f"🎯 <b>Ataque Recomendado (10D):</b> {seq_s}\n"
+                    msg_telegram += f"❌ Excluir Ponto Cego: {excl}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
         metrics_cache = {}
@@ -231,7 +200,6 @@ def rodar_drone():
                 
                 is_anomaly = False; tipo_ataque = ""
                 
-                # Drone silenciado: só atira ao bater no teto cravado. Sem alertas prévios.
                 if am >= 9 and ac >= 9 and ap >= ap_lim: is_anomaly = True; tipo_ataque = "🔥 ATAQUE TOTAL (G+C+M)"
                 elif am >= 9: is_anomaly = True; tipo_ataque = f"🔵 ATAQUE MILHAR ({am}x)"
                 elif ac >= 9: is_anomaly = True; tipo_ataque = f"🟢 ATAQUE CENTENA ({ac}x)"
@@ -248,34 +216,7 @@ def rodar_drone():
                     alvos_vistos.add(sig)
 
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
-                    msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n"
-
-                    teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
-                    _, _, _, mp_r, mc_r, mm_r = calcular_metricas_fantasma(df, col, cfg) 
-                    recorde_alvo = mp_r
-                    if "MILHAR" in tipo_ataque: recorde_alvo = mm_r
-                    elif "CENTENA" in tipo_ataque: recorde_alvo = mc_r
-                    elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp_r, mc_r, mm_r)
-                    
-                    if recorde_alvo > teto_alvo + 2:
-                        espera_sugerida = teto_alvo + 2
-                        msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
-
-                    if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache) 
-                        if hedge_data:
-                            elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
-                            mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                            seg_list = [f"D:{str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                            msg_telegram += f"🛡️ <b>Desdobramento:</b>\n❌ Cortar: G {elim_str}\n✅ Jogar: {mant_str}\n🆘 Seguro: {' | '.join(seg_list)}\n"
-                        else: msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
-                    else:
-                        cob_data = get_cobertura_massa(df, col, cfg['nome'])
-                        if cob_data:
-                            g_alvo, delay_g, desc_oposto = cob_data
-                            msg_telegram += f"🛡️ <b>Cobertura:</b> O {desc_oposto} perigoso é <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).\n🎯 Aposta Sniper.\n"
-                            
-                    msg_telegram += "\n"
+                    msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n\n"
                     achou_algo = True
 
     if achou_algo: enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
