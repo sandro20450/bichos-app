@@ -2,13 +2,16 @@ import os
 import json
 import requests
 from bs4 import BeautifulSoup
-from datetime import date
+from datetime import date, datetime
 import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 
+# =============================================================================
+# --- 1. CONFIGURAÇÕES INICIAIS E TELEGRAM ---
+# =============================================================================
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 google_creds_str = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
@@ -19,6 +22,7 @@ COLUNAS_DF = ["P1", "P2", "P3", "P4", "P5"]
 TITULOS_PREMIOS = ["1º PRÊMIO", "2º PRÊMIO", "3º PRÊMIO", "4º PRÊMIO", "5º PRÊMIO"]
 
 def enviar_telegram(mensagem):
+    """Envia a mensagem formatada em HTML para o celular do Comandante."""
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     if len(mensagem) > 4000:
         partes = [mensagem[i:i+4000] for i in range(0, len(mensagem), 4000)]
@@ -26,6 +30,7 @@ def enviar_telegram(mensagem):
     else: requests.post(url, data={"chat_id": CHAT_ID, "text": mensagem, "parse_mode": "HTML"})
 
 def conectar_sheets():
+    """Autentica o robô no banco de dados do Google Sheets."""
     try:
         creds_dict = json.loads(google_creds_str)
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -33,6 +38,56 @@ def conectar_sheets():
         return gspread.authorize(creds).open("CentralBichos")
     except Exception as e: return None
 
+# =============================================================================
+# --- NOVO: RELATÓRIO DIÁRIO DE SAÚDE (BOM DIA) ---
+# =============================================================================
+def verificar_relatorio_matinal(dados_bancas):
+    """
+    Verifica se já passou das 08:00 da manhã. Se sim, envia um relatório 
+    informando que o robô está ativo e o status do banco de dados.
+    Usa um arquivo de texto para lembrar se já enviou hoje.
+    """
+    agora = datetime.now()
+    # Verifica se já são 8h da manhã ou mais
+    if agora.hour >= 8:
+        hoje_str = agora.strftime("%Y-%m-%d")
+        arquivo_memoria = "memoria_bom_dia.txt"
+        ja_enviou_hoje = False
+        
+        # Lê a memória do robô para saber se ele já deu bom dia hoje
+        if os.path.exists(arquivo_memoria):
+            with open(arquivo_memoria, "r") as f:
+                data_salva = f.read().strip()
+                if data_salva == hoje_str:
+                    ja_enviou_hoje = True
+                    
+        # Se ainda não enviou hoje, prepara e dispara o relatório
+        if not ja_enviou_hoje:
+            resumo_bancas = ""
+            for nome, df in dados_bancas.items():
+                if not df.empty:
+                    ult_sorteio = str(df.iloc[-1]["Sorteio"])
+                    total_linhas = len(df)
+                    resumo_bancas += f"▫️ <b>{nome}:</b> {total_linhas} registros (Último: {ult_sorteio})\n"
+            
+            msg_bom_dia = (
+                "☀️ <b>BOM DIA, COMANDANTE!</b>\n\n"
+                "🤖 <b>Status do Drone:</b> 100% ONLINE E VIGIANDO.\n"
+                "📡 <b>Conexão Google Sheets:</b> ESTÁVEL.\n\n"
+                "📊 <b>Resumo do Banco de Dados:</b>\n"
+                f"{resumo_bancas}\n"
+                "🎯 <i>Modo Stealth Ativado. Aguardando alvos atingirem o Teto ou dispararem Gatilhos de Duplas.</i>"
+            )
+            
+            enviar_telegram(msg_bom_dia)
+            
+            # Grava na memória que o bom dia de hoje já foi dado
+            with open(arquivo_memoria, "w") as f:
+                f.write(hoje_str)
+
+# =============================================================================
+# --- 3. MOTORES DE ANÁLISE (GATILHOS E TETOS) ---
+# =============================================================================
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
@@ -81,10 +136,6 @@ def processar_anomalia_duplas(df, coluna):
             
     return None
 
-def get_grupo_int(m):
-    try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
-    except: return None
-
 def gerar_matrizes_taticas():
     esquadroes = []; cms = [{'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999}, {'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999}]
     for cm in cms:
@@ -93,6 +144,13 @@ def gerar_matrizes_taticas():
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
+    
+    esquadroes.extend([
+        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+    ])
     return esquadroes
 
 def calcular_metricas_fantasma(df_analise, coluna, cfg):
@@ -114,56 +172,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if (m_min <= m <= m_max): cur_m = 0
         else: cur_m += 1; max_m = max(max_m, cur_m)
     return cur_p, cur_c, cur_m, max_p, max_c, max_m
-
-def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
-    grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
-    col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg_matriz['c_min']}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS', 0), col_delays.get('D: BAIXAS', 0)])
-    if mass_max >= 3:
-        if col_delays.get('G: ÍMPARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 == 0: scores[g] += 1
-        if col_delays.get('G: PARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 != 0: scores[g] += 1
-    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
-    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
-    if not eliminar: return None 
-
-    seguro = {}; valores = df[col].astype(str).tolist()
-    for g in eliminar:
-        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4] if g != 25 else [97, 98, 99, 0]
-        max_d_delay = -1; best_d = -1
-        for d in dezenas:
-            delay_d = 0
-            for val in reversed(valores):
-                m = val.strip().zfill(4)
-                if m in ["----", "0nan", "nan"]: continue
-                try: dez_val = int(m[-2:])
-                except: dez_val = -1
-                if dez_val == d: break
-                delay_d += 1
-            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
-        seguro[g] = (best_d, max_d_delay)
-    return {'eliminar': sorted(eliminar), 'manter': sorted([g for g in grupos if g not in eliminar]), 'seguro': seguro}
-
-def get_cobertura_massa(df, col, cfg_nome):
-    opostos = {"G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24])}
-    if cfg_nome not in opostos: return None
-    desc_oposto, lista_grupos = opostos[cfg_nome]
-    max_delay = -1; best_g = -1
-    valores = df[col].astype(str).tolist()
-    for g in lista_grupos:
-        delay_g = 0
-        for val in reversed(valores):
-            m = val.strip().zfill(4)
-            if m in ["----", "0nan", "nan"]: continue
-            try: d = int(m[-2:])
-            except: continue
-            if (25 if d == 0 else math.ceil(d/4)) == g: break
-            delay_g += 1
-        if delay_g > max_delay: max_delay = delay_g; best_g = g
-    return best_g, max_delay, desc_oposto
 
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -190,12 +198,16 @@ def extrair_dia(banca, data_alvo):
         return resultados
     except: return []
 
+# =============================================================================
+# --- 4. MOTOR PRINCIPAL DO DRONE ---
+# =============================================================================
 def rodar_drone():
     sh = conectar_sheets()
     if not sh: return
     dt = date.today()
     total_salvos = 0; dados_bancas = {}
     
+    # Etapa 1: Atualização dos Dados
     for banca_nome, aba_nome in MAPA_ABAS.items():
         res = extrair_dia(banca_nome, dt)
         ws = sh.worksheet(aba_nome)
@@ -211,6 +223,11 @@ def rodar_drone():
             df = df[df["P1"].astype(str).str.strip() != ""]
             dados_bancas[banca_nome] = df
 
+    # Etapa 2: Checagem Matinal (Novo Recurso)
+    if dados_bancas:
+        verificar_relatorio_matinal(dados_bancas)
+
+    # Etapa 3: Varredura de Anomalias (Stealth Mode)
     todos_esq = gerar_matrizes_taticas()
     msg_telegram = ""; achou_algo = False; alvos_vistos = set()
 
@@ -221,6 +238,7 @@ def rodar_drone():
         for i, col in enumerate(COLUNAS_DF):
             if banca_nome == "Tradicional" and col != "P1": continue
             
+            # Análise de Duplas Seguidas
             res_duplas = processar_anomalia_duplas(df, col)
             if res_duplas:
                 cold_d, seq_s, excl, streak, max_hist, historico, trend_txt = res_duplas
@@ -242,6 +260,7 @@ def rodar_drone():
                     msg_telegram += f"❌ Excluir Ponto Cego: {excl}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
+        # Análise das Matrizes Regulares
         metrics_cache = {}
         for cfg in todos_esq:
             for col in COLUNAS_DF:
@@ -257,7 +276,7 @@ def rodar_drone():
                 
                 is_anomaly = False; tipo_ataque = ""
                 
-                # Drone silenciado: só atira ao bater no teto cravado. Sem alertas prévios.
+                # Gatilho Silencioso (Somente no Teto Exato)
                 if am >= 9 and ac >= 9 and ap >= ap_lim: is_anomaly = True; tipo_ataque = "🔥 ATAQUE TOTAL (G+C+M)"
                 elif am >= 9: is_anomaly = True; tipo_ataque = f"🔵 ATAQUE MILHAR ({am}x)"
                 elif ac >= 9: is_anomaly = True; tipo_ataque = f"🟢 ATAQUE CENTENA ({ac}x)"
@@ -285,27 +304,15 @@ def rodar_drone():
                     
                     if recorde_alvo > teto_alvo + 2:
                         espera_sugerida = teto_alvo + 2
-                        msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
-
-                    if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache) 
-                        if hedge_data:
-                            elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
-                            mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                            seg_list = [f"D:{str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                            msg_telegram += f"🛡️ <b>Desdobramento:</b>\n❌ Cortar: G {elim_str}\n✅ Jogar: {mant_str}\n🆘 Seguro: {' | '.join(seg_list)}\n"
-                        else: msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
-                    else:
-                        cob_data = get_cobertura_massa(df, col, cfg['nome'])
-                        if cob_data:
-                            g_alvo, delay_g, desc_oposto = cob_data
-                            msg_telegram += f"🛡️ <b>Cobertura:</b> O {desc_oposto} perigoso é <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).\n🎯 Aposta Sniper.\n"
-                            
-                    msg_telegram += "\n"
+                        msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n\n"
+                    
                     achou_algo = True
 
-    if achou_algo: enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
-    elif total_salvos > 0: enviar_telegram(f"🟢 <b>ROTAÇÃO CONCLUÍDA</b>\n{total_salvos} novos sorteios salvos. Mercado em Stealth (Nenhum teto rompido).")
+    # Se achou anomalia no radar, envia. Caso contrário, só avisa se for a primeira rodada do dia com dados novos.
+    if achou_algo: 
+        enviar_telegram("🛸 <b>DRONE PENTÁGONO - ALVOS ENGATILHADOS</b> 🛸\n\n" + msg_telegram)
+    elif total_salvos > 0: 
+        enviar_telegram(f"🟢 <b>ROTAÇÃO CONCLUÍDA</b>\n{total_salvos} novos sorteios salvos. Mercado em Stealth (Nenhum teto rompido).")
 
 if __name__ == "__main__":
     rodar_drone()
