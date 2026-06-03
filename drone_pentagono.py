@@ -75,6 +75,24 @@ def verificar_relatorio_matinal(dados_bancas):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def metricas_duplas_raiox(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+    if len(validos) < 2: return 0, 0
+    streak_counts = {}
+    temp_streak = 0
+    for val in validos:
+        c = val[-3:]
+        if len(set(c)) < 3: 
+            temp_streak += 1
+        else:
+            if temp_streak > 0:
+                streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
+                temp_streak = 0
+    current_streak = temp_streak
+    max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
+    return current_streak, max_historico
+
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
@@ -154,6 +172,7 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         g = 25 if d == 0 else math.ceil(d/4)
         
+        # Bug da Milhar resolvido
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
@@ -240,7 +259,7 @@ def extrair_dia(banca, data_alvo):
     except: return []
 
 # =============================================================================
-# --- MOTOR PRINCIPAL DO DRONE ---
+# --- 4. MOTOR PRINCIPAL DO DRONE ---
 # =============================================================================
 def rodar_drone():
     sh = conectar_sheets()
