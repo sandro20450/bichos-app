@@ -38,8 +38,15 @@ def processar_anomalia_duplas(df, coluna):
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
     
-    c1, c2 = validos[-1][-3:], validos[-2][-3:]
-    if len(set(c1)) < 3 and len(set(c2)) < 3:
+    streak = 0
+    for val in reversed(validos):
+        c = val[-3:]
+        if len(set(c)) < 3:
+            streak += 1
+        else:
+            break
+            
+    if streak >= 2:
         seen_digits_set = set(); seen_digits_list = []; cold_digit = None
         for val in reversed(validos):
             for char in val[-3:]:
@@ -47,12 +54,20 @@ def processar_anomalia_duplas(df, coluna):
                 if d not in seen_digits_set: seen_digits_set.add(d); seen_digits_list.append(str(d))
                 if len(seen_digits_set) == 9: cold_digit = (set(range(10)) - seen_digits_set).pop(); break
             if cold_digit is not None: break
+        
         if cold_digit is not None:
-            return cold_digit, " - ".join(seen_digits_list), (cold_digit + 1) % 10
+            excluido = seen_digits_list[4] 
+            seen_digits_list.append(str(cold_digit))
+            seq_str = " - ".join(seen_digits_list)
+            return cold_digit, seq_str, excluido, streak
+            
     return None
 
+def get_grupo_int(m):
+    try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
+    except: return None
+
 def gerar_matrizes_taticas():
-    # Remoção do INV 8D e 9D para alinhar o robô com a interface visual
     esquadroes = []; cms = [{'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999}, {'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999}]
     for cm in cms:
         for g in range(1, 14): esquadroes.append({'alvos': set(range(g, g+13)), 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G13: {str(g).zfill(2)}-{str(g+12).zfill(2)}", 'lim': 9, **cm})
@@ -191,10 +206,14 @@ def rodar_drone():
             
             res_duplas = processar_anomalia_duplas(df, col)
             if res_duplas:
-                cold_d, seq_s, excl = res_duplas
-                sig_dupla = f"DUPLA_{banca_nome}_{col}"
+                cold_d, seq_s, excl, streak = res_duplas
+                # Inclui o número do atraso na assinatura para não repetir mensagens à toa, 
+                # mas emitir de novo se o atraso for pra 3
+                sig_dupla = f"DUPLA_{banca_nome}_{col}_{streak}"
+                
                 if sig_dupla not in alvos_vistos:
-                    msg_telegram += f"🚨 <b>GATILHO DE ANOMALIA (DUPLAS SEGUIDAS)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ 2x Sorteios com Centenas Duplas/Triplas!\n❄️ Dígito Frio: <b>{cold_d}</b>\n🎯 <b>Ataque Recomendado:</b> {seq_s}\n❌ Excluir Isca: {excl}\n\n"
+                    icone_cor = "🟡" if streak == 2 else "🟢"
+                    msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA ({streak}x DUPLAS SEGUIDAS)</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n⚠️ {streak}x Sorteios com Centenas Duplas/Triplas!\n❄️ Dígito Frio: <b>{cold_d}</b>\n🎯 <b>Ataque Recomendado (10D):</b> {seq_s}\n❌ Excluir Ponto Cego: {excl}\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
         metrics_cache = {}
@@ -247,7 +266,7 @@ def rodar_drone():
                         if hedge_data:
                             elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
                             mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                            seg_list = [f"D:{str(d).zfill(2)}" for g, (d, delay) in hedge_data['seguro'].items()]
+                            seg_list = [f"D:{str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
                             msg_telegram += f"🛡️ <b>Desdobramento:</b>\n❌ Cortar: G {elim_str}\n✅ Jogar: {mant_str}\n🆘 Seguro: {' | '.join(seg_list)}\n"
                         else: msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
                     else:
