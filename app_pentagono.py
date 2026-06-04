@@ -9,20 +9,81 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES E CSS DA INTERFACE ---
+# --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.49) ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.48 - Raio-X Duplas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.49 - Glass UI", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
-.home-box { border-radius: 8px; padding: 12px; margin-bottom: 15px; text-align: center; border: 1px solid #444; background-color: #111; }
-.rodape-tatico { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #000; color: #ffcc00; text-align: center; padding: 10px; font-size: 14px; border-top: 2px solid #ff4b4b; z-index: 9999; font-weight: bold;}
+/* 1. Fundo Tático (Necessário para o vidro refletir algo) */
+.stApp {
+    background: linear-gradient(135deg, #07090f 0%, #000000 100%);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(0, 255, 255, 0.1) 0px, transparent 40%),
+        radial-gradient(at 100% 100%, rgba(255, 0, 255, 0.1) 0px, transparent 40%);
+    background-attachment: fixed;
+}
+
+/* 2. Glassmorphism Principal (Os Cards) */
+.home-box { 
+    border-radius: 12px; 
+    padding: 16px; 
+    margin-bottom: 15px; 
+    text-align: center; 
+    
+    /* Efeito Vidro */
+    background: rgba(20, 25, 30, 0.4); 
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+/* Efeito Liquid ao passar o mouse */
+.home-box:hover {
+    transform: translateY(-4px);
+    background: rgba(30, 35, 45, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* 3. Rodapé de Vidro */
+.rodape-tatico { 
+    position: fixed; bottom: 0; left: 0; width: 100%; 
+    background: rgba(5, 5, 5, 0.7); 
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    color: #ffcc00; text-align: center; padding: 10px; font-size: 14px; 
+    border-top: 1px solid rgba(255, 255, 255, 0.1); z-index: 9999; font-weight: bold;
+}
+
 .block-container { padding-bottom: 80px; }
-div.stButton > button { width: 100%; border-radius: 8px; font-weight: bold; min-height: 45px; border: 1px solid #555; }
-.alerta-verde { background-color: rgba(0,255,0,0.1); border: 1px solid #00ff00; color: #00ff00; padding: 6px; border-radius: 5px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-.sniper-titulo { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; background-color: rgba(0,0,0,0.5); }
+
+/* 4. Botões Glass */
+div.stButton > button { 
+    width: 100%; border-radius: 8px; font-weight: bold; min-height: 45px; 
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    transition: all 0.3s ease;
+}
+div.stButton > button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+    color: #00ffff;
+}
+
+/* 5. Alertas Internos de Vidro Colorido */
+.alerta-verde { background: rgba(0,255,0,0.05); backdrop-filter: blur(4px); border: 1px solid rgba(0,255,0,0.3); color: #00ff00; padding: 6px; border-radius: 6px; font-weight: bold; margin-top: 10px; font-size: 12px; }
+.alerta-amarelo { background: rgba(255,102,0,0.05); backdrop-filter: blur(4px); border: 1px solid rgba(255,102,0,0.3); color: #ff6600; padding: 6px; border-radius: 6px; font-weight: bold; margin-top: 10px; font-size: 12px; }
+
+/* Tipografia */
+.sniper-titulo { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; background: rgba(0,0,0,0.2); border-radius: 4px;}
 .sniper-dado { font-size: 12px; color: #ccc; margin: 6px 0; }
-.sniper-valor { font-weight: bold; font-size: 15px; color: #fff; }
+.sniper-valor { font-weight: bold; font-size: 16px; color: #fff; text-shadow: 0 0 10px currentColor; letter-spacing: 1px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -30,7 +91,7 @@ def aplicar_estilos_ui(cor_neon):
     st.markdown(f"""
     <style>
         .titulo-container {{ display: flex; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}}
-        .titulo-texto {{ margin: 0; font-size: 34px; font-weight: bold; color: #ffffff; }}
+        .titulo-texto {{ margin: 0; font-size: 34px; font-weight: bold; color: #ffffff; text-shadow: 0 0 15px {cor_neon};}}
         .radar-container {{ position: relative; width: 34px; height: 34px; display: flex; justify-content: center; align-items: center; }}
         .radar-core {{ position: absolute; width: 10px; height: 10px; background-color: {cor_neon}; border-radius: 50%; box-shadow: 0 0 10px {cor_neon}; z-index: 2; }}
         .radar-pulse {{ position: absolute; width: 10px; height: 10px; border: 2px solid {cor_neon}; border-radius: 50%; z-index: 1; animation: radar-ping 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }}
@@ -75,13 +136,17 @@ def carregar_dados_em_memoria(banca_nome):
 def exibir_banner_sorteio(df, banca):
     if not df.empty:
         ult_nome = str(df.iloc[-1]["Sorteio"])
-        st.markdown(f"""<div style="background-color: #0e1117; border: 1px solid #4CAF50; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px;"><span style='color: #4CAF50; font-size: 11px; font-weight: bold;'>📡 ÚLTIMA ATUALIZAÇÃO LIDA DA PLANILHA:</span><br><span style='color: white; font-size: 18px; font-weight: bold;'>{banca} - {ult_nome}</span></div>""", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="background: rgba(0, 255, 0, 0.05); backdrop-filter: blur(5px); border: 1px solid rgba(0, 255, 0, 0.2); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <span style='color: #4CAF50; font-size: 11px; font-weight: bold;'>📡 ÚLTIMA ATUALIZAÇÃO LIDA DA PLANILHA:</span><br>
+            <span style='color: white; font-size: 18px; font-weight: bold; text-shadow: 0 0 5px rgba(255,255,255,0.5);'>{banca} - {ult_nome}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
 def metricas_duplas_raiox(df, coluna):
-    # Novo Motor Especial para a Planilha de Massa
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return 0, 0
@@ -179,7 +244,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         g = 25 if d == 0 else math.ceil(d/4)
         
-        # Bug da Milhar resolvido definitivamente
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
@@ -202,7 +266,7 @@ def deduplicar_alvos(lista):
 
 def get_hedge_grupos(df, col, cfg_matriz, col_delays):
     grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS', 0), col_delays.get('D: BAIXAS', 0)])
+    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
     if mass_max >= 3:
         if col_delays.get('G: ÍMPARES', 0) >= 3:
             for g in grupos:
@@ -210,6 +274,21 @@ def get_hedge_grupos(df, col, cfg_matriz, col_delays):
         if col_delays.get('G: PARES', 0) >= 3:
             for g in grupos:
                 if g % 2 != 0: scores[g] += 1
+        if col_delays.get('D: ALTAS (51-00)', 0) >= 3:
+            for g in grupos:
+                if g <= 12: scores[g] += 1
+        if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
+            for g in grupos:
+                if g >= 13: scores[g] += 1
+    else:
+        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0), col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
+        if uni_max >= 3:
+            if col_delays.get('U: ÍMPARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 == 0: scores[g] += 1
+            if col_delays.get('U: PARES', 0) >= 3:
+                for g in grupos:
+                    if (g % 10) % 2 != 0: scores[g] += 1
     sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
     eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
     if not eliminar: return None 
@@ -284,7 +363,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.48")
+    st.header("Pentágono V65.49")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -342,7 +421,7 @@ if menu == "🏠 Visão Geral (Home)":
                             
                             if recorde_alvo > teto_alvo + 2:
                                 espera_sugerida = teto_alvo + 2
-                                alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
+                                alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:6px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra. Sugestão: Aguarde {espera_sugerida}x.</div>"
                         
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
@@ -350,13 +429,12 @@ if menu == "🏠 Visão Geral (Home)":
                                 if hedge_data:
                                     elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
                                     mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                                    seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
                             else:
                                 cob_data = get_cobertura_massa(df, col, cfg['nome'])
                                 if cob_data:
                                     g_alvo, delay_g, desc_oposto = cob_data
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
 
                             op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
                             alvos_teto.append(op_data)
@@ -379,18 +457,18 @@ if menu == "🏠 Visão Geral (Home)":
                 
                 with cols[idx % 3]:
                     st.markdown(f"""
-                    <div class="home-box" style="border-color:{cor_box}; box-shadow: 0 0 15px rgba({sombra_cor},0.3);">
-                        <div class="home-banca">🏦 {op['banca']}</div>
-                        <div class="home-premio">🏆 {op['premio']}</div>
+                    <div class="home-box" style="border-color: rgba({sombra_cor}, 0.5); box-shadow: 0 0 20px rgba({sombra_cor},0.15);">
+                        <div class="home-banca" style="color: #fff;">🏦 {op['banca']}</div>
+                        <div class="home-premio" style="color: #ddd;">🏆 {op['premio']}</div>
                         <div class="sniper-titulo" style="color:{cor_box};">🚨 GATILHO: {streak_count}x DUPLAS SEGUIDAS</div>
-                        <div style="font-size:11px; background:rgba(0,0,0,0.5); padding:6px; border-radius:5px; margin-bottom:8px; text-align:left; color:#ccc;">
+                        <div style="font-size:11px; background:rgba(0,0,0,0.3); padding:8px; border-radius:6px; margin-bottom:8px; text-align:left; color:#ccc; border: 1px solid rgba(255,255,255,0.05);">
                             <b style='color:#ffcc00;'>📊 HISTÓRICO DESTE PRÊMIO:</b><br>
                             Recorde Máximo: <b style='color:#fff;'>{op['max_hist']}x</b><br>
                             Freq: {freq_str}<br>
                             <b style='color:#00ffff;'>📈 TENDÊNCIA: {op['trend']}</b>
                         </div>
                         <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
-                        <div class="sniper-valor" style="color:#00ff00; font-size:18px;">{op['seq']}</div>
+                        <div class="sniper-valor" style="color:#00ff00;">{op['seq']}</div>
                         <div style="font-size:12px; color:{cor_box}; margin-top:8px; font-weight:bold;">❌ Excluir Ponto Cego: {op['excluido']}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -402,7 +480,6 @@ if menu == "🏠 Visão Geral (Home)":
             for idx, op in enumerate(alvos_teto):
                 c_min, c_max, m_min, m_max = op['cfg']['c_min'], op['cfg']['c_max'], op['cfg']['m_min'], op['cfg']['m_max']
                 ta = op.get('tipo_ataque', '')
-                css_class = f"home-box-seq"
                 
                 if ta == 'UNIDADE': lbl_alvo, titulo, cm_html = "Unidade", op['cfg']['nome'], ""
                 elif ta == 'MILHAR': lbl_alvo, titulo, cm_html = "Filtro", f"M: {str(m_min).zfill(4)} A {str(m_max).zfill(4)}", f"Centena: {op['ac']}x | Milhar: {op['am']}x"
@@ -410,7 +487,7 @@ if menu == "🏠 Visão Geral (Home)":
                 else: lbl_alvo, titulo, cm_html = "Atraso", op['cfg']['nome'], f"Centena: {op['ac']}x | Milhar: {op['am']}x"
                     
                 with cols[idx % 3]:
-                    st.markdown(f"""<div class="home-box {css_class}"><div class="home-banca">🏦 {op['banca']}</div><div class="home-premio">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#00ff00;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div class="home-box"><div class="home-banca" style="color: #fff;">🏦 {op['banca']}</div><div class="home-premio" style="color: #ddd;">🏆 {op['premio']}</div><div class="sniper-titulo">{titulo}</div><div class="sniper-valor" style="color:#00ff00;">{op['ap']}x</div><div style="font-size:11px; color:#aaa;">{cm_html}</div>{op['alerta']}</div>""", unsafe_allow_html=True)
             st.markdown("---") 
 
         if not alvos_teto and not alertas_duplas: 
@@ -441,7 +518,7 @@ elif menu == "🎯 Scanner de Raio-X":
                 for i, col in enumerate(COLUNAS_DF):
                     ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
                     with cols_rx[i]:
-                        st.markdown(f"""<div class="home-box"><div class="home-premio">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div>Rec: {mp}x</div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="home-box"><div class="home-premio" style="color: #fff;">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="color: #888; font-size: 11px;">Rec: {mp}x</div></div>""", unsafe_allow_html=True)
     else:
         if st.button("GERAR PLANILHA DE MASSA", type="primary"):
             df = carregar_dados_em_memoria(banca_rx)
@@ -449,14 +526,12 @@ elif menu == "🎯 Scanner de Raio-X":
             else:
                 dados_tabela = []
                 
-                # --- NOVIDADE V65.48: A LINHA DAS DUPLAS NO RAIO-X ---
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
-                # Demais Filtros Normais
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
