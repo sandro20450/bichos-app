@@ -75,6 +75,35 @@ def verificar_relatorio_matinal(dados_bancas):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def gerar_milhares_preditivas(df, coluna):
+    valores = df[coluna].astype(str).tolist()
+    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+    if not validos: return "0000", "0000", "0000"
+
+    sniper = ""; vulcao = ""; mutante = ""
+    recentes = validos[-100:] if len(validos) >= 100 else validos
+
+    for pos in range(4):
+        delays = {str(d): -1 for d in range(10)}
+        for d in range(10):
+            delay = 0
+            for val in reversed(validos):
+                if len(val) >= 4 and val[pos] == str(d): break
+                delay += 1
+            delays[str(d)] = delay
+        coldest = max(delays, key=delays.get)
+
+        freqs = {str(d): 0 for d in range(10)}
+        for val in recentes:
+            if len(val) >= 4: freqs[val[pos]] += 1
+        hottest = max(freqs, key=freqs.get)
+
+        sniper += coldest
+        vulcao += hottest
+        mutante += coldest if pos % 2 == 0 else hottest
+
+    return sniper, vulcao, mutante
+
 def get_10d_state(validos_slice):
     seen_set = set(); seen_list = []; cold = None
     for val in reversed(validos_slice):
@@ -90,24 +119,6 @@ def get_10d_state(validos_slice):
         seen_list.append(str(cold))
         return seen_list
     return []
-
-def metricas_duplas_raiox(df, coluna):
-    valores = df[coluna].astype(str).tolist()
-    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
-    if len(validos) < 2: return 0, 0
-    streak_counts = {}
-    temp_streak = 0
-    for val in validos:
-        c = val[-3:]
-        if len(set(c)) < 3: 
-            temp_streak += 1
-        else:
-            if temp_streak > 0:
-                streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
-                temp_streak = 0
-    current_streak = temp_streak
-    max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
-    return current_streak, max_historico
 
 def processar_anomalia_duplas(df, coluna):
     valores = df[coluna].astype(str).tolist()
@@ -134,7 +145,6 @@ def processar_anomalia_duplas(df, coluna):
             excluido_padrao = current_10d_list[4] 
             seq_str = " - ".join(current_10d_list)
             
-            # Tendência Preditiva
             max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
             total_reached = sum(v for k, v in streak_counts.items() if k >= current_streak) + 1
             broke_at_current = streak_counts.get(current_streak, 0)
@@ -142,7 +152,6 @@ def processar_anomalia_duplas(df, coluna):
             prob_cont = 100 - prob_break
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
-            # Fuzzy Matching & Rastreio Fantasma
             past_breaks = []
             temp = 0
             for i in range(len(validos)):
@@ -165,7 +174,6 @@ def processar_anomalia_duplas(df, coluna):
                     best_score = score
                     best_match = pb
                     
-            cruzamento_html = ""
             cruzamento_txt = ""
             melhor_exclusao = excluido_padrao
             
@@ -186,36 +194,24 @@ def processar_anomalia_duplas(df, coluna):
                 
                 detalhes.sort(key=lambda x: x['forca'], reverse=True)
                 
-                cruzamento_html += f"<div style='background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; margin-top:10px; border:1px solid rgba(255,255,255,0.1); text-align:left; font-size:12px;'>"
-                cruzamento_html += f"<b style='color:#00ffff;'>👻 RASTREIO FANTASMA (Simil. {best_score*10}%)</b><br>"
-                cruzamento_html += f"<span style='color:#ccc;'>Centena do passado: <b>{cent_quebra}</b></span><br>"
-                cruzamento_html += f"<b style='color:#fff; margin-top:5px; display:inline-block;'>🔬 CRUZAMENTO TÁTICO:</b><br>"
-                
                 cruzamento_txt += f"👻 <b>RASTREIO FANTASMA (Simil. {best_score*10}%)</b>\n"
                 cruzamento_txt += f"Centena do passado: <b>{cent_quebra}</b>\n"
                 cruzamento_txt += f"🔬 <b>CRUZAMENTO TÁTICO:</b>\n"
 
                 primeiro = True
                 for item in detalhes:
-                    cruzamento_html += f"{item['icon']} Dígito <b style='color:{item['cor']};'>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)<br>"
                     cruzamento_txt += f"▫️ Dígito <b>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)\n"
                     if primeiro:
                         melhor_exclusao = item['digito']
                         primeiro = False
                         
-                cruzamento_html += f"<div style='margin-top:8px; color:#ff4b4b; font-weight:bold; font-size:13px; text-align:center;'>❌ DECISÃO IA: Excluir {melhor_exclusao}</div></div>"
                 cruzamento_txt += f"❌ <b>DECISÃO IA:</b> Excluir {melhor_exclusao}\n"
             else:
-                cruzamento_html = f"<div style='margin-top:10px; color:#ff4b4b; font-weight:bold;'>❌ DECISÃO PADRÃO P. CEGO: Excluir {melhor_exclusao}</div>"
                 cruzamento_txt = f"❌ <b>DECISÃO PADRÃO P. CEGO:</b> Excluir {melhor_exclusao}\n"
             
-            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, cruzamento_txt
+            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, "", cruzamento_txt
             
     return None
-
-def get_grupo_int(m):
-    try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
-    except: return None
 
 def gerar_matrizes_taticas():
     esquadroes = []; cms = [{'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999}, {'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999}]
@@ -319,14 +315,14 @@ def rodar_drone():
             
             res_duplas = processar_anomalia_duplas(df, col)
             if res_duplas:
-                cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, cruz_html, cruz_txt = res_duplas
+                cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, _, cruz_txt = res_duplas
+                m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
                 sig_dupla = f"DUPLA_{banca_nome}_{col}_{streak}"
                 
                 if sig_dupla not in alvos_vistos:
                     freq_str = f"2x: {historico.get(2, 0)}v"
                     if 3 in historico: freq_str += f" | 3x: {historico.get(3, 0)}v"
                     if 4 in historico: freq_str += f" | 4x: {historico.get(4, 0)}v"
-                    if max_hist > 4: freq_str += f" | {max_hist}x: {historico.get(max_hist, 0)}v"
 
                     icone_cor = "🟡" if streak == 2 else "🟢"
                     msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA ({streak}x DUPLAS SEGUIDAS)</b>\n"
@@ -335,7 +331,10 @@ def rodar_drone():
                     msg_telegram += f"Recorde: {max_hist}x | Freq: {freq_str}\n"
                     msg_telegram += f"📈 <b>TENDÊNCIA:</b> {trend_txt}\n\n"
                     msg_telegram += f"🎯 <b>Ataque Recomendado (10D):</b> {seq_s}\n"
-                    msg_telegram += cruz_txt + "\n\n"
+                    msg_telegram += cruz_txt + "\n"
+                    msg_telegram += f"🤖 <b>SÍNTESE PREDITIVA DA IA:</b>\n"
+                    msg_telegram += f"🧊 Sniper: <b>{m_sniper}</b> | 🔥 Vulcão: <b>{m_vulcao}</b>\n"
+                    msg_telegram += f"🧬 Mutante: <b>{m_mutante}</b>\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
         metrics_cache = {}
@@ -368,21 +367,13 @@ def rodar_drone():
                     if sig in alvos_vistos: continue
                     alvos_vistos.add(sig)
 
+                    m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
+
                     msg_telegram += f"🎯 <b>{tipo_ataque}</b>\n🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\nAlvo: <b>{cfg['nome']}</b>\nAtraso Principal: {ap}x\n"
                     msg_telegram += f"Base C: {str(c_min).zfill(3)} ao {str(c_max).zfill(3)}\nAtraso C: {ac}x | Atraso M: {am}x\n\n"
-                    
-                    teto_alvo = 9 if "MILHAR" in tipo_ataque or "CENTENA" in tipo_ataque or "TOTAL" in tipo_ataque else ap_lim
-                    _, _, _, mp_r, mc_r, mm_r = calcular_metricas_fantasma(df, col, cfg) 
-                    recorde_alvo = mp_r
-                    if "MILHAR" in tipo_ataque: recorde_alvo = mm_r
-                    elif "CENTENA" in tipo_ataque: recorde_alvo = mc_r
-                    elif "TOTAL" in tipo_ataque: recorde_alvo = max(mp_r, mc_r, mm_r)
-                    
-                    if recorde_alvo > teto_alvo + 2:
-                        espera_sugerida = teto_alvo + 2
-                        msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
-
-                    msg_telegram += "\n"
+                    msg_telegram += f"🤖 <b>SÍNTESE PREDITIVA DA IA:</b>\n"
+                    msg_telegram += f"🧊 Sniper: <b>{m_sniper}</b> | 🔥 Vulcão: <b>{m_vulcao}</b>\n"
+                    msg_telegram += f"🧬 Mutante: <b>{m_mutante}</b>\n\n"
                     achou_algo = True
 
     if achou_algo: enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
