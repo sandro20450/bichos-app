@@ -9,13 +9,12 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.49) ---
+# --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.50) ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.49 - Glass UI", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.50 - Motor Fantasma", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
-/* 1. Fundo Tático (Necessário para o vidro refletir algo) */
 .stApp {
     background: linear-gradient(135deg, #07090f 0%, #000000 100%);
     background-image: 
@@ -23,64 +22,34 @@ st.markdown("""
         radial-gradient(at 100% 100%, rgba(255, 0, 255, 0.1) 0px, transparent 40%);
     background-attachment: fixed;
 }
-
-/* 2. Glassmorphism Principal (Os Cards) */
 .home-box { 
-    border-radius: 12px; 
-    padding: 16px; 
-    margin-bottom: 15px; 
-    text-align: center; 
-    
-    /* Efeito Vidro */
+    border-radius: 12px; padding: 16px; margin-bottom: 15px; text-align: center; 
     background: rgba(20, 25, 30, 0.4); 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-    transition: all 0.3s ease;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); transition: all 0.3s ease;
 }
-
-/* Efeito Liquid ao passar o mouse */
 .home-box:hover {
-    transform: translateY(-4px);
-    background: rgba(30, 35, 45, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.7);
+    transform: translateY(-4px); background: rgba(30, 35, 45, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.7);
 }
-
-/* 3. Rodapé de Vidro */
 .rodape-tatico { 
     position: fixed; bottom: 0; left: 0; width: 100%; 
-    background: rgba(5, 5, 5, 0.7); 
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    background: rgba(5, 5, 5, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
     color: #ffcc00; text-align: center; padding: 10px; font-size: 14px; 
     border-top: 1px solid rgba(255, 255, 255, 0.1); z-index: 9999; font-weight: bold;
 }
-
 .block-container { padding-bottom: 80px; }
-
-/* 4. Botões Glass */
 div.stButton > button { 
     width: 100%; border-radius: 8px; font-weight: bold; min-height: 45px; 
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1); color: #ffffff; transition: all 0.3s ease;
 }
 div.stButton > button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(0, 255, 255, 0.4);
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-    color: #00ffff;
+    background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(0, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2); color: #00ffff;
 }
-
-/* 5. Alertas Internos de Vidro Colorido */
 .alerta-verde { background: rgba(0,255,0,0.05); backdrop-filter: blur(4px); border: 1px solid rgba(0,255,0,0.3); color: #00ff00; padding: 6px; border-radius: 6px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-.alerta-amarelo { background: rgba(255,102,0,0.05); backdrop-filter: blur(4px); border: 1px solid rgba(255,102,0,0.3); color: #ff6600; padding: 6px; border-radius: 6px; font-weight: bold; margin-top: 10px; font-size: 12px; }
-
-/* Tipografia */
 .sniper-titulo { font-size: 13px; font-weight: bold; color: #fff; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; background: rgba(0,0,0,0.2); border-radius: 4px;}
 .sniper-dado { font-size: 12px; color: #ccc; margin: 6px 0; }
 .sniper-valor { font-weight: bold; font-size: 16px; color: #fff; text-shadow: 0 0 10px currentColor; letter-spacing: 1px;}
@@ -146,25 +115,40 @@ def exibir_banner_sorteio(df, banca):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def get_10d_state(validos_slice):
+    """Função utilitária que gera os 10 dígitos na ordem exata a partir de uma fatia do tempo."""
+    seen_set = set(); seen_list = []; cold = None
+    for val in reversed(validos_slice):
+        for char in val[-3:]:
+            d = int(char)
+            if d not in seen_set: 
+                seen_set.add(d); seen_list.append(str(d))
+            if len(seen_set) == 9: 
+                cold = (set(range(10)) - seen_set).pop()
+                break
+        if cold is not None: break
+    if cold is not None:
+        seen_list.append(str(cold))
+        return seen_list
+    return []
+
 def metricas_duplas_raiox(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return 0, 0
-    streak_counts = {}
-    temp_streak = 0
+    streak_counts = {}; temp_streak = 0
     for val in validos:
         c = val[-3:]
-        if len(set(c)) < 3: 
-            temp_streak += 1
+        if len(set(c)) < 3: temp_streak += 1
         else:
-            if temp_streak > 0:
-                streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
-                temp_streak = 0
+            if temp_streak > 0: streak_counts[temp_streak] = streak_counts.get(temp_streak, 0) + 1
+            temp_streak = 0
     current_streak = temp_streak
     max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
     return current_streak, max_historico
 
 def processar_anomalia_duplas(df, coluna):
+    # Motor V65.50: Inclui Rastreio Fantasma e Cruzamento Matemático
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
@@ -183,32 +167,90 @@ def processar_anomalia_duplas(df, coluna):
     current_streak = temp_streak
     
     if current_streak >= 2:
-        seen_digits_set = set(); seen_digits_list = []; cold_digit = None
-        for val in reversed(validos):
-            for char in val[-3:]:
-                d = int(char)
-                if d not in seen_digits_set: 
-                    seen_digits_set.add(d)
-                    seen_digits_list.append(str(d))
-                if len(seen_digits_set) == 9: 
-                    cold_digit = (set(range(10)) - seen_digits_set).pop()
-                    break
-            if cold_digit is not None: break
+        current_10d_list = get_10d_state(validos)
         
-        if cold_digit is not None:
-            excluido = seen_digits_list[4] 
-            seen_digits_list.append(str(cold_digit)) 
-            seq_str = " - ".join(seen_digits_list)
-            max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
+        if current_10d_list:
+            excluido_padrao = current_10d_list[4] # Isca padrão (Ponto Cego)
+            seq_str = " - ".join(current_10d_list)
             
+            # TENDÊNCIA PREDITIVA
+            max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
             total_reached = sum(v for k, v in streak_counts.items() if k >= current_streak) + 1
             broke_at_current = streak_counts.get(current_streak, 0)
-            
             prob_break = (broke_at_current / total_reached) * 100 if total_reached > 0 else 0
             prob_cont = 100 - prob_break
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
-            return cold_digit, seq_str, excluido, current_streak, max_historico, streak_counts, trend_text
+            # RASTREIO DE FANTASMAS DO PASSADO
+            past_breaks = []
+            temp = 0
+            for i in range(len(validos)):
+                c = validos[i][-3:]
+                if len(set(c)) < 3:
+                    temp += 1
+                else:
+                    if temp >= 2:
+                        state_before = get_10d_state(validos[:i])
+                        if state_before:
+                            past_breaks.append({'state': state_before, 'breaker': c})
+                    temp = 0
+            
+            best_match = None
+            best_score = -1
+            
+            # Fuzzy Matching: Mede o grau de semelhança entre o passado e o presente
+            for pb in past_breaks:
+                score = sum(1 for a, b in zip(pb['state'], current_10d_list) if a == b)
+                if score > best_score:
+                    best_score = score
+                    best_match = pb
+                    
+            cruzamento_html = ""
+            cruzamento_txt = ""
+            melhor_exclusao = excluido_padrao
+            
+            if best_match and best_score >= 0:
+                cent_quebra = best_match['breaker']
+                digitos_quebra = list(set(cent_quebra))
+                
+                detalhes = []
+                for d in digitos_quebra:
+                    if d in current_10d_list:
+                        idx = current_10d_list.index(d)
+                        # Cálculo Matemático da Força de Exclusão
+                        if idx == 0: forca = 85; desc = "Saturado (1º da fila)"; cor = "#ffaa00"; icon="🟠"
+                        elif idx == 4: forca = 99; desc = "Ponto Cego Atual"; cor = "#ff4b4b"; icon="🔴"
+                        elif idx == 9: forca = 10; desc = "Dígito Frio"; cor = "#888888"; icon="⚪"
+                        elif idx < 4: forca = 70; desc = f"Quente (Posição {idx+1})"; cor = "#ffff00"; icon="🟡"
+                        else: forca = 40; desc = f"Morno/Frio (Posição {idx+1})"; cor = "#00ff00"; icon="🟢"
+                        detalhes.append({'digito': d, 'forca': forca, 'desc': desc, 'cor': cor, 'icon': icon})
+                
+                detalhes.sort(key=lambda x: x['forca'], reverse=True)
+                
+                cruzamento_html += f"<div style='background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; margin-top:10px; border:1px solid rgba(255,255,255,0.1); text-align:left; font-size:12px;'>"
+                cruzamento_html += f"<b style='color:#00ffff;'>👻 RASTREIO FANTASMA (Simil. {best_score*10}%)</b><br>"
+                cruzamento_html += f"<span style='color:#ccc;'>Centena do passado: <b>{cent_quebra}</b></span><br>"
+                cruzamento_html += f"<b style='color:#fff; margin-top:5px; display:inline-block;'>🔬 CRUZAMENTO TÁTICO:</b><br>"
+                
+                cruzamento_txt += f"👻 <b>RASTREIO FANTASMA (Simil. {best_score*10}%)</b>\n"
+                cruzamento_txt += f"Centena do passado: <b>{cent_quebra}</b>\n"
+                cruzamento_txt += f"🔬 <b>CRUZAMENTO TÁTICO:</b>\n"
+
+                primeiro = True
+                for item in detalhes:
+                    cruzamento_html += f"{item['icon']} Dígito <b style='color:{item['cor']};'>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)<br>"
+                    cruzamento_txt += f"▫️ Dígito <b>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)\n"
+                    if primeiro:
+                        melhor_exclusao = item['digito']
+                        primeiro = False
+                        
+                cruzamento_html += f"<div style='margin-top:8px; color:#ff4b4b; font-weight:bold; font-size:13px; text-align:center;'>❌ DECISÃO IA: Excluir {melhor_exclusao}</div></div>"
+                cruzamento_txt += f"❌ <b>DECISÃO IA:</b> Excluir {melhor_exclusao}\n"
+            else:
+                cruzamento_html = f"<div style='margin-top:10px; color:#ff4b4b; font-weight:bold;'>❌ DECISÃO PADRÃO P. CEGO: Excluir {melhor_exclusao}</div>"
+                cruzamento_txt = f"❌ <b>DECISÃO PADRÃO P. CEGO:</b> Excluir {melhor_exclusao}\n"
+            
+            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, cruzamento_txt
             
     return None
 
@@ -338,17 +380,17 @@ def extrair_dia(banca, data_alvo):
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
-        resultados = []; vistos_assinaturas = set() 
+        resultados = []; vistos_assinaturas = set()
         for tab in soup.find_all('table'):
             th_tag = tab.find('th')
             texto_alvo = (th_tag.get_text().upper() if th_tag else "") + " " + (tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']).get_text().upper() if tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']) else "")
-            if "FEDERAL" in texto_alvo.upper(): continue
+            if "FEDERAL" in texto_alvo: continue
             match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
             nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -363,7 +405,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.49")
+    st.header("Pentágono V65.50")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -388,8 +430,8 @@ if menu == "🏠 Visão Geral (Home)":
                     
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
-                        cold_d, seq_s, excl, streak, max_hist, historico, trend_txt = res_duplas
-                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl, "streak": streak, "max_hist": max_hist, "historico": historico, "trend": trend_txt})
+                        cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, cruz_html, cruz_txt = res_duplas
+                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl, "streak": streak, "max_hist": max_hist, "historico": historico, "trend": trend_txt, "cruzamento_html": cruz_html})
 
                 metrics_cache = {}
                 for cfg in todos_esq:
@@ -421,7 +463,7 @@ if menu == "🏠 Visão Geral (Home)":
                             
                             if recorde_alvo > teto_alvo + 2:
                                 espera_sugerida = teto_alvo + 2
-                                alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:6px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra. Sugestão: Aguarde {espera_sugerida}x.</div>"
+                                alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
                         
                             if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
                                 col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
@@ -429,12 +471,13 @@ if menu == "🏠 Visão Geral (Home)":
                                 if hedge_data:
                                     elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
                                     mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
+                                    seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
                             else:
                                 cob_data = get_cobertura_massa(df, col, cfg['nome'])
                                 if cob_data:
                                     g_alvo, delay_g, desc_oposto = cob_data
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; border-radius:4px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
+                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
 
                             op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
                             alvos_teto.append(op_data)
@@ -469,7 +512,7 @@ if menu == "🏠 Visão Geral (Home)":
                         </div>
                         <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
                         <div class="sniper-valor" style="color:#00ff00;">{op['seq']}</div>
-                        <div style="font-size:12px; color:{cor_box}; margin-top:8px; font-weight:bold;">❌ Excluir Ponto Cego: {op['excluido']}</div>
+                        {op['cruzamento_html']}
                     </div>
                     """, unsafe_allow_html=True)
             st.markdown("---") 
@@ -613,4 +656,4 @@ elif menu == "📡 Extração Central":
                 if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
                 else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | 13 Grupos=9x | Gatilho Duplas (10D + Ponto Cego)</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | Gatilho Duplas c/ Motor Fantasma</div>""", unsafe_allow_html=True)
