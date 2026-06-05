@@ -75,6 +75,22 @@ def verificar_relatorio_matinal(dados_bancas):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def get_10d_state(validos_slice):
+    seen_set = set(); seen_list = []; cold = None
+    for val in reversed(validos_slice):
+        for char in val[-3:]:
+            d = int(char)
+            if d not in seen_set: 
+                seen_set.add(d); seen_list.append(str(d))
+            if len(seen_set) == 9: 
+                cold = (set(range(10)) - seen_set).pop()
+                break
+        if cold is not None: break
+    if cold is not None:
+        seen_list.append(str(cold))
+        return seen_list
+    return []
+
 def metricas_duplas_raiox(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
@@ -112,31 +128,88 @@ def processar_anomalia_duplas(df, coluna):
     current_streak = temp_streak
     
     if current_streak >= 2:
-        seen_digits_set = set(); seen_digits_list = []; cold_digit = None
-        for val in reversed(validos):
-            for char in val[-3:]:
-                d = int(char)
-                if d not in seen_digits_set: 
-                    seen_digits_set.add(d)
-                    seen_digits_list.append(str(d))
-                if len(seen_digits_set) == 9: 
-                    cold_digit = (set(range(10)) - seen_digits_set).pop()
-                    break
-            if cold_digit is not None: break
+        current_10d_list = get_10d_state(validos)
         
-        if cold_digit is not None:
-            excluido = seen_digits_list[4] 
-            seen_digits_list.append(str(cold_digit))
-            seq_str = " - ".join(seen_digits_list)
-            max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
+        if current_10d_list:
+            excluido_padrao = current_10d_list[4] 
+            seq_str = " - ".join(current_10d_list)
             
+            # Tendência Preditiva
+            max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
             total_reached = sum(v for k, v in streak_counts.items() if k >= current_streak) + 1
             broke_at_current = streak_counts.get(current_streak, 0)
             prob_break = (broke_at_current / total_reached) * 100 if total_reached > 0 else 0
             prob_cont = 100 - prob_break
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
-            return cold_digit, seq_str, excluido, current_streak, max_historico, streak_counts, trend_text
+            # Fuzzy Matching & Rastreio Fantasma
+            past_breaks = []
+            temp = 0
+            for i in range(len(validos)):
+                c = validos[i][-3:]
+                if len(set(c)) < 3:
+                    temp += 1
+                else:
+                    if temp >= 2:
+                        state_before = get_10d_state(validos[:i])
+                        if state_before:
+                            past_breaks.append({'state': state_before, 'breaker': c})
+                    temp = 0
+            
+            best_match = None
+            best_score = -1
+            
+            for pb in past_breaks:
+                score = sum(1 for a, b in zip(pb['state'], current_10d_list) if a == b)
+                if score > best_score:
+                    best_score = score
+                    best_match = pb
+                    
+            cruzamento_html = ""
+            cruzamento_txt = ""
+            melhor_exclusao = excluido_padrao
+            
+            if best_match and best_score >= 0:
+                cent_quebra = best_match['breaker']
+                digitos_quebra = list(set(cent_quebra))
+                
+                detalhes = []
+                for d in digitos_quebra:
+                    if d in current_10d_list:
+                        idx = current_10d_list.index(d)
+                        if idx == 0: forca = 85; desc = "Saturado (1º da fila)"; cor = "#ffaa00"; icon="🟠"
+                        elif idx == 4: forca = 99; desc = "Ponto Cego Atual"; cor = "#ff4b4b"; icon="🔴"
+                        elif idx == 9: forca = 10; desc = "Dígito Frio"; cor = "#888888"; icon="⚪"
+                        elif idx < 4: forca = 70; desc = f"Quente (Posição {idx+1})"; cor = "#ffff00"; icon="🟡"
+                        else: forca = 40; desc = f"Morno/Frio (Posição {idx+1})"; cor = "#00ff00"; icon="🟢"
+                        detalhes.append({'digito': d, 'forca': forca, 'desc': desc, 'cor': cor, 'icon': icon})
+                
+                detalhes.sort(key=lambda x: x['forca'], reverse=True)
+                
+                cruzamento_html += f"<div style='background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; margin-top:10px; border:1px solid rgba(255,255,255,0.1); text-align:left; font-size:12px;'>"
+                cruzamento_html += f"<b style='color:#00ffff;'>👻 RASTREIO FANTASMA (Simil. {best_score*10}%)</b><br>"
+                cruzamento_html += f"<span style='color:#ccc;'>Centena do passado: <b>{cent_quebra}</b></span><br>"
+                cruzamento_html += f"<b style='color:#fff; margin-top:5px; display:inline-block;'>🔬 CRUZAMENTO TÁTICO:</b><br>"
+                
+                cruzamento_txt += f"👻 <b>RASTREIO FANTASMA (Simil. {best_score*10}%)</b>\n"
+                cruzamento_txt += f"Centena do passado: <b>{cent_quebra}</b>\n"
+                cruzamento_txt += f"🔬 <b>CRUZAMENTO TÁTICO:</b>\n"
+
+                primeiro = True
+                for item in detalhes:
+                    cruzamento_html += f"{item['icon']} Dígito <b style='color:{item['cor']};'>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)<br>"
+                    cruzamento_txt += f"▫️ Dígito <b>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)\n"
+                    if primeiro:
+                        melhor_exclusao = item['digito']
+                        primeiro = False
+                        
+                cruzamento_html += f"<div style='margin-top:8px; color:#ff4b4b; font-weight:bold; font-size:13px; text-align:center;'>❌ DECISÃO IA: Excluir {melhor_exclusao}</div></div>"
+                cruzamento_txt += f"❌ <b>DECISÃO IA:</b> Excluir {melhor_exclusao}\n"
+            else:
+                cruzamento_html = f"<div style='margin-top:10px; color:#ff4b4b; font-weight:bold;'>❌ DECISÃO PADRÃO P. CEGO: Excluir {melhor_exclusao}</div>"
+                cruzamento_txt = f"❌ <b>DECISÃO PADRÃO P. CEGO:</b> Excluir {melhor_exclusao}\n"
+            
+            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, cruzamento_txt
             
     return None
 
@@ -172,7 +245,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         except: continue
         g = 25 if d == 0 else math.ceil(d/4)
         
-        # Bug da Milhar resolvido
         hit_p = (modo == 'grupo' and g in alvos) or (modo == 'dezena' and d in alvos) or (modo == 'unidade' and u in alvos) or (modo == 'centena' and c in alvos) or (modo == 'milhar' and m in alvos)
         
         if hit_p: cur_p = 0
@@ -182,56 +254,6 @@ def calcular_metricas_fantasma(df_analise, coluna, cfg):
         if (m_min <= m <= m_max): cur_m = 0
         else: cur_m += 1; max_m = max(max_m, cur_m)
     return cur_p, cur_c, cur_m, max_p, max_c, max_m
-
-def get_hedge_grupos(df, col, cfg_matriz, metrics_cache):
-    grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
-    col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg_matriz['c_min']}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS', 0), col_delays.get('D: BAIXAS', 0)])
-    if mass_max >= 3:
-        if col_delays.get('G: ÍMPARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 == 0: scores[g] += 1
-        if col_delays.get('G: PARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 != 0: scores[g] += 1
-    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
-    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
-    if not eliminar: return None 
-
-    seguro = {}; valores = df[col].astype(str).tolist()
-    for g in eliminar:
-        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4] if g != 25 else [97, 98, 99, 0]
-        max_d_delay = -1; best_d = -1
-        for d in dezenas:
-            delay_d = 0
-            for val in reversed(valores):
-                m = val.strip().zfill(4)
-                if m in ["----", "0nan", "nan"]: continue
-                try: dez_val = int(m[-2:])
-                except: dez_val = -1
-                if dez_val == d: break
-                delay_d += 1
-            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
-        seguro[g] = (best_d, max_d_delay)
-    return {'eliminar': sorted(eliminar), 'manter': sorted([g for g in grupos if g not in eliminar]), 'seguro': seguro}
-
-def get_cobertura_massa(df, col, cfg_nome):
-    opostos = {"G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24])}
-    if cfg_nome not in opostos: return None
-    desc_oposto, lista_grupos = opostos[cfg_nome]
-    max_delay = -1; best_g = -1
-    valores = df[col].astype(str).tolist()
-    for g in lista_grupos:
-        delay_g = 0
-        for val in reversed(valores):
-            m = val.strip().zfill(4)
-            if m in ["----", "0nan", "nan"]: continue
-            try: d = int(m[-2:])
-            except: continue
-            if (25 if d == 0 else math.ceil(d/4)) == g: break
-            delay_g += 1
-        if delay_g > max_delay: max_delay = delay_g; best_g = g
-    return best_g, max_delay, desc_oposto
 
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
@@ -297,7 +319,7 @@ def rodar_drone():
             
             res_duplas = processar_anomalia_duplas(df, col)
             if res_duplas:
-                cold_d, seq_s, excl, streak, max_hist, historico, trend_txt = res_duplas
+                cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, cruz_html, cruz_txt = res_duplas
                 sig_dupla = f"DUPLA_{banca_nome}_{col}_{streak}"
                 
                 if sig_dupla not in alvos_vistos:
@@ -313,7 +335,7 @@ def rodar_drone():
                     msg_telegram += f"Recorde: {max_hist}x | Freq: {freq_str}\n"
                     msg_telegram += f"📈 <b>TENDÊNCIA:</b> {trend_txt}\n\n"
                     msg_telegram += f"🎯 <b>Ataque Recomendado (10D):</b> {seq_s}\n"
-                    msg_telegram += f"❌ Excluir Ponto Cego: {excl}\n\n"
+                    msg_telegram += cruz_txt + "\n\n"
                     achou_algo = True; alvos_vistos.add(sig_dupla)
 
         metrics_cache = {}
@@ -360,20 +382,6 @@ def rodar_drone():
                         espera_sugerida = teto_alvo + 2
                         msg_telegram += f"🚨 <b>PERIGO DE ANOMALIA:</b>\nRecorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale!\n⚠️ Sugestão: Aguarde o atraso bater {espera_sugerida}x ou aplique gestão mínima.\n"
 
-                    if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                        hedge_data = get_hedge_grupos(df, col, cfg, metrics_cache) 
-                        if hedge_data:
-                            elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
-                            mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                            seg_list = [f"D:{str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                            msg_telegram += f"🛡️ <b>Desdobramento:</b>\n❌ Cortar: G {elim_str}\n✅ Jogar: {mant_str}\n🆘 Seguro: {' | '.join(seg_list)}\n"
-                        else: msg_telegram += f"🛡️ <b>Desdobramento:</b> Neutro. Jogar Integral.\n"
-                    else:
-                        cob_data = get_cobertura_massa(df, col, cfg['nome'])
-                        if cob_data:
-                            g_alvo, delay_g, desc_oposto = cob_data
-                            msg_telegram += f"🛡️ <b>Cobertura:</b> O {desc_oposto} perigoso é <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).\n🎯 Aposta Sniper.\n"
-                            
                     msg_telegram += "\n"
                     achou_algo = True
 
