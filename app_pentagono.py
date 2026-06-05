@@ -9,9 +9,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 # =============================================================================
-# --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.50) ---
+# --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.51) ---
 # =============================================================================
-st.set_page_config(page_title="Pentágono V65.50 - Motor Fantasma", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Pentágono V65.51 - Síntese Preditiva", page_icon="🎯", layout="wide")
 
 st.markdown("""
 <style>
@@ -115,8 +115,41 @@ def exibir_banner_sorteio(df, banca):
 # =============================================================================
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
+def gerar_milhares_preditivas(df, coluna):
+    # Motor de Síntese Tática (Sniper, Vulcão, Mutante)
+    valores = df[coluna].astype(str).tolist()
+    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+    if not validos: return "0000", "0000", "0000"
+
+    sniper = ""; vulcao = ""; mutante = ""
+    recentes = validos[-100:] if len(validos) >= 100 else validos
+
+    # Isola cada posição geométrica da milhar (0=M, 1=C, 2=D, 3=U)
+    for pos in range(4):
+        # 1. Mede o atraso individual de cada dígito para achar o mais frio (Sniper)
+        delays = {str(d): -1 for d in range(10)}
+        for d in range(10):
+            delay = 0
+            for val in reversed(validos):
+                if len(val) >= 4 and val[pos] == str(d): break
+                delay += 1
+            delays[str(d)] = delay
+        coldest = max(delays, key=delays.get)
+
+        # 2. Mede a frequência nos últimos 100 sorteios para achar o mais quente (Vulcão)
+        freqs = {str(d): 0 for d in range(10)}
+        for val in recentes:
+            if len(val) >= 4: freqs[val[pos]] += 1
+        hottest = max(freqs, key=freqs.get)
+
+        sniper += coldest
+        vulcao += hottest
+        # 3. Mutante: Milhar/Dezena (Frias) + Centena/Unidade (Quentes)
+        mutante += coldest if pos % 2 == 0 else hottest
+
+    return sniper, vulcao, mutante
+
 def get_10d_state(validos_slice):
-    """Função utilitária que gera os 10 dígitos na ordem exata a partir de uma fatia do tempo."""
     seen_set = set(); seen_list = []; cold = None
     for val in reversed(validos_slice):
         for char in val[-3:]:
@@ -148,7 +181,6 @@ def metricas_duplas_raiox(df, coluna):
     return current_streak, max_historico
 
 def processar_anomalia_duplas(df, coluna):
-    # Motor V65.50: Inclui Rastreio Fantasma e Cruzamento Matemático
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if len(validos) < 2: return None
@@ -170,10 +202,9 @@ def processar_anomalia_duplas(df, coluna):
         current_10d_list = get_10d_state(validos)
         
         if current_10d_list:
-            excluido_padrao = current_10d_list[4] # Isca padrão (Ponto Cego)
+            excluido_padrao = current_10d_list[4] 
             seq_str = " - ".join(current_10d_list)
             
-            # TENDÊNCIA PREDITIVA
             max_historico = max(list(streak_counts.keys()) + [current_streak]) if streak_counts else current_streak
             total_reached = sum(v for k, v in streak_counts.items() if k >= current_streak) + 1
             broke_at_current = streak_counts.get(current_streak, 0)
@@ -181,7 +212,6 @@ def processar_anomalia_duplas(df, coluna):
             prob_cont = 100 - prob_break
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
-            # RASTREIO DE FANTASMAS DO PASSADO
             past_breaks = []
             temp = 0
             for i in range(len(validos)):
@@ -198,7 +228,6 @@ def processar_anomalia_duplas(df, coluna):
             best_match = None
             best_score = -1
             
-            # Fuzzy Matching: Mede o grau de semelhança entre o passado e o presente
             for pb in past_breaks:
                 score = sum(1 for a, b in zip(pb['state'], current_10d_list) if a == b)
                 if score > best_score:
@@ -206,7 +235,6 @@ def processar_anomalia_duplas(df, coluna):
                     best_match = pb
                     
             cruzamento_html = ""
-            cruzamento_txt = ""
             melhor_exclusao = excluido_padrao
             
             if best_match and best_score >= 0:
@@ -217,7 +245,6 @@ def processar_anomalia_duplas(df, coluna):
                 for d in digitos_quebra:
                     if d in current_10d_list:
                         idx = current_10d_list.index(d)
-                        # Cálculo Matemático da Força de Exclusão
                         if idx == 0: forca = 85; desc = "Saturado (1º da fila)"; cor = "#ffaa00"; icon="🟠"
                         elif idx == 4: forca = 99; desc = "Ponto Cego Atual"; cor = "#ff4b4b"; icon="🔴"
                         elif idx == 9: forca = 10; desc = "Dígito Frio"; cor = "#888888"; icon="⚪"
@@ -232,31 +259,20 @@ def processar_anomalia_duplas(df, coluna):
                 cruzamento_html += f"<span style='color:#ccc;'>Centena do passado: <b>{cent_quebra}</b></span><br>"
                 cruzamento_html += f"<b style='color:#fff; margin-top:5px; display:inline-block;'>🔬 CRUZAMENTO TÁTICO:</b><br>"
                 
-                cruzamento_txt += f"👻 <b>RASTREIO FANTASMA (Simil. {best_score*10}%)</b>\n"
-                cruzamento_txt += f"Centena do passado: <b>{cent_quebra}</b>\n"
-                cruzamento_txt += f"🔬 <b>CRUZAMENTO TÁTICO:</b>\n"
-
                 primeiro = True
                 for item in detalhes:
                     cruzamento_html += f"{item['icon']} Dígito <b style='color:{item['cor']};'>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)<br>"
-                    cruzamento_txt += f"▫️ Dígito <b>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)\n"
                     if primeiro:
                         melhor_exclusao = item['digito']
                         primeiro = False
                         
                 cruzamento_html += f"<div style='margin-top:8px; color:#ff4b4b; font-weight:bold; font-size:13px; text-align:center;'>❌ DECISÃO IA: Excluir {melhor_exclusao}</div></div>"
-                cruzamento_txt += f"❌ <b>DECISÃO IA:</b> Excluir {melhor_exclusao}\n"
             else:
                 cruzamento_html = f"<div style='margin-top:10px; color:#ff4b4b; font-weight:bold;'>❌ DECISÃO PADRÃO P. CEGO: Excluir {melhor_exclusao}</div>"
-                cruzamento_txt = f"❌ <b>DECISÃO PADRÃO P. CEGO:</b> Excluir {melhor_exclusao}\n"
             
-            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, cruzamento_txt
+            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, ""
             
     return None
-
-def get_grupo_int(m):
-    try: d = int(str(m)[-2:]); return 25 if d == 0 else math.ceil(d/4)
-    except: return None
 
 def gerar_matrizes_taticas():
     esquadroes = []; cms = [{'c_min': 0, 'c_max': 499, 'm_min': 0, 'm_max': 4999}, {'c_min': 500, 'c_max': 999, 'm_min': 5000, 'm_max': 9999}]
@@ -306,91 +322,22 @@ def deduplicar_alvos(lista):
         if sig not in vistos: vistos.add(sig); resultado.append(item)
     return resultado
 
-def get_hedge_grupos(df, col, cfg_matriz, col_delays):
-    grupos = list(cfg_matriz['alvos']); scores = {g: 0 for g in grupos}
-    mass_max = max([col_delays.get('G: ÍMPARES', 0), col_delays.get('G: PARES', 0), col_delays.get('D: ALTAS (51-00)', 0), col_delays.get('D: BAIXAS (01-50)', 0)])
-    if mass_max >= 3:
-        if col_delays.get('G: ÍMPARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 == 0: scores[g] += 1
-        if col_delays.get('G: PARES', 0) >= 3:
-            for g in grupos:
-                if g % 2 != 0: scores[g] += 1
-        if col_delays.get('D: ALTAS (51-00)', 0) >= 3:
-            for g in grupos:
-                if g <= 12: scores[g] += 1
-        if col_delays.get('D: BAIXAS (01-50)', 0) >= 3:
-            for g in grupos:
-                if g >= 13: scores[g] += 1
-    else:
-        uni_max = max([col_delays.get('U: ÍMPARES', 0), col_delays.get('U: PARES', 0), col_delays.get('U: ALTAS (6-0)', 0), col_delays.get('U: BAIXAS (1-5)', 0)])
-        if uni_max >= 3:
-            if col_delays.get('U: ÍMPARES', 0) >= 3:
-                for g in grupos:
-                    if (g % 10) % 2 == 0: scores[g] += 1
-            if col_delays.get('U: PARES', 0) >= 3:
-                for g in grupos:
-                    if (g % 10) % 2 != 0: scores[g] += 1
-    sorted_g = sorted(grupos, key=lambda x: scores[x], reverse=True)
-    eliminar = [g for g in sorted_g[:2] if scores[g] > 0] 
-    if not eliminar: return None 
-    seguro = {}
-    valores = df[col].astype(str).tolist()
-    for g in eliminar:
-        dezenas = [g*4 - 3, g*4 - 2, g*4 - 1, g*4] if g != 25 else [97, 98, 99, 0]
-        max_d_delay = -1; best_d = -1
-        for d in dezenas:
-            delay_d = 0
-            for val in reversed(valores):
-                m = val.strip().zfill(4)
-                if m in ["----", "0nan", "nan"]: continue
-                try: dez_val = int(m[-2:])
-                except: dez_val = -1
-                if dez_val == d: break
-                delay_d += 1
-            if delay_d > max_d_delay: max_d_delay = delay_d; best_d = d
-        seguro[g] = (best_d, max_d_delay)
-    return {'eliminar': sorted(eliminar), 'manter': sorted([g for g in grupos if g not in eliminar]), 'seguro': seguro}
-
-def get_cobertura_massa(df, col, cfg_nome):
-    opostos = {
-        "G: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "G: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
-        "D: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "D: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24]),
-        "D: ALTAS (51-00)": ("Grupo Baixo", list(range(1, 14))), "D: BAIXAS (01-50)": ("Grupo Alto", list(range(14, 26))),
-        "U: PARES": ("Grupo Ímpar", [1,3,5,7,9,11,13,15,17,19,21,23,25]), "U: ÍMPARES": ("Grupo Par", [2,4,6,8,10,12,14,16,18,20,22,24])
-    }
-    if cfg_nome not in opostos: return None
-    desc_oposto, lista_grupos = opostos[cfg_nome]
-    max_delay = -1; best_g = -1
-    valores = df[col].astype(str).tolist()
-    for g in lista_grupos:
-        delay_g = 0
-        for val in reversed(valores):
-            m = val.strip().zfill(4)
-            if m in ["----", "0nan", "nan"]: continue
-            try: d = int(m[-2:])
-            except: continue
-            if (25 if d == 0 else math.ceil(d/4)) == g: break
-            delay_g += 1
-        if delay_g > max_delay: max_delay = delay_g; best_g = g
-    return best_g, max_delay, desc_oposto
-
 def extrair_dia(banca, data_alvo):
     url = f"{BANCAS_CONFIG[banca]}{data_alvo.strftime('%Y-%m-%d')}"
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
-        resultados = []; vistos_assinaturas = set()
+        resultados = []; vistos_assinaturas = set() 
         for tab in soup.find_all('table'):
             th_tag = tab.find('th')
             texto_alvo = (th_tag.get_text().upper() if th_tag else "") + " " + (tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']).get_text().upper() if tab.find_previous(['h2', 'h3', 'h4', 'strong', 'b']) else "")
-            if "FEDERAL" in texto_alvo: continue
+            if "FEDERAL" in texto_alvo.upper(): continue
             match_hora = re.search(r'(\d{2}):(\d{2})|(\d{2})\s*[hH]', texto_alvo)
             nome = f"{match_hora.group(1)}:{match_hora.group(2)}" if match_hora and match_hora.group(1) else "Extra"
             milhares = []
             for row in tab.find_all('tr'):
                 cols = [c.get_text(strip=True) for c in row.find_all(['td', 'th'])]
-                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°', '2°', '3°', '4°', '5°']):
+                if cols and any(x in cols[0].lower() for x in ['1º', '2º', '3º', '4º', '5º', '1°']):
                     nums = re.findall(r'\d+', "".join(cols[1:]))
                     milhares.append(nums[0][:4].zfill(4) if nums and len(nums[0]) >= 3 else "----")
             if len(milhares) >= 5:
@@ -405,7 +352,7 @@ def extrair_dia(banca, data_alvo):
 # =============================================================================
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2070/2070051.png", width=60)
-    st.header("Pentágono V65.50")
+    st.header("Pentágono V65.51")
     if st.button("FORÇAR ATUALIZAÇÃO", type="primary"):
         st.cache_data.clear()
         st.success("✅ Memória do radar limpa!")
@@ -430,8 +377,9 @@ if menu == "🏠 Visão Geral (Home)":
                     
                     res_duplas = processar_anomalia_duplas(df, col)
                     if res_duplas:
-                        cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, cruz_html, cruz_txt = res_duplas
-                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl, "streak": streak, "max_hist": max_hist, "historico": historico, "trend": trend_txt, "cruzamento_html": cruz_html})
+                        cold_d, seq_s, excl, streak, max_hist, historico, trend_txt, cruz_html, _ = res_duplas
+                        m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
+                        alertas_duplas.append({"banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "cold_digit": cold_d, "seq": seq_s, "excluido": excl, "streak": streak, "max_hist": max_hist, "historico": historico, "trend": trend_txt, "cruzamento_html": cruz_html, "sniper": m_sniper, "vulcao": m_vulcao, "mutante": m_mutante})
 
                 metrics_cache = {}
                 for cfg in todos_esq:
@@ -455,29 +403,8 @@ if menu == "🏠 Visão Geral (Home)":
                         elif ap >= ap_lim: estado_alvo = "TETO"; prio = 5; tipo_ataque = "ALVO_PRINCIPAL"; alerta_html = f"<div class='alerta-verde'>🟢 ATAQUE FORTE ({cfg['modo'].upper()}) - TETO ATINGIDO</div>"
 
                         if estado_alvo == "TETO":
-                            teto_alvo = 9 if tipo_ataque in ["MILHAR", "CENTENA", "TOTAL"] else ap_lim
-                            recorde_alvo = mp
-                            if tipo_ataque == "MILHAR": recorde_alvo = mm
-                            elif tipo_ataque == "CENTENA": recorde_alvo = mc
-                            elif tipo_ataque == "TOTAL": recorde_alvo = max(mp, mc, mm)
-                            
-                            if recorde_alvo > teto_alvo + 2:
-                                espera_sugerida = teto_alvo + 2
-                                alerta_html += f"<div style='background:rgba(255,0,0,0.1); border:1px solid #ff0000; color:#ff0000; padding:6px; border-radius:5px; font-weight:bold; margin-top:8px; font-size:11px;'>🚨 PERIGO DE ANOMALIA:<br>Recorde Histórico é {recorde_alvo}x. Risco de quebra de Martingale. Sugestão: Aguarde o atraso chegar a {espera_sugerida}x ou aplique gestão mínima.</div>"
-                        
-                            if cfg['modo'] == 'grupo' and cfg['tipo'] == 'seq':
-                                col_delays = {k_name: val[0] for (k_name, k_col, k_cm), val in metrics_cache.items() if k_col == col and k_cm == cfg['c_min']}
-                                hedge_data = get_hedge_grupos(df, col, cfg, col_delays)
-                                if hedge_data:
-                                    elim_str = ", ".join([str(x).zfill(2) for x in hedge_data['eliminar']])
-                                    mant_str = ", ".join([str(x).zfill(2) for x in hedge_data['manter']])
-                                    seg_list = [f"Dez {str(d).zfill(2)} ({delay}x)" for g, (d, delay) in hedge_data['seguro'].items()]
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cortar: G {elim_str} | Jogar: {mant_str}</div>"
-                            else:
-                                cob_data = get_cobertura_massa(df, col, cfg['nome'])
-                                if cob_data:
-                                    g_alvo, delay_g, desc_oposto = cob_data
-                                    alerta_html += f"<div style='background:rgba(255,255,255,0.05); padding:6px; margin-top:8px;'>🛡️ Cobertura: O {desc_oposto} mais perigoso é o <b>G{str(g_alvo).zfill(2)}</b> ({delay_g}x).</div>"
+                            m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
+                            alerta_html += f"<div style='background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; margin-top:8px; border: 1px solid rgba(255,255,255,0.1);'><b style='color:#ffcc00; font-size:11px;'>🤖 SÍNTESE IA DO PRÊMIO:</b><br><span style='font-size:11px;'>🧊 Sniper: <b style='color:#00ffff;'>{m_sniper}</b> | 🔥 Vulcão: <b style='color:#ff4b4b;'>{m_vulcao}</b><br>🧬 Mutante: <b style='color:#00ff00;'>{m_mutante}</b></span></div>"
 
                             op_data = {"prio": prio, "banca": banca_nome, "ultimo_sorteio": ultimo_sorteio, "premio": TITULOS_PREMIOS[i], "ap": ap, "ac": ac, "am": am, "mp": mp, "mc": mc, "mm": mm, "alerta": alerta_html, "cfg": cfg, "tipo_ataque": tipo_ataque}
                             alvos_teto.append(op_data)
@@ -496,7 +423,6 @@ if menu == "🏠 Visão Geral (Home)":
                 freq_str = f"2x: {op['historico'].get(2, 0)}v"
                 if 3 in op['historico']: freq_str += f" | 3x: {op['historico'].get(3, 0)}v"
                 if 4 in op['historico']: freq_str += f" | 4x: {op['historico'].get(4, 0)}v"
-                if op['max_hist'] > 4: freq_str += f" | {op['max_hist']}x: {op['historico'].get(op['max_hist'], 0)}v"
                 
                 with cols[idx % 3]:
                     st.markdown(f"""
@@ -513,6 +439,11 @@ if menu == "🏠 Visão Geral (Home)":
                         <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
                         <div class="sniper-valor" style="color:#00ff00;">{op['seq']}</div>
                         {op['cruzamento_html']}
+                        <div style='background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; margin-top:8px; border: 1px solid rgba(255,255,255,0.1); text-align:left; font-size:11px;'>
+                            <b style='color:#ffcc00;'>🤖 SÍNTESE IA DO PRÊMIO:</b><br>
+                            🧊 Sniper: <b style='color:#00ffff;'>{op['sniper']}</b> | 🔥 Vulcão: <b style='color:#ff4b4b;'>{op['vulcao']}</b><br>
+                            🧬 Mutante: <b style='color:#00ff00;'>{op['mutante']}</b>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
             st.markdown("---") 
@@ -604,6 +535,13 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp})"
                     dados_tabela.append(linha)
                 
+                # --- NOVIDADE V65.51: SÍNTESE IA ---
+                linha_sintese = {"FILTRO": "🤖 SÍNTESE IA (Sniper | Vulcão | Mutante)", "TETO": "-"}
+                for i, col in enumerate(COLUNAS_DF):
+                    m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
+                    linha_sintese[TITULOS_PREMIOS[i]] = f"S:{m_sniper} | V:{m_vulcao} | M:{m_mutante}"
+                dados_tabela.append(linha_sintese)
+
                 exibir_banner_sorteio(df, banca_rx)
                 st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, hide_index=True)
 
@@ -656,4 +594,4 @@ elif menu == "📡 Extração Central":
                 if total_salvos > 0: st.cache_data.clear(); st.success(f"🎯 EXTRAÇÃO GLOBAL CONCLUÍDA! Total de {total_salvos} novos registros.")
                 else: st.info("🔄 EXTRAÇÃO GLOBAL CONCLUÍDA! Nenhum registro novo no momento.")
 
-st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | Gatilho Duplas c/ Motor Fantasma</div>""", unsafe_allow_html=True)
+st.markdown("""<div class="rodape-tatico">🎯 GATILHOS ATIVOS: M/C Baixas/Altas=9x | Dezenas, Unidades e Filtros=9x | Síntese de Milhares</div>""", unsafe_allow_html=True)
