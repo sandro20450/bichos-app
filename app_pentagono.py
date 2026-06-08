@@ -116,7 +116,6 @@ def exibir_banner_sorteio(df, banca):
 # --- 3. MOTORES DE ANÁLISE ---
 # =============================================================================
 def gerar_milhares_preditivas(df, coluna):
-    # Motor de Síntese Tática (Sniper, Vulcão, Mutante)
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if not validos: return "0000", "0000", "0000"
@@ -124,9 +123,7 @@ def gerar_milhares_preditivas(df, coluna):
     sniper = ""; vulcao = ""; mutante = ""
     recentes = validos[-100:] if len(validos) >= 100 else validos
 
-    # Isola cada posição geométrica da milhar (0=M, 1=C, 2=D, 3=U)
     for pos in range(4):
-        # 1. Mede o atraso individual de cada dígito para achar o mais frio (Sniper)
         delays = {str(d): -1 for d in range(10)}
         for d in range(10):
             delay = 0
@@ -136,7 +133,6 @@ def gerar_milhares_preditivas(df, coluna):
             delays[str(d)] = delay
         coldest = max(delays, key=delays.get)
 
-        # 2. Mede a frequência nos últimos 100 sorteios para achar o mais quente (Vulcão)
         freqs = {str(d): 0 for d in range(10)}
         for val in recentes:
             if len(val) >= 4: freqs[val[pos]] += 1
@@ -144,7 +140,6 @@ def gerar_milhares_preditivas(df, coluna):
 
         sniper += coldest
         vulcao += hottest
-        # 3. Mutante: Milhar/Dezena (Frias) + Centena/Unidade (Quentes)
         mutante += coldest if pos % 2 == 0 else hottest
 
     return sniper, vulcao, mutante
@@ -411,7 +406,6 @@ if menu == "🏠 Visão Geral (Home)":
             
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
 
-        # --- EXIBIÇÃO NA TELA ---
         if alertas_duplas:
             st.error(f"🚨 ANOMALIA DETECTADA: {len(alertas_duplas)} Encontrados!")
             cols = st.columns(3)
@@ -506,6 +500,25 @@ elif menu == "🎯 Scanner de Raio-X":
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
+                # =========================================================================
+                # INJEÇÃO DA NOVA LINHA DE 10 DÍGITOS - INCONDICIONAL
+                # =========================================================================
+                linha_10d = {"FILTRO": "🎯 RASTREIO: 10 DÍGITOS (Atual)", "TETO": "-"}
+                for i, col in enumerate(COLUNAS_DF):
+                    valores = df[col].astype(str).tolist()
+                    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+                    
+                    if len(validos) > 0:
+                        seq_10d = get_10d_state(validos)
+                        if seq_10d:
+                            linha_10d[TITULOS_PREMIOS[i]] = "-".join(seq_10d)
+                        else:
+                            linha_10d[TITULOS_PREMIOS[i]] = "-"
+                    else:
+                        linha_10d[TITULOS_PREMIOS[i]] = "-"
+                dados_tabela.append(linha_10d)
+                # =========================================================================
+                
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -535,7 +548,6 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp})"
                     dados_tabela.append(linha)
                 
-                # --- NOVIDADE V65.51: SÍNTESE IA ---
                 linha_sintese = {"FILTRO": "🤖 SÍNTESE IA (Sniper | Vulcão | Mutante)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     m_sniper, m_vulcao, m_mutante = gerar_milhares_preditivas(df, col)
