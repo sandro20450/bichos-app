@@ -501,7 +501,7 @@ elif menu == "🎯 Scanner de Raio-X":
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
-                # 2. NOVO: Linha de Porcentagem Real Histórica (Injetada logo abaixo das Duplas)
+                # 2. Linha de Porcentagem Real Histórica (Gatilho Base)
                 linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -529,7 +529,7 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
                 
-                # Filtros de lista da massa estrutural
+                # Filtros estruturais da planilha de massa
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -551,12 +551,40 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
+                # EXECUÇÃO DO LOOP COM AUDITORIA DA % REAL INJETADA POR FILTRO
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
                     linha = {"FILTRO": nome_filtro, "TETO": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
+                        valores = df[col].astype(str).tolist()
+                        validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+                        
+                        # Calcula métricas tradicionais de atraso (ap) e recorde (mp)
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
-                        linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp})"
+                        
+                        # MOTOR DE CÁLCULO DA PORCENTAGEM REAL HISTÓRICA DO FILTRO ESPECÍFICO
+                        total_validos = 0
+                        total_hits = 0
+                        for val in validos:
+                            try:
+                                m = int(val); c = int(val[-3:]); d = int(val[-2:]); u = int(val[-1:])
+                                g = 25 if d == 0 else math.ceil(d/4)
+                                total_validos += 1
+                                
+                                hit_p = (cfg['modo'] == 'grupo' and g in cfg['alvos']) or \
+                                        (cfg['modo'] == 'dezena' and d in cfg['alvos']) or \
+                                        (cfg['modo'] == 'unidade' and u in cfg['alvos']) or \
+                                        (cfg['modo'] == 'centena' and c in cfg['alvos']) or \
+                                        (cfg['modo'] == 'milhar' and m in cfg['alvos'])
+                                if hit_p:
+                                    total_hits += 1
+                            except:
+                                continue
+                        
+                        pct_real = (total_hits / total_validos * 100) if total_validos > 0 else 0.0
+                        
+                        # Injeta o resultado unificado na célula correspondente
+                        linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp}) | {pct_real:.1f}%"
                     dados_tabela.append(linha)
                 
                 linha_sintese = {"FILTRO": "🤖 SÍNTESE IA (Sniper | Vulcão | Mutante)", "TETO": "-"}
