@@ -275,12 +275,12 @@ def gerar_matrizes_taticas():
         for g in range(1, 14): esquadroes.append({'alvos': set(range(g, g+13)), 'modo': 'grupo', 'tipo': 'seq', 'nome': f"G13: {str(g).zfill(2)}-{str(g+12).zfill(2)}", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'tipo': 'impar', 'nome': "G: ÍMPARES", 'lim': 9, **cm})
         esquadroes.append({'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'tipo': 'par', 'nome': "G: PARES", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(1, 51)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
-        esquadroes.append({'alvos': set(range(51, 100))|{0}, 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(0, 50)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: BAIXAS", 'lim': 9, **cm})
+        esquadroes.append({'alvos': set(range(50, 100)), 'modo': 'dezena', 'tipo': 'dez', 'nome': "D: ALTAS", 'lim': 9, **cm})
     
     esquadroes.extend([
-        {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (1-5)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
-        {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (6-0)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {0, 1, 2, 3, 4}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: BAIXAS (0-4)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
+        {'alvos': {5, 6, 7, 8, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ALTAS (5-9)", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: ÍMPARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999},
         {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'tipo': 'uni', 'nome': "U: PARES", 'lim': 9, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
     ])
@@ -406,6 +406,7 @@ if menu == "🏠 Visão Geral (Home)":
             
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
 
+        # --- EXIBIÇÃO NA TELA ---
         if alertas_duplas:
             st.error(f"🚨 ANOMALIA DETECTADA: {len(alertas_duplas)} Encontrados!")
             cols = st.columns(3)
@@ -430,7 +431,7 @@ if menu == "🏠 Visão Geral (Home)":
                             Freq: {freq_str}<br>
                             <b style='color:#00ffff;'>📈 TENDÊNCIA: {op['trend']}</b>
                         </div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recommended (10 Digitos):</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
                         <div class="sniper-valor" style="color:#00ff00;">{op['seq']}</div>
                         {op['cruzamento_html']}
                         <div style='background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; margin-top:8px; border: 1px solid rgba(255,255,255,0.1); text-align:left; font-size:11px;'>
@@ -529,7 +530,7 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
                 
-                # Filtros estruturais da planilha de massa
+                # Filtros estruturais da planilha de massa (CORRIGIDOS: METADES EXATAS)
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -537,16 +538,16 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Centenas Altas (500-999)", {'alvos': set(range(500, 1000)), 'modo': 'centena', 'lim': 9}),
                     ("Grupos Ímpares", {'alvos': set(range(1, 26, 2)), 'modo': 'grupo', 'lim': 9}),
                     ("Grupos Pares", {'alvos': set(range(2, 26, 2)), 'modo': 'grupo', 'lim': 9}),
-                    ("Dezenas Baixas (01-50)", {'alvos': set(range(1, 51)), 'modo': 'dezena', 'lim': 9}),
-                    ("Dezenas Altas (51-00)", {'alvos': set(range(51, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Baixas (00-49)", {'alvos': set(range(0, 50)), 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Altas (50-99)", {'alvos': set(range(50, 100)), 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Ímpares", {'alvos': {x for x in range(100) if x % 2 != 0}, 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Pares", {'alvos': {x for x in range(100) if x % 2 == 0}, 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Miolo (26-75)", {'alvos': set(range(26, 76)), 'modo': 'dezena', 'lim': 9}),
                     ("Dezenas Bordas", {'alvos': set(range(1, 26)) | set(range(76, 100)) | {0}, 'modo': 'dezena', 'lim': 9}),
-                    ("Dezenas Finais Baixos (1-5)", {'alvos': {x for x in range(100) if x % 10 in [1, 2, 3, 4, 5]}, 'modo': 'dezena', 'lim': 9}),
-                    ("Dezenas Finais Altos (6-0)", {'alvos': {x for x in range(100) if x % 10 in [6, 7, 8, 9, 0]}, 'modo': 'dezena', 'lim': 9}),
-                    ("Unidades Baixas (1-5)", {'alvos': {1, 2, 3, 4, 5}, 'modo': 'unidade', 'lim': 9}),
-                    ("Unidades Altas (6-0)", {'alvos': {6, 7, 8, 9, 0}, 'modo': 'unidade', 'lim': 9}),
+                    ("Dezenas Finais Baixos (0-4)", {'alvos': {x for x in range(100) if x % 10 in [0, 1, 2, 3, 4]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Dezenas Finais Altos (5-9)", {'alvos': {x for x in range(100) if x % 10 in [5, 6, 7, 8, 9]}, 'modo': 'dezena', 'lim': 9}),
+                    ("Unidades Baixas (0-4)", {'alvos': {0, 1, 2, 3, 4}, 'modo': 'unidade', 'lim': 9}),
+                    ("Unidades Altas (5-9)", {'alvos': {5, 6, 7, 8, 9}, 'modo': 'unidade', 'lim': 9}),
                     ("Unidades Ímpares", {'alvos': {1, 3, 5, 7, 9}, 'modo': 'unidade', 'lim': 9}),
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
