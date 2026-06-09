@@ -487,13 +487,33 @@ elif menu == "🎯 Scanner de Raio-X":
                     ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
                     with cols_rx[i]:
                         st.markdown(f"""<div class="home-box"><div class="home-premio" style="color: #fff;">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="color: #888; font-size: 11px;">Rec: {mp}x</div></div>""", unsafe_allow_html=True)
-    else:
+   else:
         if st.button("GERAR PLANILHA DE MASSA", type="primary"):
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty: st.error("Sem dados.")
             else:
                 dados_tabela = []
                 
+                # =========================================================================
+                # NOVO: LINHA DE AUDITORIA DE PORCENTAGEM REAL DA BANCA
+                # =========================================================================
+                linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
+                for i, col in enumerate(COLUNAS_DF):
+                    valores = df[col].astype(str).tolist()
+                    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+                    
+                    if validos:
+                        # Conta quantas centenas no histórico inteiro possuem menos de 3 dígitos únicos (duplas/triplas)
+                        total_repetidos = sum(1 for v in validos if len(set(v[-3:])) < 3)
+                        pct_real = (total_repetidos / len(validos)) * 100
+                        # Exibe a porcentagem e a fração exata (Ex: 27.8% (278/1000))
+                        linha_porcentagem[TITULOS_PREMIOS[i]] = f"{pct_real:.1f}% ({total_repetidos}/{len(validos)})"
+                    else:
+                        linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
+                dados_tabela.append(linha_porcentagem)
+                # =========================================================================
+                
+                # (O restante do código continua exatamente igual abaixo...)
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
