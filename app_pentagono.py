@@ -430,7 +430,7 @@ if menu == "🏠 Visão Geral (Home)":
                             Freq: {freq_str}<br>
                             <b style='color:#00ffff;'>📈 TENDÊNCIA: {op['trend']}</b>
                         </div>
-                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recomendado (10 Digitos):</b></div>
+                        <div class="sniper-dado" style="margin-top:5px;"><b>Ataque Recommended (10 Digitos):</b></div>
                         <div class="sniper-valor" style="color:#00ff00;">{op['seq']}</div>
                         {op['cruzamento_html']}
                         <div style='background:rgba(0,0,0,0.4); padding:8px; border-radius:6px; margin-top:8px; border: 1px solid rgba(255,255,255,0.1); text-align:left; font-size:11px;'>
@@ -487,47 +487,38 @@ elif menu == "🎯 Scanner de Raio-X":
                     ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg_rx)
                     with cols_rx[i]:
                         st.markdown(f"""<div class="home-box"><div class="home-premio" style="color: #fff;">🏆 {TITULOS_PREMIOS[i]}</div><div class="sniper-valor" style="color:#ff4b4b;">{ap}x</div><div style="color: #888; font-size: 11px;">Rec: {mp}x</div></div>""", unsafe_allow_html=True)
-   else:
+    else:
         if st.button("GERAR PLANILHA DE MASSA", type="primary"):
             df = carregar_dados_em_memoria(banca_rx)
             if df.empty: st.error("Sem dados.")
             else:
                 dados_tabela = []
                 
-                # =========================================================================
-                # NOVO: LINHA DE AUDITORIA DE PORCENTAGEM REAL DA BANCA
-                # =========================================================================
-                linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
-                for i, col in enumerate(COLUNAS_DF):
-                    valores = df[col].astype(str).tolist()
-                    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
-                    
-                    if validos:
-                        # Conta quantas centenas no histórico inteiro possuem menos de 3 dígitos únicos (duplas/triplas)
-                        total_repetidos = sum(1 for v in validos if len(set(v[-3:])) < 3)
-                        pct_real = (total_repetidos / len(validos)) * 100
-                        # Exibe a porcentagem e a fração exata (Ex: 27.8% (278/1000))
-                        linha_porcentagem[TITULOS_PREMIOS[i]] = f"{pct_real:.1f}% ({total_repetidos}/{len(validos)})"
-                    else:
-                        linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
-                dados_tabela.append(linha_porcentagem)
-                # =========================================================================
-                
-                # (O restante do código continua exatamente igual abaixo...)
+                # 1. Linha de Gatilho de Duplas
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
-                # =========================================================================
-                # INJEÇÃO DA NOVA LINHA DE 10 DÍGITOS - INCONDICIONAL
-                # =========================================================================
+                # 2. NOVO: Linha de Porcentagem Real Histórica (Injetada logo abaixo das Duplas)
+                linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
+                for i, col in enumerate(COLUNAS_DF):
+                    valores = df[col].astype(str).tolist()
+                    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+                    if validos:
+                        total_repetidos = sum(1 for v in validos if len(set(v[-3:])) < 3)
+                        pct_real = (total_repetidos / len(validos)) * 100
+                        linha_porcentagem[TITULOS_PREMIOS[i]] = f"{pct_real:.1f}% ({total_repetidos}/{len(validos)})"
+                    else:
+                        linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
+                dados_tabela.append(linha_porcentagem)
+                
+                # 3. Linha de Rastreio dos 10 Dígitos Incondicional
                 linha_10d = {"FILTRO": "🎯 RASTREIO: 10 DÍGITOS (Atual)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
                     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
-                    
                     if len(validos) > 0:
                         seq_10d = get_10d_state(validos)
                         if seq_10d:
@@ -537,8 +528,8 @@ elif menu == "🎯 Scanner de Raio-X":
                     else:
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
-                # =========================================================================
                 
+                # Filtros de lista da massa estrutural
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
