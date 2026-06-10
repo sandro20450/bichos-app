@@ -7,6 +7,7 @@ import re
 import math
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from itertools import combinations
 
 # =============================================================================
 # --- 1. CONFIGURAÇÕES E CSS DE GLASSMORPHISM (V65.51) ---
@@ -113,8 +114,33 @@ def exibir_banner_sorteio(df, banca):
         """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 3. MOTORES DE ANÁLISE ---
+# --- 3. MOTORES DE ANÁLISE E IA ---
 # =============================================================================
+
+# NOVO MOTOR: Rastreio do Casal de Dígitos Mais Inimigos
+def calcular_dupla_inimiga(df_analise, coluna):
+    valores = df_analise[coluna].astype(str).tolist()
+    validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
+    if not validos: return "-", 0
+
+    # Cria os 45 casais possíveis com contagem inicial ZERO
+    pair_counts = {tuple(sorted((str(i), str(j)))): 0 for i in range(10) for j in range(i+1, 10)}
+
+    for val in validos:
+        c = val[-3:]
+        digitos_unicos = list(set(c))
+        
+        # Só conta se a centena tiver pelo menos 2 dígitos diferentes
+        if len(digitos_unicos) >= 2:
+            for p in combinations(sorted(digitos_unicos), 2):
+                pair_counts[p] += 1
+
+    if pair_counts:
+        rarest_pair = min(pair_counts, key=pair_counts.get)
+        min_count = pair_counts[rarest_pair]
+        return f"{rarest_pair[0]} e {rarest_pair[1]}", min_count
+    return "-", 0
+
 def gerar_milhares_preditivas(df, coluna):
     valores = df[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
@@ -406,7 +432,6 @@ if menu == "🏠 Visão Geral (Home)":
             
         alvos_teto = deduplicar_alvos(sorted(alvos_teto, key=lambda x: (x['prio'], -max(x['ap'], x['ac'], x['am']))))
 
-        # --- EXIBIÇÃO NA TELA ---
         if alertas_duplas:
             st.error(f"🚨 ANOMALIA DETECTADA: {len(alertas_duplas)} Encontrados!")
             cols = st.columns(3)
@@ -495,14 +520,12 @@ elif menu == "🎯 Scanner de Raio-X":
             else:
                 dados_tabela = []
                 
-                # 1. Linha de Gatilho de Duplas
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
-                # 2. Linha de Porcentagem Real Histórica (Gatilho Base)
                 linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -515,7 +538,6 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
                 dados_tabela.append(linha_porcentagem)
                 
-                # 3. Linha de Rastreio dos 10 Dígitos Incondicional
                 linha_10d = {"FILTRO": "🎯 RASTREIO: 10 DÍGITOS (Atual)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -530,7 +552,16 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
                 
-                # Filtros estruturais da planilha de massa (CORRIGIDOS: METADES EXATAS)
+                # =========================================================================
+                # NOVO MOTOR: A DUPLA INIMIGA (Mais difícil de sair junto)
+                # =========================================================================
+                linha_inimiga = {"FILTRO": "❌ PARELHA EXCLUÍDA (Casal mais raro na centena)", "TETO": "-"}
+                for i, col in enumerate(COLUNAS_DF):
+                    par, contagem = calcular_dupla_inimiga(df, col)
+                    linha_inimiga[TITULOS_PREMIOS[i]] = f"Dígitos [{par}] (Só {contagem}x)"
+                dados_tabela.append(linha_inimiga)
+                # =========================================================================
+
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
@@ -552,18 +583,14 @@ elif menu == "🎯 Scanner de Raio-X":
                     ("Unidades Pares", {'alvos': {0, 2, 4, 6, 8}, 'modo': 'unidade', 'lim': 9})
                 ]
                 
-                # EXECUÇÃO DO LOOP COM AUDITORIA DA % REAL INJETADA POR FILTRO
                 for nome_filtro, cfg in filtros_lista:
                     cfg.update({'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999})
                     linha = {"FILTRO": nome_filtro, "TETO": cfg['lim']}
                     for i, col in enumerate(COLUNAS_DF):
                         valores = df[col].astype(str).tolist()
                         validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
-                        
-                        # Calcula métricas tradicionais de atraso (ap) e recorde (mp)
                         ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, col, cfg)
                         
-                        # MOTOR DE CÁLCULO DA PORCENTAGEM REAL HISTÓRICA DO FILTRO ESPECÍFICO
                         total_validos = 0
                         total_hits = 0
                         for val in validos:
@@ -583,8 +610,6 @@ elif menu == "🎯 Scanner de Raio-X":
                                 continue
                         
                         pct_real = (total_hits / total_validos * 100) if total_validos > 0 else 0.0
-                        
-                        # Injeta o resultado unificado na célula correspondente
                         linha[TITULOS_PREMIOS[i]] = f"{ap}x (R:{mp}) | {pct_real:.1f}%"
                     dados_tabela.append(linha)
                 
