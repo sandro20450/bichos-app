@@ -117,20 +117,16 @@ def exibir_banner_sorteio(df, banca):
 # --- 3. MOTORES DE ANÁLISE E IA ---
 # =============================================================================
 
-# NOVO MOTOR: Rastreio do Casal de Dígitos Mais Inimigos
 def calcular_dupla_inimiga(df_analise, coluna):
     valores = df_analise[coluna].astype(str).tolist()
     validos = [m.strip().zfill(4) for m in valores if m.strip().zfill(4) not in ["----", "0nan", "nan", ""]]
     if not validos: return "-", 0
 
-    # Cria os 45 casais possíveis com contagem inicial ZERO
     pair_counts = {tuple(sorted((str(i), str(j)))): 0 for i in range(10) for j in range(i+1, 10)}
 
     for val in validos:
         c = val[-3:]
         digitos_unicos = list(set(c))
-        
-        # Só conta se a centena tiver pelo menos 2 dígitos diferentes
         if len(digitos_unicos) >= 2:
             for p in combinations(sorted(digitos_unicos), 2):
                 pair_counts[p] += 1
@@ -233,65 +229,54 @@ def processar_anomalia_duplas(df, coluna):
             prob_cont = 100 - prob_break
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
-            past_breaks = []
-            temp = 0
-            for i in range(len(validos)):
-                c = validos[i][-3:]
-                if len(set(c)) < 3:
-                    temp += 1
-                else:
-                    if temp >= 2:
-                        state_before = get_10d_state(validos[:i])
-                        if state_before:
-                            past_breaks.append({'state': state_before, 'breaker': c})
-                    temp = 0
+            # =========================================================================
+            # NOVO MOTOR: RESUMO SNIPER PARA O CARD DA HOME (CRUZAMENTO TÁTICO REQUISITADO)
+            # =========================================================================
+            total_repetidos = sum(1 for v in validos if len(set(v[-3:])) < 3)
+            pct_rep = (total_repetidos / len(validos) * 100) if validos else 0.0
             
-            best_match = None
-            best_score = -1
+            par_inimigo, _ = calcular_dupla_inimiga(df, coluna)
+            par_formatado = f"({par_inimigo.replace(' e ', ',')})" if par_inimigo != "-" else "(-)"
             
-            for pb in past_breaks:
-                score = sum(1 for a, b in zip(pb['state'], current_10d_list) if a == b)
-                if score > best_score:
-                    best_score = score
-                    best_match = pb
-                    
-            cruzamento_html = ""
-            melhor_exclusao = excluido_padrao
+            cruzamento_html = f"""<div style='background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; margin-top:10px; border:1px solid rgba(255,255,255,0.1); text-align:left; font-size:12px; line-height:1.6;'>
+            <b style='color:#00ffff;'>🔬 CRUZAMENTO TÁTICO:</b><br>
+            🟢 De 28% Repetidos = <b style='color:#fff;'>{pct_rep:.1f}%</b><br>
+            🟢 Casal mais raro na centena = <b style='color:#ffcc00;'>{par_formatado}</b><br>"""
             
-            if best_match and best_score >= 0:
-                cent_quebra = best_match['breaker']
-                digitos_quebra = list(set(cent_quebra))
-                
-                detalhes = []
-                for d in digitos_quebra:
-                    if d in current_10d_list:
-                        idx = current_10d_list.index(d)
-                        if idx == 0: forca = 85; desc = "Saturado (1º da fila)"; cor = "#ffaa00"; icon="🟠"
-                        elif idx == 4: forca = 99; desc = "Ponto Cego Atual"; cor = "#ff4b4b"; icon="🔴"
-                        elif idx == 9: forca = 10; desc = "Dígito Frio"; cor = "#888888"; icon="⚪"
-                        elif idx < 4: forca = 70; desc = f"Quente (Posição {idx+1})"; cor = "#ffff00"; icon="🟡"
-                        else: forca = 40; desc = f"Morno/Frio (Posição {idx+1})"; cor = "#00ff00"; icon="🟢"
-                        detalhes.append({'digito': d, 'forca': forca, 'desc': desc, 'cor': cor, 'icon': icon})
-                
-                detalhes.sort(key=lambda x: x['forca'], reverse=True)
-                
-                cruzamento_html += f"<div style='background:rgba(0,0,0,0.4); padding:10px; border-radius:6px; margin-top:10px; border:1px solid rgba(255,255,255,0.1); text-align:left; font-size:12px;'>"
-                cruzamento_html += f"<b style='color:#00ffff;'>👻 RASTREIO FANTASMA (Simil. {best_score*10}%)</b><br>"
-                cruzamento_html += f"<span style='color:#ccc;'>Centena do passado: <b>{cent_quebra}</b></span><br>"
-                cruzamento_html += f"<b style='color:#fff; margin-top:5px; display:inline-block;'>🔬 CRUZAMENTO TÁTICO:</b><br>"
-                
-                primeiro = True
-                for item in detalhes:
-                    cruzamento_html += f"{item['icon']} Dígito <b style='color:{item['cor']};'>{item['digito']}</b>: {item['desc']} (Força: {item['forca']}%)<br>"
-                    if primeiro:
-                        melhor_exclusao = item['digito']
-                        primeiro = False
-                        
-                cruzamento_html += f"<div style='margin-top:8px; color:#ff4b4b; font-weight:bold; font-size:13px; text-align:center;'>❌ DECISÃO IA: Excluir {melhor_exclusao}</div></div>"
-            else:
-                cruzamento_html = f"<div style='margin-top:10px; color:#ff4b4b; font-weight:bold;'>❌ DECISÃO PADRÃO P. CEGO: Excluir {melhor_exclusao}</div>"
+            home_filtros = [
+                ("Centenas Baixas (000-499)", {'alvos': set(range(0, 500)), 'modo': 'centena'}),
+                ("Centenas Altas (500-999)", {'alvos': set(range(500, 1000)), 'modo': 'centena'}),
+                ("Dezenas Baixas (00-49)", {'alvos': set(range(0, 50)), 'modo': 'dezena'}),
+                ("Dezenas Altas (50-99)", {'alvos': set(range(50, 100)), 'modo': 'dezena'}),
+                ("Unidades Baixas (0-4)", {'alvos': {0, 1, 2, 3, 4}, 'modo': 'unidade'}),
+                ("Unidades Altas (5-9)", {'alvos': {5, 6, 7, 8, 9}, 'modo': 'unidade'})
+            ]
             
-            return current_10d_list[-1], seq_str, melhor_exclusao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, ""
+            for nome_f, cfg_f in home_filtros:
+                cfg_copy = {**cfg_f, 'c_min': 0, 'c_max': 999, 'm_min': 0, 'm_max': 9999}
+                ap, ac, am, mp, mc, mm = calcular_metricas_fantasma(df, coluna, cfg_copy)
+                
+                t_val = 0; t_hit = 0
+                for val in validos:
+                    try:
+                        m = int(val); c = int(val[-3:]); d = int(val[-2:]); u = int(val[-1:])
+                        g = 25 if d == 0 else math.ceil(d/4)
+                        t_val += 1
+                        hit = (cfg_copy['modo'] == 'grupo' and g in cfg_copy['alvos']) or \
+                              (cfg_copy['modo'] == 'dezena' and d in cfg_copy['alvos']) or \
+                              (cfg_copy['modo'] == 'unidade' and u in cfg_copy['alvos']) or \
+                              (cfg_copy['modo'] == 'centena' and c in cfg_copy['alvos']) or \
+                              (cfg_copy['modo'] == 'milhar' and m in cfg_copy['alvos'])
+                        if hit: t_hit += 1
+                    except: continue
+                pct_f = (t_hit / t_val * 100) if t_val > 0 else 0.0
+                
+                cruzamento_html += f"🟢 {nome_f} = <b style='color:#fff;'>{ap}x (R:{mp}) | {pct_f:.1f}%</b><br>"
+                
+            cruzamento_html += "</div>"
+            # =========================================================================
+            
+            return current_10d_list[-1], seq_str, excluido_padrao, current_streak, max_historico, streak_counts, trend_text, cruzamento_html, ""
             
     return None
 
@@ -520,12 +505,14 @@ elif menu == "🎯 Scanner de Raio-X":
             else:
                 dados_tabela = []
                 
+                # 1. Linha de Gatilho de Duplas
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
+                # 2. Linha de Porcentagem Real Histórica (Gatilho Base)
                 linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -538,6 +525,7 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
                 dados_tabela.append(linha_porcentagem)
                 
+                # 3. Linha de Rastreio dos 10 Dígitos Incondicional
                 linha_10d = {"FILTRO": "🎯 RASTREIO: 10 DÍGITOS (Atual)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -552,16 +540,14 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
                 
-                # =========================================================================
-                # NOVO MOTOR: A DUPLA INIMIGA (Mais difícil de sair junto)
-                # =========================================================================
+                # 4. Linha do Casal de Dígitos Inimigos
                 linha_inimiga = {"FILTRO": "❌ PARELHA EXCLUÍDA (Casal mais raro na centena)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     par, contagem = calcular_dupla_inimiga(df, col)
                     linha_inimiga[TITULOS_PREMIOS[i]] = f"Dígitos [{par}] (Só {contagem}x)"
                 dados_tabela.append(linha_inimiga)
-                # =========================================================================
 
+                # Filtros estruturais corrigidos com metades perfeitas
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
