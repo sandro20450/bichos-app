@@ -3,7 +3,11 @@ import pandas as pd
 import random
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import json
+
+# =============================================================================
+# 🎯 ATENÇÃO COMANDANTE: COLE O LINK DA SUA PLANILHA AQUI DENTRO DAS ASPAS!
+# =============================================================================
+URL_PLANILHA = "COLE_AQUI_O_LINK_DA_SUA_PLANILHA"
 
 # =============================================================================
 # --- 1. CONFIGURAÇÃO DA PÁGINA E CSS ---
@@ -26,40 +30,46 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# --- 2. CONEXÃO COM O GOOGLE SHEETS (MOTOR DO PENTÁGONO) ---
+# --- 2. CONEXÃO BLINDADA COM O GOOGLE SHEETS ---
 # =============================================================================
-def conectar_sheets():
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # Usando a exata mecânica do app_pentagono.py
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-        return gspread.authorize(creds).open("Game Sex")
-    except Exception as e: 
-        return None
-
 @st.cache_data(ttl=60, show_spinner=False)
 def carregar_planilha_jogo():
-    sh = conectar_sheets()
-    if not sh: 
-        return pd.DataFrame()
     try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+        client = gspread.authorize(creds)
+        
+        # Conecta direto pela URL absoluta (Tiro de Sniper)
+        sh = client.open_by_url(URL_PLANILHA)
         ws = sh.worksheet("Cartas Escolha")
-        # Puxa os dados em formato de matriz bruta para não quebrar com colunas vazias
         dados = ws.get_all_values()
         
         if len(dados) < 2: 
+            st.error("⚠️ A planilha foi encontrada, mas parece estar vazia (só tem cabeçalho).")
             return pd.DataFrame()
             
-        # Pega a linha 1 como cabeçalho e remove espaços inúteis do texto
+        # Pega a linha 1 como cabeçalho e remove espaços
         cabecalhos = [str(c).strip() for c in dados[0]]
-        
-        # Cria a tabela de dados
         df = pd.DataFrame(dados[1:], columns=cabecalhos)
         return df
+        
+    except gspread.exceptions.APIError as e:
+        st.error(f"⚠️ Erro no Google. A planilha foi compartilhada como Editor com o e-mail do Service Account? Detalhes: {e}")
+        return pd.DataFrame()
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("⚠️ Planilha não encontrada! Verifique se o Link está correto e se você compartilhou com o robô.")
+        return pd.DataFrame()
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("⚠️ Aba 'Cartas Escolha' não encontrada. Verifique o nome na parte de baixo da planilha.")
+        return pd.DataFrame()
     except Exception as e:
+        st.error(f"⚠️ Erro crítico: {type(e).__name__} - {str(e)}")
         return pd.DataFrame()
 
 df_cartas = carregar_planilha_jogo()
+
+if df_cartas.empty:
+    st.stop() # Interrompe a tela se houver erro (a msg de erro já foi mostrada acima)
 
 # =============================================================================
 # --- 3. VARIÁVEIS DE ESTADO (MEMÓRIA DO JOGO) ---
@@ -94,14 +104,11 @@ with st.sidebar:
 # =============================================================================
 def renderizar_midia(link):
     link = str(link).strip()
-    if not link:
-        return
+    if not link: return
         
-    # Tratamento para links do Dropbox (forçar raw para exibir direto na tela)
     if "dropbox.com" in link: 
         link = link.replace("dl=0", "raw=1")
     
-    # Identifica se é vídeo ou imagem
     if link.lower().endswith(('.mp4', '.mov', '.webm')):
         st.video(link)
     else:
@@ -110,28 +117,19 @@ def renderizar_midia(link):
 # =============================================================================
 # --- 5. LÓGICA DO TABULEIRO ---
 # =============================================================================
-if df_cartas.empty:
-    st.error("⚠️ Erro Crítico: Planilha vazia ou sem acesso. Verifique as credenciais no menu Secrets.")
-    st.stop()
-
 jogador_atual = st.session_state.jogadores[st.session_state.turno_idx % len(st.session_state.jogadores)]
 
-# --- FASE 1: ESCOLHA DAS CARTAS ---
 if st.session_state.fase == "escolha":
     st.markdown(f"<div class='vez-texto'>Vez de: {jogador_atual}</div>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #ccc;'>Escolha uma das 3 Cartas Surpresas!</h3>", unsafe_allow_html=True)
     
     if not st.session_state.cartas_mesa:
-        # Verifica se existe a coluna 'Nível'
         if 'Nível' not in df_cartas.columns:
             st.error("❌ Coluna 'Nível' não encontrada na planilha. Verifique o cabeçalho.")
             st.stop()
             
-        # Filtra cartas do nível atual que não estão vazias
         df_nivel = df_cartas[df_cartas['Nível'].astype(str).str.strip().str.lower() == nivel_selecionado.lower()]
         df_nivel = df_nivel[df_nivel['Descrição'].astype(str).str.strip() != ""]
-        
-        # Filtra cartas já jogadas
         cartas_validas = df_nivel[~df_nivel.index.isin(st.session_state.cartas_jogadas)]
         
         if len(cartas_validas) >= 3:
@@ -142,7 +140,6 @@ if st.session_state.fase == "escolha":
             st.warning(f"❌ Acabaram as cartas novas para o {nivel_selecionado}! Suba o nível no menu lateral.")
             st.stop()
             
-        # Salva as cartas da mesa mantendo o index da planilha original
         st.session_state.cartas_mesa = []
         for index, row in amostra.iterrows():
             carta_dict = row.to_dict()
@@ -156,14 +153,11 @@ if st.session_state.fase == "escolha":
                 if st.button(f"🃏 CARTA {i+1}", key=f"btn_carta_{i}", use_container_width=True):
                     st.session_state.carta_selecionada = carta
                     st.session_state.fase = "revelada"
-                    # Adiciona a carta na lista de jogadas para não repetir
                     st.session_state.cartas_jogadas.append(carta['_index'])
                     st.rerun()
 
-# --- FASE 2: CARTA REVELADA ---
 elif st.session_state.fase == "revelada":
     st.markdown(f"<div class='vez-texto'>Ação de: {jogador_atual}</div>", unsafe_allow_html=True)
-    
     carta = st.session_state.carta_selecionada
     if carta:
         desc = carta.get('Descrição', 'Ação Surpresa!')
