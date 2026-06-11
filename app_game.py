@@ -7,10 +7,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # 🎯 ATENÇÃO COMANDANTE: COLE O LINK DA SUA PLANILHA AQUI DENTRO DAS ASPAS!
 # =============================================================================
-URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1-Dhxg5G62KNcALWpbFtU_ZVLJ4sevYaZmovYJrKdQ3k/edit?gid=491860253#gid=491860253"
+URL_PLANILHA = "COLE_AQUI_O_LINK_DA_SUA_PLANILHA"
 
 # =============================================================================
-# --- 1. CONFIGURAÇÃO DA PÁGINA E CSS ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA E CSS (DESIGN DE BARALHO) ---
 # =============================================================================
 st.set_page_config(page_title="Secret Game", page_icon="🔥", layout="centered")
 
@@ -19,13 +19,46 @@ st.markdown("""
     .stApp { background-color: #07090f; color: #ffffff; }
     .vez-texto { text-align: center; font-size: 28px; font-weight: bold; color: #ff4b4b; margin-bottom: 20px; text-transform: uppercase; text-shadow: 0 0 10px #ff4b4b; }
     .desc-texto { text-align: center; font-size: 22px; font-weight: bold; color: #ffcc00; margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid rgba(255,204,0,0.3); }
+    
+    /* 🃏 ESTILIZAÇÃO DAS CARTAS DE BARALHO 🃏 */
     div[data-testid="stButton"] button {
-        height: 150px; font-size: 24px !important; font-weight: bold; border-radius: 15px;
-        background: linear-gradient(135deg, #ff4b4b 0%, #cc0000 100%); color: white; border: none;
-        box-shadow: 0 8px 15px rgba(255,0,0,0.3); transition: all 0.3s ease;
+        height: 280px !important;
+        border-radius: 12px !important;
+        /* Padrão clássico de verso de baralho com borda branca */
+        background-color: #b30000 !important;
+        background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.2) 75%, rgba(0,0,0,0.2)), repeating-linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.2) 75%, rgba(0,0,0,0.2)) !important;
+        background-position: 0 0, 10px 10px !important;
+        background-size: 20px 20px !important;
+        border: 8px solid #ffffff !important;
+        color: #ffffff !important;
+        font-size: 28px !important;
+        font-weight: 900 !important;
+        text-shadow: 2px 2px 5px rgba(0,0,0,0.9) !important;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.6), inset 0 0 15px rgba(0,0,0,0.5) !important;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important; /* Efeito de mola */
     }
-    div[data-testid="stButton"] button:hover { transform: scale(1.05); box-shadow: 0 12px 20px rgba(255,0,0,0.5); border: 1px solid #ffcc00; }
-    .btn-proximo button { height: 60px !important; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%) !important; box-shadow: 0 8px 15px rgba(0,114,255,0.3) !important; font-size: 18px !important;}
+    
+    /* 🃏 FÍSICA DE INTERAÇÃO (Levantar e Girar) 🃏 */
+    div[data-testid="stButton"] button:hover { 
+        transform: translateY(-20px) scale(1.05) rotate(-3deg) !important; 
+        box-shadow: 0 20px 40px rgba(255, 75, 75, 0.8) !important; 
+        border-color: #ffcc00 !important; 
+        color: #ffcc00 !important;
+    }
+    
+    /* Proteção para o botão de "Próxima Vez" não herdar o estilo de carta */
+    .btn-proximo button { 
+        height: 60px !important; 
+        background-image: none !important;
+        background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%) !important; 
+        border: none !important;
+        box-shadow: 0 8px 15px rgba(0,114,255,0.3) !important; 
+        font-size: 18px !important;
+        text-shadow: none !important;
+    }
+    .btn-proximo button:hover {
+        transform: scale(1.02) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -39,7 +72,6 @@ def carregar_planilha_jogo():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
         client = gspread.authorize(creds)
         
-        # Conecta direto pela URL absoluta (Tiro de Sniper)
         sh = client.open_by_url(URL_PLANILHA)
         ws = sh.worksheet("Cartas Escolha")
         dados = ws.get_all_values()
@@ -48,7 +80,6 @@ def carregar_planilha_jogo():
             st.error("⚠️ A planilha foi encontrada, mas parece estar vazia (só tem cabeçalho).")
             return pd.DataFrame()
             
-        # Pega a linha 1 como cabeçalho e remove espaços
         cabecalhos = [str(c).strip() for c in dados[0]]
         df = pd.DataFrame(dados[1:], columns=cabecalhos)
         return df
@@ -69,7 +100,7 @@ def carregar_planilha_jogo():
 df_cartas = carregar_planilha_jogo()
 
 if df_cartas.empty:
-    st.stop() # Interrompe a tela se houver erro (a msg de erro já foi mostrada acima)
+    st.stop()
 
 # =============================================================================
 # --- 3. VARIÁVEIS DE ESTADO (MEMÓRIA DO JOGO) ---
@@ -122,6 +153,7 @@ jogador_atual = st.session_state.jogadores[st.session_state.turno_idx % len(st.s
 if st.session_state.fase == "escolha":
     st.markdown(f"<div class='vez-texto'>Vez de: {jogador_atual}</div>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #ccc;'>Escolha uma das 3 Cartas Surpresas!</h3>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     if not st.session_state.cartas_mesa:
         if 'Nível' not in df_cartas.columns:
@@ -150,7 +182,8 @@ if st.session_state.fase == "escolha":
         colunas = st.columns(len(st.session_state.cartas_mesa))
         for i, carta in enumerate(st.session_state.cartas_mesa):
             with colunas[i]:
-                if st.button(f"🃏 CARTA {i+1}", key=f"btn_carta_{i}", use_container_width=True):
+                # Mudei o texto do botão para ter um ícone de interrogação no centro
+                if st.button(f"❓\nCARTA {i+1}", key=f"btn_carta_{i}", use_container_width=True):
                     st.session_state.carta_selecionada = carta
                     st.session_state.fase = "revelada"
                     st.session_state.cartas_jogadas.append(carta['_index'])
