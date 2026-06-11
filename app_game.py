@@ -40,16 +40,26 @@ def carregar_planilha_jogo():
                 
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
-            # Nome EXATO da planilha e da aba
+            
+            # Conecta na planilha e na aba
             ws = client.open("Game Sex").worksheet("Cartas Escolha")
-            dados = ws.get_all_records()
-            return pd.DataFrame(dados)
+            
+            # LÊ OS DADOS BRUTOS (Isso bloqueia o erro 200)
+            dados = ws.get_all_values()
+            
+            if len(dados) < 2:
+                return pd.DataFrame() # Planilha sem dados além do cabeçalho
+                
+            # Cria a tabela usando a primeira linha como título
+            df = pd.DataFrame(dados[1:], columns=dados[0])
+            return df
+            
         else:
             st.error("⚠️ As chaves de acesso do Google não foram encontradas nos Secrets deste app.")
-            return pd.DataFrame() # Retorna planilha vazia para não quebrar o app
+            return pd.DataFrame() 
     except Exception as e:
         st.error(f"Erro ao conectar com a planilha: {e}")
-        return pd.DataFrame() # Retorna planilha vazia para não quebrar o app
+        return pd.DataFrame()
 
 df_cartas = carregar_planilha_jogo()
 
