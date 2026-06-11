@@ -66,7 +66,7 @@ def verificar_relatorio_matinal(dados_bancas):
                 "📡 <b>Conexão Google Sheets:</b> ESTÁVEL.\n\n"
                 "📊 <b>Resumo do Banco de Dados:</b>\n"
                 f"{resumo_bancas}\n"
-                "🎯 <i>Modo Stealth Ativado. Aguardando alvos atingirem o Teto ou dispararem Gatilhos de Duplas.</i>"
+                "🎯 <i>Modo Stealth Ativado. Aguardando alvos atingirem o Teto.</i>"
             )
             enviar_telegram(msg_bom_dia)
             with open(arquivo_memoria, "w") as f:
@@ -138,7 +138,8 @@ def processar_anomalia_duplas(df, coluna):
                 
     current_streak = temp_streak
     
-    if current_streak >= 2:
+    # MODIFICAÇÃO TÁTICA: O teto de disparo agora é 4x
+    if current_streak >= 4:
         current_10d_list = get_10d_state(validos)
         
         if current_10d_list:
@@ -324,8 +325,8 @@ def rodar_drone():
                     if 3 in historico: freq_str += f" | 3x: {historico.get(3, 0)}v"
                     if 4 in historico: freq_str += f" | 4x: {historico.get(4, 0)}v"
 
-                    icone_cor = "🟡" if streak == 2 else "🟢"
-                    msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA ({streak}x DUPLAS SEGUIDAS)</b>\n"
+                    icone_cor = "🔴" 
+                    msg_telegram += f"{icone_cor} <b>GATILHO DE ANOMALIA CRÍTICO ({streak}x DUPLAS SEGUIDAS)</b>\n"
                     msg_telegram += f"🏦 {banca_nome} ({ultimo_sorteio}) | 🏆 {TITULOS_PREMIOS[i]}\n"
                     msg_telegram += f"📊 <b>HISTÓRICO (RAIO-X DO PRÊMIO):</b>\n"
                     msg_telegram += f"Recorde: {max_hist}x | Freq: {freq_str}\n"
@@ -376,8 +377,9 @@ def rodar_drone():
                     msg_telegram += f"🧬 Mutante: <b>{m_mutante}</b>\n\n"
                     achou_algo = True
 
-    if achou_algo: enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
-    elif total_salvos > 0: enviar_telegram(f"🟢 <b>ROTAÇÃO CONCLUÍDA</b>\n{total_salvos} novos sorteios salvos. Mercado em Stealth (Nenhum teto rompido).")
+    # MODIFICAÇÃO TÁTICA: Removido o bloco "elif" (Silêncio de Rádio mantido)
+    if achou_algo: 
+        enviar_telegram("🛸 <b>DRONE PENTÁGONO - RUPTURAS DETECTADAS</b> 🛸\n\n" + msg_telegram)
 
 if __name__ == "__main__":
     rodar_drone()
