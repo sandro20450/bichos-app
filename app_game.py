@@ -7,7 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # 🎯 ATENÇÃO COMANDANTE: COLE O LINK DA SUA PLANILHA AQUI DENTRO DAS ASPAS!
 # =============================================================================
-URL_PLANILHA = "COLE_AQUI_O_LINK_DA_SUA_PLANILHA"
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1-Dhxg5G62KNcALWpbFtU_ZVLJ4sevYaZmovYJrKdQ3k/edit?gid=491860253#gid=491860253"
 
 # =============================================================================
 # --- 1. CONFIGURAÇÃO DA PÁGINA E CSS (DESIGN DE BARALHO) ---
