@@ -31,20 +31,25 @@ st.markdown("""
 @st.cache_resource(ttl=60)
 def carregar_planilha_jogo():
     try:
-        # Usa o mesmo segredo do Pentágono
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         if "gcp_service_account" in st.secrets:
-            if isinstance(st.secrets["gcp_service_account"], str): creds_dict = json.loads(st.secrets["gcp_service_account"])
-            else: creds_dict = st.secrets["gcp_service_account"]
+            if isinstance(st.secrets["gcp_service_account"], str): 
+                creds_dict = json.loads(st.secrets["gcp_service_account"])
+            else: 
+                creds_dict = st.secrets["gcp_service_account"]
+                
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
             # Nome EXATO da planilha e da aba
             ws = client.open("Game Sex").worksheet("Cartas Escolha")
             dados = ws.get_all_records()
             return pd.DataFrame(dados)
+        else:
+            st.error("⚠️ As chaves de acesso do Google não foram encontradas nos Secrets deste app.")
+            return pd.DataFrame() # Retorna planilha vazia para não quebrar o app
     except Exception as e:
         st.error(f"Erro ao conectar com a planilha: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame() # Retorna planilha vazia para não quebrar o app
 
 df_cartas = carregar_planilha_jogo()
 
