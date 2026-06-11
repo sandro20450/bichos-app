@@ -215,7 +215,8 @@ def processar_anomalia_duplas(df, coluna):
                 
     current_streak = temp_streak
     
-    if current_streak >= 2:
+    # MODIFICAÇÃO TÁTICA: O teto de disparo na Home agora é 4x
+    if current_streak >= 4:
         current_10d_list = get_10d_state(validos)
         
         if current_10d_list:
@@ -230,7 +231,7 @@ def processar_anomalia_duplas(df, coluna):
             trend_text = f"Quebra Agora: {prob_break:.1f}% | Avança pra {current_streak+1}x: {prob_cont:.1f}%"
             
             # =========================================================================
-            # NOVO MOTOR: RESUMO SNIPER PARA O CARD DA HOME (CRUZAMENTO TÁTICO REQUISITADO)
+            # RESUMO SNIPER PARA O CARD DA HOME
             # =========================================================================
             total_repetidos = sum(1 for v in validos if len(set(v[-3:])) < 3)
             pct_rep = (total_repetidos / len(validos) * 100) if validos else 0.0
@@ -422,8 +423,10 @@ if menu == "🏠 Visão Geral (Home)":
             cols = st.columns(3)
             for idx, op in enumerate(alertas_duplas):
                 streak_count = op['streak']
-                cor_box = "#ffff00" if streak_count == 2 else "#00ff00"
-                sombra_cor = "255,255,0" if streak_count == 2 else "0,255,0"
+                
+                # MODIFICAÇÃO TÁTICA: Ajuste visual para prioridade a partir de 4x
+                cor_box = "#ff4b4b" if streak_count >= 4 else "#ffff00"
+                sombra_cor = "255,75,75" if streak_count >= 4 else "255,255,0"
                 
                 freq_str = f"2x: {op['historico'].get(2, 0)}v"
                 if 3 in op['historico']: freq_str += f" | 3x: {op['historico'].get(3, 0)}v"
@@ -505,14 +508,12 @@ elif menu == "🎯 Scanner de Raio-X":
             else:
                 dados_tabela = []
                 
-                # 1. Linha de Gatilho de Duplas
                 linha_duplas = {"FILTRO": "🚨 GATILHO: DUPLAS SEGUIDAS", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     curr_strk, max_hist = metricas_duplas_raiox(df, col)
                     linha_duplas[TITULOS_PREMIOS[i]] = f"{curr_strk}x (R:{max_hist})"
                 dados_tabela.append(linha_duplas)
                 
-                # 2. Linha de Porcentagem Real Histórica (Gatilho Base)
                 linha_porcentagem = {"FILTRO": "📊 REALIDADE HISTÓRICA (% Repetidos)", "TETO": "28%"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -525,7 +526,6 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_porcentagem[TITULOS_PREMIOS[i]] = "0%"
                 dados_tabela.append(linha_porcentagem)
                 
-                # 3. Linha de Rastreio dos 10 Dígitos Incondicional
                 linha_10d = {"FILTRO": "🎯 RASTREIO: 10 DÍGITOS (Atual)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     valores = df[col].astype(str).tolist()
@@ -540,14 +540,12 @@ elif menu == "🎯 Scanner de Raio-X":
                         linha_10d[TITULOS_PREMIOS[i]] = "-"
                 dados_tabela.append(linha_10d)
                 
-                # 4. Linha do Casal de Dígitos Inimigos
                 linha_inimiga = {"FILTRO": "❌ PARELHA EXCLUÍDA (Casal mais raro na centena)", "TETO": "-"}
                 for i, col in enumerate(COLUNAS_DF):
                     par, contagem = calcular_dupla_inimiga(df, col)
                     linha_inimiga[TITULOS_PREMIOS[i]] = f"Dígitos [{par}] (Só {contagem}x)"
                 dados_tabela.append(linha_inimiga)
 
-                # Filtros estruturais corrigidos com metades perfeitas
                 filtros_lista = [
                     ("Milhares Baixas (0000-4999)", {'alvos': set(range(0, 5000)), 'modo': 'milhar', 'lim': 9}),
                     ("Milhares Altas (5000-9999)", {'alvos': set(range(5000, 10000)), 'modo': 'milhar', 'lim': 9}),
