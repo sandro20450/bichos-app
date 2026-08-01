@@ -12,7 +12,6 @@ URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1N1bcNC0-qyGTqFKexromMiUM
 # =============================================================================
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 # =============================================================================
-# Utilizando configurações nativas para garantir estabilidade e o Dark Mode padrão
 st.set_page_config(page_title="Barbearia D'Ramos", page_icon="💈", layout="centered")
 
 # =============================================================================
@@ -37,7 +36,6 @@ def carregar_dados():
         if len(dados) > 1:
             cabecalhos = [str(c).strip() for c in dados[0]]
             df = pd.DataFrame(dados[1:], columns=cabecalhos)
-            # Converter a coluna Valor para número para facilitar os cálculos
             df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce').fillna(0.0)
             return df
     return pd.DataFrame()
@@ -57,7 +55,6 @@ with st.sidebar:
 if menu == "📝 Registrar Serviço":
     st.header("Novo Serviço Realizado")
     
-    # st.form cria um formulário organizado nativo do Streamlit
     with st.form("form_registro", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
@@ -66,7 +63,6 @@ if menu == "📝 Registrar Serviço":
             servico = st.selectbox("Qual serviço?", ["Corte", "Barba", "Sobrancelha", "Corte + Barba", "Outros"])
             
         with col2:
-            # Entrada livre para permitir descontos ou acréscimos
             valor = st.number_input("Valor Cobrado (R$)", min_value=0.0, format="%.2f", step=5.0)
             pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Dinheiro", "Cartão", "Fiado"])
             
@@ -84,7 +80,7 @@ if menu == "📝 Registrar Serviço":
                     st.success(f"✅ Serviço de {servico} registrado com sucesso para o {profissional}!")
 
 # =============================================================================
-# --- 5. TELA 2: RELATÓRIO FINANCEIRO E COMISSIONAMENTO ---
+# --- 5. TELA 2: RELATÓRIO FINANCEIRO (ATUALIZADO COM FILTROS) ---
 # =============================================================================
 elif menu == "📊 Relatório Financeiro":
     st.header("Fechamento de Caixa")
@@ -94,48 +90,71 @@ elif menu == "📊 Relatório Financeiro":
     if df.empty:
         st.info("Nenhum serviço registrado ainda na planilha.")
     else:
-        # Extrair apenas a data (YYYY-MM-DD) da coluna Data original (YYYY-MM-DD HH:MM:SS)
+        # Extrair apenas a data (YYYY-MM-DD) para facilitar a busca
         df['Data_Curta'] = df['Data'].str[:10]
         
-        # Filtro de Data Superior (Padrão: Hoje)
-        data_selecionada = st.date_input("Filtrar por Data:", value=datetime.today())
-        data_str = data_selecionada.strftime("%Y-%m-%d")
+        # 1. NOVO FILTRO DE PERÍODO (Data Inicial e Final)
+        st.markdown("### 📅 Escolha o Período")
+        # O Streamlit permite que o date_input receba uma tupla (lista) com duas datas
+        data_selecionada = st.date_input(
+            "Selecione a Data Inicial e a Data Final:", 
+            value=(datetime.today(), datetime.today())
+        )
         
-        # Filtrar a tabela para mostrar apenas o dia escolhido
-        df_filtrado = df[df['Data_Curta'] == data_str]
+        # Lógica para garantir que o sistema não quebre se o usuário clicar apenas em uma data e não fechar o período
+        if len(data_selecionada) == 2:
+            data_inicio = data_selecionada[0].strftime("%Y-%m-%d")
+            data_fim = data_selecionada[1].strftime("%Y-%m-%d")
+        else:
+            data_inicio = data_selecionada[0].strftime("%Y-%m-%d")
+            data_fim = data_selecionada[0].strftime("%Y-%m-%d")
+        
+        # Varrer a planilha cruzando as informações para encontrar as datas dentro do período
+        df_filtrado = df[(df['Data_Curta'] >= data_inicio) & (df['Data_Curta'] <= data_fim)]
         
         if df_filtrado.empty:
-            st.warning("Nenhum serviço encontrado para esta data.")
+            st.warning("Nenhum serviço encontrado para este período.")
         else:
-            # Cálculos Matemáticos da Engenharia de Caixa
+            # Cálculos Matemáticos (Refletem o período escolhido)
             total_bruto = df_filtrado['Valor'].sum()
-            
-            # Produção individual bruta
             producao_proprietario = df_filtrado[df_filtrado['Profissional'] == 'Proprietário']['Valor'].sum()
             producao_socio = df_filtrado[df_filtrado['Profissional'] == 'Sócio']['Valor'].sum()
             
-            # Divisão Final (Split)
             parte_socio = producao_socio * 0.50
             lucro_proprietario = producao_proprietario + (producao_socio * 0.50)
             
-            st.markdown("### 💰 Resumo do Dia")
-            # Usando st.metric nativo para os indicadores principais
+            st.markdown("### 💰 Resumo do Período")
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric(label="Faturamento Total", value=f"R$ {total_bruto:.2f}")
             with col2:
                 st.metric(label="Proprietário Recebe", value=f"R$ {lucro_proprietario:.2f}")
             with col3:
-                st.metric(label="Sócio Recebe (Pagar Hoje)", value=f"R$ {parte_socio:.2f}")
+                st.metric(label="Sócio Recebe", value=f"R$ {parte_socio:.2f}")
                 
             st.markdown("---")
             
-            # Resumo por forma de pagamento para facilitar conferência de caixa
+            # Resumo por forma de pagamento
             st.markdown("### 💳 Entrada por Pagamento")
             resumo_pagamento = df_filtrado.groupby('Pagamento')['Valor'].sum().reset_index()
-            # Formatação nativa de DataFrame
             st.dataframe(resumo_pagamento, use_container_width=True, hide_index=True)
             
             st.markdown("---")
+            
+            # 2. NOVO FILTRO DE PROFISSIONAL PARA A TABELA DETALHADA
             st.markdown("### 📋 Histórico Detalhado")
-            st.dataframe(df_filtrado[['Data', 'Profissional', 'Servico', 'Valor', 'Pagamento']], use_container_width=True, hide_index=True)
+            
+            # Criamos um seletor que ficará logo acima da tabela
+            filtro_profissional = st.selectbox(
+                "Filtrar lista abaixo por Profissional:", 
+                ["Todos", "Proprietário", "Sócio"]
+            )
+            
+            # Lógica do filtro: Se não for "Todos", isolar apenas quem foi escolhido
+            if filtro_profissional != "Todos":
+                df_historico = df_filtrado[df_filtrado['Profissional'] == filtro_profissional]
+            else:
+                df_historico = df_filtrado
+            
+            # Mostrar a tabela com o novo filtro aplicado
+            st.dataframe(df_historico[['Data', 'Profissional', 'Servico', 'Valor', 'Pagamento']], use_container_width=True, hide_index=True)
