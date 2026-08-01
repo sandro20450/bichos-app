@@ -7,7 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # =============================================================================
 # 🎯 ATENÇÃO COMANDANTE: COLE O LINK DA SUA PLANILHA DA BARBEARIA AQUI!
 # =============================================================================
-URL_PLANILHA = "COLE_AQUI_O_LINK_DA_SUA_PLANILHA"
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1N1bcNC0-qyGTqFKexromMiUMKtMZTaqfBTCmRZjFGZc/edit?gid=0#gid=0"
 
 # =============================================================================
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
